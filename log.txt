@@ -1,0 +1,21 @@
+
+peforth
+
+[x] 13:59 2017-07-31 找到 JavaScript eval() equivalent in Python
+	https://stackoverflow.com/questions/701802/how-do-i-execute-a-string-containing-python-code-in-python
+	成功了!!
+	>>> mycode = 'print ("hello world")'
+	>>> exec(mycode)
+	hello world
+	>>>
+
+	The technique of returning a function from another function is known as currying:
+	https://stackoverflow.com/questions/14261474/how-do-i-write-a-function-that-returns-another-function
+	
+	Python annoymous function lambda
+	http://blog.csdn.net/majianfei1023/article/details/45269343
+	https://www.zhihu.com/question/20125256
+	
+[ ] review project-k , should project-k support python too? which will be peforth.py 	
+
+
