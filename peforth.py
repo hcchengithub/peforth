@@ -62,6 +62,12 @@ class Word(name, xt):
     self.name = name
     self.xt = xt
     self.immediate = False
+    self.comment = 
+    def __str__(self): # return help message
+        return self.comment
+    def __repr__(self): # execute the word 
+        return self.xt()
+    
     
 Word.prototype.toString = function(){return this.name + " " + this.help}; // every word introduces itself
     
