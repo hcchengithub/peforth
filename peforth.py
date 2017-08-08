@@ -6,7 +6,7 @@
 #
 
 name = "peforth"
-vm = self;
+vm = __import__(__name__)
 major_version = 1;  # major version, peforth.py kernel version.
 ip = 0;
 stack = [] ;
@@ -17,7 +17,8 @@ current = "forth";
 context = "forth";
 order = [context];
 wordhash = {};
-dictionary = []; dictionary[0] = 0;
+dictionary = []; 
+dictionary[0] = 0;
 here = 1;
 tib = "";
 ntib = 0;
@@ -26,15 +27,9 @@ EXIT = "";     # The 'exit' instruction code.
 compiling = False;
 stop = False;  # Stop the outer loop
 newname = "";  # new word's name
-newxt = function(){}; // new word's function()
+newxt = None
 newhelp = "";
     
-# python can print()
-# function type(s) {
-#    // defined in project-k kernel jeforth.js
-#    if(vm.type) vm.type(s);
-# }
-
 # Reset the forth VM
 def reset():
     # defined in project-k kernel peforth.py
@@ -43,7 +38,6 @@ def reset():
     ip = 0;  # forth VM instruction pointer
     stop = True; 
     ntib = len(tib);  # don't clear tib, a clue for debug.
-    # stack = []; I guess it's a clue for debug
 
 # panic() calls out to vm.panic()
 # The panic() function gets only message and severity level. 
@@ -53,70 +47,69 @@ def reset():
 def panic(msg,serious=False):
     # defined in project-k kernel peforth.py
     state = { msg:msg, serious:serious }
-    if vm.panic: 
+    if vm.panic:  # from outside the module
         vm.panic(state);
-
 
 # Forth words are instances of Word() constructor.
 class Word(name, xt):
     self.name = name
     self.xt = xt
     self.immediate = False
-    self.comment = 
-    def __str__(self): # return help message
-        return self.comment
-    def __repr__(self): # execute the word 
-        return self.xt()
+    self.help = "( ?? ) No help message. Use // to add one."
+    self.comment = ""
+    def __str__(self):    # return help message
+        return self.name + " " + self.help
+    def __repr__(self):   # execute the word 
+        return self.xt()  
     
-    
-Word.prototype.toString = function(){return this.name + " " + this.help}; // every word introduces itself
-    
-    // Support Vocabulary
-    function last(){  // returns the last defined word.
-        return words[current][words[current].length-1];
-    }
-    function current_word_list(){  // returns the word-list where new defined words are going to
-        return words[current];
-    }
-    function context_word_list(){  // returns the word-list that is searched first.
-        return words[context];
-    }
+# Support Vocabulary
+def last():  # returns the last defined word.
+    return words[current][-1]
 
-    // Get string from recent ntib down to, but not including, the next delimiter.
-    // Return {str:"string", flag:boolean}
-    // If delimiter is not found then return the entire remaining TIB, multi-lines, through result.str。
-    // result.flag indicates delimiter found or not found.
-    // o  If you want to read the entire line in TIB, use nexttoken('\n|\r'). 
-    //    nexttoken() skip the next character which is usually white space in Forth source code, 
-    //    e.g. s", this is reasonable because it's Forth. While the leading white space(s) 
-    //    will be included if useing the lower level nextstring('\\s') instead of nexttoken().
-    // o  If you need to know whether the delimiter is found, use nextstring()。
-    // o  result.str is "" if TIB has nothing left.
-    // o  The ending delimiter is remained. 
-    // o  The delimiter is a regular expression.
-    function nextstring(deli){
-        var result={}, index;
-        index = (tib.substr(ntib)).search(deli);  // search for delimiter in tib from ntib
-        if (index!=-1) {   // delimiter found
-            result.str = tib.substr(ntib,index);  // found, index is the length
-            result.flag = true;
-            ntib += index;  // Now ntib points at the delimiter.
-        } else { // delimiter not found.
-            result.str = tib.substr(ntib);  // get the tib from ntib to EOL
-            result.flag = false;
-            ntib = tib.length; // skip to EOL
-        }
-        return result;
-    }
+# Get the word-list where new defined words are going to
+def current_word_list():
+    return words[current]
+
+# Get the word-list that is searched first.
+def context_word_list():
+    return words[context]
+
+# Get string from recent ntib down to, but not including, the next delimiter.
+# Return result={str:"string", flag:boolean}
+# If delimiter is not found then return the entire remaining TIB, multi-lines, through result.str。
+# result.flag indicates delimiter found or not found.
+# o  If you want to read the entire line in TIB, use nexttoken('\n|\r'). 
+#    nexttoken() skip the next character which is usually white space in Forth source code, 
+#    e.g. s", this is reasonable because it's Forth. While the leading white space(s) 
+#    will be included if useing the lower level nextstring('\\s') instead of nexttoken().
+# o  If you need to know whether the delimiter is found, use nextstring()。
+# o  result.str is "" if TIB has nothing left.
+# o  The ending delimiter is remained. 
+# o  The delimiter is a regular expression.
+def nextstring(deli):
+    result = {}
+    index = tib[ntib:].find(deli)  # search for delimiter in tib from ntib
+    re.search(r"is", "this is a String").start()
+    # re.finditer(pattern, string[, flags])  see https://stackoverflow.com/questions/2674391/python-locating-the-position-of-a-regex-match-in-a-string
     
-    // Get next token which is found after the recent ntib of TIB.
-    // If delimiter is RegEx white-space ('\\s') or absent then skip all leading white spaces first.
-    // Usual case, skip the next character which should be a white space for Forth.
-    // But if delimiter is CRLF, which is to read the entire line, for blank lines the ending CRLF won't be skipped.
-    // o  Return "" if TIB has nothing left. 
-    // o  Return the remaining TIB if delimiter is not found.
-    // o  The ending delimiter is remained. 
-    // o  The delimiter is a regular expression.
+    if (index!=-1) :   # delimiter found
+        result.str = tib[ntib:ntib+index];  # found, index is the length
+        result.flag = True;
+        ntib += index;  # Now ntib points at the delimiter.
+    else :  # delimiter not found.
+        result.str = tib[ntib:] # get the tib from ntib to EOL
+        result.flag = False;
+        ntib = len(tib) # skip to EOL
+    return result;
+    
+# Get next token which is found after the recent ntib of TIB.
+# If delimiter is RegEx white-space ('\\s') or absent then skip all leading white spaces first.
+# Usual case, skip the next character which should be a white space for Forth.
+# But if delimiter is CRLF, which is to read the entire line, for blank lines the ending CRLF won't be skipped.
+# o  Return "" if TIB has nothing left. 
+# o  Return the remaining TIB if delimiter is not found.
+# o  The ending delimiter is remained. 
+# o  The delimiter is a regular expression.
     function nexttoken(deli){
         if (arguments.length==0) deli='\\s';   // white space
         switch(deli){
