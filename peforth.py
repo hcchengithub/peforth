@@ -87,16 +87,16 @@ def context_word_list():
 # o  The ending delimiter is remained. 
 # o  The delimiter is a regular expression.
 def nextstring(deli):
+    # search for delimiter in tib from ntib
+    # index = tib[ntib:].find(deli) does not support regular expression, no good
     result = {}
-    index = tib[ntib:].find(deli)  # search for delimiter in tib from ntib
-    re.search(r"is", "this is a String").start()
-    # re.finditer(pattern, string[, flags])  see https://stackoverflow.com/questions/2674391/python-locating-the-position-of-a-regex-match-in-a-string
-    
-    if (index!=-1) :   # delimiter found
+    try:
+        index = re.search(deli, tib[ntib:]).start()  # start() triggers exception when not found
+        # see https://stackoverflow.com/questions/2674391/python-locating-the-position-of-a-regex-match-in-a-string
         result.str = tib[ntib:ntib+index];  # found, index is the length
         result.flag = True;
         ntib += index;  # Now ntib points at the delimiter.
-    else :  # delimiter not found.
+    exception:
         result.str = tib[ntib:] # get the tib from ntib to EOL
         result.flag = False;
         ntib = len(tib) # skip to EOL
@@ -110,27 +110,26 @@ def nextstring(deli):
 # o  Return the remaining TIB if delimiter is not found.
 # o  The ending delimiter is remained. 
 # o  The delimiter is a regular expression.
-    function nexttoken(deli){
-        if (arguments.length==0) deli='\\s';   // white space
-        switch(deli){
-            case '\\s': skipWhiteSpaces(); break; // skip all leading white spaces
-            case '\\n': case '\n': if (tib[ntib]!='\n') ntib += 1; break;
-            case '\\r': case '\r': if (tib[ntib]!='\r') ntib += 1; break; 
-            case '\\n|\\r': case '\n|\r': case '\\r|\\n': case '\r|\n': 
-                if (tib[ntib]!='\n' && tib[ntib]!='\r') ntib += 1; break; 
-            default: ntib += 1; // skip next character
-        }
-        var token = nextstring(deli).str;
-        return token; 
-        function skipWhiteSpaces(){  // skip all white spaces at tib[ntib]
-            var index = (tib.substr(ntib)).search('\\S'); // Skip leading whitespaces. index points to next none-whitespace.
-            if (index == -1) {  // \S not found, entire line are all white spaces or totally empty
-                ntib = tib.length;
-            }else{
-                ntib += index ; // skip leading whitespaces
-            }
+def nexttoken(deli='\\s'):
+    if deli == '\\s': 
+        skipWhiteSpaces()  # skip all leading white spaces
+    # deli=\n should skip to EOL but don't skip next token after the EOL!
+    elif deli in ['\\n','\n','\\r','\r','\\n|\\r','\n|\r','\\r|\\n', '\r|\n']: 
+        if tib[ntib] not in ['\n','\r']:
+            ntib += 1 # ok skip the next character
+    else: 
+        ntib += 1  # skip next character
+    var token = nextstring(deli).str;
+    return token; 
+    function skipWhiteSpaces(){  // skip all white spaces at tib[ntib]
+        var index = (tib.substr(ntib)).search('\\S'); // Skip leading whitespaces. index points to next none-whitespace.
+        if (index == -1) {  // \S not found, entire line are all white spaces or totally empty
+            ntib = tib.length;
+        }else{
+            ntib += index ; // skip leading whitespaces
         }
     }
+
     
     // tick() is same thing as forth word '。 
     // Let words[voc][0]=0 also means tick() return 0 indicates "not found".
