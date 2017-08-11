@@ -157,9 +157,17 @@ peforth
 [x] 進一步刺探未來的 peforth.py kernel module 的特性   
     Ynote: 搞懂 python 的 module files globals() locals().note   
 
-[ ] docode() 要組裝 function 需參考 anonymous function 的定義方法:
+[x] docode() 要組裝 function 需參考 anonymous function 的定義方法:
     https://stackoverflow.com/questions/6629876/how-to-make-an-anonymous-function-in-python-without-christening-it
     Study built-in function exec() https://docs.python.org/3/library/functions.html#exec    
     Study build-in function compile() https://docs.python.org/3/library/functions.html#compile
-    
-    
+    [ ] genxt() 有成功, 但是還有 bug 
+        (Pdb) f = genxt("print('hello')")
+        (Pdb) f()
+        *** TypeError: xt() missing 1 required positional argument: '_me'
+        (Pdb) f(None)
+        hello
+        (Pdb) 
+        f = genxt('''print('hello')''')
+    import sys
+    sys.path.append('c:/Users/hcche/Documents/GitHub/peforth')

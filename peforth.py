@@ -5,6 +5,9 @@
 # FigTaiwan H.C. Chen hcchen5600@gmail.com 21:14 2017-07-31
 #
 
+import pdb
+import re
+
 name = "peforth"
 vm = __import__(__name__)
 major_version = 1;  # major version, peforth.py kernel version.
@@ -12,14 +15,14 @@ ip = 0;
 stack = [] ;
 rstack = [];
 vocs = [];
-words = [];
+words = {};
 current = "forth";
 context = "forth";
 order = [context];
 wordhash = {};
 dictionary = []; 
 dictionary.append(0);
-here = 1;
+here = 1;  # dictionary[0] is 0
 tib = "";
 ntib = 0;
 RET = None;    # The 'ret' instruction code. It marks the end of a colon word.
@@ -49,10 +52,7 @@ def reset():
 # receive a hash structure, because it must be.
 def panic(msg,serious=False):
     # defined in project-k kernel peforth.py
-    state = { msg:msg, serious:serious }
-    if vm.panic:  # from outside the module
-        vm.panic(state);
-
+    raise AttributeError(msg)
         
 # Forth words are instances of Word() constructor.
 class Word:
@@ -63,10 +63,9 @@ class Word:
         self.help = "( ?? ) No help message. Use // to add one."
         self.comment = ""
     def __str__(self):    # return help message
-        return self.name + " " + self.help
-    def __repr__(self):   # execute the word 
-        return self.xt()  
-    
+        return self.name + " " + self.help + ' __str__'
+    def __repr__(self):   # execute xt and return help message
+        return self.name + " " + self.help + ' __repr__'
     
 # Support Vocabulary
 def last():  # returns the last defined word.
@@ -98,16 +97,17 @@ def context_word_list():
 def nextstring(deli):
     # search for delimiter in tib from ntib
     # index = tib[ntib:].find(deli) does not support regular expression, no good
+    global ntib
     result = {}
     try:
         index = re.search(deli, tib[ntib:]).start()  # start() triggers exception when not found
         # see https://stackoverflow.com/questions/2674391/python-locating-the-position-of-a-regex-match-in-a-string
-        result.str = tib[ntib:ntib+index];  # found, index is the length
-        result.flag = True;
+        result['str'] = tib[ntib:ntib+index];  # found, index is the length
+        result['flag'] = True;
         ntib += index;  # Now ntib points at the delimiter.
-    except exception:
-        result.str = tib[ntib:] # get the tib from ntib to EOL
-        result.flag = False;
+    except Exception:
+        result['str'] = tib[ntib:] # get the tib from ntib to EOL
+        result['flag'] = False;
         ntib = len(tib) # skip to EOL
     return result;
 
@@ -121,15 +121,17 @@ def nextstring(deli):
 # o  The ending delimiter is remained. 
 # o  The delimiter is a regular expression.
 def nexttoken(deli='\\s'):
+    global tib, ntib
     if deli == '\\s': 
         tib = tib[:ntib] + tib[ntib:].lstrip() # skip all leading white spaces
+        # [ ] 這地方考慮 ntib+1 避免把應有的 space 也殺掉了
     # deli=\n should skip to EOL but don't skip next token after the EOL!
     elif deli in ['\\n','\n','\\r','\r','\\n|\\r','\n|\r','\\r|\\n', '\r|\n']: 
         if tib[ntib] not in ['\n','\r']:
             ntib += 1 # ok skip the next character
     else: 
         ntib += 1  # skip next character
-    token = nextstring(deli).str;
+    token = nextstring(deli)['str'];
     return token; 
 
     
@@ -140,8 +142,10 @@ def nexttoken(deli='\\s'):
 # vm.tick keeps the original version.
 def tick(name):
     # defined in project-k peforth.py
-    return wordhash[name] or 0  # 0 means 'not found'
-
+    if name in wordhash.keys():
+        return wordhash[name]
+    else: 
+        return 0  # name not found
     
 # Return a boolean.
 # Is the new word reDef depends on only the words[current] word-list, not all 
@@ -150,7 +154,7 @@ def tick(name):
 def isReDef(name):
     result = False;
     wordlist = current_word_list();
-    for i in wordlist:
+    for i in range(1,len(wordlist)):  # skip [0] which is 0
         if wordlist[i].name == name :
             result = True;
             break;
@@ -161,8 +165,17 @@ def isReDef(name):
 # function, object, array .. etc。
 # To compile a word, comma(tick('word-name'))
 def comma(x):
-    dictionary[here], here = x, here+1
-    dictionary[here] = RET;  # dummy
+    global dictionary, here
+    try: 
+        dictionary[here], here = x , here + 1
+    except:
+        dictionary.append(x) 
+        here += 1
+    # dummy RET
+    try: 
+        dictionary[here] = RET
+    except:
+        dictionary.append(RET) 
     # [here] will be overwritten, we do this dummy because 
     # RET is the ending mark for 'see' to know where to stop. 
 
@@ -186,7 +199,7 @@ def comma(x):
     can also run another dictate() within a dictate().
     
     The ultimate inner loop is like this: while(w){ip++; w.xt(); w=dictionary[ip]}; 
-    Boolean(w) == false is the break condition. So I choose None to be the RET instruction
+    Boolean(w) == False is the break condition. So I choose None to be the RET instruction
     and the empty string "" to be the EXIT instruction. Choices are None, "", [], {}, False, 
     and 0. While 0 neas 'suspend' the inner loop. 
     
@@ -201,11 +214,12 @@ def comma(x):
 
 # Translate all possible entry or input to the suitable word type.
 def phaseA (entry):
+        global ip
         w = 0; 
         if type(entry)==str: 
             # "string" is word name
-            w = vm.tick(entry.strip());  # remove leading and tailing white spaces
-        elif callable(entry) or type(entry)==vm.Word: # function or Word
+            w = tick(entry.strip());  # remove leading and tailing white spaces
+        elif callable(entry) or type(entry)==Word: # function or Word
             w = entry; 
         elif type(entry)==int: 
             # number could be dictionary entry or 0. 
@@ -219,6 +233,7 @@ def phaseA (entry):
 
 # Execute the given w by the correct method 
 def phaseB(w):
+    global ip, rstack
     if type(w)==int:
         # Usually a number is the entry of does>. Can't use inner() to call it 
         # The below push-jump mimics the call instruction of a CPU.
@@ -226,11 +241,12 @@ def phaseB(w):
         ip = w;  # jump
     elif callable(w) :  # a function
         w();
-    elif type(w)==vm.Word: # Word object
+    elif type(w)==Word: # Word object
         try:  # take care of errors to avoid being kicked out
+            pdb.set_trace()
             w.xt(w);
         except Exception as err:
-            panic('Python error on word "'+w.name+'" : '+err+'\n',"error")
+            panic(err)
     else:
         panic("Error! don't know how to execute : "+w+" ("+type(w)+")\n","error");
         
@@ -246,8 +262,9 @@ def execute(entry):
         else:
             phaseB(w); 
 
-def inner(entry, resuming):
+def inner(entry, resuming=None):
     # defined in project-k kernel peforth.py
+    global ip
     w = phaseA(entry);
     while True: 
         while w:      # this is the very inner loop
@@ -270,17 +287,10 @@ def inner(entry, resuming):
 # the remaining colon thread down until ip reaches 0. That's resume.
 # Then proceed with the tib/ntib string.
 # 
-def outer(entry):
-    if (entry):
-        inner(entry, true);  # resume from the breakpoint 
-    while(not stop):
-        token = nexttoken();
-        if (token==""):
-            break;  # TIB done, loop exit.
-        outerExecute(token);
+def outer(entry=None):
     # Handle one token. 
     def outerExecute(token):
-        w = vm.tick(token);  # not found is 0. w is an Word object.
+        w = tick(token);  # not found is 0. w is an Word object.
         if (w) :
             if(not compiling): # interpret state or immediate words
                 if getattr(w,'compileonly',False):
@@ -301,7 +311,7 @@ def outer(entry):
                         );
                         return;
                     comma(w);  # compile w into dictionary. w is a Word() object
-        elif type(token) not in [int, float]:
+        elif type(eval(token)) not in [int, float]:
             panic(
                 "Error! "+token+" unknown.\n", 
                 len(tib)-ntib>100  # error or warning? depends
@@ -312,7 +322,14 @@ def outer(entry):
             push(n)
             if (compiling):
                 execute("literal");
-        ### End of the outer loop ###
+    if (entry):
+        inner(entry, True);  # resume from the breakpoint 
+    while(not stop):
+        token = nexttoken();
+        if (token==""):
+            break;  # TIB done, loop exit.
+        outerExecute(token);
+    ### End of the outer loop ###
     
 # code ( -- ) Start to compose a code word. docode() is its run-time.
 # "( ... )" and " \ ..." on first line will be brought into word.help attribute.
@@ -321,28 +338,28 @@ def outer(entry):
 # need to consider about how to get user input from keyboard.
 
 # Convert python code body into eforth xt function
-def genxt(body):
-    g = {}
-    exec(
-        "def xt(_me): #/* {} */\n{}".format(  # _me will be the code word object itself.
-            newname,
-            "\n".join("    {}\n".format(line)  # An ending \n makes # comment at end of body safe
-                for line in body.splitlines())), 
-        g)
-    g['xt'].body = body  # keep source code [ ] is this redundent?
-    return g['xt']
+def genxt(name, body):
+    ll = {}
+    source = "def xt(_me=None): ### {} ###{}".format(  # _me will be the code word object itself.
+        name,
+        "".join("    {}\n".format(line)  # An ending \n makes # comment at end of body safe
+        for line in body.splitlines()))
+    exec(source,globals(),ll)
+    ll['xt'].source = source  # keep source code [ ] is this redundent?
+    return ll['xt']
 
-def docode():
+def docode(_me=None):
     # All future code words can see local variables in here, so don't use
     # any local variable. They can *see* variables & functions out side 
     # this function too, that's normal.
+    global compiling, newname, newxt
     compiling = "code";  # it's true and a clue of compiling a code word.
     newname = nexttoken();
     if isReDef(newname): # don't use tick(newname), it's wrong.
         panic("reDef "+newname+"\n");  
     push(nextstring("end-code")); 
-    if tos().flag:
-        newxt = genxt(pop().str)
+    if tos()['flag']:
+        newxt = genxt(newname, pop()['str'])
     else:
         panic("Error! expecting 'end-code'.\n");
         reset();
@@ -355,31 +372,34 @@ code.type = 'code'
 code.help = '( <name> -- ) Start composing a code word.'
 
 # forth 'end-code' definition    
-endcode = Word('end-code', genxt('''
-    if compiling!="code":
-        panic("Error! 'end-code' a none code word.\n")
-    current_word_list().append(Word(newname,newxt))
-    last().vid = current;
-    last().wid = len(current_word_list());
-    last().type = 'code';
-    last().help = newhelp;
-    wordhash[last().name]=last();
-    compiling  = false;
-    '''))
+c = '''
+global compiling
+if compiling!="code":
+    panic("Error! 'end-code' a none code word.")
+current_word_list().append(Word(newname,newxt))
+last().vid = current;
+last().wid = len(current_word_list());
+last().type = 'code';
+last().help = newhelp;
+wordhash[last().name] = last();
+compiling = False; 
+'''
+endcode = Word('end-code', genxt('end-code',c))
 endcode.vid  = 'forth'
 endcode.wid  = 2
 endcode.type = 'code'
-endcode.immediate = true
-endcode.compileonly = true
+endcode.immediate = True
+endcode.compileonly = True
 endcode.help = '( -- ) Wrap up the new code word.'
 
 # forth master word-list
-words[current] = [
-    0,  # Letting current_word_list()[0] == 0 has many advantages. When tick('name') 
-        # returns a 0, current_word_list()[0] is 0 too, indicates a not-found.
-    code,
-    endcode
-];
+# words[current] = [
+#     0,  # Letting current_word_list()[0] == 0 has many advantages. When tick('name') 
+#         # returns a 0, current_word_list()[0] is 0 too, indicates a not-found.
+#     code,
+#     endcode
+#     ];
+words[current] = [0,code,endcode]
     
 # Use the best of JavaScript to find a word.
 wordhash = {"code":current_word_list()[1], "end-code":current_word_list()[2]};
@@ -394,7 +414,7 @@ def dictate(input):
     ipwas   = ip
     tib = input; 
     ntib = 0;
-    stop = false; # stop outer loop
+    stop = False; # stop outer loop
     outer();
     tib = tibwas;
     ntib = ntibwas;
@@ -405,6 +425,7 @@ def dictate(input):
 # tos(i,new) returns tos(i) and by the way change tos(i) to new value this is good
 # for counting up or down in a loop.
 def tos(index=None,value=None):
+    global stack
     if index==None:
         return stack[-1]
     elif value==None: 
@@ -419,6 +440,7 @@ def tos(index=None,value=None):
 # rtos(i,new) returns rtos(i) and by the way change rtos(i) to new value this is good
 # for counting up or down in a loop.
 def rtos(index=None,value=None):
+    global rstack
     if index==None:
         return rstack[-1]
     elif value==None: 
@@ -439,6 +461,7 @@ def pop(index=None):
 # Stack access easier. e.g. push(data,1) inserts data to tos(1), ( tos2 tos1 tos -- tos2 tos1 data tos )
 # push(formula(pop(i)),i-1) manipulate the tos(i) directly, usually when i is the index of a loop.
 def push(data=None, index=None):
+    global stack
     if data==None: 
         panic(" push() what?\n");
     elif index==None:
