@@ -52,7 +52,11 @@ def reset():
 # receive a hash structure, because it must be.
 def panic(msg,serious=False):
     # defined in project-k kernel peforth.py
-    raise AttributeError(msg)
+    if serious :
+        raise AttributeError(msg)
+    else:
+        print("\nPanic! {}".format(msg))
+        input(" ... press Enter to continue")
         
 # Forth words are instances of Word() constructor.
 class Word:
@@ -243,7 +247,6 @@ def phaseB(w):
         w();
     elif type(w)==Word: # Word object
         try:  # take care of errors to avoid being kicked out
-            pdb.set_trace()
             w.xt(w);
         except Exception as err:
             panic(err)
@@ -338,14 +341,33 @@ def outer(entry=None):
 # need to consider about how to get user input from keyboard.
 
 # Convert python code body into eforth xt function
-def genxt(name, body):
+def genxt_old(name, body):
     ll = {}
-    source = "def xt(_me=None): ### {} ###{}".format(  # _me will be the code word object itself.
+    # _me will be the code word object itself.
+    source = "def xt(_me=None): ### {} ###\n{}".format(  
         name,
-        "".join("    {}\n".format(line)  # An ending \n makes # comment at end of body safe
+        "".join("    {}\n".format(line)  
+        # An ending \n makes # comment at end of body safe
         for line in body.splitlines()))
     exec(source,globals(),ll)
     ll['xt'].source = source  # keep source code [ ] is this redundent?
+    return ll['xt']
+    
+def genxt(name, body):
+    ll = {}
+    source = "def xt(_me=None): ### {} ###"
+    # _me will be the code word object itself.
+    if body.strip()=="":
+        source = (source+"\n    pass\n").format(name)
+    else:
+        source = (source+'\n{}').format(
+            name,
+            "".join("    {}\n".format(line)
+            # An ending \n makes # comment at end of body safe
+            for line in body.splitlines()))
+    exec(source,globals(),ll)
+    ll['xt'].source = source  # keep source code [ ] is this redundent?
+    ll['xt'].name = name 
     return ll['xt']
 
 def docode(_me=None):
@@ -353,12 +375,12 @@ def docode(_me=None):
     # any local variable. They can *see* variables & functions out side 
     # this function too, that's normal.
     global compiling, newname, newxt
-    compiling = "code";  # it's true and a clue of compiling a code word.
     newname = nexttoken();
     if isReDef(newname): # don't use tick(newname), it's wrong.
         panic("reDef "+newname+"\n");  
     push(nextstring("end-code")); 
     if tos()['flag']:
+        compiling = "code";  # it's true and a clue of compiling a code word.
         newxt = genxt(newname, pop()['str'])
     else:
         panic("Error! expecting 'end-code'.\n");
@@ -380,7 +402,6 @@ current_word_list().append(Word(newname,newxt))
 last().vid = current;
 last().wid = len(current_word_list());
 last().type = 'code';
-last().help = newhelp;
 wordhash[last().name] = last();
 compiling = False; 
 '''

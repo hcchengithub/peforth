@@ -171,3 +171,7 @@ peforth
         f = genxt('''print('hello')''')
     import sys
     sys.path.append('c:/Users/hcche/Documents/GitHub/peforth')
+[ ] 12:50 2017/08/12 已經跑起來了, debugging compiling == 'code' 的問題
+    --> 可能是 end-code 裡面 Word(newname,newxt) 失敗的關係 --> no, it can't fail
+    --> 應該是 docode 裡面, 結構不太好, 萬一 reDef 或 genxt() 失敗了會怎樣?
+        很多都會半途結束, 留下 compiling == 'code' 的問題。
