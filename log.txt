@@ -171,7 +171,45 @@ peforth
         f = genxt('''print('hello')''')
     import sys
     sys.path.append('c:/Users/hcche/Documents/GitHub/peforth')
-[ ] 12:50 2017/08/12 已經跑起來了, debugging compiling == 'code' 的問題
+[x] 12:50 2017/08/12 已經跑起來了, debugging compiling == 'code' 的問題
     --> 可能是 end-code 裡面 Word(newname,newxt) 失敗的關係 --> no, it can't fail
     --> 應該是 docode 裡面, 結構不太好, 萬一 reDef 或 genxt() 失敗了會怎樣?
-        很多都會半途結束, 留下 compiling == 'code' 的問題。
+        很多都會半途結束, 留下 compiling == 'code' 的問題。 --> all tested, behavior acceptable now
+[x] "import re" in peforth.py kernel is not a good choice.
+    Simply letting the main program to do that. The main program is eforth.3py 
+    --> Yeah! it works.
+        c:\Users\hcche\Documents\GitHub\peforth>python eforth.3py
+        hello eforth!!
+    --> 錯了, 每個 .py 檔都自己 import re, import pdb 反而是對的, see:
+        https://stackoverflow.com/questions/8957859/python-child-cannot-use-a-module-the-parent-imported
+        ... Generally if you're doing simple obvious things like importing a standard module, 
+        you should do it the simple and obvious way......
+[x] reproduce the problem:
+        import peforth as vm
+        vm.dictate('code test end-code') # Try this first
+        vm.words['forth']    
+    這樣是成功的,但是進入 forth command line 之後, 同樣的工作... 還是成功的。
+    --> 改試 vm.dictate('code test3 print("hello test3!!") end-code')
+        >>> vm.execute('test3') --> hello test3!!  很成功
+    --> 進 forth command line
+            >>> vm.peforth()
+            OK code test4 print("hello test4") end-code
+            OK test4
+            hello test4
+            OK
+        還是很成功
+    --> 好像要出過 error e.g. word unknown 之類才能複製問題
+        >>> code test5 end-code
+          File "<stdin>", line 1
+            code test5 end-code
+                     ^
+        SyntaxError: invalid syntax
+        >>>
+        的確是這樣!!! now I've got the SRP
+    --> 似乎是 w.xt(w) 執行 end-code 時出問題, 檢查此時的 end-code 
+        RI, outer() 裡面分辨 token 是否 [int, float] 用 eval(token) 會有 exception
+        必須要用 try - except 處理才行。 --> Fixed !!!
+        
+        
+        
+        

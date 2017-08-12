@@ -5,8 +5,8 @@
 # FigTaiwan H.C. Chen hcchen5600@gmail.com 21:14 2017-07-31
 #
 
+import re    # import whatever we want, don't rely on parent module
 import pdb
-import re
 
 name = "peforth"
 vm = __import__(__name__)
@@ -294,6 +294,7 @@ def outer(entry=None):
     # Handle one token. 
     def outerExecute(token):
         w = tick(token);  # not found is 0. w is an Word object.
+        pdb.set_trace()
         if (w) :
             if(not compiling): # interpret state or immediate words
                 if getattr(w,'compileonly',False):
@@ -314,17 +315,18 @@ def outer(entry=None):
                         );
                         return;
                     comma(w);  # compile w into dictionary. w is a Word() object
-        elif type(eval(token)) not in [int, float]:
-            panic(
-                "Error! "+token+" unknown.\n", 
-                len(tib)-ntib>100  # error or warning? depends
-            );
         else:
-            # token is int or float
-            n = eval(token)
-            push(n)
-            if (compiling):
-                execute("literal");
+            try:
+                # token is int or float
+                n = eval(token)  # triggers exception if token is not a number
+                push(n)
+                if (compiling):
+                    execute("literal");
+            except:
+                panic(
+                    "Error! "+token+" unknown.\n", 
+                    len(tib)-ntib>100  # error or warning? depends
+                );
     if (entry):
         inner(entry, True);  # resume from the breakpoint 
     while(not stop):
@@ -490,3 +492,18 @@ def push(data=None, index=None):
     else:
         stack.insert(len(stack)-1-index,data);
 
+# The eforth.3py command line interface, the main program loop
+def peforth():
+    print('OK ', end="")
+    while True:
+        cmd = input("").strip()
+        if cmd == "":
+            print('OK ', end="")
+            continue
+        elif cmd == "exit":
+            break
+        else:    
+            vm.dictate(cmd)
+            print('OK ')
+
+print("Run: vm.peforth() to enter peforth command line UI.")
