@@ -2,6 +2,11 @@ code // last().help = nexttoken('\n|\r'); end-code
      // ( <comment> -- ) Give help message to the new word.
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code *debug* pdb.set_trace() end-code // ( -- ) Invoke python pdb debugger
+code words    # ( -- ) Prints all words in forth vocabulary
+     for i in words['forth']: 
+         print(i and i.name, end=" ")
+     print() end-code
+code .s print(stack) end-code // ( -- ) Print the data stack 
 code privacy push(False) end-code // ( -- false ) Default is false, words are nonprivate by default.
 code version # ( -- revision ) print the greeting message and return the revision code
      push(vm.greeting()) end-code
@@ -301,26 +306,35 @@ code last       push(last()) end-code // ( -- word ) Get the word that was last 
 code exit    # ( -- ) \ Exit this colon word.
     comma(EXIT) end-code immediate compile-only
 
-                <selftest>
-                    *** exit should stop a colon word
-                        : dummy 123 exit 456 ;
-                        last execute [d 123 d] [p "exit" p]
-                        (forget)
-                </selftest>
+    <selftest>
+        *** exit should stop a colon word
+            : dummy 123 exit 456 ;
+            last execute [d 123 d] [p "exit" p]
+            (forget)
+    </selftest>
 
 code ret    # ( -- ) \ Mark at the end of a colon word.
     comma(RET) end-code immediate compile-only
 
-stop
-
 code rescan-word-hash    # ( -- ) \ Rescan all word-lists in the order[] to rebuild wordhash{}
+    global wordhash, context
+    # Scan given VID into wordhash{}
+    def scan_vocabulary(v,isContext):
+        for i in range(1,len(words[v])): # The [0] is 0, skip it.
+            if compiling and last()==words[v][i]: 
+                # skip the last() to avoid unexpected 'reveal'.
+                continue; 
+            if isContext or not getattr(words[v][i], 'private', False) :
+                # skip private words unless in context
+                wordhash[words[v][i].name] = words[v][i];
     wordhash = {}; context = order[len(order)-1];
-    vm.g.scan_vocabulary("forth",False); # forth always available
-    for (var j=0; j<order.length-1; j++) 
-        vm.g.scan_vocabulary(order[j],False); // The latter the higher priority
-    vm.g.scan_vocabulary(context,True); // The context has the highest priority
+    scan_vocabulary("forth",False); # forth always available
+    for j in range(len(order)-1): 
+        scan_vocabulary(order[j],False);  # The latter the higher priority
+    scan_vocabulary(context,True);  # The context has the highest priority
     end-code
 
+stop
 code all        ( -- ) \ Temporarily make all private words public, so "all words" shows them all.
                 for (var j=0; j<order.length; j++) 
                     vm.g.scan_vocabulary(order[j],True); // The latter the higher priority
