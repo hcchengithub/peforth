@@ -209,7 +209,34 @@ peforth
     --> 似乎是 w.xt(w) 執行 end-code 時出問題, 檢查此時的 end-code 
         RI, outer() 裡面分辨 token 是否 [int, float] 用 eval(token) 會有 exception
         必須要用 try - except 處理才行。 --> Fixed !!!
+[x] why after OK type 'words' no response <--- should be : Error! words unknown.
+    --> 結果發現, 所有的 dir(vm) attributes 都這樣!!
+        (Pdb) eval('pop') ==> <function pop at 0x00000178A534A730>
+        (Pdb) eval('dictionary') ==> [0]
+        (Pdb) eval('stack') ==> [{'forth': [0, code, end-code, //, stop, *debug*]}, {'forth': [0, code, end-code, //, stop, *debug*]}, {'forth': [0, code, end-code, //, stop, *debug*]}, <class 'peforth.Word'>, <function phaseA at 0x00000178A534A0D0>, <function phaseB at 0x00000178A534A158>]
+        所以, outer() 還要再改良。
+    --> eval() 的結果 + 0 就可以保證他是 number 了
+[x] kernel project-k.py instead of peforth.py         
+[ ] code word's help, not easy, keep the record.
+    # stack diagram    
+    ntibwas, s = ntib, nextstring("\\(")
+    if s['flag']:  # stack diagram is existing
+        pdb.set_trace()
+        newhelp = '( ' + nexttoken('\\)') + nexttoken() + ' '
+    else: # return s to tib
+        ntib = ntibwas
+    # word description
+    ntibwas, s = ntib, nextstring("\\")
+    if s['flag']:  # description is existing
+        newhelp += nexttoken('\n|\r')
+    else: # return s to tib
+        ntib = ntibwas
+    code \ last().help += nexttoken('\n|\r'); end-code immediate
+         // ( <comment> -- ) Give help message to the new word.
+    code ( last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' end-code immediate
+         // ( -- ) Get stack diagram to the last's help. 
         
-        
-        
+[ ]         
+[ ]         
+[ ]         
         
