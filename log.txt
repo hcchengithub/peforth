@@ -236,7 +236,43 @@ peforth
     code ( last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' end-code immediate
          // ( -- ) Get stack diagram to the last's help. 
         
-[ ]         
-[ ]         
-[ ]         
-        
+[x] In jeforth, window.colonxt is dynamicly created by definition of ':'.
+    Can peforth.f do that too in python? Yes!!!
+        >>> def test():
+        ...     globals()['cc'] = 123
+        ...
+        >>> cc
+        Traceback (most recent call last):
+          File "<stdin>", line 1, in <module>
+        NameError: name 'cc' is not defined
+        >>> test()
+        >>> cc
+        123
+        >>>
+[ ] : test ; 
+    'module' object does not support item assignment
+    Debug? [y/N] y
+    RI: last().xt = xt # also vm['colonxt'] <------ [ ] easy, deal with this later
+[x] After the above error probably, after colon definition the compiling is still True!!!
+    --> because forgot declare it a global.
+    B i n g o ! ! colon definition works now
+[x] literal needs to use closure 
+    def gen(n): # function generator
+        def f(): # literal run time function
+            print(n)
+        f.description = "{} {}".format(type(n),n)    
+        return f
+    f = gen([11,22,33])
+    f()
+    >>> f.description
+    "<class 'list'> [11, 22, 33]"
+    # functions are not shown by __str__ and __repr__ like dict
+    # def str(self):    # return help message
+    #     return f.description
+    # def repr(self):   # execute xt and return help message
+    #     return f.description
+    # str.desc = "I am str"    
+    # repr.desc = "I am repr"    
+    # f.__str__  = str    
+    # f.__repr__ = repr
+    

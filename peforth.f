@@ -1,12 +1,73 @@
-code // last().help = nexttoken('\n|\r'); end-code 
-     // ( <comment> -- ) Give help message to the new word.
+code //    # ( <comment> -- ) Give help message to the new word.
+    if last().help:
+        last().help += nexttoken('\n|\r'); 
+    else:
+        last().help  = nexttoken('\n|\r'); 
+    if tick('//'): tick('//').immediate=True # workaround
+    end-code 
+    // ( <comment> -- ) Give help message to the new word.
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code *debug* pdb.set_trace() end-code // ( -- ) Invoke python pdb debugger
 code words    # ( -- ) Prints all words in forth vocabulary
      for i in words['forth']: 
          print(i and i.name, end=" ")
      print() end-code
+code . print(pop(),end="") end-code // ( x -- ) Print the TOS
+code ? print(tos(),end="") end-code // ( x -- x ) Print the TOS
 code .s print(stack) end-code // ( -- ) Print the data stack 
+code immediate # ( -- ) Make the last new word an immediate.
+    last().immediate=True
+    end-code
+code interpret-only # ( -- ) Make the last new word an interpret-only.
+    last().interpretonly=True;
+    end-code interpret-only
+code compile-only    # ( -- ) \ Make the last new word a compile-only.
+    last().compileonly=True
+    end-code interpret-only
+code literal    # ( n -- ) \ Compile TOS as an anonymous constant
+    def gen(n): # function generator
+        def f(): # literal run time function
+            push(n)
+        f.description = "{} {}".format(type(n),n)    
+        return f
+    comma(gen(pop()))
+    end-code
+code :    # ( <name> -- ) Begin a forth colon definition.
+    def xt(_me):
+        rstack.append(ip)
+        inner(_me.cfa)
+    global newname, tib, newhelp, compiling
+    newname = nexttoken();
+    # push(nexttoken('\n|\r'));  # rest of the first line
+    # execute("parse-help"); // ( "helpmsg" "rests" )
+    # tib = " " + pop() + tib.slice(ntib); ntib = 0; // "rests" + tib(ntib)
+    # newhelp = /* newname + " " + */ pop(); // help messages packed
+    push(newname); execute("(create)");  # 故 colon definition 裡有 last or last() 可用來取得本身。
+    compiling=True;
+    tick(':').stackwas = stack[:] # Should not be changed, ';' will check.
+    last().type = "colon";
+    last().cfa = here;
+    last().help = newhelp;
+    last().xt = xt # also vm['colonxt']
+    end-code
+
+code ;    # ( -- ) End of the colon definition.
+    global calling, compiling
+    if tick(':').stackwas!=stack:
+        panic("Stack changed during colon definition, it must be a mistake!");
+        words[current].pop() # drop the unrevealed new word
+    else:
+        comma(RET);
+    compiling = False;
+    execute('reveal');
+    end-code immediate compile-only
+code (    # ( <stack diagram> -- ) Get stack diagram to the last's help.  
+    if last().help: # skip bringing the help into the word.help
+        nexttoken('\\)'); nexttoken() # skip the stack diagram
+    else:
+        last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' 
+    end-code immediate
+    // ( -- ) Get stack diagram to the last's help. 
 code privacy push(False) end-code // ( -- false ) Default is false, words are nonprivate by default.
 code version # ( -- revision ) print the greeting message and return the revision code
      push(vm.greeting()) end-code
@@ -78,9 +139,6 @@ code execute # ( Word|"name"|address -- ... ) \ Execute the given word.
                         [d 321,654 d] [p 'drop', "'", "execute", '\\' p]
                 </selftest>
 
-code interpret-only # ( -- ) Make the last new word an interpret-only.
-    last().interpretonly=True;
-    end-code interpret-only
 
                 <selftest>
                     *** interpret-only marks the last word an interpret-only word
@@ -89,9 +147,6 @@ code interpret-only # ( -- ) Make the last new word an interpret-only.
                         [d False,True d] [p "interpret-only" p]
                 </selftest>
 
-code immediate # ( -- ) Make the last new word an immediate.
-    last().immediate=True
-    end-code
 
                 <selftest>
                     *** immediate marks the last word an immediate word
@@ -158,9 +213,6 @@ code \s    # ( -- ) \ Stop outer loop which may be loading forth source files.
     ntib=len(tib); # 可能沒用，雙重保險。
     end-code
 
-code compile-only    # ( -- ) \ Make the last new word a compile-only.
-    last().compileonly=True
-    end-code interpret-only
 
                 <selftest>
                     *** compile-only marks last word as a compile-only word
@@ -315,7 +367,6 @@ code exit    # ( -- ) \ Exit this colon word.
 
 code ret    # ( -- ) \ Mark at the end of a colon word.
     comma(RET) end-code immediate compile-only
-
 code rescan-word-hash    # ( -- ) \ Rescan all word-lists in the order[] to rebuild wordhash{}
     global wordhash, context
     # Scan given VID into wordhash{}
@@ -333,76 +384,13 @@ code rescan-word-hash    # ( -- ) \ Rescan all word-lists in the order[] to rebu
         scan_vocabulary(order[j],False);  # The latter the higher priority
     scan_vocabulary(context,True);  # The context has the highest priority
     end-code
-
-stop
-code all        ( -- ) \ Temporarily make all private words public, so "all words" shows them all.
-                for (var j=0; j<order.length; j++) 
-                    vm.g.scan_vocabulary(order[j],True); // The latter the higher priority
-                end-code
-                
-code (forget)   ( -- ) \ Forget the last word
-                if (last().cfa) here = last().cfa;
-                words[current].pop(); // drop the last word
-                execute("rescan-word-hash");
-                end-code 
-
-                <selftest>
-                    *** (forget) should forget the last word
-                        : remember-me ; (forget)
-                        last :> name=="remember-me" [d False d] 
-                        [p "(forget)","rescan-word-hash" p]
-                </selftest>
-
-code :          ( <name> -- ) \ Begin a forth colon definition.
-                newname = nexttoken();
-                push(nexttoken('\n|\r')); // rest of the first line
-                execute("parse-help"); // ( "helpmsg" "rests" )
-                tib = " " + pop() + tib.slice(ntib); ntib = 0; // "rests" + tib(ntib)
-                newhelp = /* newname + " " + */ pop(); // help messages packed
-                push(newname); execute("(create)"); // 故 colon definition 裡有 last or last() 可用來取得本身。
-                compiling=True;
-                tick(':').stackwas = stack.slice(0); // Should not be changed, ';' will check.
-                last().type = "colon";
-                last().cfa = here;
-                last().help = newhelp;
-                last().xt = colonxt = function(){
-                    rstack.push(ip);
-                    inner(this.cfa);
-                }
-                end-code
-
-code ;          ( -- ) \ End of the colon definition.
-                if (!vm.g.isSameArray(tick(':').stackwas,stack)) {
-                    panic("Stack changed during colon definition, it must be a mistake!\n", "error");
-                    words[current].pop();
-                } else {
-                    comma(RET);
-                }
-                compiling = False;
-                execute('reveal');
-                end-code immediate compile-only
-
-code (')        ( "name" -- Word ) \ name>Word like tick but the name is from TOS.
-                push(vm.tick(pop())) // use the original tick() to avoid warning
-                end-code
-
-code '          ( <name> -- Word ) \ Tick, get word name from TIB, leave the Word object on TOS.
-                push(vm.tick(nexttoken())) // use the original tick() to avoid warning
-                end-code
-
-
-                <selftest>
-                    *** ' tick and (') should return a word object
-                        ' code :> name char end-code (') :> name
-                        [d "code","end-code" d] [p "'","(')" p]
-                </selftest>
-
-code #tib       push(ntib) end-code // ( -- n ) Get ntib
-code #tib!      ntib = pop() end-code // ( n -- ) Set ntib
-
-\ ------------------ eforth code words ----------------------------------------------------------------------
-
-code branch     ip=dictionary[ip] end-code compile-only // ( -- ) 將當前 ip 內數值當作 ip *** 20111224 sam
+code (')    # ( "name" -- Word ) name>Word like tick but the name is from TOS.
+    push(tick(pop())) # use the original tick() to avoid warning
+    end-code
+code '    # ( <name> -- Word ) Tick, get word name from TIB, leave the Word object on TOS.
+    push(tick(nexttoken())) # use the original tick() to avoid warning
+    end-code
+code branch ip=dictionary[ip] end-code compile-only // ( -- ) 將當前 ip 內數值當作 ip *** 20111224 sam
 
                 <selftest>
                     *** branch should jump to run hello
@@ -413,7 +401,14 @@ code branch     ip=dictionary[ip] end-code compile-only // ( -- ) 將當前 ip �
                     ---
                 </selftest>
 
-code 0branch    if(pop())ip++;else ip=dictionary[ip] end-code compile-only // ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則將 ip 進位 *** 20111224 sam
+code 0branch 
+    global ip;
+    if pop():
+        ip += 1;
+    else:
+        ip = dictionary[ip] 
+    end-code compile-only 
+    // ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則將 ip 進位 *** 20111224 sam
 code !          dictionary[pop()]=pop() end-code // ( n a -- ) 將 n 存入位址 a
 code @          push(dictionary[pop()]) end-code // ( a -- n ) 從位址 a 取出 n
 code >r         rstack.push(pop()) end-code  // ( n -- ) Push n into the return stack.
@@ -441,8 +436,8 @@ code 0<         push(pop()<0) end-code // ( a -- f ) 比較 a 是否小於 0
                     ---
                 </selftest>
 
-code here!      here=pop() end-code // ( a -- ) 設定系統 dictionary 編碼位址
-code here       push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
+code here! global here; here=pop() end-code // ( a -- ) 設定系統 dictionary 編碼位址
+code here push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
 
                 <selftest>
                     *** here! here, forth dictionary pointer
@@ -458,19 +453,35 @@ code here       push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
                     ~~~ 
                 </selftest>
 
-\ JavaScript logical operations can be confusing
-\ 在處理邏輯 operator 時我決定用 JavaScript 自己的 Boolean() 來 logicalize 所有的
-\ operands, 這類共有 and or not 三者。為了保留 JavaScript && || 的功能 (邏輯一旦確
-\ 立隨即傳回該 operand 之值) 另外定義 && || 遵照之，結果變成很奇特的功能。Forth 傳
-\ 統的 AND OR NOT XOR 是 bitwise operators, 正好用傳統的大寫給它們。
+code bool       push(bool(pop())) end-code // ( x -- boolean(x) ) Cast TOS to boolean.
+code and        b=pop();a=pop();push(bool(a) and bool(b)) end-code // ( a b == a and b ) Logical and
+code or         b=pop();a=pop();push(bool(a) or bool(b)) end-code // ( a b == a or b ) Logical or
+code not        push(not bool(pop())) end-code // ( x == !x ) Logical not
+code (forget)    # ( -- ) \ Forget the last word
+    global here
+    if last().cfa: here = last().cfa;
+    words[current].pop(); # drop the last word
+    execute("rescan-word-hash");
+    end-code 
 
-code boolean    push(Boolean(pop())) end-code // ( x -- boolean(x) ) Cast TOS to boolean.
-code and        var b=pop(),a=pop();push(Boolean(a)&&Boolean(b)) end-code // ( a b == a and b ) Logical and. See also '&&' and 'AND'.
-code or         var b=pop(),a=pop();push(Boolean(a)||Boolean(b)) end-code // ( a b == a or b ) Logical or. See also '||' and 'OR'.
-code not        push(!Boolean(pop())) end-code // ( x == !x ) Logical not. Capital NOT is for bitwise.
-code &&         push(pop(1)&&pop()) end-code // ( a b == a && b ) if a then b else swap endif
-code ||         push(pop(1)||pop()) end-code // ( a b == a || b ) if a then swap else b endif
-code AND        push(pop() & pop()) end-code // ( a b -- a & b ) Bitwise AND. See also 'and' and '&&'.
+                <selftest>
+                    *** (forget) should forget the last word
+                        : remember-me ; (forget)
+                        last :> name=="remember-me" [d False d] 
+                        [p "(forget)","rescan-word-hash" p]
+                </selftest>
+
+                <selftest>
+                    *** ' tick and (') should return a word object
+                        ' code :> name char end-code (') :> name
+                        [d "code","end-code" d] [p "'","(')" p]
+                </selftest>
+stop \ _stop_
+
+code #tib       push(ntib) end-code // ( -- n ) Get ntib
+code #tib!      ntib = pop() end-code // ( n -- ) Set ntib
+
+\ ------------------ eforth code words ----------------------------------------------------------------------
 code OR         push(pop() | pop()) end-code // ( a b -- a | b ) Bitwise OR. See also 'or' and '||'.
 code NOT        push(~pop()) end-code // ( a -- ~a ) Bitwise NOT. Small 'not' is for logical.
 code XOR        push(pop() ^ pop()) end-code // ( a b -- a ^ b ) Bitwise exclusive OR.
@@ -685,7 +696,6 @@ code roll       ( ... n3 n2 n1 n0 3 -- ... n2 n1 n0 n3 )
                         1 2 3 2 roll 1 = depth 3 = and >r 2 drops \ True
                         r> r> r> [d True,True,True d] [p "roll" p]
                 </selftest>
-code .          type(pop()); end-code // ( sth -- ) Print number or string on TOS.
 : space         (space) . ; // ( -- ) Print a space.
 code word       ( "delimiter" -- "token" <delimiter> ) \ Get next "token" from TIB.
                 push(nexttoken(pop())) end-code
@@ -729,7 +739,7 @@ code word       ( "delimiter" -- "token" <delimiter> ) \ Get next "token" from T
 code colon-word ( -- ) \ Decorate the last() as a colon word.
                 // last().type = "colon";
                 last().cfa = here;
-                last().xt = colonxt;
+                last().xt = colonxt;  # vm['colonxt']
                 end-code private
 
 : create        ( <name> -- ) \ Create a new word. The new word is a variable by default.
@@ -772,17 +782,26 @@ code cls        ( -- ) \ Clear jeforth console screen
                 end-code
 code abort      reset() end-code // ( -- ) Reset the forth system.
 
-code literal    ( n -- ) \ Compile TOS as an anonymous constant
-                var literal = pop();
-                var getLiteral = eval(
-                        "var f;f=function(){push(literal)/*(" 
-                        + mytypeof(literal) + ")" 
-                        // avoid all "*/" and longer string
-                        + literal.toString().slice(0,20).replace(/\*[/]/g,"*_/") 
-                        + " */}"
-                    );
-                comma(getLiteral);
-                end-code
+code literal    # ( n -- ) \ Compile TOS as an anonymous constant
+    literal = pop();
+    var getLiteral = eval(
+            "var f;f=function(){push(literal)/*(" 
+            + mytypeof(literal) + ")" 
+            // avoid all "*/" and longer string
+            + literal.toString().slice(0,20).replace(/\*[/]/g,"*_/") 
+            + " */}"
+        );
+    comma(getLiteral);
+    end-code
+    /// 02794: function (){push(literal)/*(number)123 */} (function)
+code literal    # ( n -- ) \ Compile TOS as an anonymous constant
+    local = {}
+    local['lit'] = pop()
+    cc = "def f(): push(lit)#({}){}".format(type(lit),lit)
+    exec(cc,local,local)
+    comma(local['f'])
+    end-code // ( n -- ) \ Compile TOS as an anonymous constant    
+                
 code alias      ( Word <alias> -- ) \ Create a new name for an existing word
                 var w = pop();
                 // To use the correct TIB, must use execute("word") instead of dictate("word").

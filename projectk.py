@@ -63,7 +63,7 @@ class Word:
         self.name = name
         self.xt = xt
         self.immediate = False
-        self.help = "( ?? ) No help message. Use // to add one."
+        self.help = ""
         self.comment = ""
     def __str__(self):    # return help message
         return self.name + " " + self.help + ' __str__'
