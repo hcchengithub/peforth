@@ -289,6 +289,10 @@ peforth
     --> fixed, now it's a panic.
 [ ] \ ------------ above are most basic words for developing and for debug ----------------
     py: py> 完成之後, 以下都應該盡量改成 colon words 
-
+[x] compiling 未定義怎麼不觸發 unknown?
+    --> outer() 用 eval(token) 想判斷 token 是否 number 不行, 
+        當 token='compiling' 時不會觸發 exception 反而傳回其值 True or False !! 
+    --> 改用 complex(token) 很完美! 
+        
     
     

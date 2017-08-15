@@ -84,12 +84,12 @@ code compile-only
     end-code interpret-only
     // ( -- ) \ Make the last new word a compile-only.
 code literal    
-    def gen(n): # function generator
+    def literal(n): # function generator
         def f(): # literal run time function
             push(n)
         f.description = "{} {}".format(type(n),n)    
         return f
-    comma(gen(pop()))
+    comma(literal(pop()))
     end-code
     // ( n -- ) \ Compile TOS as an anonymous constant    
 code reveal    
@@ -161,14 +161,53 @@ code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
     /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
 : py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement    
 : py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
-
+\ Wordafound when py: is now available
+    py: tick('//').immediate=True
 \ ------------ above are most basic words for developing and for debug ----------------
 \ 以下都應該盡量改成 colon words 
 
+code 0branch 
+    global ip;
+    if pop():
+        ip += 1;
+    else:
+        ip = dictionary[ip] 
+    end-code compile-only 
+    // ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則將 ip 進位 *** 20111224 sam
+code here! global here; here=pop() end-code // ( a -- ) 設定系統 dictionary 編碼位址
+code here push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
+code swap push(pop(1)) end-code // ( a b -- b a ) stack operation
+code !    dictionary[pop()]=pop() end-code // ( n a -- ) 將 n 存入位址 a
+code @    push(dictionary[pop()]) end-code // ( a -- n ) 從位址 a 取出 n
+code >r   rstack.append(pop()) end-code  // ( n -- ) Push n into the return stack.
+code r>   push(rstack.pop()) end-code  // ( -- n ) Pop the return stack
+code r@   push(rtos()) end-code // ( -- r0 ) Get a copy of the TOS of return stack
+code drop pop(); end-code // ( x -- ) Remove TOS.
+code dup  push(tos()) end-code // ( a -- a a ) Duplicate TOS.
+code over push(tos(1)) end-code // ( a b -- a b a ) Stack operation.
+code 0<   push(pop()<0) end-code // ( a -- f ) 比較 a 是否小於 0
+code +    push(pop(1)+pop()) end-code // ( a b -- a+b) Add two numbers or concatenate two strings.
+code *    push(pop()*pop()) end-code // ( a b -- a*b ) Multiplex.
+code -    push(pop(1)-pop()) end-code // ( a b -- a-b ) a-b
+code /    push(pop(1)/pop()) end-code // ( a b -- c ) 計算 a 與 b 兩數相除的商 c
+code 1+   push(pop()+1) end-code // ( a -- a++ ) a += 1
+code 2+   push(pop()+2) end-code // ( a -- a+2 )
+code 1-   push(pop()-1) end-code // ( a -- a-1 ) TOS - 1
+code 2-   push(pop()-2) end-code // ( a -- a-2 ) TOS - 2
+: compile ( -- ) // Compile the next word at dictionary[ip] to dictionary[here].
+    r> dup @ , 1+ >r ; compile-only 
+: if ( -- a ) // if..else..then, if..then
+    compile 0branch here 0 , ; immediate compile-only
+: then  ( a -- ) // if....else..then, for aft...then next, begin..while..until..then
+    here swap ! ; immediate compile-only
+code compiling push(compiling) end-code // ( -- boolean ) Get system state
+: char ( <str> -- str ) // Get character(s).
+    BL word compiling if literal then ; immediate
+    /// "char abc" gets "abc", unlike ANS forth "char abc" gets only 'a'.
+: CR char \\n|\\r ; // ( -- '\\n|\\r' ) RegEx new line, works with 'word' command.
+code last push(last()) end-code // ( -- word ) Get the word that was last defined.
+: version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
 stop _stop_    
-code CR push("\\n|\\r") end-code // ( -- '\n' ) RegEx new line, works with 'word' command.
-code version # ( -- revision ) print the greeting message and return the revision code
-    push(vm.greeting()) end-code
 code <selftest> 
     push(nexttoken("</selftest>"));
     end-code
@@ -433,8 +472,6 @@ code (space)    push(" ") end-code // ( -- " " ) Put a space on TOS.
 \                 eval("push(function(){" + pop() + "})"); 
 \                 end-code private
 
-code compiling  push(compiling) end-code // ( -- boolean ) Get system state
-code last       push(last()) end-code // ( -- word ) Get the word that was last defined.
 
                 <selftest>
                     *** last should return the last word
@@ -486,24 +523,6 @@ code branch ip=dictionary[ip] end-code compile-only // ( -- ) 將當前 ip 內�
                     ---
                 </selftest>
 
-code 0branch 
-    global ip;
-    if pop():
-        ip += 1;
-    else:
-        ip = dictionary[ip] 
-    end-code compile-only 
-    // ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則將 ip 進位 *** 20111224 sam
-code !          dictionary[pop()]=pop() end-code // ( n a -- ) 將 n 存入位址 a
-code @          push(dictionary[pop()]) end-code // ( a -- n ) 從位址 a 取出 n
-code >r         rstack.push(pop()) end-code  // ( n -- ) Push n into the return stack.
-code r>         push(rstack.pop()) end-code  // ( -- n ) Pop the return stack
-code r@         push(rtos()) end-code // ( -- r0 ) Get a copy of the TOS of return stack
-code drop       pop(); end-code // ( x -- ) Remove TOS.
-code dup        push(tos()) end-code // ( a -- a a ) Duplicate TOS.
-code swap       push(pop(1)) end-code // ( a b -- b a ) stack operation
-code over       push(tos(1)) end-code // ( a b -- a b a ) Stack operation.
-code 0<         push(pop()<0) end-code // ( a -- f ) 比較 a 是否小於 0
 
                 <selftest>
                     *** ! @ >r r> r@ drop dup swap over 0<
@@ -521,8 +540,6 @@ code 0<         push(pop()<0) end-code // ( a -- f ) 比較 a 是否小於 0
                     ---
                 </selftest>
 
-code here! global here; here=pop() end-code // ( a -- ) 設定系統 dictionary 編碼位址
-code here push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
 
                 <selftest>
                     *** here! here, forth dictionary pointer
@@ -656,14 +673,6 @@ code null       push(null) end-code // ( -- null ) Get a null value.
 \ Not eforth code words
 \ 以下照理都可以用 eforth 的基本 code words 組合而成 colon words, 我覺得 jeforth 裡適合用 code word 來定義。
 
-code +          push(pop(1)+pop()) end-code // ( a b -- a+b) Add two numbers or concatenate two strings.
-code *          push(pop()*pop()) end-code // ( a b -- a*b ) Multiplex.
-code -          push(pop(1)-pop()) end-code // ( a b -- a-b ) a-b
-code /          push(pop(1)/pop()) end-code // ( a b -- c ) 計算 a 與 b 兩數相除的商 c
-code 1+         push(pop()+1) end-code // ( a -- a++ ) a += 1
-code 2+         push(pop()+2) end-code // ( a -- a+2 )
-code 1-         push(pop()-1) end-code // ( a -- a-1 ) TOS - 1
-code 2-         push(pop()-2) end-code // ( a -- a-2 ) TOS - 2
 
                 <selftest>
                     *** + * - / 1+ 2+ 1- 2-
@@ -785,7 +794,7 @@ code min        push(Math.min(pop(),pop())) end-code // ( a b -- min(a,b) ) The 
 
 code doVar      push(ip); ip=rstack.pop(); end-code compile-only private
                 // ( -- a ) 取隨後位址 a , runtime of created words
-code doNext     var i=rstack.pop()-1;if(i>0){ip=dictionary[ip]; rstack.push(i);}else ip++ end-code 
+code doNext     var i=rstack.pop()-1;if(i>0){ip=dictionary[ip]; rstack.append(i);}else ip++ end-code 
                 compile-only
                 // ( -- ) next's runtime.
 
@@ -831,8 +840,6 @@ code roll       ( ... n3 n2 n1 n0 3 -- ... n2 n1 n0 n3 )
 code [ compiling=False end-code immediate // ( -- ) 進入直譯狀態, 輸入指令將會直接執行 *** 20111224 sam
 code ] compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將會編碼到系統 dictionary *** 20111224 sam
 
-: compile       ( -- ) \ Compile the next word at dictionary[ip] to dictionary[here].
-                r> dup @ , 1+ >r ; compile-only 
 
                 <selftest>
                     *** [compile] compile [ ]
@@ -1050,15 +1057,11 @@ code 2drop      stack.splice(stack.length-2,2) end-code // ( ... a b -- ... )
                     ---
                 </selftest>
 
-: if            ( -- a ) \ if..else..then, if..then
-                compile 0branch here 0 , ; immediate compile-only
 : ahead         ( -- a ) \ aft internal use
                 compile branch here 0 , ; immediate compile-only
 ' ahead alias never immediate compile-only // ( -- a ) never ... then for call-back entry inner(word.cfa+n) 
 : repeat        ( a a -- ) \ begin..while..repeat
                 [compile] again here swap ! ; immediate compile-only
-: then          ( a -- ) \ if....else..then, for aft...then next, begin..while..until..then
-                here swap ! ; immediate compile-only
 : aft           ( a -- a a ) \ for aft ... then next
                 drop [compile] ahead [compile] begin swap ; immediate compile-only
 : else          ( a -- a ) \ if..else..then
@@ -1087,9 +1090,6 @@ code 2drop      stack.splice(stack.length-2,2) end-code // ( ... a b -- ... )
                     ---
                 </selftest>
 
-: char          ( <str> -- str ) \ Get character(s).
-                BL word compiling if literal then ; immediate
-                /// "char abc" gets "abc", Note! ANS forth "char abc" gets only 'a'.
 : ?stop         if stop then ; // ( flag -- ) Stop TIB task if flag is True.
 : ?dup          dup if dup then ; // ( w -- w w | 0 ) Dup TOS if it is not 0|""|False.
 
@@ -1742,12 +1742,12 @@ code wordhash>array ( "vid" -- array ) \ Retrive a VID list from the recent acti
                 var vid=pop(), aa = [], bb = [], j=1; // vid[0] always 0, start from 1.
                 // get the raw list
                 for (var i in wordhash) 
-                    if (wordhash[i].vid==vid) aa.push(wordhash[i]);
+                    if (wordhash[i].vid==vid) aa.append(wordhash[i]);
                 // sort aa by wid to be bb
                 while (aa.length) { 
                     for (i=0; i<aa.length; i++) {
                         if (aa[i].wid<=j) {
-                            bb.push(aa.splice(i,1)[0]);
+                            bb.append(aa.splice(i,1)[0]);
                             break;
                         }
                     }

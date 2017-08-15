@@ -321,8 +321,8 @@ def outer(entry=None):
                     comma(w);  # compile w into dictionary. w is a Word() object
         else:
             try:
-                # token is a number, int or float
-                n = eval(token) + 0 # triggers exception if token is not a number
+                # token is a number
+                n = complex(token) # triggers exception if token is not a number
                 push(n)
                 if (compiling):
                     execute("literal");
