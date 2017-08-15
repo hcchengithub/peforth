@@ -1,11 +1,11 @@
 import projectk as vm
 
 # peforth version 
-version = 1.01
+vm.version = float(vm.major_version) + 0.01 # 0.01 is the minor version or build number
 def temp():
-    print("p e f o r t h    v" + str(version));
+    print("p e f o r t h    v" + str(vm.version));
     print("source code http://github.com/hcchengithub/peforth");
-    return version;
+    return vm.version;
 vm.greeting = temp
     
 # The eforth.py command line interface, the main program loop
@@ -15,7 +15,7 @@ def main():
     s = f.read()
     f.close()
     vm.dictate(s)
-    # include quit.f for peforth.3py
+    # include quit.f for peforth.3dos
     f = open('quit.f','r',encoding='utf-8')
     s = f.read()
     f.close()

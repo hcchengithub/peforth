@@ -1,30 +1,89 @@
-code //    # ( <comment> -- ) Give help message to the new word.
-    if last().help:
-        last().help += nexttoken('\n|\r'); 
-    else:
-        last().help  = nexttoken('\n|\r'); 
-    if tick('//'): tick('//').immediate=True # workaround
-    end-code 
-    // ( <comment> -- ) Give help message to the new word.
+code // last().help += nexttoken('\n|\r'); end-code // ( <comment> -- ) Give help message to the new word with the rest of the line
+code /// 
+    ss = nexttoken('\n|\r');
+    ss = "\t" + ss   # Add leading \t to each line.
+    ss = ss.rstrip() # trim tailing white spaces
+    last().comment = getattr(last(), 'comment', "") + ss;
+    end-code
+    // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
+code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
+code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the rest of the line
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code *debug* pdb.set_trace() end-code // ( -- ) Invoke python pdb debugger
-code words    # ( -- ) Prints all words in forth vocabulary
-     for i in words['forth']: 
-         print(i and i.name, end=" ")
-     print() end-code
+\ code py>
+\     s = "lambda:" + nexttoken()
+\     f = eval(s) # compile to be a function
+\     if compiling:
+\         comma(lambda:push(f()))
+\     else:
+\         push(f())
+\     end-code immediate
+\     // ( <statement> -- value ) eval python statements
+\ code py:
+\     s = "lambda:" + nexttoken()
+\     print(s)
+\     f = eval(s) # compile to be a function
+\     dis.dis(f)
+\     if compiling:
+\         comma(f)
+\     else:
+\         f()
+\     end-code immediate
+\     // ( <statement> -- ... ) exec python statements
+\ Trick that works around
+\    py: tick('//').immediate=True
+code <py> 
+    push(nexttoken("</py>|</pyV>")) end-code immediate
+    // ( <python statements> -- "statements" ) Starting in-line python statements
+code </py>     
+    exec_code = compile(pop(),"","exec")
+    if compiling:
+        comma(lambda:exec(exec_code))
+    else:
+        exec(exec_code)
+    end-code immediate
+    // ( "statements" -- ) exec in-line python statements
+code </pyV>
+    eval_code = compile(pop(),"","eval")
+    if compiling:
+        comma(lambda:push(eval(eval_code)))
+    else:
+        push(eval(eval_code))
+    end-code immediate
+    // ( "statements" -- value ) eval in-line python statements
+code words
+    for i in words['forth']: 
+        print(i and i.name, end=" ")
+    print() end-code 
+    // ( -- ) Prints all words in forth vocabulary
 code . print(pop(),end="") end-code // ( x -- ) Print the TOS
+code cr print() end-code // ( -- ) print a carriage return
 code ? print(tos(),end="") end-code // ( x -- x ) Print the TOS
 code .s print(stack) end-code // ( -- ) Print the data stack 
-code immediate # ( -- ) Make the last new word an immediate.
-    last().immediate=True
-    end-code
-code interpret-only # ( -- ) Make the last new word an interpret-only.
+code help
+    n=nexttoken();
+    if n:
+        print(tick(n).help,'\n',tick(n).comment or "") 
+    else:
+        list = context_word_list()
+        for i in range(1,len(list)):
+            print(list[i].name, end=" ")
+            if getattr(list[i],"help",False):
+                print(list[i].help)
+            else:
+                print("( ?? ) No help, use // command to add help to last")
+            if getattr(list[i],"comment",False):
+                print(list[i].comment)
+    end-code // ( <word name> -- ) Print word's help and comment of the given word or all of them
+code interpret-only
     last().interpretonly=True;
     end-code interpret-only
-code compile-only    # ( -- ) \ Make the last new word a compile-only.
+    // ( -- ) Make the last new word an interpret-only.
+code compile-only    
     last().compileonly=True
     end-code interpret-only
-code literal    # ( n -- ) \ Compile TOS as an anonymous constant
+    // ( -- ) \ Make the last new word a compile-only.
+code literal    
     def gen(n): # function generator
         def f(): # literal run time function
             push(n)
@@ -32,16 +91,32 @@ code literal    # ( n -- ) \ Compile TOS as an anonymous constant
         return f
     comma(gen(pop()))
     end-code
-code :    # ( <name> -- ) Begin a forth colon definition.
+    // ( n -- ) \ Compile TOS as an anonymous constant    
+code reveal    
+    wordhash[last().name]=last() end-code
+    // ( -- ) Add the last word into wordhash
+    \ We don't want the last word to be seen during its colon definition.
+    \ So reveal is done in ';' command.
+code privacy push(False) end-code // ( -- false ) Default is false, words are nonprivate by default.
+code (create)    
+    global newname
+    newname = pop()
+    if not newname: panic("(create) what?") 
+    if isReDef(newname): print("reDef "+newname); # 若用 tick(newname) 就錯了
+    current_word_list().append(Word(newname,None));
+    last().vid = current; # vocabulary ID
+    last().wid = len(current_word_list())-1; # word ID
+    last().type = "colon-create";
+    vm.execute("privacy"); # use the original execute() to avoid warning
+    last().private = bool(pop());
+    end-code
+    // ( "name" -- ) Create a code word that has a dummy xt, not added into wordhash{} yet
+code :    
     def xt(_me):
         rstack.append(ip)
         inner(_me.cfa)
     global newname, tib, newhelp, compiling
     newname = nexttoken();
-    # push(nexttoken('\n|\r'));  # rest of the first line
-    # execute("parse-help"); // ( "helpmsg" "rests" )
-    # tib = " " + pop() + tib.slice(ntib); ntib = 0; // "rests" + tib(ntib)
-    # newhelp = /* newname + " " + */ pop(); // help messages packed
     push(newname); execute("(create)");  # 故 colon definition 裡有 last or last() 可用來取得本身。
     compiling=True;
     tick(':').stackwas = stack[:] # Should not be changed, ';' will check.
@@ -50,8 +125,8 @@ code :    # ( <name> -- ) Begin a forth colon definition.
     last().help = newhelp;
     last().xt = xt # also vm['colonxt']
     end-code
-
-code ;    # ( -- ) End of the colon definition.
+    // ( <name> -- ) Begin a forth colon definition.
+code ;    
     global calling, compiling
     if tick(':').stackwas!=stack:
         panic("Stack changed during colon definition, it must be a mistake!");
@@ -61,25 +136,50 @@ code ;    # ( -- ) End of the colon definition.
     compiling = False;
     execute('reveal');
     end-code immediate compile-only
-code (    # ( <stack diagram> -- ) Get stack diagram to the last's help.  
+    // ( -- ) End of the colon definition.
+code (    
     if last().help: # skip bringing the help into the word.help
         nexttoken('\\)'); nexttoken() # skip the stack diagram
     else:
         last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' 
     end-code immediate
-    // ( -- ) Get stack diagram to the last's help. 
-code privacy push(False) end-code // ( -- false ) Default is false, words are nonprivate by default.
-code version # ( -- revision ) print the greeting message and return the revision code
-     push(vm.greeting()) end-code
-code <selftest> # ( <statements> -- ) \ Collect self-test statements. interpret-only
-     push(nexttoken("</selftest>"));
-     end-code
-code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>.buffer. interpret-only
-     my = tick("<selftest>");
-     my.buffer = getattr(my, "buffer", "") # initialize my.buffer
-     my.buffer += pop();
-     end-code
+    // ( <stack diagram> -- ) Get stack diagram to the last's help.  
+code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
+code word
+    push(nexttoken(pop())) end-code
+    // ( "delimiter" -- "token" <delimiter> ) Get next "token" from TIB.
+    /// First character after 'word' will always be skipped first, token separator.
+    /// If delimiter is RegEx '\s' then white spaces before the "token"
+    /// will be removed. Otherwise, return TIB[ntib] up to but not include the delimiter.
+    /// If delimiter not found then return the entire remaining TIB (can be multiple lines!).
+code '
+    push(tick(nexttoken())) # use the original tick() to avoid warning
+    end-code
+    // ( <name> -- Word ) Tick, get word name from TIB, leave the Word object on TOS.
+code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
+: [compile] ' , ; immediate // ( <string> -- ) Compile the next immediate word.
+    /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
+: py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement    
+: py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
 
+\ ------------ above are most basic words for developing and for debug ----------------
+\ 以下都應該盡量改成 colon words 
+
+stop _stop_    
+code CR push("\\n|\\r") end-code // ( -- '\n' ) RegEx new line, works with 'word' command.
+code version # ( -- revision ) print the greeting message and return the revision code
+    push(vm.greeting()) end-code
+code <selftest> 
+    push(nexttoken("</selftest>"));
+    end-code
+    // ( <statements> -- ) \ Collect self-test statements. interpret-only
+code </selftest> 
+    my = tick("<selftest>");
+    my.buffer = getattr(my, "buffer", "") # initialize my.buffer
+    my.buffer += pop();
+    end-code
+    // ( "selftest" -- ) Save the self-test statements to <selftest>.buffer. interpret-only
+    
     <selftest>
         <comment>
         程式只要稍微大一點點，就得附上一些 self-test 讓它伺機檢查自身。隨便有做，穩定性
@@ -129,8 +229,9 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
             [p 'version' p]
     </selftest>
 
-code execute # ( Word|"name"|address -- ... ) \ Execute the given word.
-     execute(pop()); end-code
+code execute 
+    execute(pop()); end-code
+    // ( Word|"name"|address -- ... ) Execute the given word.
 
                 <selftest>
                     *** "drop" drops the TOS
@@ -155,12 +256,6 @@ code execute # ( Word|"name"|address -- ... ) \ Execute the given word.
                         [d False,True d] [p "immediate" p]
                 </selftest>
                 
-code /// # ( <comment> -- ) Add comment to the new word, it appears in 'see'.
-     ss = nexttoken('\n|\r');
-     ss = "\t" + ss   # Add leading \t to each line.
-     ss = ss.rstrip() # trim tailing white spaces
-     last().comment = getattr(last(), 'comment', "") + ss;
-     end-code interpret-only
 
                 <selftest>
                     *** /// adds comment to the last word
@@ -173,10 +268,14 @@ code /// # ( <comment> -- ) Add comment to the new word, it appears in 'see'.
                         (forget)
                 </selftest>
                 
+code cls os.system("cls") end-code // ( -- ) DOS box clear creen 
+    /// os.system('cls')  # on windows
+    /// os.system('clear')  # on linux / os x
+
 code private  # ( -- ) Make the last word invisible when out of the context.
-     last().private=True
-     end-code
-     /// The opposite is nonprivate.
+    last().private=True
+    end-code
+    /// The opposite is nonprivate.
                 
 code nonprivate    # ( -- ) \ Make the last word non-private so it's globally visible.
     last().private=False
@@ -189,12 +288,6 @@ code nonprivate    # ( -- ) \ Make the last word non-private so it's globally vi
                     \   ' \ :> immediate==True ( True )
                     \   [d False,True d] [p "immediate" p]
                 </selftest>
-
-code .((    # ( <str> -- ) \ Print string that has ')' in it down to '))' immediately.
-    global ntib; print(nexttoken('\\)\\)')); ntib+=2; end-code immediate
-
-code \    # ( <comment> -- ) Comment down to the next '\n'.
-    nexttoken('\n') end-code immediate
 
                 <selftest>
                     *** TIB lines after \ should be ignored
@@ -223,22 +316,6 @@ code \s    # ( -- ) \ Stop outer loop which may be loading forth source files.
 
 \ ------------------ Fundamental words ------------------------------------------------------
                 
-code (create)    # ( "name" -- ) Create a code word that has a dummy xt, not added into wordhash{} yet
-    global newname
-    newname = pop()
-    if not newname: panic("(create) what?") 
-    if isReDef(newname): print("reDef "+newname); # 若用 tick(newname) 就錯了
-    current_word_list().append(Word(newname,None));
-    last().vid = current; # vocabulary ID
-    last().wid = len(current_word_list())-1; # word ID
-    last().type = "colon-create";
-    vm.execute("privacy"); # use the original execute() to avoid warning
-    last().private = bool(pop());
-    end-code
-code reveal    # ( -- ) Add the last word into wordhash
-    wordhash[last().name]=last() end-code
-    \ We don't want the last word to be seen during its colon definition.
-    \ So reveal is done in ';' command.
 
                 <selftest>
                     *** (create) creates a new word
@@ -247,8 +324,6 @@ code reveal    # ( -- ) Add the last word into wordhash
                 </selftest>
 
 code (space)    push(" ") end-code // ( -- " " ) Put a space on TOS.
-code BL         push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
-code CR         push("\\n|\\r") end-code // ( -- '\n' ) RegEx new line, works with 'word' command.
 
                 <selftest>
                     *** (space) puts a 0x20 on TOS
@@ -260,28 +335,43 @@ code CR         push("\\n|\\r") end-code // ( -- '\n' ) RegEx new line, works wi
                         CR js> "\\n|\\r" = 
                         [d True d] [p "CR","=" p]                       
                 </selftest>
-
-code pyExec    # ( "python code" -- ) Exec the given python statements
-    body = pop() # python code 
-    try:
-        exec(body,globals(),locals())
-    except Exception as err:
-        panic("{}\nCode:\n{}".format(err, body))
-    end-code 
                 
-    <selftest>
-        *** pyExec should exec(tos) 
-            456 char pop()+1 jsEval [d 457 d] [p "jsEval" p]
-    </selftest>
 
-code pyEval    # ( "python statement" -- value ) Eval the given python statements
-    body = pop() # python code 
-    try:
-        value = eval(body,globals(),locals())
-        push(value)
-    except Exception as err:
-        panic("{}\nCode:\n{}".format(err, body))
-    end-code 
+                <selftest>
+                    *** word reads "string" from TIB
+                    marker ---
+                    char \s word    111    222 222 === >r s" 111" === r> and \ True , whitespace 會切掉
+                    char  2 word    111    222 222 === >r s"    111    " === r> and \ True , whitespace 照收
+                    : </div> ;
+                    char </div> word    此後到 </ div> 之
+                                前都被收進，可
+                                以跨行！ come-find-me-!!
+                    </div> js> pop().indexOf("come-find-me-!!")!=-1 \ True
+                    [d True,True,True d] [p "word" p]
+                    ---
+                </selftest>
+
+\ code pyExec    # ( "python code" -- ) Exec the given python statements
+\     body = pop() # python code 
+\     try:
+\         exec(body,globals(),locals())
+\     except Exception as err:
+\         panic("{}\nCode:\n{}".format(err, body))
+\     end-code 
+\                 
+\     <selftest>
+\         *** pyExec should exec(tos) 
+\             456 char pop()+1 jsEval [d 457 d] [p "jsEval" p]
+\     </selftest>
+\ 
+\ code pyEval    # ( "python statement" -- value ) Eval the given python statements
+\     body = pop() # python code 
+\     try:
+\         value = eval(body,globals(),locals())
+\         push(value)
+\     except Exception as err:
+\         panic("{}\nCode:\n{}".format(err, body))
+\     end-code 
                 
     <selftest>
         *** pyEval should exec(tos) 
@@ -343,8 +433,6 @@ code pyEval    # ( "python statement" -- value ) Eval the given python statement
 \                 eval("push(function(){" + pop() + "})"); 
 \                 end-code private
 
-code [          compiling=False end-code immediate // ( -- ) 進入直譯狀態, 輸入指令將會直接執行 *** 20111224 sam
-code ]          compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將會編碼到系統 dictionary *** 20111224 sam
 code compiling  push(compiling) end-code // ( -- boolean ) Get system state
 code last       push(last()) end-code // ( -- word ) Get the word that was last defined.
 
@@ -386,9 +474,6 @@ code rescan-word-hash    # ( -- ) \ Rescan all word-lists in the order[] to rebu
     end-code
 code (')    # ( "name" -- Word ) name>Word like tick but the name is from TOS.
     push(tick(pop())) # use the original tick() to avoid warning
-    end-code
-code '    # ( <name> -- Word ) Tick, get word name from TIB, leave the Word object on TOS.
-    push(tick(nexttoken())) # use the original tick() to avoid warning
     end-code
 code branch ip=dictionary[ip] end-code compile-only // ( -- ) 將當前 ip 內數值當作 ip *** 20111224 sam
 
@@ -476,7 +561,53 @@ code (forget)    # ( -- ) \ Forget the last word
                         ' code :> name char end-code (') :> name
                         [d "code","end-code" d] [p "'","(')" p]
                 </selftest>
+
+
+
 stop \ _stop_
+
+\ code py>
+\     s = nexttoken()
+\     try:
+\         eval_code = compile(s,"","eval")
+\     if compiling:
+\         comma(lambda:eval(eval_code))
+\     else:
+\         push(eval(eval_code))
+\     end-code immediate
+\     // ( <statement> -- ... ) eval python statements
+\ code py:
+\     s = "lambda:" + nexttoken()
+\     f = eval(s)
+\     if compiling:
+\         comma(f)
+\     else:
+\         f()
+\     end-code immediate
+\     // ( <statement> -- ... ) exec python statements
+\ 
+\ code pyExec    # ( "python code" -- ) Exec the given python statements
+\     body = pop() # python code 
+\     try:
+\         exec(body,globals(),locals())
+\     except Exception as err:
+\         panic("{}\nCode:\n{}".format(err, body))
+\     end-code 
+\                 
+\     <selftest>
+\         *** pyExec should exec(tos) 
+\             456 char pop()+1 jsEval [d 457 d] [p "jsEval" p]
+\     </selftest>
+\ 
+\ code pyEval    # ( "python statement" -- value ) Eval the given python statements
+\     body = pop() # python code 
+\     try:
+\         value = eval(body,globals(),locals())
+\         push(value)
+\     except Exception as err:
+\         panic("{}\nCode:\n{}".format(err, body))
+\     end-code 
+    
 
 code #tib       push(ntib) end-code // ( -- n ) Get ntib
 code #tib!      ntib = pop() end-code // ( n -- ) Set ntib
@@ -657,7 +788,6 @@ code doVar      push(ip); ip=rstack.pop(); end-code compile-only private
 code doNext     var i=rstack.pop()-1;if(i>0){ip=dictionary[ip]; rstack.push(i);}else ip++ end-code 
                 compile-only
                 // ( -- ) next's runtime.
-code ,          comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
 
                 <selftest>
                     *** doVar doNext
@@ -697,29 +827,9 @@ code roll       ( ... n3 n2 n1 n0 3 -- ... n2 n1 n0 n3 )
                         r> r> r> [d True,True,True d] [p "roll" p]
                 </selftest>
 : space         (space) . ; // ( -- ) Print a space.
-code word       ( "delimiter" -- "token" <delimiter> ) \ Get next "token" from TIB.
-                push(nexttoken(pop())) end-code
-                /// First character after 'word' will always be skipped first, token separator.
-                /// If delimiter is RegEx '\s' then white spaces before the "token"
-                /// will be removed. Otherwise, return TIB[ntib] up to but not include the delimiter.
-                /// If delimiter not found then return the entire remaining TIB (can be multiple lines!).
 
-                <selftest>
-                    *** word reads "string" from TIB
-                    marker ---
-                    char \s word    111    222 222 === >r s" 111" === r> and \ True , whitespace 會切掉
-                    char  2 word    111    222 222 === >r s"    111    " === r> and \ True , whitespace 照收
-                    : </div> ;
-                    char </div> word    此後到 </ div> 之
-                                前都被收進，可
-                                以跨行！ come-find-me-!!
-                    </div> js> pop().indexOf("come-find-me-!!")!=-1 \ True
-                    [d True,True,True d] [p "word" p]
-                    ---
-                </selftest>
-
-: [compile]     ' , ; immediate // ( <string> -- ) Compile the next immediate word.
-                /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
+code [ compiling=False end-code immediate // ( -- ) 進入直譯狀態, 輸入指令將會直接執行 *** 20111224 sam
+code ] compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將會編碼到系統 dictionary *** 20111224 sam
 
 : compile       ( -- ) \ Compile the next word at dictionary[ip] to dictionary[here].
                 r> dup @ , 1+ >r ; compile-only 

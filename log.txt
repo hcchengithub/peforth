@@ -105,6 +105,13 @@ peforth
 
     print (inspect.getsource(foo))
     ==> 結果完全成功, 連 comment 也被顯示出來。
+    ==> 但是 py> py: 組合出來的 function 不行
+            py> tick('test').cfa ==> 1
+            py> dictionary[1:] ==> [.s, <function <lambda> at 0x0000024CE15810D0>, 
+            .s, <function <lambda> at 0x0000024CE1581158>, .s, None, None]
+            OK py> inspect.getsource(dictionary[2]) .
+            could not get source code  <------------------- error message
+            Debug? [y/N]
     
     同一篇 stackoverflow 介紹的 dis module 也真的可行!
     >>> import dis
@@ -161,14 +168,8 @@ peforth
     https://stackoverflow.com/questions/6629876/how-to-make-an-anonymous-function-in-python-without-christening-it
     Study built-in function exec() https://docs.python.org/3/library/functions.html#exec    
     Study build-in function compile() https://docs.python.org/3/library/functions.html#compile
-    [ ] genxt() 有成功, 但是還有 bug 
-        (Pdb) f = genxt("print('hello')")
-        (Pdb) f()
-        *** TypeError: xt() missing 1 required positional argument: '_me'
-        (Pdb) f(None)
-        hello
-        (Pdb) 
-        f = genxt('''print('hello')''')
+    [x] genxt() 成功了
+[x] IDLE path working directory working folder
     import sys
     sys.path.append('c:/Users/hcche/Documents/GitHub/peforth')
 [x] 12:50 2017/08/12 已經跑起來了, debugging compiling == 'code' 的問題
@@ -275,4 +276,19 @@ peforth
     # repr.desc = "I am repr"    
     # f.__str__  = str    
     # f.__repr__ = repr
+[x] py> py: 都應該改用 compile(code,"")    
+    compile CN http://www.th7.cn/Program/Python/201608/923063.shtml
+    用到 lambda 就不能用來【賦值】, 安全理由. 故 py: 不能用 lambda. 要的話就必須用 compile 的。
+    https://stackoverflow.com/questions/20695745/why-use-lambdas-vs-1-line-function-declarations
+    --> [x] 已經發現 py: tick('//').immediate=True 行不通了!!! 
+            --> 用 <py> </py> </pyV> 分別改寫了 py: py> , ok now
+    [x] pyExec pyEval 是多餘的 --> 去除
+[x] (Pdb) execute("sdfsdf")
+    (Pdb)
+    沒半點錯誤訊息, 有問題看不出來!!
+    --> fixed, now it's a panic.
+[ ] \ ------------ above are most basic words for developing and for debug ----------------
+    py: py> 完成之後, 以下都應該盡量改成 colon words 
+
+    
     

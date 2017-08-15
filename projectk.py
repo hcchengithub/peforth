@@ -7,10 +7,13 @@
 
 import re    # import whatever we want, don't rely on parent module
 import pdb
+import os
+import inspect  # print (inspect.getsource(func))
+import dis      # dis.dis(func) 
 
 name = "peforth"
 vm = __import__(__name__)
-major_version = 1;  # major version, peforth.py kernel version.
+major_version = 1;  # major version, peforth.py kernel version, integer.
 ip = 0;
 stack = [] ;
 rstack = [];
@@ -264,6 +267,8 @@ def execute(entry):
             panic("Error! please use inner("+w+") instead of execute("+w+").\n","severe");
         else:
             phaseB(w); 
+    else:
+        panic(entry + " unknown!")
 
 def inner(entry, resuming=None):
     # defined in project-k kernel peforth.py
