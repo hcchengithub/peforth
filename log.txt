@@ -293,6 +293,15 @@ peforth
     --> outer() 用 eval(token) 想判斷 token 是否 number 不行, 
         當 token='compiling' 時不會觸發 exception 反而傳回其值 True or False !! 
     --> 改用 complex(token) 很完美! 
-        
-    
-    
+[ ] t> >t t@ 
+    >>> line = 'Cats are smarter than dogs\n\\ 1234\n\\ 2233'
+    >>> matchObj = re.search( r'\n\\ (\d*)$', line)
+    >>> matchObj.group()
+    '\n\\ 2233'
+    >>> matchObj.group(1)
+    '2233'
+    >>> len(matchObj.group())
+    7
+    >>> line[:-7]
+    'Cats are smarter than dogs\n\\ 1234'
+    >>>    

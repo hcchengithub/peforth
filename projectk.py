@@ -323,6 +323,10 @@ def outer(entry=None):
             try:
                 # token is a number
                 n = complex(token) # triggers exception if token is not a number
+                if int(n.real)==float(n.real): 
+                    n = int(n.real)
+                else:
+                    n = float(n.real)
                 push(n)
                 if (compiling):
                     execute("literal");
