@@ -917,12 +917,9 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                 </selftest>
 
 : variable      ( <string> -- ) // Create a variable.
-                create 0 , [ char push(function(){last().type='colon-variable'}) jsEvalNo , ] ;
-                
+                create 0 , py: last().type='colon-variable' ;
 : +!            ( n addr -- ) // Add n into addr, addr is a variable.
                 swap over @ swap + swap ! ;
-
-                
 : ?             @ . ; // ( a -- ) print value of the variable.
 
                 <selftest>
@@ -969,7 +966,8 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                 char ` word compiling if literal then BL word drop ; immediate
 : does>         ( -- ) // redirect the last new colon word.xt to after does>
                 [compile] ret \ dummy 'ret' mark for 'see' to know where is the end of a creat-does word
-                r> [ s" push(function(){push(last().cfa)})" jsEvalNo , ] ! ; 
+                \ r> [ s" push(function(){push(last().cfa)})" jsEvalNo , ] ! ; 
+                r> py: push(last().cfa) ! ; 
 
                 <selftest>
                     *** .( ( ." .' s" s' s`
@@ -985,7 +983,8 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                 </selftest>
 
 : count         ( string -- string length ) // Get length of the given string
-                [ s" push(function(){push(tos().length)})" jsEvalNo , ] ;
+                \ [ s" push(function(){push(tos().length)})" jsEvalNo , ] ;
+                py: push(len(tos())) ;
 
                 <selftest>
                     *** count
@@ -995,7 +994,8 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
 
 code accept     push(False) end-code // ( -- str T|F ) Read a line from terminal. A fake before I/O ready.
 : refill        ( -- flag ) // Reload TIB from stdin. return 0 means no input or EOF
-                accept if [ s" push(function(){tib=pop();ntib=0})" jsEvalNo , ] 1 else 0 then ;
+                \ accept if [ s" push(function(){tib=pop();ntib=0})" jsEvalNo , ] 1 else 0 then ;
+                accept if py: vm.tib=pop();vm.ntib=0 1 else 0 then ;
 
 : [else] ( -- ) // 丟掉以下 TIB 到 "[else]" or "[then]" 為止，考慮了中間的 nested 結構。
                 1 \ ( [if] structure nested level )
@@ -1033,14 +1033,19 @@ code accept     push(False) end-code // ( -- str T|F ) Read a line from terminal
 
 : [then]        ( -- ) // Conditional compilation [if] [else] [then]
                 ; immediate
-stop _stop_    
                 
-: ::            ( obj <foo.bar> ) // Simplified form of "obj py: pop().foo.bar" w/o return value
-                BL word py> tos().charAt(0)=='['||tos().charAt(0)=='(' if char pop() else  char pop(). then 
-                swap + compiling if jsFuncNo , else jsEvalNo then ; immediate
-: :>            ( obj <foo.bar> ) // Simplified form of "obj js> pop().foo.bar" w/return value
-                BL word js> tos().charAt(0)=='['||tos().charAt(0)=='(' if char pop() else  char pop(). then 
-                swap + compiling if jsFunc , else jsEval then ; immediate
+: ::    ( obj <foo.bar> ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+        BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
+        if char pop() else char pop(). then 
+        swap + compiling if </py> 
+        else [compile] </py> then ; immediate
+        
+: :>    ( obj <foo.bar> ) // Simplified form of "obj js> pop().foo.bar" w/return value
+        BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
+        if char pop() else char pop(). then 
+        swap + compiling if </pyV> 
+        else [compile] </pyV> then ; immediate
+stop _stop_    
 
 : (             ( <str> -- ) // Ignore the comment down to ')', can be nested but must be balanced
                 js> nextstring(/\(|\)/).str \ word 固定會吃掉第一個 character 故不適用。
