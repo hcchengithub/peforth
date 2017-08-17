@@ -305,3 +305,88 @@ peforth
     >>> line[:-7]
     'Cats are smarter than dogs\n\\ 1234'
     >>>    
+[x] [/py] [/pyV] 只分別取得 exec-code 與 eval-code 不執行, 可以用 execute 執行嗎?
+    [x] execute 也要能執行 exec-code 或 eval-code ---> done
+    [x] 這兩個都不要，應該是個 compyle ( 'source' -- code object ) \ python compiler 指令
+[x] 讓 execute() 認得 code object 
+    --> OK ' compyle .
+        compyle ( "source" -- exec-code ) Python compile source to exec-code object __str__ OK
+        OK char print('hi') compyle
+        OK execute
+        hi
+        OK 一次就成功了!!
+[x] colon definition 裡看能不能用 comma 塞入一個 code object ?
+    --> : test char print('hi') compyle execute ;  成功
+        : test2 [ char print('hi') compyle , ] ; 也成功
+        : cfa ' py> dictionary[pop().cfa:] . cr ; 
+        OK cfa test2
+        [ /* test2 */ <code object <module> at 0x0000019B24E1F8A0, file "", line 1>, None,
+          /* cfa */ ', <function xt.<locals>.<lambda> at 0x0000019B24E29C80>, ., cr, None,
+        None]
+        OK
+[x] 有了 compyle 要不要改寫 <py> </py> </pyV> 等? 
+    --> 只簡化了 </py> 一點點
+[x] debug :: --> root cause 又是 branch 裡 assignment to ip 忘了加 vm.ip 
+    OK 11 22 ' + :: xt() .s ==> [33] OK 表示 :: interpret mode 功能 ok
+    OK : test :: xt() ;
+    --Return--
+    > <string>(2)xt()->None
+    (Pdb) c
+    OK
+    OK
+    OK
+    OK see-cfa test
+    [<code object <module> at 0x000001F1364F68A0, file "", line 1>, None, None]
+    OK 22 33 ' + test
+    OK .s
+    [55]
+    OK    
+[ ] constant 要用到 vm.forth['varname'] 複習一下 python 語法
+    constant 要做的事 --> 'push(vm["forth"]["x"])'
+    一開始 word-list 都沒有自己的空間
+        (Pdb) vm['forth']
+        *** TypeError: 'module' object is not subscriptable  
+        (Pdb) vm.forth
+        *** AttributeError: module 'projectk' has no attribute 'forth'
+    不能這樣 init :
+        (Pdb) vm['forth']={}
+        *** TypeError: 'module' object does not support item assignment
+    要這樣 init :
+        (Pdb) setattr(vm,'forth',{})
+    Object 的 attribute 不能這樣 access :
+        (Pdb) vm['forth']  <--- 這是 dict 的方式
+        *** TypeError: 'module' object is not subscriptable
+    要這樣 access :
+        (Pdb) vm.forth
+        {}
+        (Pdb) getattr(vm,'forth')
+        {}
+        (Pdb)    
+[x] colon definition 失敗還是會佔一個位置
+    OK 123 constant x
+    OK 345 to x
+    Error! Assigning to a none-value.
+    Debug? [y/N]
+    OK : test 44445555 to x ;
+    Error! Assigning to a none-value. <--- 馬上觸發錯誤,好。
+    Debug? [y/N]
+    OK words
+    0 code end-code // ...snip... to x test  <--- test 佔了位置
+    OK : ttt ;
+    OK words
+    0 code end-code // ...snip... to x test ttt <--- 確實佔了位置
+    OK test
+    Error! test unknown. <---- colon definition 失敗, 只是沒有 reveal 而已
+    Debug? [y/N]
+    OK rescan-word-hash <---- rescan 之後它就會出現!!
+    OK test
+    OK .s
+    [44445555]
+    OK
+    --> jeforth 也一樣, 算了, 有警告就可以了。
+[ ] tib 平時有被 corrupted
+    OK char $ . rewind
+    $
+    Error! char$.rewind unknown. <--- delimiter 被吃掉了
+    Debug? [y/N] n
+    OK    

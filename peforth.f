@@ -69,13 +69,17 @@ code immediate last().immediate=True end-code // ( -- ) Make the last new word a
 code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the rest of the line
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code *debug* pdb.set_trace() end-code // ( -- ) Invoke python pdb debugger
+code compyle 
+    code = compile(pop(),"","exec"); push(code) end-code
+    // ( "source" -- exec-code ) Python compile source to exec-code object
 code <py> 
     push(nexttoken("</py>|</pyV>")) end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
     exec_code = compile(pop(),"","exec")
     if compiling:
-        comma(lambda:exec(exec_code))
+        # comma(lambda:exec(exec_code))
+        comma(exec_code)
     else:
         exec(exec_code)
     end-code immediate
@@ -99,7 +103,8 @@ code .s print(stack) end-code // ( -- ) Print the data stack
 code help
     n=nexttoken();
     if n:
-        print(tick(n).help,'\n',tick(n).comment or "") 
+        print(tick(n).help)
+        print(tick(n).comment or "") 
     else:
         list = context_word_list()
         for i in range(1,len(list)):
@@ -174,7 +179,7 @@ code ;
     end-code immediate compile-only
     // ( -- ) End of the colon definition.
 code (    
-    if last().help: # skip bringing the help into the word.help
+    if last().help: # skip if help alreay exists
         nexttoken('\\)'); nexttoken() # skip the stack diagram
     else:
         last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' 
@@ -281,6 +286,7 @@ code execute execute(pop()); end-code
             (forget)
     </selftest>
                 
+: see-cfa ' py> dictionary[pop().cfa:] . cr ; // ( <word> -- ) Dump dictionary after a colon word's cfa
 : cls ( -- ) // DOS box clear creen 
     py: os.system("cls") ;
     \ os.system('cls')  # on windows
@@ -401,7 +407,7 @@ code rescan-word-hash
     // ( -- ) \ Rescan all word-lists in the order[] to rebuild wordhash{}
 code (') push(tick(pop())) # use the original tick() to avoid warning
     end-code // ( "name" -- Word ) name>Word like tick but the name is from TOS.
-code branch ip=dictionary[ip] end-code compile-only 
+code branch vm.ip=dictionary[ip] end-code compile-only 
     // ( -- ) 將當前 ip 內數值當作 ip *** 20111224 sam
 
     <selftest>
@@ -676,8 +682,8 @@ code roll push(pop(pop())) end-code // ( ... n3 n2 n1 n0 3 -- ... n2 n1 n0 n3 ) 
     </selftest>
                 
 : space (space) . ; // ( -- ) Print a space.
-code [ compiling=False end-code immediate // ( -- ) 進入直譯狀態, 輸入指令將會直接執行 *** 20111224 sam
-code ] compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將會編碼到系統 dictionary *** 20111224 sam
+code [ vm.compiling=False end-code immediate // ( -- ) 進入直譯狀態, 輸入指令將會直接執行 *** 20111224 sam
+code ] vm.compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將會編碼到系統 dictionary *** 20111224 sam
 
     <selftest>
         *** [compile] compile [ ]
@@ -920,7 +926,6 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                 create 0 , py: last().type='colon-variable' ;
 : +!            ( n addr -- ) // Add n into addr, addr is a variable.
                 swap over @ swap + swap ! ;
-: ?             @ . ; // ( a -- ) print value of the variable.
 
                 <selftest>
                     *** +! variable
@@ -1033,38 +1038,43 @@ code accept     push(False) end-code // ( -- str T|F ) Read a line from terminal
 
 : [then]        ( -- ) // Conditional compilation [if] [else] [then]
                 ; immediate
-                
 : ::    ( obj <foo.bar> ) // Simplified form of "obj py: pop().foo.bar" w/o return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
         if char pop() else char pop(). then 
-        swap + compiling if </py> 
+        swap + compiling if compyle , 
         else [compile] </py> then ; immediate
-        
 : :>    ( obj <foo.bar> ) // Simplified form of "obj js> pop().foo.bar" w/return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
-        if char pop() else char pop(). then 
-        swap + compiling if </pyV> 
-        else [compile] </pyV> then ; immediate
-stop _stop_    
+        if char push(pop() else char push(pop(). then 
+        swap + char ) + compiling if compyle ,
+        else [compile] </py> then ; immediate
 
-: (             ( <str> -- ) // Ignore the comment down to ')', can be nested but must be balanced
-                js> nextstring(/\(|\)/).str \ word 固定會吃掉第一個 character 故不適用。
-                drop js> tib[ntib++] \ 撞到停下來的字母非 '(' 即 ')' 要不就是行尾，都可以 skip 過去
-                char ( = if \ 剛才那個字母是啥？
-                    [ last literal ] dup \ 取得本身
-                    execute \ recurse nested level
-                    execute \ recurse 剩下來的部分
-                then ; immediate 
-
-                <selftest>
-                    *** value and to work together
-                    marker -%-%-%-%-%-
-                    112233 value x x 112233 = \ True
-                    445566 to x x 445566 = \ True
-                    : test 778899 to x ; test x 778899 = \ True
-                    -%-%-%-%-%-
-                    [d True,True,True d] [p 'value','to' p]
-                </selftest>
+\ 有 bug 先暫時不要這個 nested ( ) comment
+\ : (     ( <str> -- ) // Ignore the comment down to ')', can be nested but must be balanced
+\         <py> compiling and last().help</pyV> if : 
+\             \ comment out the stack diagram if help alreay exists
+\             py> nextstring(r"\(|\)")['str'] \ word 固定會吃掉第一個 character 故不適用。
+\             drop py: push(tib[ntib]);vm.ntib+=1 \ 撞到停下來的字母非 '(' 即 ')' 要不就是行尾，都可以 skip 過去
+\             char ( = if \ 剛才那個字母是啥？
+\             [ last literal ] dup \ 取得本身
+\             execute \ recurse nested level
+\             execute \ recurse 剩下來的部分
+\             then
+\         else
+\             \ add stack diagram into the word's help
+\             <py> last().help = '( ' + nexttoken('\\)') + nexttoken() + ' '</py>
+\         then ; immediate
+\         /// '(' command 用 recursion 完成, 正點! 
+    
+        <selftest>
+            *** value and to work together
+            marker -%-%-%-%-%-
+            112233 value x x 112233 = \ True
+            445566 to x x 445566 = \ True
+            : test 778899 to x ; test x 778899 = \ True
+            -%-%-%-%-%-
+            [d True,True,True d] [p 'value','to' p]
+        </selftest>
                 
 \ This word works fine. But doing this for letting doNext be a private is carried way too far.
 \ : next        ( -- ) // for ... next (FigTaiwan SamSuanChen)
@@ -1072,8 +1082,7 @@ stop _stop_
 \               \ Redefine after js: and ['] to allow doNext be private
 
 : "msg"abort    ( "errormsg" -- ) // Panic with error message and abort the forth VM
-                js: panic(pop()+'\n') abort ; nonprivate
-                \ needed to compose variables into the errormsg
+                py: panic(pop()) abort ; nonprivate
 
 : abort"        ( <msg> -- ) // Through an error message and abort the forth VM
                 char " word literal BL word drop compile "msg"abort ;
@@ -1081,7 +1090,6 @@ stop _stop_
 
 : "msg"?abort   ( "errormsg" flag -- ) // Conditional panic with error message and abort the forth VM
                 if "msg"abort else drop then ; nonprivate
-                \ needed to compose variables into the errormsg
 
 : ?abort"       ( f <errormsg> -- ) // Conditional abort with an error message.
                 char " word literal BL word drop
@@ -1095,10 +1103,10 @@ stop _stop_
 
 \ 費了一番功夫寫就能 nested 的 <text> 及 <comment> , 開發心得在 Ynote 上
 \ search "jeforth.3we design a nesting supported〈text〉also〈comment〉"
+\ '(' command 用 recursion 完成, 正點! 
 
 variable '<text> private
-                // ( -- <text> ) Variable reference to the <text> Word object, for indirect call.
-                    
+    // ( -- <text> ) Variable reference to the <text> Word object, for indirect call.
 : (<text>)      ( <text> -- "text"+"</text>" ) // Auxiliary <text>, handles nested portion
                 '<text> @ execute ( string ) \ 此時 TIB 非 </text> 即行尾
                 BL word char </text> = ( string is</text>? )
@@ -1118,7 +1126,7 @@ variable '<text> private
                     [ last literal ] execute ( string1'' string3 ) + ( string )
                 else \ 剛才撞上了 </text> 或行尾  ( string1 deli )
                     char </text> swap over = ( string1 "</text>" is</text>? ) 
-                    if js: ntib-=pop().length ( string1 )
+                    if py: vm.ntib-=len(pop()) ( string1 )
                     else drop then  ( string1 )
                 then ; immediate last '<text> !
                 /// If <text> hits <text> in TIB then it returns 
@@ -1131,16 +1139,20 @@ variable '<text> private
                 compiling if literal then ; immediate
                 /// Usage: <text> word of multiple lines </text>
 
+: trim          ( string -- string' ) // Remove leading & ending white spaces of the multiple line string.
+                :> strip() ;
+                /// NOT every line of a multiple line string, only the begin/end of it.
+                /// Work with </o> </h> </e> 前置 white spaces 會變成 [object Text] 必須消除。
+
 \ Ready to add comment to 'privacy' 
-<text> 
- Example 'privacy' definition for a vocabulary. Assume current == context.
- False constant privacy private // ( -- True ) All words in this module are public
- True  constant privacy private // ( -- True ) All words in this module are private
-</text> ' privacy :: comment=pop()
-                
+<text>
+    Example 'privacy' definition for a vocabulary. Assume current == context.
+    False constant privacy private // ( -- False ) All words in this module are public
+    True  constant privacy private // ( -- True ) All words in this module are private
+</text> ' privacy :: comment=pop(1)
+
 \ If <comment> hits <comment> in TIB then it drops string1 
 \ and does <comment> and does again <comment>
-
 : <comment>     ( <comemnt> -- ) // Can be nested
                 char <comment>|</comment> word drop ( empty )
                 BL word char <comment> = ( is<comment>? )
@@ -1158,47 +1170,29 @@ variable '<text> private
                     111 222 <comment> 333 </comment> 444
                     [d 111,222,444 d] [p '<comment>', '</comment>', '::' p]
                 </selftest>
-
-: trim          ( string -- string' ) // Remove leading&ending white spaces of the multiple line string.
-                \ remove 頭尾 whitespaces. 但 .trim() 舊 JScript v5.6 未 support
-                dup if <js> pop().toString().replace(/(^\s*)/,'').replace(/(\s*$)/,'') </jsV>
-                then ;
-                /// If TOS is not a string then do nothing.
-                /// NOT every line of a multiple line string, only the begin/end of it.
-                /// Work with </o> </h> </e> 前置 white spaces 會變成 [object Text] 必須消除。
-
+                
 \ 2016/12/21 Now constant & value support private and direct-access through vm[vid].name 
-: constant      ( n <name> -- ) // Create a 'constnat'
-                BL word (create) <js> 
-                    last().type = "constant";
-                    var s = '(function(){push(vm["_vid_"]["_name_"])})';
-                    var vid = current.replace(/"/g,"\\\"");
-                    var name = last().name.replace(/"/g,"\\\"");
-                    s = s.replace(/_vid_/,vid).replace(/_name_/,name);
-                    last().xt = eval(s);
-                    if(vm[current]==undefined) vm[current]={};
-                    vm[current][last().name] = pop();
-                </js> reveal ; 
+: constant  ( n <name> -- ) // Create a constnat
+    BL word (create) 
+<py> 
+last().type = "constant";
+source = 'push(getattr(vm,"{}")["{}"])'.format(current, last().name)
+last().xt = compile(source,"","exec");
+if not getattr(vm,current,False): setattr(vm,current,{})
+exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
+</py> reveal ; 
                 
 : value         ( n <name> -- ) // Create a 'value' variable.
                 constant last :: type='value' ; 
-                
 : to            ( n <value> -- ) // Assign n to <value>.
                 ' ( n word ) 
-                <js> if (tos().type!="value") panic("Error! Assigning to a none-value.\n",'error') </js>
+                py> tos().type!="value" ?abort" Error! Assigning to a none-value."
                 compiling if ( n word ) 
-                    <text>
-                        (function(){/* to */ vm["_vid_"]["_name_"]=pop()})
-                    </text> trim ( n word s ) 
-                    <js> 
-                        var s = pop(); // ( n word )
-                        var vid = tos().vid.replace(/"/g,"\\\"");
-                        var name = pop().name.replace(/"/g,"\\\"");
-                        s = s.replace(/_vid_/,vid).replace(/_name_/,name);
-                        push(eval(s));
-                    </js> ( n xt ) , 
+                    char getattr(vm,"{}")["{}"]=pop() 
+                    :> format(tos().vid,pop().name) ( n s ) 
+                    compyle , ( n ) \ n has already been compiled as a literal
                 else ( n word )
-                    js: vm[tos().vid][pop().name]=pop()
+                    py: getattr(vm,tos().vid)[pop().name]=pop(1)
                 then ; immediate
                 
                 <selftest>
@@ -1289,6 +1283,8 @@ code -word
     /// See also <task>
 : ?rewind ( boolean -- ) // Conditional rewind TIB so as to repeat it. 'stop' to terminate.
     if rewind then ;
+
+stop _stop_                
 
 \ To TIB command line TSRs, the tib/ntib is their only private storage. So save-restore and
 \ loop back information must be using the tib. That's why we have >t t@ and t> 

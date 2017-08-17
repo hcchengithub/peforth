@@ -71,7 +71,7 @@ class Word:
     def __str__(self):    # return help message
         return self.name + " " + self.help + ' __str__'
     def __repr__(self):   # execute xt and return help message
-        return self.name
+        return "<Word '{}'>".format(self.name)
     
 # Support Vocabulary
 def last():  # returns the last defined word.
@@ -226,7 +226,7 @@ def phaseA (entry):
         if type(entry)==str: 
             # "string" is word name
             w = tick(entry.strip());  # remove leading and tailing white spaces
-        elif callable(entry) or type(entry)==Word: # function or Word
+        elif callable(entry) or type(entry)==Word or str(type(entry))=="<class 'code'>": # function Word or code object
             w = entry; 
         elif type(entry)==int: 
             # number could be dictionary entry or 0. 
@@ -241,18 +241,25 @@ def phaseA (entry):
 # Execute the given w by the correct method 
 def phaseB(w):
     global ip, rstack
-    if type(w)==int:
+    if type(w)==Word: # Word object
+        try:
+            if callable(w.xt):
+                # function 
+                w.xt(w)
+            else:
+                # code object
+                exec(w.xt)
+        except Exception as err:
+            panic("Failed to run {}: {}".format(repr(w),err))
+    elif callable(w) :  # a function
+        w();
+    elif str(type(w))=="<class 'code'>": # code object
+        exec(w)
+    elif type(w)==int:
         # Usually a number is the entry of does>. Can't use inner() to call it 
         # The below push-jump mimics the call instruction of a CPU.
         rstack.append(ip);  # Forth ip is the "next" instruction to be executed. Push return address.
         ip = w;  # jump
-    elif callable(w) :  # a function
-        w();
-    elif type(w)==Word: # Word object
-        try:  # take care of errors to avoid being kicked out
-            w.xt(w);
-        except Exception as err:
-            panic(err)
     else:
         panic("Error! don't know how to execute : "+w+" ("+type(w)+")\n","error");
         
