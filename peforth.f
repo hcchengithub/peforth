@@ -58,6 +58,12 @@ code </selftest>
             [p 'version' p]
     </selftest>
 
+code bye 
+    if len(stack) and type(tos())==int: 
+        exit(pop()) 
+    else:
+        exit()
+    end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
 code /// 
     ss = nexttoken('\n|\r');
     ss = "\t" + ss   # Add leading \t to each line.
@@ -100,7 +106,7 @@ code words
     // ( -- ) Prints all words in forth vocabulary
 code . print(pop(),end=" ") end-code // ( x -- ) Print the TOS
 code cr print() end-code // ( -- ) print a carriage return
-code .s print(stack) end-code // ( -- ) Print the data stack 
+\ code .s print(stack) end-code // ( -- ) Print the data stack 
 code help
     n=nexttoken();
     if n:
@@ -1490,13 +1496,12 @@ code float      push(float(pop())) end-code // ( string -- float|NaN )
                 </selftest>
 
 code char>ASCII push(ord(pop())) end-code // ( str -- ASCII ) Get str[0]'s ASCII or whatever code
-                \ https://stackoverflow.com/questions/227459/ascii-value-of-a-character-in-python
                 /// Actually it returns utf-8, big-5, or whatever numeric code.
+                \ https://stackoverflow.com/questions/227459/ascii-value-of-a-character-in-python
                 
-code ASCII>char ( ASCII -- 'c' ) // ASCII or whatever code number to character
-                push(chr(pop()) end-code
-                \ https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
+code ASCII>char push(chr(pop())) end-code // ( ASCII -- 'c' ) ASCII or whatever code number to character
                 /// 65 ASCII>char tib. \ ==> A (string)
+                \ https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
                 
 : ASCII         ( <str> -- ASCII ) // Get <str>[0]'s ASCII code.
                 BL word char>ASCII compiling if literal then
@@ -1511,19 +1516,21 @@ code ASCII>char ( ASCII -- 'c' ) // ASCII or whatever code number to character
                     [d 97,'b',99 d] [p 'char>ASCII', 'ASCII>char', "ASCII" p]
                     ---
                 </selftest>
-stop _stop_
-code .s         ( ... -- ... ) // Dump the data stack.
-                var count=stack.length, basewas=vm.forth.base;
-                if(count>0) for(var i=0;i<count;i++){
-                    if (typeof(stack[i])=="number") {
-                        push(stack[i]); push(i); dictate("decimal 7 .r char : . space dup decimal 11 .r space hex 11 .r char h .");
-                    } else {
-                        push(stack[i]); push(i); dictate("decimal 7 .r char : . space .");
-                    }
-                    type(" ("+mytypeof(stack[i])+")\n");
-                } else type("empty\n");
-                vm.forth.base = basewas;
-                end-code
+code .s         
+    for i in range(len(stack)):
+        x, typex = stack[i], type(stack[i])
+        if typex==int or typex==float or typex==complex:
+            # push(stack[i]); push(i); dictate("decimal 7 .r char : . space dup decimal 11 .r space hex 11 .r char h .");
+            s = "{0:>7}: {1:11,} {2:11X}h ({3})".format(i,x,x,type(x))
+            print(s)
+        else:
+            # push(stack[i]); push(i); dictate("decimal 7 .r char : . space .");
+            s = "{0:>7}: {1} ({2})".format(i,x,type(x))
+            print(s)
+    else:
+        print("empty\n");
+    end-code
+    // ( ... -- ... ) Dump the data stack.
 
                 <selftest>
                     *** .s is probably the most used word
@@ -1540,192 +1547,189 @@ code .s         ( ... -- ... ) // Dump the data stack.
                     ---
                 </selftest>
 
-code wordhash>array ( "vid" -- array ) // Retrive a VID list from the recent active words hash
-                var vid=pop(), aa = [], bb = [], j=1; // vid[0] always 0, start from 1.
-                // get the raw list
-                for (var i in wordhash) 
-                    if (wordhash[i].vid==vid) aa.append(wordhash[i]);
-                // sort aa by wid to be bb
-                while (aa.length) { 
-                    for (i=0; i<aa.length; i++) {
-                        if (aa[i].wid<=j) {
-                            bb.append(aa.splice(i,1)[0]);
-                            break;
-                        }
-                    }
-                    if (vm.debug && i>=aa.length) 
-                        // warning, rare case like ' code.wid is 7 because reDef'ed
-                        debugger; 
-                    j += 1;
-                }
-                push(bb);
-                end-code
-                
-: word_select   ( "vid" "pattern" "option" -- word[] ) // Get an array of words, name/help/comments screened by pattern.
-                rot dup wordhash>array ( "pattern" "option" "vid" array )
-                <js> 
-                var word_list = pop();
-                var vid = pop();
-                var option = pop();
-                var pattern = pop();
-                var result = [];
-                var isContext = order[order.length-1] == vid;
-                // Remove private words unless in context
-                // for (var i=0; i<words[vid].length; i++) {
-                //     if (isContext || !words[vid][i].private) 
-                //         word_list.push(words[vid][i]);
-                // }
-                for(var i=0; i<word_list.length; i++) {
-                    if (!pattern) { 
-                        // no pattern is all public
-                        result.push(word_list[i]); 
-                        continue; 
-                    } 
-                    switch(option){ 
-                        // 這樣寫表示這些 option 都是唯一的。
-                        case "-t": // -t for matching type pattern, case insensitive.
-                            if (word_list[i].type.toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) {
-                                result.push(word_list[i]);
-                            }
-                            break;
-                        case "-T": // -T for matching type pattern exactly.
-                            if (word_list[i].type==pattern) {
-                                result.push(word_list[i]);
-                            }
-                            break;
-                        case "-n": // -n for matching only name pattern, case insensitive.
-                            if (word_list[i].name.toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) {
-                                result.push(word_list[i]);
-                            }
-                            break;
-                        case "-f": // -f for fuzzy search in name, help, and comment.
-                            var flag =  (word_list[i].name.toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) ||
-                                        ((word_list[i].help||"").toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) ||
-                                        ((word_list[i].comment||"").toLowerCase().indexOf(pattern.toLowerCase()) != -1);
-                            if (flag) {
-                                result.push(word_list[i]);
-                            }
-                            break;
-                        default: // any other option, includes -N, for exactly name only, case sensitive.
-                            if (word_list[i].name==pattern) {
-                                result = [word_list[i]];
-                            }
-                    }
-                }
-                push(result); </js> ;
-                /// Options: 
-                /// -f pattern matches all names, helps and comments. Case insensitive.
-                /// -n pattern in name. Case insensitive.
-                /// -t pattern in type. Case insensitive. 
-                /// -T pattern is exact type.
-                /// "" pattern is exact name. 
+\ code wordhash>array ( "vid" -- array ) // Retrive a VID list from the recent active words hash
+\                 var vid=pop(), aa = [], bb = [], j=1; // vid[0] always 0, start from 1.
+\                 // get the raw list
+\                 for (var i in wordhash) 
+\                     if (wordhash[i].vid==vid) aa.append(wordhash[i]);
+\                 // sort aa by wid to be bb
+\                 while (aa.length) { 
+\                     for (i=0; i<aa.length; i++) {
+\                         if (aa[i].wid<=j) {
+\                             bb.append(aa.splice(i,1)[0]);
+\                             break;
+\                         }
+\                     }
+\                     if (vm.debug && i>=aa.length) 
+\                         // warning, rare case like ' code.wid is 7 because reDef'ed
+\                         debugger; 
+\                     j += 1;
+\                 }
+\                 push(bb);
+\                 end-code
+\                 
+\ : word_select   ( "vid" "pattern" "option" -- word[] ) // Get an array of words, name/help/comments screened by pattern.
+\                 rot dup wordhash>array ( "pattern" "option" "vid" array )
+\                 <js> 
+\                 var word_list = pop();
+\                 var vid = pop();
+\                 var option = pop();
+\                 var pattern = pop();
+\                 var result = [];
+\                 var isContext = order[order.length-1] == vid;
+\                 // Remove private words unless in context
+\                 // for (var i=0; i<words[vid].length; i++) {
+\                 //     if (isContext || !words[vid][i].private) 
+\                 //         word_list.push(words[vid][i]);
+\                 // }
+\                 for(var i=0; i<word_list.length; i++) {
+\                     if (!pattern) { 
+\                         // no pattern is all public
+\                         result.push(word_list[i]); 
+\                         continue; 
+\                     } 
+\                     switch(option){ 
+\                         // 這樣寫表示這些 option 都是唯一的。
+\                         case "-t": // -t for matching type pattern, case insensitive.
+\                             if (word_list[i].type.toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) {
+\                                 result.push(word_list[i]);
+\                             }
+\                             break;
+\                         case "-T": // -T for matching type pattern exactly.
+\                             if (word_list[i].type==pattern) {
+\                                 result.push(word_list[i]);
+\                             }
+\                             break;
+\                         case "-n": // -n for matching only name pattern, case insensitive.
+\                             if (word_list[i].name.toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) {
+\                                 result.push(word_list[i]);
+\                             }
+\                             break;
+\                         case "-f": // -f for fuzzy search in name, help, and comment.
+\                             var flag =  (word_list[i].name.toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) ||
+\                                         ((word_list[i].help||"").toLowerCase().indexOf(pattern.toLowerCase()) != -1 ) ||
+\                                         ((word_list[i].comment||"").toLowerCase().indexOf(pattern.toLowerCase()) != -1);
+\                             if (flag) {
+\                                 result.push(word_list[i]);
+\                             }
+\                             break;
+\                         default: // any other option, includes -N, for exactly name only, case sensitive.
+\                             if (word_list[i].name==pattern) {
+\                                 result = [word_list[i]];
+\                             }
+\                     }
+\                 }
+\                 push(result); </js> ;
+\                 /// Options: 
+\                 /// -f pattern matches all names, helps and comments. Case insensitive.
+\                 /// -n pattern in name. Case insensitive.
+\                 /// -t pattern in type. Case insensitive. 
+\                 /// -T pattern is exact type.
+\                 /// "" pattern is exact name. 
+\ 
+\ 
+\ : words         ( <["pattern" [-t|-T|-n|-f]]> -- ) // List all words or words screened by spec.
+\                 js> context CR word ( forth line )
+\                 <js> pop().replace(/\s+/g," ").split(" ")</jsV> ( forth [pattern,option,rests] )
+\                 js> tos()[0] swap js> tos()[1] nip word_select <js>
+\                     var word_list = pop();
+\                     var w = "";
+\                     for (var i=0; i<word_list.length; i++) w += word_list[i].name + " ";
+\                     type(w);
+\                 </js> ;
+\                 /// Original version in jeforth.f
+\                 last :: comment+=tick("word_select").comment
+\                 /// An empty pattern matches all words.
+\ 
+\ : (help)        ( "word-list" "[pattern [-t|-T|-n|-f]]" -- "msg" ) // Get help message of screened words
+\                 <js> pop().replace(/\s+/g," ").split(" ")</jsV> ( voc [pattern,option,rests] )
+\                 js> tos()[0] swap js> tos()[1] nip ( forth pattern option ) word_select ( [words...] )
+\                 <js>
+\                     var word_list = pop();
+\                     for (var ss="",i=0; i<word_list.length; i++) {
+\                         ss += word_list[i]+"\n"; // help of the word
+\                         if (typeof(word_list[i].comment) != "undefined") ss += word_list[i].comment;
+\                     };ss
+\                 </jsV> ;
+\                 /// Original version in jeforth.f
+\                 last :: comment+=tick("word_select").comment
+\ 
+\ : help          ( <["pattern" [-t|-T|-n|-f]]> -- ) // Print the help of screened words
+\                 js> context CR word ( voc pattern )
+\                 js> tos().length if 
+\                     dup char * = if drop "" then (help) .
+\                 else
+\                     2drop version drop
+\                     [ \ 先存起來,供往後新版引用.
+\                         <text>
+\                         
+\                             Basic commands that bring you the whole jeforth world.
+\                             
+\                             -- words --
+\                             Try 'words' command to view all words. It has following options:
+\                             > words [<pattern> [-n|-N|-t|-T]] 
+\                             that prints not all but matched words. Try,
+\                             > help words
+\                             to view more help of 'words' command. 
+\                             
+\                             -- help --
+\                             You are viewing 'help' now. Yet it has more options, try
+\                             > help  [<pattern> [-n|-N|-t|-T]]
+\                             that prints the help of matched words.
+\                             > help *
+\                             that prints all words' help.
+\                             
+\                             -- see --
+\                             Use 'see' command to view the definition of a word.
+\                             > see <word> 
+\                         </text> <js> pop().replace(/^[ \t]*/gm,'')</jsV> 
+\                         last :: general_help=pop()
+\                         last literal
+\                     ] :> general_help . cr
+\                 then ;
+\                 /// Original version in jeforth.f
+\                 last :: comment+=tick("word_select").comment
+\                 /// A pattern of star '*' matches all words.
+\                 /// Example: 
+\                 ///   help * <-- show help of all words
+\                 ///   help * -N <-- show help of '*' command
+\                 \ 2016/2/2 改成以原來 -N 為默認 option. -N 未定義屬 default 結果還是原來 -N 的效果。
+\                 
+\                 <selftest>
+\                     <text>
+\                     本來 words help 都接受 RegEx 的，可是不好用。現已改回普通 non RegEx pattern. 只動
+\                     word_select 就可以來回修改成 RegEx/non-RegEx.
+\                     </text> drop
+\ 
+\                     *** help words word_select
+\                     marker ---
+\                     : test ; // testing help words and word_select 32974974
+\                     /// 9247329474 comment
+\                     js: vm.selftest_visible=False;vm.screenbuffer=""
+\                     \ help test -N
+\                     help test
+\                     <js> vm.screenbuffer.indexOf('32974974') !=-1 </jsV> \ True
+\                     <js> vm.screenbuffer.indexOf('9247329474') !=-1 </jsV> \ True
+\                     words 9247329474 -f
+\                     <js> vm.screenbuffer.indexOf('test') !=-1 </jsV> \ True
+\                     words test -f
+\                     <js> vm.screenbuffer.indexOf('<selftest>') !=-1 </jsV> \ True
+\                     <js> vm.screenbuffer.indexOf('***') !=-1 </jsV> \ True
+\                     js: vm.selftest_visible=True;
+\                     [d True,True,True,True,True d] [p 'word_select', 'words' p]
+\                     ---
+\                 </selftest>
 
+stop _stop_
 
-: words         ( <["pattern" [-t|-T|-n|-f]]> -- ) // List all words or words screened by spec.
-                js> context CR word ( forth line )
-                <js> pop().replace(/\s+/g," ").split(" ")</jsV> ( forth [pattern,option,rests] )
-                js> tos()[0] swap js> tos()[1] nip word_select <js>
-                    var word_list = pop();
-                    var w = "";
-                    for (var i=0; i<word_list.length; i++) w += word_list[i].name + " ";
-                    type(w);
-                </js> ;
-                /// Original version in jeforth.f
-                last :: comment+=tick("word_select").comment
-                /// An empty pattern matches all words.
-
-: (help)        ( "word-list" "[pattern [-t|-T|-n|-f]]" -- "msg" ) // Get help message of screened words
-                <js> pop().replace(/\s+/g," ").split(" ")</jsV> ( voc [pattern,option,rests] )
-                js> tos()[0] swap js> tos()[1] nip ( forth pattern option ) word_select ( [words...] )
-                <js>
-                    var word_list = pop();
-                    for (var ss="",i=0; i<word_list.length; i++) {
-                        ss += word_list[i]+"\n"; // help of the word
-                        if (typeof(word_list[i].comment) != "undefined") ss += word_list[i].comment;
-                    };ss
-                </jsV> ;
-                /// Original version in jeforth.f
-                last :: comment+=tick("word_select").comment
-
-: help          ( <["pattern" [-t|-T|-n|-f]]> -- ) // Print the help of screened words
-                js> context CR word ( voc pattern )
-                js> tos().length if 
-                    dup char * = if drop "" then (help) .
-                else
-                    2drop version drop
-                    [ \ 先存起來,供往後新版引用.
-                        <text>
-                        
-                            Basic commands that bring you the whole jeforth world.
-                            
-                            -- words --
-                            Try 'words' command to view all words. It has following options:
-                            > words [<pattern> [-n|-N|-t|-T]] 
-                            that prints not all but matched words. Try,
-                            > help words
-                            to view more help of 'words' command. 
-                            
-                            -- help --
-                            You are viewing 'help' now. Yet it has more options, try
-                            > help  [<pattern> [-n|-N|-t|-T]]
-                            that prints the help of matched words.
-                            > help *
-                            that prints all words' help.
-                            
-                            -- see --
-                            Use 'see' command to view the definition of a word.
-                            > see <word> 
-                        </text> <js> pop().replace(/^[ \t]*/gm,'')</jsV> 
-                        last :: general_help=pop()
-                        last literal
-                    ] :> general_help . cr
-                then ;
-                /// Original version in jeforth.f
-                last :: comment+=tick("word_select").comment
-                /// A pattern of star '*' matches all words.
-                /// Example: 
-                ///   help * <-- show help of all words
-                ///   help * -N <-- show help of '*' command
-                \ 2016/2/2 改成以原來 -N 為默認 option. -N 未定義屬 default 結果還是原來 -N 的效果。
-                
-                <selftest>
-                    <text>
-                    本來 words help 都接受 RegEx 的，可是不好用。現已改回普通 non RegEx pattern. 只動
-                    word_select 就可以來回修改成 RegEx/non-RegEx.
-                    </text> drop
-
-                    *** help words word_select
-                    marker ---
-                    : test ; // testing help words and word_select 32974974
-                    /// 9247329474 comment
-                    js: vm.selftest_visible=False;vm.screenbuffer=""
-                    \ help test -N
-                    help test
-                    <js> vm.screenbuffer.indexOf('32974974') !=-1 </jsV> \ True
-                    <js> vm.screenbuffer.indexOf('9247329474') !=-1 </jsV> \ True
-                    words 9247329474 -f
-                    <js> vm.screenbuffer.indexOf('test') !=-1 </jsV> \ True
-                    words test -f
-                    <js> vm.screenbuffer.indexOf('<selftest>') !=-1 </jsV> \ True
-                    <js> vm.screenbuffer.indexOf('***') !=-1 </jsV> \ True
-                    js: vm.selftest_visible=True;
-                    [d True,True,True,True,True d] [p 'word_select', 'words' p]
-                    ---
-                </selftest>
-
-code bye        ( ERRORLEVEL -- ) // Exit to shell with TOS as the ERRORLEVEL.
-                // 這些都無效，最後靠 WMI 達成傳回 errorlevel // var errorlevel = pop(); window.errorlevel = typeof(errorlevel)=='number' ? errorlevel : 0; 
-                vm.bye();
-                end-code
-
-code readTextFile ( "pathname" -- string ) // Return a string, "" if failed
-                try {
-                    var data = vm.readTextFile(pop()); 
-                } catch (err) {
-                    data = "";
-                }
-                push(data);
-                end-code
+code readTextFile 
+    try {
+        var data = vm.readTextFile(pop()); 
+    } catch (err) {
+        data = "";
+    }
+    push(data);
+    end-code // ( "pathname" -- string ) Return a string, "" if failed
 
 : readTextFileAuto ( "pathname" -- string ) // Search and read, panic if failed.
                 js> vm.path.slice(0) \ this is the way javascript copy array by value
