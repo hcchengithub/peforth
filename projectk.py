@@ -35,7 +35,7 @@ stop = False;  # Stop the outer loop
 newname = "";  # new word's name
 newxt = None
 newhelp = "";
-    
+debug = False; # debugging flag    
     
 # Reset the forth VM
 def reset():
@@ -129,15 +129,22 @@ def nextstring(deli):
 # o  The delimiter is a regular expression.
 def nexttoken(deli='\\s'):
     global tib, ntib
+    if ntib >= len(tib): return ""
     if deli == '\\s': 
-        tib = tib[:ntib] + tib[ntib:].lstrip() # skip all leading white spaces
-        # [ ] 這地方考慮 ntib+1 避免把應有的 space 也殺掉了
-    # deli=\n should skip to EOL but don't skip next token after the EOL!
+        # skip all leading white spaces
+        while tib[ntib] in [" ","\t","\n","\r"]:
+            if (ntib+1) < len(tib):
+                ntib += 1
+            else:
+                break
     elif deli in ['\\n','\n','\\r','\r','\\n|\\r','\n|\r','\\r|\\n', '\r|\n']: 
+        # skip the next character that must be whitespace
         if tib[ntib] not in ['\n','\r']:
-            ntib += 1 # ok skip the next character
+            # But don't skip the EOL itself!
+            ntib += 1 
     else: 
-        ntib += 1  # skip next character
+        # skip next character that must be whitespace
+        ntib += 1  
     token = nextstring(deli)['str'];
     return token; 
 

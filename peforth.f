@@ -69,6 +69,7 @@ code immediate last().immediate=True end-code // ( -- ) Make the last new word a
 code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the rest of the line
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code *debug* pdb.set_trace() end-code // ( -- ) Invoke python pdb debugger
+code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 code compyle 
     code = compile(pop(),"","exec"); push(code) end-code
     // ( "source" -- exec-code ) Python compile source to exec-code object
@@ -1038,12 +1039,12 @@ code accept     push(False) end-code // ( -- str T|F ) Read a line from terminal
 
 : [then]        ( -- ) // Conditional compilation [if] [else] [then]
                 ; immediate
-: ::    ( obj <foo.bar> ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+: ::    ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
         if char pop() else char pop(). then 
         swap + compiling if compyle , 
         else [compile] </py> then ; immediate
-: :>    ( obj <foo.bar> ) // Simplified form of "obj js> pop().foo.bar" w/return value
+: :>    ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
         if char push(pop() else char push(pop(). then 
         swap + char ) + compiling if compyle ,
@@ -1284,7 +1285,12 @@ code -word
 : ?rewind ( boolean -- ) // Conditional rewind TIB so as to repeat it. 'stop' to terminate.
     if rewind then ;
 
-stop _stop_                
+
+: tib. ( result -- ) // Print the command line and the TOS.
+    <py> re.search(r"\n?(.*) tib\.\s*",tib)</pyV> :> group(1) :> strip() ( result cmd-line )
+    s" {} \ ==> {} ({})\n" :> format(pop(),tos(),type(pop())) . ;
+    /// Good for experiments that need to show command line and the result.
+    /// "" tib. prints the command line only, w/o the TOS.
 
 \ To TIB command line TSRs, the tib/ntib is their only private storage. So save-restore and
 \ loop back information must be using the tib. That's why we have >t t@ and t> 
@@ -1292,33 +1298,31 @@ stop _stop_
 code >t         
     # \n\\ 1234$ <--- 一個數字的 pattern
     vm.tib += "\n\\ " + str(pop());
-    end-code // ( int -- ) Push the integer to end of TIB as a comment
+    end-code // ( int -- ) Push the integer to end of TIB
 
 code t@         
-    matchObj = re.search( r'\n\\ (\d*)$', tib)
-    push(int(matchObj.group(1))); 
+    # \n\\ 1234$ <--- 一個數字的 pattern
+    r = re.search( r'\n\\ (\d*)$', tib)
+    push(int(r.group(1))); 
     end-code // ( -- int ) Get integer from end of the TIB 
-    
 
-: t>            
-    matchObj = re.search( r'\n\\ (\d*)$', tib)
-    push(int(matchObj.group(1))); 
-    vm.tib = tib[:len(matchObj.group())]
-    // ( -- int ) Pop integer from end of the TIB 
-                
-stop _stop_
+code t>            
+    # \n\\ 1234$ <--- 一個數字的 pattern
+    r = re.search( r'\n\\ (\d*)$', tib)
+    push(int(r.group(1))); 
+    vm.tib = tib[:-len(r.group())]
+    end-code // ( -- int ) Pop integer from end of the TIB 
 
 : [begin]       ( -- ) // [begin]..[again], [begin].. flag [until]
-                js> ntib >t ; interpret-only
+                py> ntib >t ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
                 /// ex. [begin] .s js> rstack . cr 1000 nap [again]
                 
 : [again]       ( -- ) // [begin]..[again]
-                t@ js: ntib=pop() ; interpret-only
+                t@ py: vm.ntib=pop() ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
-
 
 : [until]       ( flag -- ) // [begin].. flag [until]
                 if  t> drop else [compile] [again] then ; interpret-only
@@ -1350,9 +1354,9 @@ stop _stop_
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
 
 : [next]        ( -- ) // (T ntib count -- ntib count-1 | empty ) [for]..[next]
-                t> 1- dup >t js> pop()>0 ( count>0 ) if 
+                t> 1- dup >t py> pop()>0 ( count>0 ) if 
                     \ rewind
-                    t> t> js: ntib=tos() >t >t 
+                    t> t> py: vm.ntib=tos() >t >t 
                 else
                     \ exit the for loop
                     t> t> 2drop \ drop the count and loop back ntib address
@@ -1360,30 +1364,30 @@ stop _stop_
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
 
-code (run:)     ( "..if.." -- "..[if].." ) // Run string with "if","begin","for" in interpret mode
-                var ss = pop();
-                var result = ss
-                    .replace(/(^|\s)(if|else|then|begin|again|until|for|next)(\s|$)/mg,"$1[$2]$3")
-                    .replace(/(^|\s)(if|else|then|begin|again|until|for|next)(\s|$)/mg,"$1[$2]$3");
-                    // 連做兩次解決 if else then 翻成 [if] else [then] 的現象。 
-                push(result);execute("tib.insert"); // 不能用 dictate(), 多重 suspend 時，會有怪現象。
-                end-code
-                /// Replace "if", "for", "begin", .. etc to "[if]", "[for]", "[beign]" .. etc
-                /// I like to use "if" in interpret mode directly instead of "[if]" and
-                /// to merge them is difficult to me so far. So I defined this word.
-: run:          ( <string> -- ... ) // Run one-liner with "if","begin","for", in interpret mode
-                CR word (run:) ; interpret-only
-                /// To run multiple lines use <text>...</text> (run:) or "run>" instead of "run:".
-                /// run: is oneliner. I think run: may be used in ~.f files while run> certainly can't.
-: run>          ( <string> -- ... ) // Run multiple lines with "if","begin","for", in interpret mode
-                js> push(ntib);ntib=tib.length;tib.slice(pop()) (run:) ; interpret-only
-                /// run> go through all the rest of the inputbox; 
-                /// run: is oneliner. I think run: may be used in ~.f files while run> certainly can't.
+\ code (run:)     ( "..if.." -- "..[if].." ) // Run string with "if","begin","for" in interpret mode
+\                 var ss = pop();
+\                 var result = ss
+\                     .replace(/(^|\s)(if|else|then|begin|again|until|for|next)(\s|$)/mg,"$1[$2]$3")
+\                     .replace(/(^|\s)(if|else|then|begin|again|until|for|next)(\s|$)/mg,"$1[$2]$3");
+\                     // 連做兩次解決 if else then 翻成 [if] else [then] 的現象。 
+\                 push(result);execute("tib.insert"); // 不能用 dictate(), 多重 suspend 時，會有怪現象。
+\                 end-code
+\                 /// Replace "if", "for", "begin", .. etc to "[if]", "[for]", "[beign]" .. etc
+\                 /// I like to use "if" in interpret mode directly instead of "[if]" and
+\                 /// to merge them is difficult to me so far. So I defined this word.
+\ : run:          ( <string> -- ... ) // Run one-liner with "if","begin","for", in interpret mode
+\                 CR word (run:) ; interpret-only
+\                 /// To run multiple lines use <text>...</text> (run:) or "run>" instead of "run:".
+\                 /// run: is oneliner. I think run: may be used in ~.f files while run> certainly can't.
+\ : run>          ( <string> -- ... ) // Run multiple lines with "if","begin","for", in interpret mode
+\                 js> push(ntib);ntib=tib.length;tib.slice(pop()) (run:) ; interpret-only
+\                 /// run> go through all the rest of the inputbox; 
+\                 /// run: is oneliner. I think run: may be used in ~.f files while run> certainly can't.
 
 \ ------------------ Tools  ----------------------------------------------------------------------
                 
-code int        push(parseInt(pop())) end-code   // ( float|string -- integer|NaN )
-code float      push(parseFloat(pop())) end-code // ( string -- float|NaN ) 
+code int        push(int(pop())) end-code   // ( float|string -- integer|NaN )
+code float      push(float(pop())) end-code // ( string -- float|NaN ) 
 
                 <selftest>
                     *** int 3.14 is 3, 12.34AB is 12
@@ -1391,128 +1395,123 @@ code float      push(parseFloat(pop())) end-code // ( string -- float|NaN )
                     [d 3,12 d] [p "int" p]
                 </selftest>
 
-: random        ( -- 0~1 )
-                js> Math.random() ;
-
-                <selftest>
-                    *** random is (0...1)
-                    random 0 > random 1 < and
-                    random 0 > random 1 < and
-                    random 0 > random 1 < and
-                    random 0 > random 1 < and
-                    [d True,True,True,True d] [p "random" p]
-                </selftest>
-
 : nop           ; // ( -- ) No operation.
 : drops         ( ... n -- ... ) // Drop n cells from data stack.
-                1+ js> stack.splice(stack.length-tos(),pop()) drop ;
-                /// We need 'drops' <js> sections in a colon definition are easily to have
-                /// many input arguments that need to be dropped.
+                py: vm.stack=stack[:-pop()] ;
+                /// We need 'drops' <py> sections in a colon definition are easily 
+                /// to have many input arguments that need to be dropped.
+: dropall       ( ... -- empty ) // Drop all cells from data stack
+                0 drops ;
 
                 <selftest>
                     *** drops n data stack cells ...
                         1 2 3 4 5 2 drops [d 1,2,3 d] [p "drops" p]
                 </selftest>
 
-\ JavaScript's hex is a little strange.
-\ Example 1: -2 >> 1 is -1 correct, -2 >> 31 is also -1 correct, but -2 >> 32 become -2 !!
-\ Example 2: -1 & 0x7fffffff is 0x7fffffff, but -1 & 0xffffffff will be -1 !!
-\ That means hex is 32 bits and bit 31 is the sign bit. But not exactly, because 0xfff...(over 32 bits)
-\ are still valid numbers. However, my job is just to print hex correctly by using .r and
-\ .0r. So I simply use a workaround that prints higher 16 bits and then lower 16 bits respectively.
-\ So JavaScript's opinion about hex won't bother me anymore.
-
-code (.r)       ( num|str n -- "  num|str" ) // Right adjusted num|str in n characters (FigTaiwan SamSuanChen)
-                var n=pop(); var i=pop();
-                if(typeof i == 'number') {
-                    if(vm.forth.base == 10){
-                        i=i.toString(vm.forth.base);
-                    }else{
-                        i = (i >> 16 & 0xffff || "").toString(vm.forth.base) + (i & 0xffff).toString(vm.forth.base);
-                    }
-                }
-                n=n-i.length;
-                if(n>0) do {
-                    i=" "+i;
-                    n--;
-                } while(n>0);
-                push(i);
-                end-code
-                
-: .r            ( num|str n -- ) // Print right adjusted num|str in n characters (FigTaiwan SamSuanChen)
-                (.r) . ;
-                
-code (.0r)      ( num|str n -- "0000num|str" ) // Right adjusted print num|str in n characters (FigTaiwan SamSuanChen)
-                var n=pop(); var i=pop();
-                var minus = "";
-                if(typeof i == 'number') {
-                    if(vm.forth.base == 10){
-                        if (i<0) minus = '-';
-                        i=Math.abs(i).toString(vm.forth.base);
-                    }else{
-                        i = (i >> 16 & 0xffff || "").toString(vm.forth.base) + (i & 0xffff).toString(vm.forth.base);
-                    }
-                }
-                n=n-i.length - (minus?1:0);
-                if(n>0) do {
-                    i="0"+i;
-                    n--;
-                } while (n>0);
-                // type(minus+i);
-                push(minus+i);
-                end-code
-                
-: .0r           ( num|str n -- ) // Right adjusted print num|str in n characters (FigTaiwan SamSuanChen)
-                (.0r) . ;
-                /// Negative numbers are printed in a strange way. e.g. "0000-123".
-
-                <selftest>
-                    <comment> .r 是 FigTaiwan 爽哥那兒抄來的。 JavaScript 本身就有 
-                    number.toString(base) 可以任何 base 印出數值。base@ base! hex 
-                    decimal 等只對 .r .0r 有用。輸入時照 JavaScript 的慣例，數字就
-                    是十進位，0x1234 是十六進位，已經足夠。 .r .0r 很有用, .s 的定
-                    義就是靠他們。
-                    </comment>
-                    *** .r .0r can print hex-decimal
-                    marker ---
-                    js: vm.selftest_visible=False;vm.screenbuffer=""
-                    decimal  -1 10  .r <js> vm.screenbuffer.slice(-10)=='        -1'</jsV> \ True
-                    hex      -1 10  .r <js> vm.screenbuffer.slice(-10)=='  ffffffff'</jsV> \ True
-                    decimal  56 10 .0r <js> vm.screenbuffer.slice(-10)=='0000000056'</jsV> \ True
-                    hex      56 10 .0r <js> vm.screenbuffer.slice(-10)=='0000000038'</jsV> \ True
-                    decimal -78 10 .0r <js> vm.screenbuffer.slice(-10)=='-000000078'</jsV> \ True
-                    hex     -78 10 .0r <js> vm.screenbuffer.slice(-10)=='00ffffffb2'</jsV> \ True
-                    js: vm.selftest_visible=True
-                    [d True,True,True,True,True,True d] 
-                    [p 'decimal', 'hex', '.0r', '.r' p]
-                    ---
-                </selftest>
-
-code dropall    stack=[] end-code // ( ... -- ) Clear the data stack.
+\ \ JavaScript's hex is a little strange.
+\ \ Example 1: -2 >> 1 is -1 correct, -2 >> 31 is also -1 correct, but -2 >> 32 become -2 !!
+\ \ Example 2: -1 & 0x7fffffff is 0x7fffffff, but -1 & 0xffffffff will be -1 !!
+\ \ That means hex is 32 bits and bit 31 is the sign bit. But not exactly, because 0xfff...(over 32 bits)
+\ \ are still valid numbers. However, my job is just to print hex correctly by using .r and
+\ \ .0r. So I simply use a workaround that prints higher 16 bits and then lower 16 bits respectively.
+\ \ So JavaScript's opinion about hex won't bother me anymore.
+\ 
+\ code (.r)       ( num|str n -- "  num|str" ) // Right adjusted num|str in n characters (FigTaiwan SamSuanChen)
+\                 var n=pop(); var i=pop();
+\                 if(typeof i == 'number') {
+\                     if(vm.forth.base == 10){
+\                         i=i.toString(vm.forth.base);
+\                     }else{
+\                         i = (i >> 16 & 0xffff || "").toString(vm.forth.base) + (i & 0xffff).toString(vm.forth.base);
+\                     }
+\                 }
+\                 n=n-i.length;
+\                 if(n>0) do {
+\                     i=" "+i;
+\                     n--;
+\                 } while(n>0);
+\                 push(i);
+\                 end-code
+\                 
+\ : .r            ( num|str n -- ) // Print right adjusted num|str in n characters (FigTaiwan SamSuanChen)
+\                 (.r) . ;
+\                 
+\ code (.0r)      ( num|str n -- "0000num|str" ) // Right adjusted print num|str in n characters (FigTaiwan SamSuanChen)
+\                 var n=pop(); var i=pop();
+\                 var minus = "";
+\                 if(typeof i == 'number') {
+\                     if(vm.forth.base == 10){
+\                         if (i<0) minus = '-';
+\                         i=Math.abs(i).toString(vm.forth.base);
+\                     }else{
+\                         i = (i >> 16 & 0xffff || "").toString(vm.forth.base) + (i & 0xffff).toString(vm.forth.base);
+\                     }
+\                 }
+\                 n=n-i.length - (minus?1:0);
+\                 if(n>0) do {
+\                     i="0"+i;
+\                     n--;
+\                 } while (n>0);
+\                 // type(minus+i);
+\                 push(minus+i);
+\                 end-code
+\                 
+\ : .0r           ( num|str n -- ) // Right adjusted print num|str in n characters (FigTaiwan SamSuanChen)
+\                 (.0r) . ;
+\                 /// Negative numbers are printed in a strange way. e.g. "0000-123".
+\ 
+\                 <selftest>
+\                     <comment> .r 是 FigTaiwan 爽哥那兒抄來的。 JavaScript 本身就有 
+\                     number.toString(base) 可以任何 base 印出數值。base@ base! hex 
+\                     decimal 等只對 .r .0r 有用。輸入時照 JavaScript 的慣例，數字就
+\                     是十進位，0x1234 是十六進位，已經足夠。 .r .0r 很有用, .s 的定
+\                     義就是靠他們。
+\                     </comment>
+\                     *** .r .0r can print hex-decimal
+\                     marker ---
+\                     js: vm.selftest_visible=False;vm.screenbuffer=""
+\                     decimal  -1 10  .r <js> vm.screenbuffer.slice(-10)=='        -1'</jsV> \ True
+\                     hex      -1 10  .r <js> vm.screenbuffer.slice(-10)=='  ffffffff'</jsV> \ True
+\                     decimal  56 10 .0r <js> vm.screenbuffer.slice(-10)=='0000000056'</jsV> \ True
+\                     hex      56 10 .0r <js> vm.screenbuffer.slice(-10)=='0000000038'</jsV> \ True
+\                     decimal -78 10 .0r <js> vm.screenbuffer.slice(-10)=='-000000078'</jsV> \ True
+\                     hex     -78 10 .0r <js> vm.screenbuffer.slice(-10)=='00ffffffb2'</jsV> \ True
+\                     js: vm.selftest_visible=True
+\                     [d True,True,True,True,True,True d] 
+\                     [p 'decimal', 'hex', '.0r', '.r' p]
+\                     ---
+\                 </selftest>
+\ 
+\ code dropall    stack=[] end-code // ( ... -- ) Clear the data stack.
 
                 <selftest>
                     *** dropall clean the data stack
                     1 2 3 4 5 dropall depth 0= [d True d] [p "dropall","0=" p]
                 </selftest>
 
-code (ASCII)    push(pop().charCodeAt(0)) end-code // ( str -- ASCII ) Get str[0]'s ASCII code.
-code ASCII>char ( ASCII -- 'c' ) // ASCII code number to character
-                push(String.fromCharCode(pop())) end-code
+code char>ASCII push(ord(pop())) end-code // ( str -- ASCII ) Get str[0]'s ASCII or whatever code
+                \ https://stackoverflow.com/questions/227459/ascii-value-of-a-character-in-python
+                /// Actually it returns utf-8, big-5, or whatever numeric code.
+                
+code ASCII>char ( ASCII -- 'c' ) // ASCII or whatever code number to character
+                push(chr(pop()) end-code
+                \ https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
                 /// 65 ASCII>char tib. \ ==> A (string)
+                
 : ASCII         ( <str> -- ASCII ) // Get <str>[0]'s ASCII code.
-                BL word (ASCII) compiling if literal then
+                BL word char>ASCII compiling if literal then
                 ; immediate
 
                 <selftest>
-                    *** ASCII (ASCII) ASCII>char
+                    *** ASCII char>ASCII ASCII>char
                     marker ---
-                    char abc (ASCII) ( 97 )
+                    char abc char>ASCII ( 97 )
                     98 ASCII>char ( b )
                     : test ASCII c ; test ( 99 )
-                    [d 97,'b',99 d] [p '(ASCII)', 'ASCII>char', "ASCII" p]
+                    [d 97,'b',99 d] [p 'char>ASCII', 'ASCII>char', "ASCII" p]
                     ---
                 </selftest>
-
+stop _stop_
 code .s         ( ... -- ... ) // Dump the data stack.
                 var count=stack.length, basewas=vm.forth.base;
                 if(count>0) for(var i=0;i<count;i++){
