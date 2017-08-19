@@ -474,6 +474,16 @@ peforth
                 then
                 refill
             again ;
+        code accept2 # use Ctrl-D at the end to terminate the input. py> chr(4)=='^D' --> True
+            result, s = "", input()
+            while not chr(4) in s:
+                result += s
+                s = input()
+            result += s.replace(chr(4),'\n')  # all ^D become \n 
+            push(result)
+            push(True)
+            end-code // ( -- str T|F ) Read a line from terminal.
+
         
 [ ] accept can be single line accept1 or multiple lines accept2 , switch by Ctrl-D
     8: [EOT] (<class 'str'>) <---- the Ctrl-D from input()

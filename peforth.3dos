@@ -8,6 +8,9 @@ def greeting():
     return vm.version;
 vm.greeting = greeting
 
+# Toggle multiple or single lines by ^D 
+vm.multiple = False
+
 def readTextFile(pathname):
     f = open(pathname,'r',encoding='utf-8')
     # for line in f:
@@ -28,12 +31,26 @@ def main():
     vm.dictate(readTextFile('quit.f'))
     print('OK ', end="")
     while True:
-        cmd = input("").strip()
+        cmd = ""                                   # 
+        if vm.tick('accept') and not vm.multiple:  # 
+            vm.execute('accept')                   # 
+            if vm.pop():                           # Input can be single line (default) or 
+                cmd = vm.pop().strip()             # multiple lines. Press Ctrl-D to switch
+        elif vm.tick('accept2') and vm.multiple:   # to multiple-line mode. Place a Ctrl-D
+            vm.execute('accept2')                  # before the last enter to end the input
+            if vm.pop():                           # when in multiple-line mode and back to
+                cmd = vm.pop().strip()             # single-line mode automatically.
+        else:                                      # 
+            cmd = input("").strip()                # 
+            
+        # pass the command line to forth VM    
         if cmd == "":
             print('OK ', end="")
             continue
-        elif cmd == "exit":
+        elif cmd == "exit": # A backup way to stop the program other than the bye command
             break
+        elif cmd == chr(4):
+            vm.multiple = not vm.multiple
         else:    
             vm.dictate(cmd)
             print('OK ', end="")

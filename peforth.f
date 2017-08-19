@@ -1012,6 +1012,22 @@ code accept
     else:
         push(False)
     end-code // ( -- str T|F ) Read a line from terminal.
+    
+code accept2 # use Ctrl-D at the end to terminate the input. py> chr(4)=='^D' --> True
+    vm.multiple = False # back to single input line
+    result, s = "", input()+'\n'
+    while not chr(4) in s:
+        result += s
+        s = input()+'\n'
+    result += s.replace(chr(4),'')  # remove all ^D
+    if len(result):
+        push(result)
+        push(True)
+    else:
+        push(False)
+    end-code // ( -- str T|F ) Read multiple lines from terminal.
+    
+    
 : refill        ( -- flag ) // Reload TIB from stdin. return 0 means no input or EOF
                 \ accept if [ s" push(function(){tib=pop();ntib=0})" jsEvalNo , ] 1 else 0 then ;
                 accept if py: vm.tib=pop();vm.ntib=0 1 else 0 then ;
