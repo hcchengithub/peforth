@@ -392,3 +392,16 @@ peforth
     問題在 kernel nexttoken() 裡面
     --> Root cause 1 : nexttoken() <--- skip leading white spaces 改寫
         Root cause 2 : tib and ntib are strange <-- ntib 太大先排除
+[x] writeTextFile  實驗
+    OK <py> open("pathname.txt", "wt")</pyV> constant f
+    reDef f
+    OK f .
+    <_io.TextIOWrapper name='pathname.txt' mode='wt' encoding='cp950'> OK f :> name
+    --> pathname.txt OK
+    OK f :: write("abc")
+    OK f :: write("123")
+    OK f :: write("中文")
+    OK f :: close()
+    encoding='utf-8'
+[ ] refill works now. Use refill to improve <text> first. Let it accept
+    multiple lines.

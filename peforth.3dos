@@ -10,10 +10,17 @@ vm.greeting = greeting
 
 def readTextFile(pathname):
     f = open(pathname,'r',encoding='utf-8')
+    # for line in f:
     s = f.read()
     f.close()
     return s
 vm.readTextFile = readTextFile
+    
+def writeTextFile(pathname, string):
+    f = open(pathname,"wt",encoding='utf-8')
+    f.write(string)
+    f.close
+vm.writeTextFile = writeTextFile    
     
 # The eforth.py command line interface, the main program loop
 def main():

@@ -1004,7 +1004,14 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                         [d "abc",3,2 d] [p "count" p]
                 </selftest>
 
-code accept     push(False) end-code // ( -- str T|F ) Read a line from terminal. A fake before I/O ready.
+code accept     
+    s = input()
+    if len(s):
+        push(s)
+        push(True)
+    else:
+        push(False)
+    end-code // ( -- str T|F ) Read a line from terminal.
 : refill        ( -- flag ) // Reload TIB from stdin. return 0 means no input or EOF
                 \ accept if [ s" push(function(){tib=pop();ntib=0})" jsEvalNo , ] 1 else 0 then ;
                 accept if py: vm.tib=pop();vm.ntib=0 1 else 0 then ;
@@ -1720,66 +1727,75 @@ code .s
 \                     ---
 \                 </selftest>
 
-stop _stop_
 
 code readTextFile 
-    try {
-        var data = vm.readTextFile(pop()); 
-    } catch (err) {
+    pathname = pop()
+    try:
+        data = vm.readTextFile(pathname); 
+    except Exception as err:
+        panic("Failed reading {}: {}".format(pathname,err))
         data = "";
-    }
     push(data);
-    end-code // ( "pathname" -- string ) Return a string, "" if failed
+    end-code // ( "pathname" -- string ) Return an utf-8 string, "" if failed
 
-: readTextFileAuto ( "pathname" -- string ) // Search and read, panic if failed.
-                js> vm.path.slice(0) \ this is the way javascript copy array by value
-                over char readTextFile execute ( call by name for 3ce's reDef'ed readTextFile )
-                js> tos()!="" if nip nip exit then drop
-                js> tos().length for aft ( -- fname [path] )
-                    js> tos().pop()+'/'+tos(1) 
-                    char readTextFile execute 
-                    js> tos()!=""
-                    if ( -- fname [path] file )
-                        nip nip r> drop exit \ for..next loop 裡面不能光 exit !!!
-                    then drop ( -- fname [path] )
-                then next ( -- fname [path] )
-                drop "" swap <js> panic("Error! File " + pop() + " not found!\n",True) </js> ;
+code writeTextFile 
+    pathname = pop()
+    try:
+        vm.writeTextFile(pathname,pop())
+    except Exception as err:
+        panic("Failed writing {}: {}".format(pathname,err))
+        data = "";
+    end-code // ( string "pathname" -- ) Write utf-8 string to file
 
-code writeTextFile ( string "pathname" -- ) // Write string to file. Panic if failed.
-                vm.writeTextFile(pop(),pop())
-                end-code
+stop _stop_
+stop _stop_
+
+\ : readTextFileAuto ( "pathname" -- string ) // Search and read, panic if failed.
+\                 js> vm.path.slice(0) \ this is the way javascript copy array by value
+\                 over char readTextFile execute ( call by name for 3ce's reDef'ed readTextFile )
+\                 js> tos()!="" if nip nip exit then drop
+\                 js> tos().length for aft ( -- fname [path] )
+\                     js> tos().pop()+'/'+tos(1) 
+\                     char readTextFile execute 
+\                     js> tos()!=""
+\                     if ( -- fname [path] file )
+\                         nip nip r> drop exit \ for..next loop 裡面不能光 exit !!!
+\                     then drop ( -- fname [path] )
+\                 then next ( -- fname [path] )
+\                 drop "" swap <js> panic("Error! File " + pop() + " not found!\n",True) </js> ;
+
 
 \ code tib.append   ( "string" -- ) // Append the "string" to TIB
 \               tib += " " + (pop()||""); end-code
 \               /// VM suspend-resume doesn't allow multiple levels of dictate() so
 \               /// we need tib.append or tib.insert.
 
-code tib.append ( "string" -- ) // Append the "string" to TIB
-                tib = tib.slice(ntib); ntib = 0;
-                tib += " " + (pop()||""); end-code
-                /// VM suspend-resume doesn't allow multiple levels of dictate() so
-                /// we need tib.append or tib.insert.
-
-                <comment>
-                    靠！ tib.append 沒辦法測呀！到了 terminal prompt 手動這樣測，
-                    OK 111 s" 12345" tib.append 222
-                    OK .s
-                        0:         111          6fh (number)
-                        1:         222          deh (number)
-                        2:       12345        3039h (number) <=== appended to the ending
-                </comment>
-
-\ code tib.insert   ( "string" -- ) // Insert the "string" into TIB
-\               var before = tib.slice(0,ntib), after = tib.slice(ntib);
-\               tib = before + " " + (pop()||"") + " " + after; end-code
-\               /// VM suspend-resume doesn't allow multiple levels of dictate() so
-\               /// we need tib.append or tib.insert.
-
-code tib.insert ( "string" -- ) // Insert the "string" into TIB
-                tib = tib.slice(ntib); ntib = 0;
-                tib = (pop()||"") + " " + tib; end-code
-                /// VM suspend-resume doesn't allow multiple levels of dictate() so
-                /// we need tib.append or tib.insert.
+\ code tib.append ( "string" -- ) // Append the "string" to TIB
+\                 tib = tib.slice(ntib); ntib = 0;
+\                 tib += " " + (pop()||""); end-code
+\                 /// VM suspend-resume doesn't allow multiple levels of dictate() so
+\                 /// we need tib.append or tib.insert.
+\ 
+\                 <comment>
+\                     靠！ tib.append 沒辦法測呀！到了 terminal prompt 手動這樣測，
+\                     OK 111 s" 12345" tib.append 222
+\                     OK .s
+\                         0:         111          6fh (number)
+\                         1:         222          deh (number)
+\                         2:       12345        3039h (number) <=== appended to the ending
+\                 </comment>
+\ 
+\ \ code tib.insert   ( "string" -- ) // Insert the "string" into TIB
+\ \               var before = tib.slice(0,ntib), after = tib.slice(ntib);
+\ \               tib = before + " " + (pop()||"") + " " + after; end-code
+\ \               /// VM suspend-resume doesn't allow multiple levels of dictate() so
+\ \               /// we need tib.append or tib.insert.
+\ 
+\ code tib.insert ( "string" -- ) // Insert the "string" into TIB
+\                 tib = tib.slice(ntib); ntib = 0;
+\                 tib = (pop()||"") + " " + tib; end-code
+\                 /// VM suspend-resume doesn't allow multiple levels of dictate() so
+\                 /// we need tib.append or tib.insert.
 : sinclude.js   ( "pathname" -- ) // Include JavaScript source file
                 readTextFileAuto js: eval(pop()) ;
 : include.js    ( <pathname> -- ) // Include JavaScript source file
