@@ -497,10 +497,9 @@ def pop(index=None):
 # push(formula(pop(i)),i-1) manipulate the tos(i) directly, usually when i is the index of a loop.
 def push(data=None, index=None):
     global stack
-    if data==None: 
-        panic(" push() what?");
-    elif index==None:
+    if index==None:
         stack.append(data); 
     else:
         stack.insert(len(stack)-1-index,data);
 
+    # 這個用不上 panic(" push() what?");  為了允許 push(None)

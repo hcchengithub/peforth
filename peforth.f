@@ -1532,7 +1532,7 @@ code .s
             print(s)
         else:
             # push(stack[i]); push(i); dictate("decimal 7 .r char : . space .");
-            s = "{0:>7}: {1} ({2})".format(i,x,type(x))
+            s = "{0:>7}: {1} ({2})".format(i,str(x),type(x))
             print(s)
     else:
         print("empty\n");
@@ -1746,6 +1746,34 @@ code writeTextFile
         panic("Failed writing {}: {}".format(pathname,err))
         data = "";
     end-code // ( string "pathname" -- ) Write utf-8 string to file
+
+: <t> ( <multi-lines> -- "string" ) // get multi-lines string from ternimal
+    py> nextstring('</t>') ( result )
+    \ if found then easy just return the string
+        py> tos().flag if py> pop().str exit then
+    \ if not found then proceed the below loop
+    py> pop().str ( s )
+    begin
+        accept if ( s line )  
+            \ get string to s, leave </text> and the rests in tib by adjusting ntib
+            py> re.search("(.*)</t>(.*)",tos()) ( s line re )
+            py> bool(tos()) if  \ line has </text> ? 
+                ( s line re ) 
+                *debug*
+                py: vm.tib="</t>"+tos().group(2);vm.ntib=0;
+                \ s += re.group(1)
+                nip ( s re ) :> group(1) *debug* + ( s )
+                exit
+            else  ( s line re )
+                \ s += line
+                drop *debug* + ( s ) 
+            then
+        else ( s )
+            \ s += '\n'
+            *debug* py> pop()+'\n'
+        then
+        refill
+    again ;
 
 stop _stop_
 stop _stop_

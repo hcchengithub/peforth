@@ -405,3 +405,80 @@ peforth
     encoding='utf-8'
 [ ] refill works now. Use refill to improve <text> first. Let it accept
     multiple lines.
+    : <text>.interpret ( <multi-lines> -- "string" ) // get multi-lines string from ternimal
+        CR word ( s )
+        begin
+            accept if ( s line )  
+                \ get string to s, leave </text> and the rests in tib by adjusting ntib
+                py> re.search("(.*)</text>(.*)",tos()) ( s line re )
+                py> bool(tos()) if  \ line has </text> ? 
+                    ( s line re )
+                    py: vm.tib="</text>"+tos().group(2);vm.ntib=0;
+                    \ s += re.group(1)
+                    nip ( s re ) :> group(1) + ( s )
+                    exit
+                else  ( s line re )
+                    \ s += line
+                    drop + ( s ) 
+            else ( s )
+                \ s += '\n'
+                py> pop()+'\n'
+            then
+            refill
+        again ;
+    我發現, bool(regEx) 可以看出 re.search 的結果是否 found
+    [x] See MetaMoji 討論如何適當分割以上複雜的 <text>.interpret 成簡單的 一行成功; 多行輸入 兩段。
+        其中多行輸入是個公用 routine
+    [x] 實驗後綴法是否有簡化功效? 使 group(1) 成為共同的結果
+        \ regular expression 實例
+        OK <py> re.search("(.*?)</text>(.*)","aa </text>bb</text>")</pyV> ( re ) constant re
+        OK re bool . cr                                   ^^^^^^ 故意加上後綴讓 re.search 總是成功   
+        True <--- 總是成功
+        OK re :> group() . cr
+        aa </text>bb</text>
+        OK re :> group(1) . cr
+        aa <----------------------------- group(1) 為所求 
+        OK re :> group(2) . cr
+        bb</text>  <-------------------- group(2) 去掉後綴之後還給 tib 
+        OK <py> re.search("(.*?)</text>(.*)","aa bb</text>")</pyV> ( re ) constant re
+        OK re bool . cr
+        True
+        OK re :> group() . cr
+        aa bb</text>
+        OK re :> group(1) . cr
+        aa bb  <------------ 當 bool group(2) False 時 group(1) 仍為所求, 故確有簡化功效
+        OK re :> group(2) . cr
+        OK re :> group(2)=="" . cr
+        True
+        OK re :> group(2) bool .
+        False OK
+    [ ] 多行輸入公用 routine
+        : accepts ( "deli" <multiple lines> -- "string" ) // Get multiple lines from tib up to delimiter 
+            ( deli )
+            begin
+                accept if ( s line )  
+                    \ get string to s, leave </text> and the rests in tib by adjusting ntib
+                    py> re.search("(.*)</text>(.*)",tos()) ( s line re )
+                    py> bool(tos()) if  \ line has </text> ? 
+                        ( s line re )
+                        py: vm.tib="</text>"+tos().group(2);vm.ntib=0;
+                        \ s += re.group(1)
+                        nip ( s re ) :> group(1) + ( s )
+                        exit
+                    else  ( s line re )
+                        \ s += line
+                        drop + ( s ) 
+                else ( s )
+                    \ s += '\n'
+                    py> pop()+'\n'
+                then
+                refill
+            again ;
+        
+[ ] accept can be single line accept1 or multiple lines accept2 , switch by Ctrl-D
+    8: [EOT] (<class 'str'>) <---- the Ctrl-D from input()
+    OK py> ord(tos()[0]) . cr
+    4
+    OK
+    
+[ ] .s in trouble when cell is False, None ... etc
