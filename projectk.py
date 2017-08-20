@@ -10,6 +10,7 @@ import pdb
 import os
 import inspect  # print (inspect.getsource(func))
 import dis      # dis.dis(func) 
+import json
 
 name = "peforth"
 vm = __import__(__name__)
@@ -46,19 +47,6 @@ def reset():
     ip = 0;  # forth VM instruction pointer
     stop = True; 
     ntib = len(tib);  # don't clear tib, a clue for debug.
-
-    
-# panic() calls out to vm.panic()
-# The panic() function gets only message and severity level. 
-# Kernel has no idea how to handle these information so it checks if vm.panic() exists
-# and pass the {msg,serious}, or even more info, over that's all. That's why vm.panic() has to
-# receive a hash structure, because it must be.
-def panic(msg,serious=False):
-    # defined in project-k kernel peforth.py
-    print("\n{}".format(msg))
-    c = input("Debug? [y/N] ")
-    if c in ['y', 'Y']:
-        pdb.set_trace()
         
 # Forth words are instances of Word() constructor.
 class Word:
@@ -393,7 +381,7 @@ def docode(_me=None):
     global compiling, newname, newxt, newhelp, ntib
     newname = nexttoken();
     if isReDef(newname): # don't use tick(newname), it's wrong.
-        panic("reDef "+newname);
+        panic("reDef "+newname, False);
     # get code body
     push(nextstring("end-code")); 
     if tos()['flag']:

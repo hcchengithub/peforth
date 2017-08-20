@@ -1,4 +1,17 @@
+import pdb
 import projectk as vm
+
+# panic() when something wrong
+def panic(msg,serious=True):
+    # defined in project-k kernel peforth.py
+    print("\n{}".format(msg))
+    if serious:
+        c = input("Continue, Debug, or Abort? [C/d/a] ")
+        if c in ['D', 'd']:
+            pdb.set_trace()
+        elif c in ['A', 'a']:
+            vm.reset()
+vm.panic = panic
 
 # peforth version 
 vm.version = float(vm.major_version) + 0.01 # 0.01 is the minor version or build number
@@ -27,8 +40,10 @@ vm.writeTextFile = writeTextFile
     
 # The eforth.py command line interface, the main program loop
 def main():
-    vm.dictate(readTextFile('peforth.f'))
-    vm.dictate(readTextFile('quit.f'))
+    if not vm.tick('version'): 
+        # run from python interpreter only once
+        vm.dictate(readTextFile('peforth.f'))
+        vm.dictate(readTextFile('quit.f'))
     print('OK ', end="")
     while True:
         cmd = ""                                   # 

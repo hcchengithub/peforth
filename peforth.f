@@ -83,7 +83,9 @@ code <py>
     push(nexttoken("</py>|</pyV>")) end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
-    exec_code = compile(pop(),"","exec")
+    source = pop()
+    exec_code = compile(source,"","exec")
+    # setattr(exec_code,'source',source)
     if compiling:
         # comma(lambda:exec(exec_code))
         comma(exec_code)
@@ -135,7 +137,7 @@ code literal
     def literal(n): # function generator
         def f(): # literal run time function
             push(n)
-        f.description = "{} {}".format(type(n),n)    
+        f.literal = "Literal: {} {}".format(n,type(n))    
         return f
     comma(literal(pop()))
     end-code
@@ -150,7 +152,7 @@ code (create)
     global newname
     newname = pop()
     if not newname: panic("(create) what?") 
-    if isReDef(newname): print("reDef "+newname); # 若用 tick(newname) 就錯了
+    if isReDef(newname): panic("reDef "+newname, False); # 若用 tick(newname) 就錯了
     current_word_list().append(Word(newname,None));
     last().vid = current; # vocabulary ID
     last().wid = len(current_word_list())-1; # word ID
@@ -484,16 +486,17 @@ code not  push(not bool(pop())) end-code // ( x -- !x ) Logical not
 
 
 \ ------------------ eforth code words ----------------------------------------------------------------------
-code OR         push(pop() | pop()) end-code // ( a b -- a | b ) Bitwise OR. See also 'or' and '||'.
-code NOT        push(~pop()) end-code // ( a -- ~a ) Bitwise NOT. Small 'not' is for logical.
+code AND        push(pop() & pop()) end-code // ( a b -- a & b ) Bitwise AND
+code OR         push(pop() | pop()) end-code // ( a b -- a | b ) Bitwise OR
+code NOT        push(~pop()) end-code // ( a -- ~a ) Bitwise NOT
 code XOR        push(pop() ^ pop()) end-code // ( a b -- a ^ b ) Bitwise exclusive OR.
 code true       push(True) end-code // ( -- True ) boolean True.
 code false      push(False) end-code // ( -- False ) boolean False.
 code ""         push("") end-code // ( -- "" ) empty string.
 code []         push([]) end-code // ( -- [] ) empty array.
-code {}         push({}) end-code // ( -- {} ) empty object.
+code {}         push({}) end-code // ( -- {} ) empty dictionary
 code none       push(None) end-code // ( -- None ) Get a None value.
-                /// 'Null' can be used in functions to check whether an argument is given.
+
     <selftest>
         *** boolean and or && || not AND OR NOT XOR
         undefined not \ True
@@ -1542,9 +1545,11 @@ code ASCII>char push(chr(pop())) end-code // ( ASCII -- 'c' ) ASCII or whatever 
 code .s         
     for i in range(len(stack)):
         x, typex = stack[i], type(stack[i])
-        if typex==int or typex==float or typex==complex:
-            # push(stack[i]); push(i); dictate("decimal 7 .r char : . space dup decimal 11 .r space hex 11 .r char h .");
+        if typex==int:
             s = "{0:>7}: {1:11,} {2:11X}h ({3})".format(i,x,x,type(x))
+            print(s)
+        elif typex==float or typex==complex:    
+            s = "{0:>7}: {1:11,} {2:11}  ({3})".format(i,x,'',type(x))
             print(s)
         else:
             # push(stack[i]); push(i); dictate("decimal 7 .r char : . space .");
@@ -1763,37 +1768,6 @@ code writeTextFile
         data = "";
     end-code // ( string "pathname" -- ) Write utf-8 string to file
 
-: <t> ( <multi-lines> -- "string" ) // get multi-lines string from ternimal
-    py> nextstring('</t>') ( result )
-    \ if found then easy just return the string
-        py> tos().flag if py> pop().str exit then
-    \ if not found then proceed the below loop
-    py> pop().str ( s )
-    begin
-        accept if ( s line )  
-            \ get string to s, leave </text> and the rests in tib by adjusting ntib
-            py> re.search("(.*)</t>(.*)",tos()) ( s line re )
-            py> bool(tos()) if  \ line has </text> ? 
-                ( s line re ) 
-                *debug*
-                py: vm.tib="</t>"+tos().group(2);vm.ntib=0;
-                \ s += re.group(1)
-                nip ( s re ) :> group(1) *debug* + ( s )
-                exit
-            else  ( s line re )
-                \ s += line
-                drop *debug* + ( s ) 
-            then
-        else ( s )
-            \ s += '\n'
-            *debug* py> pop()+'\n'
-        then
-        refill
-    again ;
-
-stop _stop_
-stop _stop_
-
 \ : readTextFileAuto ( "pathname" -- string ) // Search and read, panic if failed.
 \                 js> vm.path.slice(0) \ this is the way javascript copy array by value
 \                 over char readTextFile execute ( call by name for 3ce's reDef'ed readTextFile )
@@ -1840,60 +1814,84 @@ stop _stop_
 \                 tib = (pop()||"") + " " + tib; end-code
 \                 /// VM suspend-resume doesn't allow multiple levels of dictate() so
 \                 /// we need tib.append or tib.insert.
-: sinclude.js   ( "pathname" -- ) // Include JavaScript source file
-                readTextFileAuto js: eval(pop()) ;
-: include.js    ( <pathname> -- ) // Include JavaScript source file
-                BL word sinclude.js ;
 
-                char -=EOF=- ( eof ) <js> (new RegExp(tos()))</jsV> ( eof /eof/ )
-                js> ({regex:pop(),pattern:pop()}) constant EOF // ( -- {regex,pattern} ) End of file pattern and RegExp
+\ : sinclude.js   ( "pathname" -- ) // Include JavaScript source file
+\                 readTextFileAuto js: eval(pop()) ;
+\ : include.js    ( <pathname> -- ) // Include JavaScript source file
+\                 BL word sinclude.js ;
+\ 
+\                 char -=EOF=- ( eof ) <js> (new RegExp(tos()))</jsV> ( eof /eof/ )
+\                 js> ({regex:pop(),pattern:pop()}) constant EOF // ( -- {regex,pattern} ) End of file pattern and RegExp
+                
 : sinclude      ( "pathname" -- ... ) // Lodad the given forth source file.
-                readTextFileAuto ( file )
-                <js> 
-                    var s = pop();
-                    var ss = (s+'x').slice(0,s.search(vm.forth.EOF.regex))
-                             + '\n\\ '
-                             + vm.forth.EOF.pattern
-                             + '\n';
-                    // The +'x' is a perfect trick, will be cut both EOF mark exists or not. 
-                    // The last \n 避免最後是 \ comment 時吃到後面來
-                    if (s) push(ss); else push(""); // skip if file not found
-                </js> 
-                tib.insert ;
-                /// Cut after EOF and append EOF back to guarantee an EOF exists
-                /// So, if a ~.f file is copy-paste to jeforth.3we input box, 
-                /// instead of through sinclude, then EOF not found will be a problem 
-                /// when it is expected in, i.e. source-code-header. Add EOF manually
-                /// is the solution.
+                readTextFile ( file ) py: dictate(pop()) ;
 
 : include       ( <filename> -- ... ) // Load the source file
                 BL word sinclude ; interpret-only
+
+: type  ( x -- type ) // get type object of anything x                
+    py> type(pop()) ;
+    
+: dir   ( x -- dir ) // get dir list of anything x                
+    py> dir(pop()) ;
+
+: keys  ( x -- keys ) // get keys of dict x
+    py> pop().keys() ;
+    
+code obj>keys      
+    if type(tos())==dict:
+        push(pop().keys())
+    else:
+        push(dir(pop()))
+    end-code
+    // ( obj -- [keys] ) Get all attributes of an object or all kyes of an dict
+
+
+\ json.dumps() needs this function to convert a Word object to dict 
+<py>
+def obj2dict(obj):
+    #convert object to a dict
+    d = {}
+    d['__class__'] = obj.__class__.__name__
+    d['__module__'] = getattr(obj,"__module__","unknown")
+    d.update(getattr(obj,"__dict__",{}))
+    return d
+push(obj2dict)
+</py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=vm.forth['obj2dict'])
+
+: .obj ( obj -- ) // see object that is supposed to be Word object
+    py> json.dumps(pop(),default=vm.forth['obj2dict'],indent=4) . ;
+
                 
-code obj>keys   ( obj -- keys[] ) // Get all keys of an object.
-                var obj=pop();
-                var array = [];
-                for(var i in obj) array.push(i);
-                push(array);
-                end-code
+\ code memberCount ( obj -- count ) // Get hash table's length or an object's member count.
+\                 push(vm.g.memberCount(pop()));
+\                 end-code
 
-code memberCount ( obj -- count ) // Get hash table's length or an object's member count.
-                push(vm.g.memberCount(pop()));
-                end-code
+\ code isSameArray ( a1 a2 -- T|F ) // Compare two arrays.
+\                 push(vm.g.isSameArray(pop(), pop()));
+\                 end-code
 
-code isSameArray ( a1 a2 -- T|F ) // Compare two arrays.
-                push(vm.g.isSameArray(pop(), pop()));
-                end-code
-
-code (?)        ( a -- ) // print value of the variable consider ret and exit
-                var x = dictionary[pop()];
-                switch(x){
-                    case null: type('RET');break;
-                    case "": type('EXIT');break;
-                    default: type(x);
-                }; end-code private
+code toString # To see a cell in dictionary
+    x = pop();
+    if x==None: 
+        push('RET')
+    elif x=="": 
+        push('EXIT')
+    elif type(x)==int:  # remove numbers to protect getattr()
+        push(str(x))
+    elif getattr(x,'literal',False):
+        push(x.literal)
+    else: 
+        push(str(x));
+    end-code private // ( value -- string ) To see dictionary cell, toString() of the variable consider ret and exit
 
 : (dump)        ( addr -- ) // dump one cell of dictionary
-                decimal dup 5 .0r s" : " . dup (?) s"  (" . js> mytypeof(dictionary[pop()]) . s" )" . cr ;
+                \ sample line: 00007: r> ( -- n ) Pop the return stack  (object)
+                dup @ ( addr value ) dup toString ( addr value toString )
+                s" {:05}: {}  ({})" 
+                :> format(pop(2),pop(),type(pop())) 
+                . cr ;
+                
 : dump          ( addr length -- addr' ) // dump dictionary
                 for ( addr ) dup (dump) 1+ next ;
 : d             ( <addr> -- ) // dump dictionary
@@ -1901,15 +1899,16 @@ code (?)        ( a -- ) // print value of the variable consider ret and exit
                 BL word                     \ (me str)
                 count 0=                    \ (me str undef?) No start address?
                 if                          \ (me str)
-                    drop                    \ drop the undefined  (me)
-                    js> tos().lastaddress   \ (me addr)
+                    drop                    \ drop the null str (me)
+                    py> tos().lastaddress   \ (me addr)
                 else                        \ (me str)
-                    js> parseInt(pop())     \ (me addr)
+                    py> int(pop())          \ (me addr)
                 then ( me addr )
-                20 dump                         \ (me addr')
-                js: pop(1).lastaddress=pop()
+                20 dump                     \ (me addr')
+                py: pop().lastaddress=pop()
                 ;
                 
+stop _stop_
                 <selftest>
                     *** d dump
                     js: vm.selftest_visible=False;vm.screenbuffer=""

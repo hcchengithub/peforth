@@ -403,8 +403,8 @@ peforth
     OK f :: write("中文")
     OK f :: close()
     encoding='utf-8'
-[ ] refill works now. Use refill to improve <text> first. Let it accept
-    multiple lines.
+[x] refill works now. Use refill to improve <text> first. Let it accept
+    multiple lines. ---> 最後是簡單地引進 accept2 用 Ctrl-D 切換 multiple-line mode 即可. 保留以下研究過程。
     : <text>.interpret ( <multi-lines> -- "string" ) // get multi-lines string from ternimal
         CR word ( s )
         begin
@@ -452,7 +452,7 @@ peforth
         True
         OK re :> group(2) bool .
         False OK
-    [ ] 多行輸入公用 routine
+    [x] 多行輸入公用 routine
         : accepts ( "deli" <multiple lines> -- "string" ) // Get multiple lines from tib up to delimiter 
             ( deli )
             begin
@@ -483,12 +483,112 @@ peforth
             push(result)
             push(True)
             end-code // ( -- str T|F ) Read a line from terminal.
-
-        
-[ ] accept can be single line accept1 or multiple lines accept2 , switch by Ctrl-D
+[x] accept can be single line accept1 or multiple lines accept2 , switch by Ctrl-D
     8: [EOT] (<class 'str'>) <---- the Ctrl-D from input()
     OK py> ord(tos()[0]) . cr
     4
     OK
     
-[ ] .s in trouble when cell is False, None ... etc
+[x] .s in trouble when cell is False, None ... etc
+[x] peforth.py 可以直接執行 : python peforth.py 
+    也可以由 python interpreter 執行: >>> peforth.main() 此時 exit 回到 python interpreter
+    bye 則會傳回 errorlevel 回到 DOS.
+
+    # 從 python interpreter 就可以看到 peforth.py module 裡的 globals
+    >>> dir(peforth)
+    ['__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', 
+    '__package__', '__spec__', 'greeting', 'main', 'panic', 'readTextFile', 
+    'vm', 'writeTextFile']
+
+    # 從 python interpreter 更可以看到 project-k vm 裡的 globals
+    >>> dir(peforth.vm)
+    ['EXIT', 'RET', 'Word', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', 
+    '__name__', '__package__', '__spec__', 'code', 'colonxt', 'comma', 'compiling', 'context', 
+    'context_word_list', 'current', 'current_word_list', 'debug', 'dictate', 'dictionary', 
+    'dis', 'docode', 'doendcode', 'endcode', 'execute', 'forth', 'genxt', 'greeting', 
+    'here', 'inner', 'inspect', 'ip', 'isReDef', 'json', 'last', 'major_version', 'multiple', 
+    'name', 'newhelp', 'newname', 'newxt', 'nextstring', 'nexttoken', 'ntib', 'order', 'os', 
+    'outer', 'panic', 'pdb', 'phaseA', 'phaseB', 'pop', 'push', 're', 'readTextFile', 'reset', 
+    'rstack', 'rtos', 'stack', 'stop', 'tib', 'tick', 'tos', 'version', 'vm', 'vocs', 'wordhash', 
+    'words', 'writeTextFile']
+    
+    # 從 python interpreter 也可以執行 peforth 
+    >>> peforth.vm.dictate 
+    <function dictate at 0x000001D1368E2510>
+    >>> peforth.vm.dictate('version')
+    p e f o r t h    v1.01
+    source code http://github.com/hcchengithub/peforth
+
+    # 在 peforth 裡面定義的東西, 回到 python interpreter 取用:
+    >>> peforth.main()
+    OK 123 constant x
+    OK exit
+    >>> peforth.vm.forth
+    {'obj2dict': <function object2dict at 0x000001D136934510>, 'x': 123}
+    >>> peforth.vm.forth['x'] --> 123
+
+    # 用 obj2dict() 把 Word 轉成 dict, 這是 see 的準備
+    >>> peforth.vm.forth['obj2dict'](peforth.vm.tick('+'))
+    {'__class__': 'Word', '__module__': 'projectk', 'name': '+', 'xt': <function xt at 0x000001D1368F28C8>, 'immediate': False, 'help': '( a b -- a+b) Add two numbers or concatenate two strings.', 'comment': '', 'vid': 'forth', 'wid': 51, 'type': 'code'}
+
+[ ] see code words
+
+    # json 需要先給它 obj2dict() function 才能處理我們的 object
+    OK py> json.dumps(tick('+'),indent=4) .
+    Failed to run <Word '</pyV>'>: Object of type 'Word' is not JSON serializable
+    Continue, Debug, or Abort? [C/d/a] a          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
+
+    # 從 peforth 裡面定義轉換 function 
+    <py>
+    def object2dict(obj):
+        #convert object to a dict
+        d = {}
+        d['__class__'] = obj.__class__.__name__
+        d['__module__'] = obj.__module__
+        d.update(obj.__dict__)
+        return d
+    push(object2dict)
+    </py>
+    ^D
+    OK .s
+          0: <function object2dict at 0x000001D136934510> (<class 'function'>)
+    OK constant obj2dict
+    OK exit
+    
+    # 有了轉換 function 就可以讓 json 完成工作
+    >>> import json
+    >>> print(json.dumps(peforth.vm.tick('+'),default=peforth.vm.forth['obj2dict'],indent=4))
+    {
+        "__class__": "Word",
+        "__module__": "projectk",
+        "name": "+",
+        "xt": {
+            "__class__": "function",
+            "__module__": "projectk",
+            "source": "def xt(_me=None): ### + ###\n    push(pop(1)+pop()) \n",
+            "name": "+"
+        },
+        "immediate": false,
+        "help": "( a b -- a+b) Add two numbers or concatenate two strings.",
+        "comment": "",
+        "vid": "forth",
+        "wid": 51,
+        "type": "code"
+    }
+    >>>
+    
+[ ] code object 希望能帶 source code 以供 see
+    OK 45 @ dir .
+    ['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', 
+    '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', 
+    '__le__', '__lt__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', 
+    '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'co_argcount', 'co_cellvars', 
+    'co_code', 'co_consts', 'co_filename', 'co_firstlineno', 'co_flags', 'co_freevars', 
+    'co_kwonlyargcount', 'co_lnotab', 'co_name', 'co_names', 'co_nlocals', 'co_stacksize', 
+    'co_varnames'] OK
+    OK    
+    
+    若不行, 只好模仿 Word 弄成一個 class 來裝 code object 就可以帶上 source code
+    或用 closure , 也就是 genxt() 的方法也是現成已經成功的辦法。也不見得比 compyle 差。
+    或用 dis.dis(func) 也好, 更具視覺效果
+    
