@@ -531,7 +531,7 @@ peforth
     >>> peforth.vm.forth['obj2dict'](peforth.vm.tick('+'))
     {'__class__': 'Word', '__module__': 'projectk', 'name': '+', 'xt': <function xt at 0x000001D1368F28C8>, 'immediate': False, 'help': '( a b -- a+b) Add two numbers or concatenate two strings.', 'comment': '', 'vid': 'forth', 'wid': 51, 'type': 'code'}
 
-[ ] see code words
+[x] see code words
 
     # json 需要先給它 obj2dict() function 才能處理我們的 object
     OK py> json.dumps(tick('+'),indent=4) .
@@ -577,7 +577,7 @@ peforth
     }
     >>>
     
-[ ] code object 希望能帶 source code 以供 see
+[x] code object 希望能帶 source code 以供 see
     OK 45 @ dir .
     ['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', 
     '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', 
@@ -586,9 +586,33 @@ peforth
     'co_code', 'co_consts', 'co_filename', 'co_firstlineno', 'co_flags', 'co_freevars', 
     'co_kwonlyargcount', 'co_lnotab', 'co_name', 'co_names', 'co_nlocals', 'co_stacksize', 
     'co_varnames'] OK
-    OK    
+    OK    --> 不行, code object 裡面不能新增 attribute 也不能改裡面的
     
     若不行, 只好模仿 Word 弄成一個 class 來裝 code object 就可以帶上 source code
     或用 closure , 也就是 genxt() 的方法也是現成已經成功的辦法。也不見得比 compyle 差。
-    或用 dis.dis(func) 也好, 更具視覺效果
+    或用 dis.dis(func) 也好, 更具視覺效果 
+    [x] 想到給 code object 加上 source code 顯示的辦法了, 引進 class Comment, 類似 class Word 
+        但是 do nothing (由 phaseA phaseB 實現) 只帶著 comment comma(Comment('lalalal')) 進
+        dictionary 裡去躺著,等 see command 來利用。
+
+        OK py: comma(Comment("lalala"))
+        OK here
+        OK .
+        637 OK 636 @ .
+        lalala OK 636 @ type . --> <class 'projectk.Comment'> 
+        OK 636 @ .
+        lalala 
+        OK 636 @ execute -->
+            Failed to run <Word 'execute'>: must be str, not Comment
+            Continue, Debug, or Abort? [C/d/a] a
+    [x] modify phaseA phaseB to support Comment class
+        --> done!
+    [x] modify ::, :>, </py>, and </pyV> to add comment
+    [x] 目前 literal 仍被當一般 function 用 dis.dis() 顯示 --> 改成顯示 literal 
+        OK 339 @ .  # 已知 339 處是個 literal function
+        <function xt.<locals>.f.<locals>.literal at 0x000001ED9B6579D8> OK 339 @ :> __name__ .
+        OK 339 @ :> str . # 印出 readable 的方法
+        Literal: pop(). <class 'str'> OK
+        --> 可以修改 toString 了
+    ==> see 終於完成了!!!
     

@@ -60,7 +60,16 @@ class Word:
         return self.name + " " + self.help + ' __str__'
     def __repr__(self):   # execute xt and return help message
         return "<Word '{}'>".format(self.name)
-    
+
+# Comment word do nothing but carrying the comment to explain a code object or something
+class Comment:
+    def __init__(self, comment):
+        self.comment = comment
+    def __str__(self):    # return help message
+        return self.comment
+    def __repr__(self):   # execute xt and return help message
+        return "<class 'comment'>"
+        
 # Support Vocabulary
 def last():  # returns the last defined word.
     return words[current][-1]
@@ -221,7 +230,10 @@ def phaseA (entry):
         if type(entry)==str: 
             # "string" is word name
             w = tick(entry.strip());  # remove leading and tailing white spaces
-        elif callable(entry) or type(entry)==Word or str(type(entry))=="<class 'code'>": # function Word or code object
+        elif (callable(entry) or
+             type(entry)==Word or
+             str(type(entry))=="<class 'code'>" or
+             type(entry)==Comment) : # function, Word, code object, or Comment
             w = entry; 
         elif type(entry)==int: 
             # number could be dictionary entry or 0. 
@@ -255,6 +267,8 @@ def phaseB(w):
         # The below push-jump mimics the call instruction of a CPU.
         rstack.append(ip);  # Forth ip is the "next" instruction to be executed. Push return address.
         ip = w;  # jump
+    elif type(w)==Comment: 
+        pass # do nothing
     else:
         panic("Error! don't know how to execute : "+w+" ("+type(w)+")\n","error");
         
@@ -358,11 +372,10 @@ def genxt(name, body):
     if body.strip()=="":
         source = (source+"\n    pass\n").format(name)
     else:
-        source = (source+'\n{}').format(
-            name,
-            "".join("{}\n".format(line)
-            # An ending \n makes # comment at end of body safe
-            for line in body.splitlines()))
+        source = (source+'\n{}').format(name,body)
+            # "".join("{}\n".format(line)
+            # # An ending \n makes # comment at end of body safe
+            # for line in body.splitlines()))
     try:
         exec(source,globals(),ll)
     except Exception as err:

@@ -79,6 +79,8 @@ code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 code compyle 
     code = compile(pop(),"","exec"); push(code) end-code
     // ( "source" -- exec-code ) Python compile source to exec-code object
+code comment push(Comment(pop())) end-code
+    // ( "comment" -- Comment ) Generate a Comment object. execute(comment-object) does nothing. 
 code <py> 
     push(nexttoken("</py>|</pyV>")) end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
@@ -87,15 +89,17 @@ code </py>
     exec_code = compile(source,"","exec")
     # setattr(exec_code,'source',source)
     if compiling:
-        # comma(lambda:exec(exec_code))
+        comma(Comment(source))
         comma(exec_code)
     else:
         exec(exec_code)
     end-code immediate
     // ( "statements" -- ) exec in-line python statements
 code </pyV>
-    eval_code = compile(pop(),"","eval")
+    source = pop()
+    eval_code = compile(source,"","eval")
     if compiling:
+        comma(Comment("lambda:push(eval({}))".format(source)))
         comma(lambda:push(eval(eval_code)))
     else:
         push(eval(eval_code))
@@ -134,12 +138,12 @@ code compile-only
     end-code interpret-only
     // ( -- ) \ Make the last new word a compile-only.
 code literal    
-    def literal(n): # function generator
-        def f(): # literal run time function
+    def f(n): # function generator
+        def literal(): # literal run time function
             push(n)
-        f.literal = "Literal: {} {}".format(n,type(n))    
-        return f
-    comma(literal(pop()))
+        literal.str = "Literal: {} {}".format(n,type(n))    
+        return literal
+    comma(f(pop()))
     end-code
     // ( n -- ) \ Compile TOS as an anonymous constant    
 code reveal    
@@ -1074,12 +1078,12 @@ code accept2 # use Ctrl-D at the end to terminate the input. py> chr(4)=='^D' --
 : ::    ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
         if char pop() else char pop(). then 
-        swap + compiling if compyle , 
+        swap + compiling if dup comment , compyle , 
         else [compile] </py> then ; immediate
 : :>    ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
         if char push(pop() else char push(pop(). then 
-        swap + char ) + compiling if compyle ,
+        swap + char ) + compiling if dup comment , compyle ,
         else [compile] </py> then ; immediate
 
 \ 有 bug 先暫時不要這個 nested ( ) comment
@@ -1223,7 +1227,7 @@ exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
                 compiling if ( n word ) 
                     char getattr(vm,"{}")["{}"]=pop() 
                     :> format(tos().vid,pop().name) ( n s ) 
-                    compyle , ( n ) \ n has already been compiled as a literal
+                    dup comment , compyle , ( n ) \ n has already been compiled as a literal
                 else ( n word )
                     py: getattr(vm,tos().vid)[pop().name]=pop(1)
                 then ; immediate
@@ -1859,8 +1863,8 @@ def obj2dict(obj):
 push(obj2dict)
 </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=vm.forth['obj2dict'])
 
-: .obj ( obj -- ) // see object that is supposed to be Word object
-    py> json.dumps(pop(),default=vm.forth['obj2dict'],indent=4) . ;
+: stringify ( thing -- "string" ) // JSON.stringify anything
+    py> json.dumps(pop(),default=vm.forth['obj2dict'],indent=4) ;
 
                 
 \ code memberCount ( obj -- count ) // Get hash table's length or an object's member count.
@@ -1879,21 +1883,40 @@ code toString # To see a cell in dictionary
         push('EXIT')
     elif type(x)==int:  # remove numbers to protect getattr()
         push(str(x))
-    elif getattr(x,'literal',False):
-        push(x.literal)
+    elif getattr(x,'__name__',False)=='literal':
+        push(getattr(tos(),'str'))
     else: 
         push(str(x));
     end-code private // ( value -- string ) To see dictionary cell, toString() of the variable consider ret and exit
 
 : (dump)        ( addr -- ) // dump one cell of dictionary
                 \ sample line: 00007: r> ( -- n ) Pop the return stack  (object)
-                dup @ ( addr value ) dup toString ( addr value toString )
-                s" {:05}: {}  ({})" 
-                :> format(pop(2),pop(),type(pop())) 
-                . cr ;
+                dup @ <py> str(type(pop())) in ["<class 'code'>","<class 'function'>"] </pyV>
+                if ( addr ) \ is code or function
+                    dup @ ( addr code ) 
+                    py> getattr(tos(),'__name__',False)=='literal' if \ is literal function
+                        s" {:05}: {}" :> format(pop(1),pop().str) . cr
+                    else \ not literal function
+                        ( addr code ) s" {:05}: ({})" 
+                        :> format(pop(1),type(tos())) . cr ( code ) \ address and type
+                        py: dis.dis(pop()) \ disassembled code
+                    then
+                else ( addr ) \ not code nore function
+                    dup @ ( addr value ) dup toString ( addr value toString )
+                    s" {:05}: {}  ({})" 
+                    :> format(pop(2),pop(),type(pop())) 
+                    . cr                 
+                then ;
+
                 
 : dump          ( addr length -- addr' ) // dump dictionary
                 for ( addr ) dup (dump) 1+ next ;
+                
+: dump2ret      ( addr -- ) // dump dictionary until next RET
+                begin dup (dump) ( addr ) py> dictionary[tos()]==None 
+                if exit then \ it's RET, all done
+                1+ again ;
+                
 : d             ( <addr> -- ) // dump dictionary
                 [ last literal ]
                 BL word                     \ (me str)
@@ -1908,7 +1931,6 @@ code toString # To see a cell in dictionary
                 py: pop().lastaddress=pop()
                 ;
                 
-stop _stop_
                 <selftest>
                     *** d dump
                     js: vm.selftest_visible=False;vm.screenbuffer=""
@@ -1918,41 +1940,20 @@ stop _stop_
                     [d True d] [p 'dump', 'd' p]
                 </selftest>
 
-code (see)      ( thing -- ) // See into the given word, object, array, ... anything.
-                var w=pop();
-                var basewas = vm.forth.base; vm.forth.base = 10;
-                if (!(w instanceof Word)) {
-                    type(JSON.stringify(w,"\n","\t"));  // none forth word objects. 意外的好處是不必有 "unkown word" 這種無聊的錯誤訊息。
-                }else{
-                    for(var i in w){
-                        if (typeof(w[i])=="function") continue;
-                        if (i=="comment") continue;
-                        push(i); dictate("16 .r s'  : ' .");
-                        type(w[i]+" ("+mytypeof(w[i])+")\n");
-                    }
-                    if (w.type.indexOf("colon")!=-1){
-                        if(w.cfa) { // 產生一個 colon word 方法很多，不一定已經有 cfa。
-                            var i = w.cfa;
-                            type("\n-------- Definition in dictionary --------\n");
-                            do {
-                                push(i); execute(_me["(dump)"]);
-                            } while (dictionary[i++] != RET);
-                            type("---------- End of the definition -----------\n");
-                        }
-                    } else {
-                        if (typeof w.xt == "function") {
-                            push("xt"); dictate("16 .r s'  :\n' .");
-                            type(w.xt+"\n");
-                        }
-                    }
-                    if (w.comment != undefined) type("\ncomment:\n"+w.comment+"\n");
-                }
-                vm.forth.base = basewas;
-                end-code
-                last :: ["(dump)"]=tick("(dump)")
+: (see)         ( thing -- ) // See into the given word, object, array, ... anything.
+                dup ( thing thing ) stringify . cr ( thing )
+                \ for colon words, dump its forth code 
+                dup type py> Word = if \ is a Word ( w ) \ the thing is a Word
+                    py> tos().type.find('colon')!=-1 if  ( w ) \ it is a colon word 
+                        ." ------------ Definition in dictionary ------------" cr
+                        :> cfa ( cfa ) dump2ret 
+                        ." ------------ End of the difinition ---------------" cr
+                    then
+                then ;
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
 
+stop _stop_
                 <selftest>
                     *** see (see)
                     marker ---
