@@ -61,7 +61,8 @@ class Word:
     def __repr__(self):   # execute xt and return help message
         return "<Word '{}'>".format(self.name)
 
-# Comment word do nothing but carrying the comment to explain a code object or something
+# Comment object does nothing but carrying the comment.
+# Was used to explain the following code object which's __doc__ is read-only.
 class Comment:
     def __init__(self, comment):
         self.comment = comment
@@ -230,10 +231,7 @@ def phaseA (entry):
         if type(entry)==str: 
             # "string" is word name
             w = tick(entry.strip());  # remove leading and tailing white spaces
-        elif (callable(entry) or
-             type(entry)==Word or
-             str(type(entry))=="<class 'code'>" or
-             type(entry)==Comment) : # function, Word, code object, or Comment
+        elif (type(entry)==Word or callable(entry)) : # function, Word
             w = entry; 
         elif type(entry)==int: 
             # number could be dictionary entry or 0. 
@@ -250,16 +248,14 @@ def phaseB(w):
     global ip, rstack
     if type(w)==Word: # Word object
         try:
-            if callable(w.xt):
-                # function 
-                w.xt(w)
-            else:
-                # code object
-                exec(w.xt)
+            w.xt(w)
         except Exception as err:
             panic("Failed to run {}: {}".format(repr(w),err))
     elif callable(w) :  # a function
-        w();
+        try:
+            w();
+        except Exception as err:
+            panic("Failed to run {}: {}".format(w,err))
     elif str(type(w))=="<class 'code'>": # code object
         exec(w)
     elif type(w)==int:
@@ -267,8 +263,6 @@ def phaseB(w):
         # The below push-jump mimics the call instruction of a CPU.
         rstack.append(ip);  # Forth ip is the "next" instruction to be executed. Push return address.
         ip = w;  # jump
-    elif type(w)==Comment: 
-        pass # do nothing
     else:
         panic("Error! don't know how to execute : "+w+" ("+type(w)+")\n","error");
         

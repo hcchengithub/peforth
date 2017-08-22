@@ -74,10 +74,13 @@ code ///
 code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
 code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the rest of the line
 code stop reset() end-code // ( -- ) Stop the TIB loop
-code *debug* pdb.set_trace() end-code // ( -- ) Invoke python pdb debugger
 code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 code compyle 
-    code = compile(pop(),"","exec"); push(code) end-code
+    source = pop()
+    exec_code = compile(source,"","exec"); 
+    f = lambda:exec(exec_code)
+    f.__doc__ = "lambda:exec({})".format(source)
+    push(f) end-code
     // ( "source" -- exec-code ) Python compile source to exec-code object
 code comment push(Comment(pop())) end-code
     // ( "comment" -- Comment ) Generate a Comment object. execute(comment-object) does nothing. 
@@ -85,22 +88,24 @@ code <py>
     push(nexttoken("</py>|</pyV>")) end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
-    source = pop()
-    exec_code = compile(source,"","exec")
-    # setattr(exec_code,'source',source)
+    # source = pop()
+    # exec_code = compile(source,"","exec")
+    # f = lambda:exec(exec_code)
+    # f.__doc__ = "lambda:exec({})".format(source)
+    execute('compyle')
     if compiling:
-        comma(Comment(source))
-        comma(exec_code)
+        comma(pop()) 
     else:
-        exec(exec_code)
+        pop()()  # exec(exec_code)
     end-code immediate
     // ( "statements" -- ) exec in-line python statements
 code </pyV>
     source = pop()
     eval_code = compile(source,"","eval")
+    f = lambda:push(eval(eval_code))
+    f.__doc__ = "lambda:push(eval({}))".format(source)
     if compiling:
-        comma(Comment("lambda:push(eval({}))".format(source)))
-        comma(lambda:push(eval(eval_code)))
+        comma(f)
     else:
         push(eval(eval_code))
     end-code immediate
@@ -141,7 +146,7 @@ code literal
     def f(n): # function generator
         def literal(): # literal run time function
             push(n)
-        literal.str = "Literal: {} {}".format(n,type(n))    
+        literal.__doc__ = "Literal: {} {}".format(n,type(n))    
         return literal
     comma(f(pop()))
     end-code
@@ -191,11 +196,11 @@ code ;
     execute('reveal');
     end-code immediate compile-only
     // ( -- ) End of the colon definition.
-code (    
-    if last().help: # skip if help alreay exists
-        nexttoken('\\)'); nexttoken() # skip the stack diagram
-    else:
-        last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' 
+code (   
+    a = nexttoken('\\)') 
+    b = nexttoken()  # the ')' 
+    if compiling and last().help=="": # skip if help alreay exists
+        last().help = '( ' + a + b + ' ' 
     end-code immediate
     // ( <stack diagram> -- ) Get stack diagram to the last's help.  
 code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
@@ -214,6 +219,7 @@ code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
 : py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
 \ A workaround when py: is now available
     py: tick('//').immediate=True
+    
 \ ------------ above are most basic words for developing and for debug ----------------
 \ 以下都應該盡量改成 colon words 
 
@@ -1078,12 +1084,12 @@ code accept2 # use Ctrl-D at the end to terminate the input. py> chr(4)=='^D' --
 : ::    ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
         if char pop() else char pop(). then 
-        swap + compiling if dup comment , compyle , 
+        swap + compiling if compyle , 
         else [compile] </py> then ; immediate
 : :>    ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
         BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
         if char push(pop() else char push(pop(). then 
-        swap + char ) + compiling if dup comment , compyle ,
+        swap + char ) + compiling if compyle ,
         else [compile] </py> then ; immediate
 
 \ 有 bug 先暫時不要這個 nested ( ) comment
@@ -1579,6 +1585,14 @@ code .s
                     ---
                 </selftest>
 
+code (*debug*)
+    print('---- Break point {} ----'.format(pop()))
+    pdb.set_trace() end-code 
+    // ( msg -- ) Invoke python pdb debugger
+: *debug*	( <prompt> -- resume ) // Breakpoint enters pdb debugger
+            BL word compiling if literal compile (*debug*) 
+            else (*debug*) then ; immediate
+
 \ code wordhash>array ( "vid" -- array ) // Retrive a VID list from the recent active words hash
 \                 var vid=pop(), aa = [], bb = [], j=1; // vid[0] always 0, start from 1.
 \                 // get the raw list
@@ -1883,30 +1897,33 @@ code toString # To see a cell in dictionary
         push('EXIT')
     elif type(x)==int:  # remove numbers to protect getattr()
         push(str(x))
-    elif getattr(x,'__name__',False)=='literal':
-        push(getattr(tos(),'str'))
     else: 
         push(str(x));
     end-code private // ( value -- string ) To see dictionary cell, toString() of the variable consider ret and exit
 
+: .literal      ( addr -- T|f ) // Do the (dump) if addr @ is a literal
+                dup @ ( addr code ) 
+                py> getattr(tos(),'__name__',False)=='literal' if 
+                    \ is literal function ( addr code )
+                    s" {:05}: {}" :> format(pop(1),pop().__doc__) . cr 
+                    true
+                else 2drop false then ;
+                
+: .function     ( addr -- T|f ) // Do the (dump) if addr @ is a literal
+                dup @ ( addr func ) 
+                py> callable(tos()) if  \ is function ( addr code )
+                    s" {:05}: {} ({})" 
+                    :> format(pop(1),tos().__doc__,type(tos())) . cr ( code )
+                    py: dis.dis(pop()) \ disassembled code
+                    true
+                else 2drop false then ;
+                
 : (dump)        ( addr -- ) // dump one cell of dictionary
-                \ sample line: 00007: r> ( -- n ) Pop the return stack  (object)
-                dup @ <py> str(type(pop())) in ["<class 'code'>","<class 'function'>"] </pyV>
-                if ( addr ) \ is code or function
-                    dup @ ( addr code ) 
-                    py> getattr(tos(),'__name__',False)=='literal' if \ is literal function
-                        s" {:05}: {}" :> format(pop(1),pop().str) . cr
-                    else \ not literal function
-                        ( addr code ) s" {:05}: ({})" 
-                        :> format(pop(1),type(tos())) . cr ( code ) \ address and type
-                        py: dis.dis(pop()) \ disassembled code
-                    then
-                else ( addr ) \ not code nore function
-                    dup @ ( addr value ) dup toString ( addr value toString )
-                    s" {:05}: {}  ({})" 
-                    :> format(pop(2),pop(),type(pop())) 
-                    . cr                 
-                then ;
+                dup .literal  if drop exit then
+                dup .function if drop exit then
+                dup @ ( addr value ) dup toString ( addr value toString )
+                s" {:05}: {}  ({})" :> format(pop(2),pop(),type(pop())) 
+                . cr ;
 
                 
 : dump          ( addr length -- addr' ) // dump dictionary
@@ -1953,7 +1970,6 @@ code toString # To see a cell in dictionary
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
 
-stop _stop_
                 <selftest>
                     *** see (see)
                     marker ---
@@ -1967,100 +1983,107 @@ stop _stop_
                     [d True,True,True d] [p 'see','(see)','(?)' p]
                     ---
                 </selftest>
-
-code notpass    ( -- ) // List words their sleftest flag are not 'pass'.
-                for (var j in words) { // all word-lists
-                    for (var i in words[j]) {  // all words in a word-list
-                        if(i!=0 && words[j][i].selftest != 'pass') type(words[j][i].name+" ");
-                    }
-                }
-                end-code
-code passed     ( -- ) // List words their sleftest flag are 'pass'.
-                for (var j in words) { // all word-lists
-                    for (var i in words[j]) {  // all words in a word-list
-                        if(i!=0 && words[j][i].selftest == 'pass') type(words[j][i].name+" ");
-                    }
-                }
-                end-code
+                
+code notpass
+    for v in words: 
+        print(
+            v,
+            ':',
+            [w for w in words[v] if getattr(w,'selftest',False)!='pass']
+        )
+    end-code // ( -- ) List words who's selftest flag are not 'pass'.
+                
+                
+code passed
+    for v in words: 
+        print(
+            v,
+            ':',
+            [w for w in words[v] if getattr(w,'selftest',False)=='pass']
+        )
+    end-code // List words who's sleftest flag are 'pass'.
 
 \ -------------- Debugger : set breakpoint to a colon word -------------------------
 
-js> inner constant fastInner // ( -- inner ) Original inner() without breakpoint support
-
-code be         ( -- ) // Enable the breakPoint. See also 'bp','bd'.
-                inner = vm.g.debugInner; 
-                vm.jsc.enable = True;
-                execute(_me["bp"]); // call by reference safer than call by name
-                end-code interpret-only
-                /// work with 'jsc' debug console, jsc is application dependent.
-code bd         ( -- ) // Disable breakpoint, See also 'bp','be'.
-                inner = vm.forth.fastInner;
-                vm.jsc.enable = False; // 需要這個 flag 因為若已經進了 debugInner, 換掉 inner 也出不來。
-                end-code interpret-only
-                /// work with 'jsc' debug console, jsc is application dependent.
-code bp         ( <address> -- ) // Set breakpoint in a colon word. See also 'bd','be'.
-                var bp = nexttoken();
-                vm.jsc.enable = True;
-                if (bp) {
-                    vm.jsc.bp = parseInt(bp);
-                    execute(_me["be"])  // call by reference safer than call by name
-                } else {
-                    type("Breakpoint : " + vm.jsc.bp);
-                    if (inner == vm.g.debugInner) type(", activated\n");
-                    else  type(", inactive\n");
-                }
-                end-code interpret-only
-                \ bp be look easily conflictedly reused in the future
-                \ call by reference safer than call by name
-                ' be :: ["bp"]=last() 
-                last :: ["be"]=tick("be")
-                /// If no address is given then show the recent breakPoint and 
-                /// its status.
-                /// work with 'jsc' debug console, jsc is application dependent.
-
-: (*debug*)     ( msg -- ) // Suspend to command prompt, 'q' to quit debugging.
-                cr ." ---- Entering *debug* ----" cr
-                [ last literal ] ( _me )
-                <js>
-                    var _me = pop();
-                    if (_me.resume) {
-                        panic("Error, already in *debug*, 'q' to resume.\n");
-                    } else {
-                        var tibwas=tib, ntibwas=ntib, ipwas=ip, promptwas=vm.prompt;
-                        vm.prompt = pop().toString();
-                        // The clue to resume from debugging
-                        _me.resume = function(){
-                            tib=tibwas; 
-                            ntib=ntibwas; 
-                            vm.prompt=promptwas;
-                            outer(ipwas);
-                        }
-                        // ip = 0 reserve rstack, suspend the forth VM 
-                        // (*debug*) must be a colon word so as to use this trick.
-                        tib = ""; ntib = ip = 0; 
-                    }
-                </js> ;
-                /// 'q' command to quit debugging
-code q          ( -- ) // Quit *debug*
-                type("\n ---- Leaving *debug* ----\n");
-                var q = tick("(*debug*)").resume; 
-                tick("(*debug*)").resume=null; 
-                q(); 
-                end-code interpret-only
-                
-: *debug*       ( <prompt> -- resume ) // Forth debug console. Execute the resume() to quit debugging.
-                BL word compiling if literal compile (*debug*) 
-                else (*debug*) then ; immediate
-                /// 'q' command to quit debugging
-                /// *debug* 可以用在 immediate word 裡面, 當 break 到時可能在 
-                /// colon definition 的半途，此時 q 要下成 [ q ] , .s 要下成 
-                /// [ .s ] ... etc
+\ js> inner constant fastInner // ( -- inner ) Original inner() without breakpoint support
+\ 
+\ code be         ( -- ) // Enable the breakPoint. See also 'bp','bd'.
+\                 inner = vm.g.debugInner; 
+\                 vm.jsc.enable = True;
+\                 execute(_me["bp"]); // call by reference safer than call by name
+\                 end-code interpret-only
+\                 /// work with 'jsc' debug console, jsc is application dependent.
+\ code bd         ( -- ) // Disable breakpoint, See also 'bp','be'.
+\                 inner = vm.forth.fastInner;
+\                 vm.jsc.enable = False; // 需要這個 flag 因為若已經進了 debugInner, 換掉 inner 也出不來。
+\                 end-code interpret-only
+\                 /// work with 'jsc' debug console, jsc is application dependent.
+\ code bp         ( <address> -- ) // Set breakpoint in a colon word. See also 'bd','be'.
+\                 var bp = nexttoken();
+\                 vm.jsc.enable = True;
+\                 if (bp) {
+\                     vm.jsc.bp = parseInt(bp);
+\                     execute(_me["be"])  // call by reference safer than call by name
+\                 } else {
+\                     type("Breakpoint : " + vm.jsc.bp);
+\                     if (inner == vm.g.debugInner) type(", activated\n");
+\                     else  type(", inactive\n");
+\                 }
+\                 end-code interpret-only
+\                 \ bp be look easily conflictedly reused in the future
+\                 \ call by reference safer than call by name
+\                 ' be :: ["bp"]=last() 
+\                 last :: ["be"]=tick("be")
+\                 /// If no address is given then show the recent breakPoint and 
+\                 /// its status.
+\                 /// work with 'jsc' debug console, jsc is application dependent.
+\ 
+\ : (*debug*)     ( msg -- ) // Suspend to command prompt, 'q' to quit debugging.
+\                 cr ." ---- Entering *debug* ----" cr
+\                 [ last literal ] ( _me )
+\                 <js>
+\                     var _me = pop();
+\                     if (_me.resume) {
+\                         panic("Error, already in *debug*, 'q' to resume.\n");
+\                     } else {
+\                         var tibwas=tib, ntibwas=ntib, ipwas=ip, promptwas=vm.prompt;
+\                         vm.prompt = pop().toString();
+\                         // The clue to resume from debugging
+\                         _me.resume = function(){
+\                             tib=tibwas; 
+\                             ntib=ntibwas; 
+\                             vm.prompt=promptwas;
+\                             outer(ipwas);
+\                         }
+\                         // ip = 0 reserve rstack, suspend the forth VM 
+\                         // (*debug*) must be a colon word so as to use this trick.
+\                         tib = ""; ntib = ip = 0; 
+\                     }
+\                 </js> ;
+\                 /// 'q' command to quit debugging
+\ code q          ( -- ) // Quit *debug*
+\                 type("\n ---- Leaving *debug* ----\n");
+\                 var q = tick("(*debug*)").resume; 
+\                 tick("(*debug*)").resume=null; 
+\                 q(); 
+\                 end-code interpret-only
+\                 
+\ : *debug*       ( <prompt> -- resume ) // Forth debug console. Execute the resume() to quit debugging.
+\                 BL word compiling if literal compile (*debug*) 
+\                 else (*debug*) then ; immediate
+\                 /// 'q' command to quit debugging
+\                 /// *debug* 可以用在 immediate word 裡面, 當 break 到時可能在 
+\                 /// colon definition 的半途，此時 q 要下成 [ q ] , .s 要下成 
+\                 /// [ .s ] ... etc
 
 \ ----------------- Self Test -------------------------------------
-: warning-on    ( -- ) // Turn on run-time warnings 
-                js: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
-: warning-off   ( -- ) // Turn off run-time warnings
-                js: tick=vm.tick;execute=vm.execute ;
+
+\ private words called (execute) or referenced (tick) by name warning when in self-test. 
+\ private words referenced by name out of the context will be a problem.
+\ : warning-on    ( -- ) // Turn on run-time warnings 
+\                 js: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
+\ : warning-off   ( -- ) // Turn off run-time warnings
+\                 js: tick=vm.tick;execute=vm.execute ;
                 
 "" value description     ( private ) // ( -- "text" ) description of a selftest section
 [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
@@ -2068,13 +2091,17 @@ code q          ( -- ) // Quit *debug*
 0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d] 
 [] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
 : ***           ( <description> -- ) // Start a selftest section
-                CR word trim
-                <js> "*** " + pop() + " ... " </jsV> to description
+                CR word trim ( desc )
+                \ <js> "*** " + pop() + " ... " </jsV> to description
+                s" *** {} ... " :> format(pop()) to description
                 depth if 
                     description . ." aborted" cr 
                     ." *** Warning, Data stack is not empty." cr
                     stop
                 then ;
+stop _stop_
+
+                
 code all-pass   ( ["name",...] -- ) // Pass-mark all these word's selftest flag
                 var a=pop();
                 for (var i in a) {

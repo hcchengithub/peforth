@@ -615,4 +615,51 @@ peforth
         Literal: pop(). <class 'str'> OK
         --> 可以修改 toString 了
     ==> see 終於完成了!!!
-    
+[x] 其實 __doc__ attribute 就是用來放說明文字的 . . . 
+    --> 錯! 
+        Failed to run <Word '</py>'>: 'code' object attribute '__doc__' is read-only
+        Continue, Debug, or Abort? [C/d/a]
+    可是我試過了呀!? 如下:
+        00035: RET  (<class 'NoneType'>)
+        00036: Literal: \\n|\\r <class 'str'>
+        00037: RET  (<class 'NoneType'>)
+        00038: lambda:push(eval(vm.greeting()))  (<class 'projectk.Comment'>)
+        00039: (<class 'function'>)
+          7           0 LOAD_GLOBAL              0 (push)
+                      2 LOAD_GLOBAL              1 (eval)
+                      4 LOAD_DEREF               0 (eval_code)
+                      6 CALL_FUNCTION            1
+                      8 CALL_FUNCTION            1
+                     10 RETURN_VALUE
+        OK 39 @ .
+        <function xt.<locals>.<lambda> at 0x0000017E8D269598> OK
+        OK 39 @ dir .
+        ['__annotations__', '__call__', '__class__', '__closure__', 
+        '__code__', '__defaults__', '__delattr__', '__dict__', 
+        '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__get__', 
+        ...snip...] 
+        OK 39 @ :> __doc__ .
+        None 
+        OK 39 @ :: __doc__="abc"
+        OK 39 @ :> __doc__ .
+        abc OK    
+    這是 : version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
+    compile() 出來的 eval_code, exec_code 的 __doc__ 都是 read-only, 但是
+    包過一層 lambda 之後就可以編寫了。  <------ 真相大白！！
+    --> </py> 直接 comma(exec_code) 實在沒有好處, 犧牲了 __doc__ 又
+        迫使 phaseB 無謂地變得複雜。
+    --> [x] 改掉!     
+[x] 利用 python 的 list filter 列出某些 words 
+    ==> OK <py> [w for w in words['forth'] if getattr(w,'immediate',False) ] </pyV> .
+    [<Word 'end-code'>, <Word '//'>, <Word '\'>, <Word '<py>'>, ...snip..., <Word '*debug*'>] OK
+[x] these lines are strange, 
+        "" value description     ( private ) // ( -- "text" ) description of a selftest section
+        [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
+        [] value expected_stack  ( private ) // ( -- [..] ) an array to compare data stack in selftest
+        0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d] 
+        [] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
+    the "( private )" become prefix of their word.help ! 
+    --> value command gets stack diagram ? 
+    --> ( command 看到 last 沒有 help 就把後續的 (...) comment 加進去了! 應該限制
+        compiling state 才這麼做。
+[ ] *** debugging    
