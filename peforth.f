@@ -1219,8 +1219,8 @@ variable '<text> private
     BL word (create) 
 <py> 
 last().type = "constant";
-source = 'push(getattr(vm,"{}")["{}"])'.format(current, last().name)
-last().xt = compile(source,"","exec");
+source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
+last().xt = genxt('constant',source)
 if not getattr(vm,current,False): setattr(vm,current,{})
 exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
 </py> reveal ; 
@@ -1233,7 +1233,7 @@ exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
                 compiling if ( n word ) 
                     char getattr(vm,"{}")["{}"]=pop() 
                     :> format(tos().vid,pop().name) ( n s ) 
-                    dup comment , compyle , ( n ) \ n has already been compiled as a literal
+                    compyle , ( n ) \ n has already been compiled as a literal
                 else ( n word )
                     py: getattr(vm,tos().vid)[pop().name]=pop(1)
                 then ; immediate
@@ -2092,7 +2092,6 @@ code passed
 [] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
 : ***           ( <description> -- ) // Start a selftest section
                 CR word trim ( desc )
-                \ <js> "*** " + pop() + " ... " </jsV> to description
                 s" *** {} ... " :> format(pop()) to description
                 depth if 
                     description . ." aborted" cr 
