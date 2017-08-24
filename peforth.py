@@ -37,14 +37,15 @@ def writeTextFile(pathname, string):
     f.write(string)
     f.close
 vm.writeTextFile = writeTextFile    
+
+if not vm.tick('version'): 
+    # run from python interpreter only once
+    vm.dictate(readTextFile('peforth.f'))
+    vm.dictate(readTextFile('quit.f'))
+print('OK')
     
 # The eforth.py command line interface, the main program loop
 def main():
-    if not vm.tick('version'): 
-        # run from python interpreter only once
-        vm.dictate(readTextFile('peforth.f'))
-        vm.dictate(readTextFile('quit.f'))
-    print('OK ', end="")
     while True:
         cmd = ""                                   # 
         if vm.tick('accept') and not vm.multiple:  # 

@@ -1330,7 +1330,7 @@ code -word
 
 : tib. ( result -- ) // Print the command line and the TOS.
     <py> re.search(r"\n?(.*) tib\.\s*",tib)</pyV> :> group(1) :> strip() ( result cmd-line )
-    s" {} \ ==> {} ({})\n" :> format(pop(),tos(),type(pop())) . ;
+    s" {} \ ==> {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
     /// Good for experiments that need to show command line and the result.
     /// "" tib. prints the command line only, w/o the TOS.
 

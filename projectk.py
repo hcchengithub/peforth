@@ -48,7 +48,7 @@ def reset():
     stop = True; 
     ntib = len(tib);  # don't clear tib, a clue for debug.
         
-# Forth words are instances of Word() constructor.
+# All peforth words are instances of this Word() constructor.
 class Word:
     def __init__(self, name, xt):
         self.name = name
@@ -71,8 +71,8 @@ class Comment:
     def __repr__(self):   # execute xt and return help message
         return "<class 'comment'>"
         
-# Support Vocabulary
-def last():  # returns the last defined word.
+# returns the last defined word.
+def last():  
     return words[current][-1]
 
     

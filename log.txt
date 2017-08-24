@@ -662,4 +662,82 @@ peforth
     --> value command gets stack diagram ? 
     --> ( command 看到 last 沒有 help 就把後續的 (...) comment 加進去了! 應該限制
         compiling state 才這麼做。
-[ ] *** debugging    
+[x] *** debugging, OK now. RI: constant and value were in trouble due to that I 
+    changed the Comment word and the way to compile code objects. 
+[x] python shell and eforth 互相參考手上的資料
+    >>> peforth.main()
+    OK 0 constant shell  # peforth 定義的變量
+    OK exit
+    
+    # 從外面把 globals() 給它
+    >>> getattr(peforth.vm,'forth')['shell']=globals()
+    >>> peforth.vm.forth
+    {'obj2dict': <function obj2dict at 0x000002C8D8F5B1E0>, 
+    'description': '', 'expected_rstack': [], 'expected_stack': [], 
+    'test-result': 0, '[all-pass]': [], 
+    'shell': {'__name__': '__main__', '__doc__': None, '__package__': None, 
+    '__loader__': <class '_frozen_importlib.BuiltinImporter'>, 
+    '__spec__': None, '__annotations__': {}, '__builtins__': <module 'builtins' (built-in)>, 
+    'peforth': <module 'peforth' from 'c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforth.py'>}}
+    
+    >>> peforth.main()
+    OK shell .
+    {'__name__': '__main__', '__doc__': None, '__package__': None, 
+    '__loader__': <class '_frozen_importlib.BuiltinImporter'>, 
+    '__spec__': None, '__annotations__': {}, 
+    '__builtins__': <module 'builtins' (built-in)>, 
+    'peforth': <module 'peforth' from 'c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforth.py'>} 
+    OK    
+
+    # 從外面一氣呵成 (copy-paste 到 phthon interpreter 時，前面不要留白,用 block mode)
+    import peforth
+    peforth.vm.dictate('0 constant shell')
+    getattr(peforth.vm,'forth')['shell']=globals()
+[ ] Start to use peforth for the wh300 project . . . 
+    用 peforth 來實現 wh300 
+    第一個好消息就是 import module 變成 forth word 成功了!!
+    <py>
+    import numpy as np
+    push(np)
+    </py> constant np // ( -- numpy ) The numpy module
+    OK np . 
+    <module 'numpy' from 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\numpy\\__init__.py'> OK
+    OK
+
+    # import pandas as                pd
+    # import numpy as                 np
+    # from sklearn.neighbors import   KNeighborsClassifier
+    # from sklearn.tree import        DecisionTreeClassifier
+    # from sklearn.naive_bayes import GaussianNB
+    # from sklearn import             preprocessing
+    # from sklearn import             cross_validation
+        
+    none value pd // ( -- pandas ) Module   
+    none value np // ( -- numpy ) Module
+    none value KNeighborsClassifier // ( -- clf ) 
+    none value DecisionTreeClassifier // ( -- clf ) 
+    none value GaussianNB // ( -- clf ) 
+    none value preprocessing // ( -- obj ) 
+    none value cross_validation // ( -- obj )
+    <py>
+    import numpy as                 np
+    import pandas as                pd
+    from sklearn.neighbors import   KNeighborsClassifier
+    from sklearn.tree import        DecisionTreeClassifier
+    from sklearn.naive_bayes import GaussianNB
+    from sklearn import             preprocessing
+    from sklearn import             cross_validation
+    vm.forth['np'] = np 
+    vm.forth['pd'] = pd 
+    vm.forth['KNeighborsClassifier'] = KNeighborsClassifier 
+    vm.forth['DecisionTreeClassifier'] = DecisionTreeClassifier 
+    vm.forth['GaussianNB'] = GaussianNB 
+    vm.forth['preprocessing'] = preprocessing 
+    vm.forth['cross_validation'] = cross_validation 
+    </py>
+    pd <py> pop().read_csv("c:\Users\hcche\Documents\GitHub\ML\WH300\2017-7-20.csv", sep="\s*,", skipinitialspace=True)</pyV> constant df // ( -- df ) Data-Frame object from the csv input file
+    np py> pop().array(vm.forth['df']) constant data // ( -- np.array ) all data. df.shape is (747,8) data.shape too.
+    data :> [:,:7] constant feature // ( -- np.array ) all rows, column 0..7, feature.shape --> (747,7)
+    data :> [:,7] constant label // ( -- np.array ) all rows, column 7, label.shape --> (747,)
+    \ 以上都成功了
+    
