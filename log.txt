@@ -689,10 +689,28 @@ peforth
     'peforth': <module 'peforth' from 'c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforth.py'>} 
     OK    
 
-    # 從外面一氣呵成 (copy-paste 到 phthon interpreter 時，前面不要留白,用 block mode)
+    # 從外面 DOS copy-paste 進來，一氣呵成 (不要 indent, 用 block mode)
+    python
     import peforth
     peforth.vm.dictate('0 constant shell')
+    peforth.vm.dictate('// ( -- dict ) 最外層 python interpreter 的 globals()')
     getattr(peforth.vm,'forth')['shell']=globals()
+    peforth.main() # 從 python interpreter 切換進入 peforth
+    \ 進入了 peforth interpret state 
+    <accept> \ 從 terminal 收取跨行 input lines 
+    <py>
+    import sys
+    push(sys)</py> constant sys 
+    // ( -- sys ) The sys module. Try: sys py: help(pop())
+    </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string 
+    [if] tib.insert help sys [then]
+[x] examples tools utilities goodies 
+    \ 列出所有的 code words
+    <py> [w for w in words['forth'][1:] if 'code' in w.type] </pyV>
+    \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array) 
+    ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
+    --> slice 
+    
 [ ] Start to use peforth for the wh300 project . . . 
     用 peforth 來實現 wh300 
     第一個好消息就是 import module 變成 forth word 成功了!!
@@ -703,41 +721,3 @@ peforth
     OK np . 
     <module 'numpy' from 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\numpy\\__init__.py'> OK
     OK
-
-    # import pandas as                pd
-    # import numpy as                 np
-    # from sklearn.neighbors import   KNeighborsClassifier
-    # from sklearn.tree import        DecisionTreeClassifier
-    # from sklearn.naive_bayes import GaussianNB
-    # from sklearn import             preprocessing
-    # from sklearn import             cross_validation
-        
-    none value pd // ( -- pandas ) Module   
-    none value np // ( -- numpy ) Module
-    none value KNeighborsClassifier // ( -- clf ) 
-    none value DecisionTreeClassifier // ( -- clf ) 
-    none value GaussianNB // ( -- clf ) 
-    none value preprocessing // ( -- obj ) 
-    none value cross_validation // ( -- obj )
-    <py>
-    import numpy as                 np
-    import pandas as                pd
-    from sklearn.neighbors import   KNeighborsClassifier
-    from sklearn.tree import        DecisionTreeClassifier
-    from sklearn.naive_bayes import GaussianNB
-    from sklearn import             preprocessing
-    from sklearn import             cross_validation
-    vm.forth['np'] = np 
-    vm.forth['pd'] = pd 
-    vm.forth['KNeighborsClassifier'] = KNeighborsClassifier 
-    vm.forth['DecisionTreeClassifier'] = DecisionTreeClassifier 
-    vm.forth['GaussianNB'] = GaussianNB 
-    vm.forth['preprocessing'] = preprocessing 
-    vm.forth['cross_validation'] = cross_validation 
-    </py>
-    pd <py> pop().read_csv("c:\Users\hcche\Documents\GitHub\ML\WH300\2017-7-20.csv", sep="\s*,", skipinitialspace=True)</pyV> constant df // ( -- df ) Data-Frame object from the csv input file
-    np py> pop().array(vm.forth['df']) constant data // ( -- np.array ) all data. df.shape is (747,8) data.shape too.
-    data :> [:,:7] constant feature // ( -- np.array ) all rows, column 0..7, feature.shape --> (747,7)
-    data :> [:,7] constant label // ( -- np.array ) all rows, column 7, label.shape --> (747,)
-    \ 以上都成功了
-    

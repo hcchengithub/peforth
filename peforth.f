@@ -88,10 +88,6 @@ code <py>
     push(nexttoken("</py>|</pyV>")) end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
-    # source = pop()
-    # exec_code = compile(source,"","exec")
-    # f = lambda:exec(exec_code)
-    # f.__doc__ = "lambda:exec({})".format(source)
     execute('compyle')
     if compiling:
         comma(pop()) 
@@ -1026,19 +1022,23 @@ code accept
         push(False)
     end-code // ( -- str T|F ) Read a line from terminal.
     
-code accept2 # use Ctrl-D at the end to terminate the input. py> chr(4)=='^D' --> True
+code accept2 
     vm.multiple = False # back to single input line
     result, s = "", input()+'\n'
-    while not chr(4) in s:
+    while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
         result += s
         s = input()+'\n'
-    result += s.replace(chr(4),'')  # remove all ^D
+    s = s.replace(chr(4),'')  # remove all ^D 
+    s = s.replace('</accept>','')  # remove all "</accept>" pattern
+    result += s 
     if len(result):
         push(result)
         push(True)
     else:
         push(False)
     end-code // ( -- str T|F ) Read multiple lines from terminal.
+    /// Ctrl-D or </accept> in the line to terminate the input. 
+    last alias <accept> // ( -- str T|F ) Alias of accept2
     
     
 : refill        ( -- flag ) // Reload TIB from stdin. return 0 means no input or EOF
@@ -1565,7 +1565,7 @@ code .s
             # push(stack[i]); push(i); dictate("decimal 7 .r char : . space .");
             s = "{0:>7}: {1} ({2})".format(i,str(x),type(x))
             print(s)
-    else:
+    if stack==[]:
         print("empty\n");
     end-code
     // ( ... -- ... ) Dump the data stack.
@@ -1821,17 +1821,11 @@ code writeTextFile
 \                         2:       12345        3039h (number) <=== appended to the ending
 \                 </comment>
 \ 
-\ \ code tib.insert   ( "string" -- ) // Insert the "string" into TIB
-\ \               var before = tib.slice(0,ntib), after = tib.slice(ntib);
-\ \               tib = before + " " + (pop()||"") + " " + after; end-code
-\ \               /// VM suspend-resume doesn't allow multiple levels of dictate() so
-\ \               /// we need tib.append or tib.insert.
-\ 
-\ code tib.insert ( "string" -- ) // Insert the "string" into TIB
-\                 tib = tib.slice(ntib); ntib = 0;
-\                 tib = (pop()||"") + " " + tib; end-code
-\                 /// VM suspend-resume doesn't allow multiple levels of dictate() so
-\                 /// we need tib.append or tib.insert.
+
+code tib.insert  
+    before, after = tib[:ntib], tib[ntib:] 
+    vm.tib = before + " " + str(pop()) + " " + after 
+    end-code // ( "string" -- ) Insert the "string" into TIB
 
 \ : sinclude.js   ( "pathname" -- ) // Include JavaScript source file
 \                 readTextFileAuto js: eval(pop()) ;
@@ -2076,6 +2070,10 @@ code passed
 \                 /// colon definition 的半途，此時 q 要下成 [ q ] , .s 要下成 
 \                 /// [ .s ] ... etc
 
+: slice ( 1 2 3 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
+    ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
+    \ 很多 function 的傳回值是一列 tuple, 有需要把它們集合起來。    
+
 \ ----------------- Self Test -------------------------------------
 
 \ private words called (execute) or referenced (tick) by name warning when in self-test. 
@@ -2150,3 +2148,7 @@ code all-pass   ( ["name",...] -- ) // Pass-mark all these word's selftest flag
     \   [else] \ We don't have jobs from command line to do. So we do the self-test.
     \       js> tick('<selftest>').enabled=True;tick('<selftest>').buffer tib.insert
     \   [then] js: tick('<selftest>').buffer="" \ recycle the memory
+
+
+    
+    

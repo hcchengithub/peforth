@@ -479,9 +479,17 @@ def rtos(index=None,value=None):
         data = rstack[len(rstack)-1-index];
         rstack[len(rstack)-1-index] = value; 
         return(data); 
+        
+# rstack access easier. e.g. rpop(1) gets rtos(1) ( rtos(2) rtos(1) rtos(0) -- rtos(2) rtos(0) )
+# push(formula(rpop(i)),i-1) manipulates the rtos(i) directly, usually when i is the index of a loop.
+def rpop(index=None):
+    if index==None:
+        return rstack.pop();
+    else:
+        return rstack.pop(len(rstack)-1-index);
 
-# Stack access easier. e.g. pop(1) gets tos(1) and leaves ( tos(2) tos(1) tos(void|0) -- tos(2) tos(void|0) )
-# push(formula(pop(i)),i-1) manipulate the tos(i) directly, usually when i is the index of a loop.
+# Stack access easier. e.g. pop(1) gets tos(1) ( tos(2) tos(1) tos(0) -- tos(2) tos(0) )
+# push(formula(pop(i)),i-1) manipulate the tos(i) directly, when i is the index of a loop.
 def pop(index=None):
     if index==None:
         return stack.pop();
