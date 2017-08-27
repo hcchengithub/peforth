@@ -42,7 +42,7 @@ debug = False; # debugging flag
 def reset():
     # defined in project-k kernel peforth.py
     global rstack, compiling, ip, stop, ntip
-    rstack = [];
+    # rstack = []; this creates extra error when return from the inner loop
     compiling = False;
     ip = 0;  # forth VM instruction pointer
     stop = True; 
@@ -190,7 +190,7 @@ def comma(x):
         dictionary.append(RET) 
     # [here] will be overwritten, we do this dummy because 
     # RET is the ending mark for 'see' to know where to stop. 
-
+    
 '''    
     Discussions:
     

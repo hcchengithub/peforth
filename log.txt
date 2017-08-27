@@ -488,6 +488,46 @@ peforth
     OK py> ord(tos()[0]) . cr
     4
     OK
+    示範 <accept> ... </accept> 的用法 
+        ------- clipboard ---------
+        dropall
+        <accept>
+        11
+        22
+        33
+        44
+        55
+        </accept>
+        66
+        77
+        88
+        99
+        ----------------------------
+        OK dropall      # paste 之後的樣子
+        OK <accept>
+        11
+        22
+        33
+        44
+        55
+        </accept>66   # 這是最後一行，注意！66 可以往前緊貼, delimiter 會整個被忽略掉。
+        OK 77
+        OK 88
+        OK 99
+        ----------------------------
+        OK .s      # 看看結果 .......
+              0: 11
+        22
+        33
+        44
+        55
+        66
+         (<class 'str'>)
+              1: True (<class 'bool'>)
+              2:          77          4Dh (<class 'int'>)
+              3:          88          58h (<class 'int'>)
+              4:          99          63h (<class 'int'>)
+        OK    
     
 [x] .s in trouble when cell is False, None ... etc
 [x] peforth.py 可以直接執行 : python peforth.py 
@@ -691,11 +731,11 @@ peforth
 
     # 從外面 DOS copy-paste 進來，一氣呵成 (不要 indent, 用 block mode)
     python
-    import peforth
-    peforth.vm.dictate('0 constant shell')
-    peforth.vm.dictate('// ( -- dict ) 最外層 python interpreter 的 globals()')
-    getattr(peforth.vm,'forth')['shell']=globals()
-    peforth.main() # 從 python interpreter 切換進入 peforth
+import peforth
+peforth.vm.dictate('0 constant shell')
+peforth.vm.dictate('// ( -- dict ) 最外層 python interpreter 的 globals()')
+getattr(peforth.vm,'forth')['shell']=globals()
+peforth.main() # 從 python interpreter 切換進入 peforth
     \ 進入了 peforth interpret state 
     <accept> \ 從 terminal 收取跨行 input lines 
     <py>
@@ -706,11 +746,121 @@ peforth
     [if] tib.insert help sys [then]
 [x] examples tools utilities goodies 
     \ 列出所有的 code words
-    <py> [w for w in words['forth'][1:] if 'code' in w.type] </pyV>
+        <py> [w for w in words['forth'][1:] if 'code' in w.type] </pyV>
     \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array) 
-    ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
-    --> slice 
+        ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
+        --> slice 
+    \ Execute DOS command
+        OK <py> exec('import os',globals(),globals())</py>  # import the os module
+        OK py: os.system('dir')
+            Volume in drive C is Windows
+            Volume Serial Number is 2EA4-3202
+            Directory of c:\Users\hcche\Documents\GitHub\peforth
+            2017-08-23  09:31    <DIR>          .
+            2017-08-23  09:31    <DIR>          ..
+            2017-07-31  20:35                65 .gitattributes
+            2017-06-25  13:31            18,226 voc.f
+            2017-08-25  13:03    <DIR>          __pycache__
+                        10 File(s)        178,951 bytes
+                        3 Dir(s)  264,579,960,832 bytes free
+            OK    
+        # But after <py> os.system(r"cd c:\Users\hcche\Documents\GitHub\ML\WH300")</py>
+          the peforth working directory is not changed. It changes only the temperary shell.
+    \ copy 以下 comment (用 np++ column mode) 從 DOS box Ctrl-V 一路跑起來
+        <comment>
+        python
+        import peforth
+        peforth.vm.dictate('0 constant shell')
+        peforth.vm.dictate('// ( -- dict ) 最外層 python interpreter 的 globals()')
+        getattr(peforth.vm,'forth')['shell']=globals()
+        peforth.main() # 從 python interpreter 切換進入 peforth
+        \ 進入了 peforth interpret state 
+        <accept> \ 從 terminal 收取跨行 input lines 
+        <py>
+        import sys
+        push(sys)</py> constant sys 
+        // ( -- sys ) The sys module. Try: sys py: help(pop())
+        </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string 
+        [if] tib.insert help sys [then]
+        </comment>
     
+[x] <accept> <py> does not work when unless putting <py> to next line <---- problem
+    --> rest of the line after <accept> should be the first line of the multiple lines
+[x] OK include c:\Users\hcche\Documents\GitHub\ML\WH300\wh300.f
+    C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\sklearn\cross_validation.py:44: DeprecationWarning: This module was deprecated in version 0.18 in favor of the model_selection module into which all the refactored classes and functions are moved. Also note that the interface of the new CV iterators are different from that of this module. This module will be removed in 0.20.
+      "This module will be removed in 0.20.", DeprecationWarning)
+    Failed to run <Word 'sinclude'>: pop from empty list
+    Continue, Debug, or Abort? [C/d/a] a
+    OK
+    --> possibly because rstack are to be used to return while reset() ( stop command ) 
+        clears the rstack. --> 應該是猜對了。 stop command 只能中斷 outer loop 不能把 rstack 清掉!!
+[x] let <accept> <text> auto indent. Use spaces before </accept> </text> as the common strip.
+    --> study <text> </text> 直接用 BL word 把 </text> 之前的 spaces 都忽略掉了, 這裡要改一下。
+    --> code test push(nextstring('[^ ]')) end-code test   123 得到:
+            0: {'str': '   ', 'flag': True} (<class 'dict'>)
+            1:         123          7Bh (<class 'int'>)
+        用來取得 </text> 之前的 spaces --> 這只是一法,也不太好。
+    --> 不如取所有 lines 的 leading spaces 之最大公因數,一律刪除就對了。
+        1. 切成 lines in an array
+            </text> :> splitlines() ( [lines] )
+        2. 算出每行的前導 spaces 個數
+            len - lstrip 
+            OK s"     abc" py> len(pop()) tib.
+            s"     abc" py> len(pop()) \ ==> 7 (<class 'int'>)
+            OK s"     abc" :> lstrip() py> len(pop()) tib.
+            s"     abc" :> lstrip() py> len(pop()) \ ==> 3 (<class 'int'>)
+            OK            
+        3. 取最小值,
+            OK py> min([1,2,3]) tib.
+            py> min([1,2,3]) \ ==> 1 (<class 'int'>)
+            OK        
+        4. 每行都去除這麼多前導 spaces
+            [ e for e in m]
+        cls dropall <accept>
+        <text>
+            line1
+                line2
+                line3
+                line4
+                line5
+        </text> constant lines
+        </accept> 
+        drop tib.insert
+        lines :> splitlines() constant [lines] 
+        <py> map(lambda x:len(x)-len(x.lstrip()),vm.forth['[lines]'])</pyV> 
+        constant leading-spaces // ( -- map ) 只能用一次!
+        \ 檢查 leading-spaces 有兩種方法,後者才漂亮
+        \ <py> [i for i in vm.forth['leading-spaces']]</pyV> tib. \ check leading-spaces
+        \ leading-spaces py> list(pop()) .
+            \ OK leading-spaces py> list(pop()) . # 如果 map 不大這個可以考慮
+            \ [12, 16, 16, 16, 16, 8] OK
+            \ OK leading-spaces py> list(pop()) . # map 之類的 iterator 都不能 rewind/reset
+            \ [] OK        
+        leading-spaces py> min(pop()) constant common-indent
+        [lines] common-indent <py> [i[tos():] for i in pop(1)]</pyV> nip constant [result]
+        result py> "\n".join(pop()) constant result // ( -- string ) the cooked multi-lines string
+
+    : -indent ( multi-lines -- cooked ) // Remove common indent of the string
+        :> splitlines() ( [lines] )
+        <py> map(lambda x:len(x)-len(x.lstrip()),tos())</pyV> ( [lines] map[^spaces] )
+        py> min(pop()) ( [lines] indent )
+        <py> [i[tos():] for i in pop(1)]</pyV> nip ( [result] )
+        py> "\n".join(pop()) ;
+        
+    code -indent    
+        lines = pop()
+        array = lines.splitlines() # [lines] 
+        spaces = map(lambda x:len(x)-len(x.lstrip()),array) # [spaces]
+        indent = min(spaces) # number of common indent 
+        cut = [i[indent:] for i in array]  # [cuted lines] 
+        push("\n".join(cut)) end-code
+        // ( multi-lines -- cooked ) Remove common indent of the string
+        
+    bingo! it works!
+    [x] don't need to use map in -indent, use [f(i) for i in lines.splitlines()]
+        should be enough --> Yes! The following two lines are equivalent:
+        spaces = map(lambda x:len(x)-len(x.lstrip()),array) # iterator
+        spaces = [len(x)-len(x.lstrip()) for x in array] # list 
 [ ] Start to use peforth for the wh300 project . . . 
     用 peforth 來實現 wh300 
     第一個好消息就是 import module 變成 forth word 成功了!!
@@ -721,3 +871,30 @@ peforth
     OK np . 
     <module 'numpy' from 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\numpy\\__init__.py'> OK
     OK
+    --> import to globals() is the best way. The above method is interesting but not the best.
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

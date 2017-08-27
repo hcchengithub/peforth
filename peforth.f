@@ -59,18 +59,18 @@ code </selftest>
     </selftest>
 
 code bye 
-    if len(stack) and type(tos())==int: 
-        exit(pop()) 
-    else:
-        exit()
-    end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
+            if len(stack) and type(tos())==int: 
+                exit(pop()) 
+            else:
+                exit()
+            end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
 code /// 
-    ss = nexttoken('\n|\r');
-    ss = "\t" + ss   # Add leading \t to each line.
-    ss = ss.rstrip()+'\n' # trim tailing white spaces
-    last().comment = getattr(last(), 'comment', "") + ss;
-    end-code
-    // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
+            ss = nexttoken('\n|\r');
+            ss = "\t" + ss   # Add leading \t to each line.
+            ss = ss.rstrip()+'\n' # trim tailing white spaces
+            last().comment = getattr(last(), 'comment', "") + ss;
+            end-code
+            // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
 code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
 code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the rest of the line
 code stop reset() end-code // ( -- ) Stop the TIB loop
@@ -82,10 +82,21 @@ code compyle
     f.__doc__ = "lambda:exec({})".format(source)
     push(f) end-code
     // ( "source" -- exec-code ) Python compile source to exec-code object
-code comment push(Comment(pop())) end-code
-    // ( "comment" -- Comment ) Generate a Comment object. execute(comment-object) does nothing. 
+\ code comment push(Comment(pop())) end-code
+\     // ( "comment" -- Comment ) Generate a Comment object. execute(comment-object) does nothing. 
+code -indent    
+    lines = pop()+"\n"+" "*100 # guarantee multiple lines
+    array = lines.splitlines() # [lines] 
+    array = [i+" "*100 for i in array]  # avoid blank lines to be shorted
+    spaces = [len(x)-len(x.lstrip()) for x in array]
+    indent = min(spaces) # number of common indent 
+    cut = [i[indent:].rstrip() for i in array]  # [cooked lines] 
+    push("\n".join(cut)) end-code
+    // ( multi-lines -- cooked ) Remove common indent of the string
 code <py> 
-    push(nexttoken("</py>|</pyV>")) end-code immediate
+    push(nexttoken("</py>|</pyV>")) 
+    execute('-indent') 
+    end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
     execute('compyle')
@@ -106,6 +117,27 @@ code </pyV>
         push(eval(eval_code))
     end-code immediate
     // ( "statements" -- value ) eval in-line python statements
+    
+    <py>
+    def v(name):
+        '''
+        # forth variables (value or constant) can be accessed in python code
+        # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
+        # shorter form v(variableName) is getattr(vm,context)[variableName]
+        # where 'v' means (V)ariable in the context. '''
+        return getattr(vm,context)[name]
+    vm.v = v
+
+    def r(name):
+        '''
+        # forth variables (value or constant) can be accessed in python code
+        # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
+        # shorter form r(variableName) is vm.forth[variableName] where 'r' 
+        # means variable in the (R)oot context, the forth vocabulary.'''
+        return vm.forth[name]
+    vm.r = r
+    </py>
+    
 code words
     for i in words['forth']: 
         print(i and i.name, end=" ")
@@ -1023,8 +1055,9 @@ code accept
     end-code // ( -- str T|F ) Read a line from terminal.
     
 code accept2 
-    vm.multiple = False # back to single input line
-    result, s = "", input()+'\n'
+    # vm.multiple = False # back to single input line
+    tail = nexttoken('\\n')+'\n' # rest of the line after accept2
+    result, s = tail, input()+'\n'
     while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
         result += s
         s = input()+'\n'
@@ -1033,11 +1066,12 @@ code accept2
     result += s 
     if len(result):
         push(result)
+        execute('-indent')
         push(True)
     else:
         push(False)
-    end-code // ( -- str T|F ) Read multiple lines from terminal.
-    /// Ctrl-D or </accept> in the line to terminate the input. 
+    end-code // ( -- str T|F ) Read multiple lines from terminal. 
+    /// Ctrl-D or </accept> appear in the last line to terminate the input. 
     last alias <accept> // ( -- str T|F ) Alias of accept2
     
     
@@ -1216,14 +1250,13 @@ variable '<text> private
                 
 \ 2016/12/21 Now constant & value support private and direct-access through vm[vid].name 
 : constant  ( n <name> -- ) // Create a constnat
-    BL word (create) 
-<py> 
-last().type = "constant";
-source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
-last().xt = genxt('constant',source)
-if not getattr(vm,current,False): setattr(vm,current,{})
-exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
-</py> reveal ; 
+    BL word (create) <py>  
+    last().type = "constant";
+    source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
+    last().xt = genxt('constant',source)
+    if not getattr(vm,current,False): setattr(vm,current,{})
+    exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) </py> 
+    reveal ; 
                 
 : value         ( n <name> -- ) // Create a 'value' variable.
                 constant last :: type='value' ; 
@@ -1589,7 +1622,7 @@ code (*debug*)
     print('---- Break point {} ----'.format(pop()))
     pdb.set_trace() end-code 
     // ( msg -- ) Invoke python pdb debugger
-: *debug*	( <prompt> -- resume ) // Breakpoint enters pdb debugger
+: *debug*   ( <prompt> -- resume ) // Breakpoint enters pdb debugger
             BL word compiling if literal compile (*debug*) 
             else (*debug*) then ; immediate
 
@@ -1858,21 +1891,20 @@ code obj>keys
     end-code
     // ( obj -- [keys] ) Get all attributes of an object or all kyes of an dict
 
-
-\ json.dumps() needs this function to convert a Word object to dict 
-<py>
-def obj2dict(obj):
-    #convert object to a dict
-    d = {}
-    d['__class__'] = obj.__class__.__name__
-    d['__module__'] = getattr(obj,"__module__","unknown")
-    d.update(getattr(obj,"__dict__",{}))
-    return d
-push(obj2dict)
-</py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=vm.forth['obj2dict'])
+    \ json.dumps() needs this function to convert a Word object to dict 
+    <py>
+    def obj2dict(obj):
+        #convert object to a dict
+        d = {}
+        d['__class__'] = obj.__class__.__name__
+        d['__module__'] = getattr(obj,"__module__","unknown")
+        d.update(getattr(obj,"__dict__",{}))
+        return d
+    push(obj2dict)
+    </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=r('obj2dict'))
 
 : stringify ( thing -- "string" ) // JSON.stringify anything
-    py> json.dumps(pop(),default=vm.forth['obj2dict'],indent=4) ;
+    py> json.dumps(pop(),default=r('obj2dict'),indent=4) ;
 
                 
 \ code memberCount ( obj -- count ) // Get hash table's length or an object's member count.
