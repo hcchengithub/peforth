@@ -42,24 +42,34 @@ if not vm.tick('version'):
     # run from python interpreter only once
     vm.dictate(readTextFile('peforth.f'))
     vm.dictate(readTextFile('quit.f'))
+
+
+
+
+
+
+
+
+
+
+
+
     
 # The eforth.py command line interface, the main program loop
 def main():
     print('OK ',end='')
     while True:
-        cmd = ""                                   # 
-        if vm.tick('accept') and not vm.multiple:  # 
-            vm.execute('accept')                   # 
-            if vm.pop():                           # Input can be single line (default) or 
-                cmd = vm.pop().strip()             # multiple lines. Press Ctrl-D to switch
-        elif vm.tick('accept2') and vm.multiple:   # to multiple-line mode. Place a Ctrl-D
-            vm.execute('accept2')                  # before the last enter to end the input
-            if vm.pop():                           # when in multiple-line mode and back to
-                cmd = vm.pop().strip()             # single-line mode automatically.
-        else:                                      # 
-            cmd = input("").strip()                # 
-            
-        # pass the command line to forth VM    
+        cmd = ""                                     # 
+        if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    
+            vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
+            cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D     
+        elif vm.tick('accept2') and vm.multiple:     # before the last enter to end the input    
+            vm.execute('accept2')                    # when in multiple-line mode.
+            cmd = vm.pop().strip()                   # 
+        else:                                        #  
+            cmd = input("").strip()                  # 
+                                                     
+        # pass the command line to forth VM          
         if cmd == "":
             print('OK ', end="")
             continue
@@ -67,6 +77,7 @@ def main():
             break
         elif cmd == chr(4):
             vm.multiple = not vm.multiple
+            if not vm.multiple: print('OK ', end="")
         else:    
             vm.dictate(cmd)
             print('OK ', end="")

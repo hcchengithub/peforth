@@ -861,7 +861,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         should be enough --> Yes! The following two lines are equivalent:
         spaces = map(lambda x:len(x)-len(x.lstrip()),array) # iterator
         spaces = [len(x)-len(x.lstrip()) for x in array] # list 
-[ ] Start to use peforth for the wh300 project . . . 
+[x] Start to use peforth for the wh300 project . . . 
     用 peforth 來實現 wh300 
     第一個好消息就是 import module 變成 forth word 成功了!!
     <py>
@@ -872,7 +872,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     <module 'numpy' from 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\numpy\\__init__.py'> OK
     OK
     --> import to globals() is the best way. The above method is interesting but not the best.
-    
+    --> Done ! wh300.f works fine now.
     
     
     

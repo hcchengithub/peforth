@@ -1047,37 +1047,32 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
 
 code accept     
     s = input()
-    if len(s):
-        push(s)
-        push(True)
-    else:
-        push(False)
-    end-code // ( -- str T|F ) Read a line from terminal.
+    push(s)
+    end-code // ( -- str ) Read a line from terminal.
     
 code accept2 
-    # vm.multiple = False # back to single input line
     tail = nexttoken('\\n')+'\n' # rest of the line after accept2
     result, s = tail, input()+'\n'
     while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
         result += s
         s = input()+'\n'
-    s = s.replace(chr(4),'')  # remove all ^D 
-    s = s.replace('</accept>','')  # remove all "</accept>" pattern
     result += s 
     if len(result):
         push(result)
         execute('-indent')
-        push(True)
     else:
-        push(False)
-    end-code // ( -- str T|F ) Read multiple lines from terminal. 
+        push("")
+    end-code // ( -- str ) Read multiple lines from terminal. 
     /// Ctrl-D or </accept> appear in the last line to terminate the input. 
-    last alias <accept> // ( -- str T|F ) Alias of accept2
+    last alias <accept> // ( -- str ) Read multiple lines from terminal.
+
+code nop end-code // ( -- ) no operation
+    ' nop alias </accept> // ( -- ) Ending mark of a multiple-line input
+    ' nop alias d last py: pop().name=chr(4) // ( -- ) Ctrl-D ending mark of a multiple-line input
+    rescan-word-hash
     
-    
-: refill        ( -- flag ) // Reload TIB from stdin. return 0 means no input or EOF
-                \ accept if [ s" push(function(){tib=pop();ntib=0})" jsEvalNo , ] 1 else 0 then ;
-                accept if py: vm.tib=pop();vm.ntib=0 1 else 0 then ;
+: refill        ( -- flag ) // Reload TIB from stdin. return false means no input or EOF
+                accept count if py: vm.tib=pop();vm.ntib=0 true else false then ;
 
 : [else] ( -- ) // 丟掉以下 TIB 到 "[else]" or "[then]" 為止，考慮了中間的 nested 結構。
                 1 \ ( [if] structure nested level )
@@ -1470,7 +1465,6 @@ code float      push(float(pop())) end-code // ( string -- float|NaN )
                     [d 3,12 d] [p "int" p]
                 </selftest>
 
-: nop           ; // ( -- ) No operation.
 : drops         ( ... n -- ... ) // Drop n cells from data stack.
                 py: vm.stack=stack[:-pop()] ;
                 /// We need 'drops' <py> sections in a colon definition are easily 
