@@ -1009,6 +1009,24 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [ ] 改用 genfunc() 取代 lambda 之後, indent 習慣又全變了, 因為 function body
         一定要 indent 而與原來的 exec(body) 相反。 共有 <py> py> py: :: :> 這些
         東西受影響, 剩下 :: :> 要改 
+[ ] code compyle 
+        execute('-indent');execute('indent') 
+    若用 dictate('-indent indent') 則無效, 何故?
+    --> 以下實驗卻又都 ok !
+    OK s" sdfsdfdf" <py> dictate('-indent indent')</py> .
+        sdfsdfdf OK s"        sdfsdfdf" <py> dictate('-indent indent')</py> .
+        sdfsdfdf OK    
+    OK ^D
+    code test
+            dictate('-indent indent')
+            end-code
+    ^D
+    Multiple-line mode is on, Ctrl-D switches it off.
+    OK ^D
+    OK s"  sdfsdf" test
+    OK .
+        sdfsdf OK s"          sdfsf" test .
+        sdfsf OK    
         
     
     

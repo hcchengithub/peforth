@@ -76,6 +76,9 @@ code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the re
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 code compyle 
+    # if tos().find('os.system("cls")')!=-1: pdb.set_trace()
+    # dictate('-indent indent')  # [ ] 奇怪, dictate 就不行???
+    execute('-indent');execute('indent') 
     source = pop()
     try:
         # f = lambda:exec(source,globals(),vm.local)
@@ -93,7 +96,11 @@ code compyle
 
 code trim push(pop().strip()) end-code // ( string -- string' ) Remove leading & ending white spaces
     /// NOT every line of the multi-line string, only the begin/end of it.
-code indent push("\t"+pop()) end-code // ( string -- string' ) Indent the string    
+code indent
+    array = pop().splitlines() # [lines] 
+    joined = "\n".join(["    "+s for s in array])
+    push(joined) 
+    end-code // ( string -- string' ) Indent the string    
 code -indent    
     lines = pop()+"\n"+" "*100 # guarantee multiple lines
     array = lines.splitlines() # [lines] 
@@ -104,14 +111,13 @@ code -indent
     spaces = [len(x)-len(x.lstrip()) for x in array]
     indent = min(spaces) # number of common indent 
     cooked = [i[indent:].rstrip() for i in array]  # [cooked lines] 
-    joined = "\n".join(cooked)
-    if len(joined.splitlines())==2: joined = "\t"+joined; # one liner's indent
+    joined = "\n".join(cooked).rstrip() 
+    # if len(joined.splitlines())==1: joined = "\t"+joined; # one liner's indent
     push(joined) 
     end-code
     // ( multi-lines -- cooked ) Remove common indent of the string
 code <py> 
     push(nexttoken("</py>|</pyV>")) 
-    execute('-indent') 
     end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
@@ -130,16 +136,23 @@ code </py>
     end-code immediate
     // ( "statements" -- ) exec in-line python statements
 code </pyV>
-    source = pop()
-    try:
-        f = lambda:push(eval(source))
-        f.__doc__ = "lambda:push(eval({}))".format(source)
-    except Exception as err:
-        panic("Failed in </pyV> command: {}\nBody:\n{}".format(err, source))
-    if compiling:
-        comma(f)
-    else:
-        push(eval(source))
+    push("push(" + pop() + ")")
+    execute('</py>')
+    # source = tos()
+    # try:
+    #     execute('compyle')
+    # except Exception as err:
+    #     panic("Failed in </pyV> command: {}\nBody:\n{}".format(err, source))
+    # # try:
+    # #     f = lambda:push(eval(source))
+    # #     f.__doc__ = "lambda:push(eval({}))".format(source)
+    # # except Exception as err:
+    # #     panic("Failed in </pyV> command: {}\nBody:\n{}".format(err, source))
+    # if compiling:
+    #     comma(pop())
+    # else:
+    #     # push(eval(source))
+    #     pop()()
     end-code immediate
     // ( "statements" -- value ) eval in-line python statements
 
@@ -156,23 +169,23 @@ code </pyV>
 
     
     <py>
-        def v(name):
-            '''
-            # forth variables (value or constant) can be accessed in python code
-            # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
-            # shorter form v(variableName) is getattr(vm,context)[variableName]
-            # where 'v' means (V)ariable in the context. '''
-            return getattr(vm,context)[name]
-        vm.v = v
+    def v(name):
+        '''
+        # forth variables (value or constant) can be accessed in python code
+        # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
+        # shorter form v(variableName) is getattr(vm,context)[variableName]
+        # where 'v' means (V)ariable in the context. '''
+        return getattr(vm,context)[name]
+    vm.v = v
 
-        def r(name):
-            '''
-            # forth variables (value or constant) can be accessed in python code
-            # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
-            # shorter form r(variableName) is vm.forth[variableName] where 'r' 
-            # means variable in the (R)oot context, the forth vocabulary.'''
-            return vm.forth[name]
-        vm.r = r
+    def r(name):
+        '''
+        # forth variables (value or constant) can be accessed in python code
+        # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
+        # shorter form r(variableName) is vm.forth[variableName] where 'r' 
+        # means variable in the (R)oot context, the forth vocabulary.'''
+        return vm.forth[name]
+    vm.r = r
     </py>
     
 code words
@@ -280,8 +293,8 @@ code ' push(tick(nexttoken())) # use the original tick() to avoid warning
 code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
 : [compile] ' , ; immediate // ( <string> -- ) Compile the next immediate word.
     /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
-: py: ( <statement> -- ) BL word trim indent [compile] </py> ; immediate // Inline python statement    
-: py> ( <statement> -- ) BL word trim indent [compile] </pyV> ; immediate // Inline python statement    
+: py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement    
+: py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
 
     ( A workaround when py: is now available )
     py: tick('//').immediate=True
@@ -1924,14 +1937,14 @@ code obj>keys
 
     \ json.dumps() needs this function to convert a Word object to dict 
     <py>   
-    def obj2dict(obj):
-        #convert object to a dict
-        d = {}
-        d['__class__'] = obj.__class__.__name__
-        d['__module__'] = getattr(obj,"__module__","unknown")
-        d.update(getattr(obj,"__dict__",{}))
-        return d
-    push(obj2dict)
+        def obj2dict(obj):
+            #convert object to a dict
+            d = {}
+            d['__class__'] = obj.__class__.__name__
+            d['__module__'] = getattr(obj,"__module__","unknown")
+            d.update(getattr(obj,"__dict__",{}))
+            return d
+        push(obj2dict)
     </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=r('obj2dict'))
 
 
