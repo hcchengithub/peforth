@@ -37,6 +37,7 @@ newname = "";  # new word's name
 newxt = None
 newhelp = "";
 debug = False; # debugging flag    
+local = {} # Utilized in exec(source,globals(),local) 
     
 # Reset the forth VM
 def reset():
@@ -353,7 +354,8 @@ def outer(entry=None):
             break;  # TIB done, loop exit.
         outerExecute(token);
     ### End of the outer loop ###
-    
+
+
 # code ( -- ) Start to compose a code word. docode() is its run-time.
 # "( ... )" and " \ ..." on first line will be brought into word.help attribute.
 # peforth.py kernel has only two words, 'code' and 'end-code', peforth.f
@@ -367,17 +369,35 @@ def genxt(name, body):
         source = (source+"\n    pass\n").format(name)
     else:
         source = (source+'\n{}').format(name,body)
-            # "".join("{}\n".format(line)
-            # # An ending \n makes # comment at end of body safe
-            # for line in body.splitlines()))
     try:
         exec(source,globals(),ll)
     except Exception as err:
         panic("Failed to compose {} : {}\nBody:\n{}".format(name, err, body))
         
-    ll['xt'].source = source  # keep source code [ ] is this redundent?
+    ll['xt'].__doc__ = source
     ll['xt'].name = name 
     return ll['xt']
+
+
+# python does not support annoymous function. But it supports closure, 
+# so we can recover it. genfunc("body","args") returns a function which 
+# is composed by the given function name, source code and arguments.
+# Where the function name is for debug.
+def genfunc(body,args,name):
+    local = {}
+    source = "def {}({}):".format(name,args)
+    # args can be "", or 'x, y=123,z=None' 
+    if body.strip()=="":
+        source = source+"\n    pass\n";
+    else:
+        source = (source+'\n{}').format(body)
+    try:
+        exec(source,globals(),local)
+    except Exception as err:
+        panic("Failed in genfunc(body,{}): {}\nBody:\n{}".format(args,err,body))
+    local[name].__doc__ = source
+    return local[name]
+
 
 # forth 'code' definition        
 def docode(_me=None):

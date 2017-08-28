@@ -873,16 +873,143 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     OK
     --> import to globals() is the best way. The above method is interesting but not the best.
     --> Done ! wh300.f works fine now.
+[x] -indent 很聰明地 " "*100 的花招把 </text> 之前的線索給毀了!!! 目前變成過度 indent.
+    --> 過度 indent 修好了， constant 的 runtime 又出問題。因為是 runtime, root cause 很難找。
+        Root cause : 下面 lambda 的 code 內縮了，應該不要。所以是 -indent 有問題。
+        str__', '__subclasshook__'] OK py> dictionary[456].__doc__ .
+        lambda:exec(
+           source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
+           last().xt = genxt('constant',source)
+           if not getattr(vm,current,False): setattr(vm,current,{})
+           exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
+        ) OK 123 constant x
+        Failed to run <function xt.<locals>.<lambda> at 0x000001C0C39B61E0>: unexpected indent (<string>, line 2)
+        Continue, Debug, or Abort? [C/d/a] a
+        OK    
+    --> 對照 ok of 'see constant' 可見得上面問題版的 lambda source code 裡有多的 indent 
+        ------------ Definition in dictionary ------------
+        00456: lambda:exec(
+        source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
+        last().xt = genxt('constant',source)
+        if not getattr(vm,current,False): setattr(vm,current,{})
+        exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
+        )        
+    --> 先用醜版面過關取得完整功能, 再來對付它。
+    --> interpret state ok, try compile --> ok too --> so what's the problem..it's clear 
+        當 <py> 之後跟著兩個 space 時其實這個實驗就已經複製到問題了, 厲害的是要到 test 的
+        runtime 才會執行 lambda 從而觸發到 unexpected indent ... 難怪這麼難抓!!
+            : test   
+            <py>  
+            a=1
+            b=2
+            c=3
+            </py> ;
+    --> breakpoint 在 -indent 當 last==constant 時
+            code -indent    
+                if debug and last().name=='constant': pdb.set_trace() <--- 斷到了
+                ...snip....
+    --> constant 改到有問題的 <py>..</py> 版本 --> 看看這時 -indent 收到啥
+        |(Pdb) p lines
+        |' \n    source = \'\\tpush(getattr(vm,"{}")["{}"])...snip...
+          ^---- 這個 space 就是問題所在了 ！！！！ 真難找。  
+    --> Root cause: in constant source code, after the <py> an extra space was there! 
+    --> See Ynote : "peforth -indent command indent 問題探討-- 成功了！ 扫描_20170828180311 _peforth_"
+        
+[ ] reset() 能不能強一點? panic() 好幾次很煩....也許有意義?      
+[ ] compyle 裡用到 lambda 來產生 function 有問題！
+    # 這個可以!
+        >>> s = '''
+        ... dd = {'a':123,'b':456}
+        ... print(dd)
+        ... v = [dd[i] for i in dd] # 取得所有的 value of a dict
+        ... print(v)
+        ... '''
+        >>> exec(s)  # <----------- 直接執行 exec() 很好,沒問題
+        {'a': 123, 'b': 456}
+        [123, 456] 
+        --
+    # 經過 lambda 之後 local name space 就有怪現象了
+    # 如下不行了, 這是經過 lambda 之後產生的結果。 compyle command 不要用 lambda . . . . 
+        ... s = '''
+        ... dd = {'a':123,'b':456}
+        ... print(dd)
+        ... v = [dd[i] for i in dd] # 取得所有的 value of a dict
+        ... print(v)
+        ... '''
+        >>> f = lambda:exec(s)
+        >>> f()
+        {'a': 123, 'b': 456}
+        NameError: name 'dd' is not defined
+        >>>
+    --> compyle 裡改用 genfunc(source) 來產生 function 
     
+    ----- this snippet works fine ------------
+    <py>    
+    # python does not support annoymous function. But it supports closure, 
+    # so we can recover it. genfunc("body","args") returns a function which 
+    # is composed by the given source code and arguments.
+    def genfunc(body,args):
+        local = {}
+        source = "def func({}):".format(args)
+        # args is something like "", or 'x, y=123,z=None' 
+        if body.strip()=="":
+            source = source+"\n    pass\n";
+        else:
+            source = (source+'\n{}').format(body)
+        try:
+            exec(source,globals(),local)
+        except Exception as err:
+            panic("Failed in genfunc(body,{}): {}\nBody:\n{}".format(args,err,body))
+        local['func'].__doc__ = source
+        return local['func']
+    push(genfunc)    
+    </py> constant genfunc // ( -- func ) function generater genfunc(body,args)
+    genfunc <py> pop()('    print("hi")',"")</pyV> :: ()
+    \ ==> hi
+    ( arguments ) s" x,y"
+    ( body ) <text> 
+        result = x**2 + y**2
+        print(result)
+    </text> -indent
+    genfunc :> (pop(),pop()) constant f // ( -- func ) f(3,4) prints 25 which is 3^2+4^2
+    f :: (3,4)
+    \ ==> 25
+    ----- this snippet works fine ------------
+    結果：
+        ^D
+        hi  <--- 正確,正確
+        25
+        Multiple-line mode is on, Ctrl-D switches it off.
+        OK    
+    --- genfunc() 進了 project-k kernel -----------
+    ( name ) s" lalala"
+    ( arguments ) s" x,y"
+    ( body ) <text> 
+        result = x**3 + y**3
+        print(result)
+    </text> -indent
+    py> genfunc(pop(),pop(),pop()) constant f f :: (3,4)
+    # it works fine !!
     
-    
-    
-    
-    
-    
-    
-    
-    
+    --- 有問題要到 runtime 才會發現, 故 selftest 很重要 -----------
+    ( name ) s" lalala"
+    ( arguments ) s" x,y"
+    ( body ) <text> 
+        result = x*y
+        print(resultttttttt)
+    </text> -indent
+    py> genfunc(pop(),pop(),pop()) constant f 
+    \ 到這裡都沒問題, 以下執行了才發現問題，而且 error message 線索差很遠
+    OK f :: (1,2)
+    Failed in </py> command: name 'resultttttttt' is not defined
+    Body:
+    pop()(1,2)
+    Continue, Debug, or Abort? [C/d/a]
+    ----- it works fine --------------
+    [ ] 改用 genfunc() 取代 lambda 之後, indent 習慣又全變了, 因為 function body
+        一定要 indent 而與原來的 exec(body) 相反。 共有 <py> py> py: :: :> 這些
+        東西受影響, 剩下 :: :> 要改 
+        
     
     
     

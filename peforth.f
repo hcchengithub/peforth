@@ -77,21 +77,37 @@ code stop reset() end-code // ( -- ) Stop the TIB loop
 code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 code compyle 
     source = pop()
-    exec_code = compile(source,"","exec"); 
-    f = lambda:exec(exec_code)
-    f.__doc__ = "lambda:exec({})".format(source)
-    push(f) end-code
-    // ( "source" -- exec-code ) Python compile source to exec-code object
+    try:
+        # f = lambda:exec(source,globals(),vm.local)
+        f = genfunc(source,"","compyle_anonymous")  # body,args,name
+        # f.__doc__ = "lambda:exec({})".format(source)
+        push(f) 
+    except Exception as err:
+        panic("Failed in compyle command: {}\nBody:\n{}".format(err, source))
+    end-code
+    \ // ( "source" -- exec-code ) Python compile source to exec-code object
+    // ( "source" -- function ) Python compile source code to function
+    
 \ code comment push(Comment(pop())) end-code
 \     // ( "comment" -- Comment ) Generate a Comment object. execute(comment-object) does nothing. 
+
+code trim push(pop().strip()) end-code // ( string -- string' ) Remove leading & ending white spaces
+    /// NOT every line of the multi-line string, only the begin/end of it.
+code indent push("\t"+pop()) end-code // ( string -- string' ) Indent the string    
 code -indent    
     lines = pop()+"\n"+" "*100 # guarantee multiple lines
     array = lines.splitlines() # [lines] 
-    array = [i+" "*100 for i in array]  # avoid blank lines to be shorted
+    if array[0].strip()=="": array=array[1:] # avoid invisible spaces in first line
+    for i in range(len(array)): # avoid blank lines become the shortest 
+        if len(array[i])==0:
+            array[i] += " " * 100;
     spaces = [len(x)-len(x.lstrip()) for x in array]
     indent = min(spaces) # number of common indent 
-    cut = [i[indent:].rstrip() for i in array]  # [cooked lines] 
-    push("\n".join(cut)) end-code
+    cooked = [i[indent:].rstrip() for i in array]  # [cooked lines] 
+    joined = "\n".join(cooked)
+    if len(joined.splitlines())==2: joined = "\t"+joined; # one liner's indent
+    push(joined) 
+    end-code
     // ( multi-lines -- cooked ) Remove common indent of the string
 code <py> 
     push(nexttoken("</py>|</pyV>")) 
@@ -99,43 +115,64 @@ code <py>
     end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
 code </py>     
-    execute('compyle')
+    source = tos()
+    try:
+        execute('compyle')
+    except Exception as err:
+        panic("Failed in </py> command: {}\nBody:\n{}".format(err, source))
     if compiling:
         comma(pop()) 
     else:
-        pop()()  # exec(exec_code)
+        try:
+            pop()()  # exec(exec_code)
+        except Exception as err:
+            panic("Failed in </py> command: {}\nBody:\n{}".format(err, source))
     end-code immediate
     // ( "statements" -- ) exec in-line python statements
 code </pyV>
     source = pop()
-    eval_code = compile(source,"","eval")
-    f = lambda:push(eval(eval_code))
-    f.__doc__ = "lambda:push(eval({}))".format(source)
+    try:
+        f = lambda:push(eval(source))
+        f.__doc__ = "lambda:push(eval({}))".format(source)
+    except Exception as err:
+        panic("Failed in </pyV> command: {}\nBody:\n{}".format(err, source))
     if compiling:
         comma(f)
     else:
-        push(eval(eval_code))
+        push(eval(source))
     end-code immediate
     // ( "statements" -- value ) eval in-line python statements
+
+\    source = pop()
+\    # exec_code = compile(source,"","exec"); also works but it's an over-kill I think
+\    try:
+\        f = lambda:exec(source,globals(),vm.local)
+\        f.__doc__ = "lambda:exec({})".format(source)
+\        push(f) 
+\    except Exception as err:
+\        panic("Failed in compyle command: {}\nBody:\n{}".format(err, source))
+\    end-code
+
+
     
     <py>
-    def v(name):
-        '''
-        # forth variables (value or constant) can be accessed in python code
-        # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
-        # shorter form v(variableName) is getattr(vm,context)[variableName]
-        # where 'v' means (V)ariable in the context. '''
-        return getattr(vm,context)[name]
-    vm.v = v
+        def v(name):
+            '''
+            # forth variables (value or constant) can be accessed in python code
+            # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
+            # shorter form v(variableName) is getattr(vm,context)[variableName]
+            # where 'v' means (V)ariable in the context. '''
+            return getattr(vm,context)[name]
+        vm.v = v
 
-    def r(name):
-        '''
-        # forth variables (value or constant) can be accessed in python code
-        # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
-        # shorter form r(variableName) is vm.forth[variableName] where 'r' 
-        # means variable in the (R)oot context, the forth vocabulary.'''
-        return vm.forth[name]
-    vm.r = r
+        def r(name):
+            '''
+            # forth variables (value or constant) can be accessed in python code
+            # throuth getattr(vm,context)[variableName] or vm.forth[variableName]
+            # shorter form r(variableName) is vm.forth[variableName] where 'r' 
+            # means variable in the (R)oot context, the forth vocabulary.'''
+            return vm.forth[name]
+        vm.r = r
     </py>
     
 code words
@@ -243,9 +280,10 @@ code ' push(tick(nexttoken())) # use the original tick() to avoid warning
 code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
 : [compile] ' , ; immediate // ( <string> -- ) Compile the next immediate word.
     /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
-: py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement    
-: py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
-\ A workaround when py: is now available
+: py: ( <statement> -- ) BL word trim indent [compile] </py> ; immediate // Inline python statement    
+: py> ( <statement> -- ) BL word trim indent [compile] </pyV> ; immediate // Inline python statement    
+
+    ( A workaround when py: is now available )
     py: tick('//').immediate=True
     
 \ ------------ above are most basic words for developing and for debug ----------------
@@ -853,7 +891,9 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
     \ here 指在下一個 available 處, 即 len(dictionary) 之值。
     \ Python 的 array 要夠大才能用。len(dictionary) 有可能大於 here, 
     \ here 到 len(dictionary) 之間的不用擴充，不夠的要先 append()。
-    <py> for i in range(tos()-len(dictionary)+here): dictionary.append(0)</py>
+    <py> 
+    for i in range(tos()-len(dictionary)+here): dictionary.append(0)
+    </py>
     here + here! ; 
     
     <selftest>
@@ -1211,11 +1251,6 @@ variable '<text> private
                 compiling if literal then ; immediate
                 /// Usage: <text> word of multiple lines </text>
 
-: trim          ( string -- string' ) // Remove leading & ending white spaces of the multiple line string.
-                :> strip() ;
-                /// NOT every line of a multiple line string, only the begin/end of it.
-                /// Work with </o> </h> </e> 前置 white spaces 會變成 [object Text] 必須消除。
-
 \ Ready to add comment to 'privacy' 
 <text>
     Example 'privacy' definition for a vocabulary. Assume current == context.
@@ -1245,14 +1280,15 @@ variable '<text> private
                 
 \ 2016/12/21 Now constant & value support private and direct-access through vm[vid].name 
 : constant  ( n <name> -- ) // Create a constnat
-    BL word (create) <py>  
-    last().type = "constant";
+    BL word (create) 
+    <py>   
     source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
     last().xt = genxt('constant',source)
     if not getattr(vm,current,False): setattr(vm,current,{})
-    exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) </py> 
+    exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
+    </py> 
     reveal ; 
-                
+
 : value         ( n <name> -- ) // Create a 'value' variable.
                 constant last :: type='value' ; 
 : to            ( n <value> -- ) // Assign n to <value>.
@@ -1885,8 +1921,9 @@ code obj>keys
     end-code
     // ( obj -- [keys] ) Get all attributes of an object or all kyes of an dict
 
+
     \ json.dumps() needs this function to convert a Word object to dict 
-    <py>
+    <py>   
     def obj2dict(obj):
         #convert object to a dict
         d = {}
@@ -1897,9 +1934,9 @@ code obj>keys
     push(obj2dict)
     </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=r('obj2dict'))
 
+
 : stringify ( thing -- "string" ) // JSON.stringify anything
     py> json.dumps(pop(),default=r('obj2dict'),indent=4) ;
-
                 
 \ code memberCount ( obj -- count ) // Get hash table's length or an object's member count.
 \                 push(vm.g.memberCount(pop()));
@@ -1985,6 +2022,11 @@ code toString # To see a cell in dictionary
                         ." ------------ Definition in dictionary ------------" cr
                         :> cfa ( cfa ) dump2ret 
                         ." ------------ End of the difinition ---------------" cr
+                    else \ Not colon word must be a code word
+                        ( w ) 
+                        ." ------------ Source code ------------" cr
+                        :> xt.__doc__ . cr cr
+                        ." -------------------------------------" cr
                     then
                 then ;
 

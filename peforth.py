@@ -80,6 +80,7 @@ def main():
             if not vm.multiple: print('OK ', end="")
         else:    
             vm.dictate(cmd)
+            if vm.multiple: print("\nMultiple-line mode is on, Ctrl-D switches it off.")
             print('OK ', end="")
 
 if __name__ == '__main__':
