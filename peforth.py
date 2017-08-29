@@ -1,3 +1,4 @@
+import sys
 import pdb
 import projectk as vm
 
@@ -18,6 +19,8 @@ vm.version = float(vm.major_version) + 0.01 # 0.01 is the minor version or build
 def greeting():
     print("p e f o r t h    v" + str(vm.version));
     print("source code http://github.com/hcchengithub/peforth");
+    if 'peforth.py' not in sys.argv:
+        print("Type 'peforth.main()' enters forth interpreter, 'exit' to come back.");
     return vm.version;
 vm.greeting = greeting
 

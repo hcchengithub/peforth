@@ -287,8 +287,6 @@ peforth
     (Pdb)
     沒半點錯誤訊息, 有問題看不出來!!
     --> fixed, now it's a panic.
-[ ] \ ------------ above are most basic words for developing and for debug ----------------
-    py: py> 完成之後, 以下都應該盡量改成 colon words 
 [x] compiling 未定義怎麼不觸發 unknown?
     --> outer() 用 eval(token) 想判斷 token 是否 number 不行, 
         當 token='compiling' 時不會觸發 exception 反而傳回其值 True or False !! 
@@ -1009,32 +1007,120 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] 改用 genfunc() 取代 lambda 之後, indent 習慣又全變了, 因為 function body
         一定要 indent 而與原來的 exec(body) 相反。 共有 <py> py> py: :: :> 這些
         東西受影響, 剩下 :: :> 要改 
-[ ] code compyle 
+[x] code compyle 
         execute('-indent');execute('indent') 
-    若用 dictate('-indent indent') 則無效, 何故?
+    若用 dictate('-indent indent') 則無效, 何故? 
     --> 以下實驗卻又都 ok !
-    OK s" sdfsdfdf" <py> dictate('-indent indent')</py> .
-        sdfsdfdf OK s"        sdfsdfdf" <py> dictate('-indent indent')</py> .
-        sdfsdfdf OK    
-    OK ^D
-    code test
-            dictate('-indent indent')
-            end-code
-    ^D
-    Multiple-line mode is on, Ctrl-D switches it off.
-    OK ^D
-    OK s"  sdfsdf" test
-    OK .
-        sdfsdf OK s"          sdfsf" test .
-        sdfsf OK    
-[ ] (forget) in trouble now
+    --> RI: 因為當時在 compiling state !! 用 dictate() 的結果是把兩個 words 
+        compile 進去了，既沒效果又出別的問題。
+    ==> 用 dictate() 問題比較多，不能放心亂用。
+    
+    這兩行 debug trick 技巧留作紀念：
+        if tos().find('vm.greeting')!=-1: pdb.set_trace()
+        dictate('-indent indent')  # 奇怪, dictate 就不行???
+   
+[x] (forget) in trouble now
     OK (forget)
     Failed to run <function compyle_anonymous at 0x0000018230B22400>: 'Word' object has no attribute 'cfa'
-    Continue, Debug, or Abort? [C/d/a]        
-    
-    
-    
-    
+    --> 這問題自動好了
+[x] improve the greeting when imported from python interpreter
+    OK py> sys.argv .
+    ['peforth.py'] <------- run from DOS box
+    >>> import peforth
+    OK py> sys.argv .
+    [''] <----------------- run from python interpreter, need more help messages
+[x] 整理 try - exception in peforth.f     
+    # 從 python interpreter 裡用 genfunc() 產生 function 
+        >>> f = peforth.vm.genfunc(" 1/0",'','test2')
+        >>> f
+        <function test2 at 0x000001B42DB13E18>
+        
+        # 測試看看，確實會出錯
+        >>> f()
+        Traceback (most recent call last):
+          File "<stdin>", line 1, in <module>
+          File "<string>", line 2, in test2
+        ZeroDivisionError: division by zero
+        >>> f
+        <function test2 at 0x000001B42DB13E18>
+        
+        # 直接 compile 進 peforth 的字典
+        >>> peforth.vm.comma(f)
+
+    # 進到 peforth 一執行 error message 又是 </py> 發的！
+        >>> peforth.main()
+        OK here 1- @ :: ()
+        Failed in </py> (compiling=False): division by zero
+        Body:
+        pop()()
+        Continue, Debug, or Abort? [C/d/a] a
+
+    # 檢查看看，他確實是 test2 
+        OK here 1- @ :> __doc__ .  
+        def test2():
+         1/0 OK
+
+    --> 探討原因，似乎「誰執行的，error message 就打給誰」，這樣應該資訊比較充分。
+        :: 裡面 interpret state 是 </py>, compiling state 則是 compyle --> 試試看
+        
+        OK here 1- @ constant f \ 取得 test2 function 
+        OK : test f :: () ;  \ 故意讓 :: 的 compiling state 表演
+        OK test \ 一執行，報錯的變成 phaseB()
+        Callable in phaseB <function compyle_anonymous at 0x000001CC3771D1E0>: division by zero
+        Body:
+        def compyle_anonymous():  
+            pop()()   
+        Continue, Debug, or Abort? [C/d/a] a     
+        --> ^^^^^^^--- 這個 Body information 似乎沒啥用，好像錯了？其實沒錯。
+        --> 如下，這是 f :: () 這種寫法的結果，沒錯，它的 Body 當然顯示不出 f 的 source code
+            ------------ Definition in dictionary ------------
+            00711: f  __str__  (<class 'projectk.Word'>)
+            00712: def compyle_anonymous():
+                pop()() (<class 'function'>)
+              2           0 LOAD_GLOBAL              0 (pop)
+                          2 CALL_FUNCTION            0
+                          4 CALL_FUNCTION            0
+                          6 POP_TOP
+                          8 LOAD_CONST               0 (None)
+                         10 RETURN_VALUE
+            00713: RET  (<class 'NoneType'>)
+            ------------ End of the difinition ---------------
+
+        --> 正確的寫法是 :
+
+            OK : test2 [ f , ] ;
+            OK test2
+            Callable in phaseB <function test2 at 0x000001CC35113E18>: division by zero
+            Body:
+            def test2():   <------------------ 果然顯示出了 除0 的 source code 
+             1/0
+            Continue, Debug, or Abort? [C/d/a] a
+
+            OK see test2
+            {
+                ... snip...
+                "cfa": 715
+            }
+            ------------ Definition in dictionary ------------
+            00715: def test2():
+             1/0 (<class 'function'>)
+              2           0 LOAD_CONST               1 (1)
+                          2 LOAD_CONST               2 (0)
+                          4 BINARY_TRUE_DIVIDE
+                          6 POP_TOP
+                          8 LOAD_CONST               0 (None)
+                         10 RETURN_VALUE
+            00716: RET  (<class 'NoneType'>)
+            ------------ End of the difinition ---------------
+            OK
+    --> 即使在 interpret state 也不一定讓 </py> 來報錯（描述不精確），如下：
+        OK f py: execute(pop())
+        Callable in phaseB <function test2 at 0x000001CC35113E18>: division by zero
+        Body:
+        def test2():  <----------------- 直接就看到真正的 source code
+         1/0
+        Continue, Debug, or Abort? [C/d/a]
+    --> try: exception: 以後繼續改進。。。。。。
     
     
     

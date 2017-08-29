@@ -77,15 +77,13 @@ code stop reset() end-code // ( -- ) Stop the TIB loop
 code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 
 code compyle 
-    # if tos().find('os.system("cls")')!=-1: pdb.set_trace()
-    # dictate('-indent indent')  # [ ] 奇怪, dictate 就不行???
     execute('-indent');execute('indent') 
     source = pop()
     try:
         f = genfunc(source,"","compyle_anonymous")  # body,args,name
         push(f) 
     except Exception as err:
-        panic("Failed in compyle command: {}\nBody:\n{}".format(err, source))
+        panic("Failed in compyle command : {}\nBody:\n{}".format(err, source))
     end-code
     \ // ( "source" -- exec-code ) Python compile source to exec-code object
     // ( "source" -- function ) Python compile source code to function

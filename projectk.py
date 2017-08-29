@@ -251,12 +251,12 @@ def phaseB(w):
         try:
             w.xt(w)
         except Exception as err:
-            panic("Failed to run {}: {}".format(repr(w),err))
+            panic("Word in phaseB {}: {}\nBody:\n{}".format(repr(w),err,w.xt.__doc__))
     elif callable(w) :  # a function
         try:
             w();
         except Exception as err:
-            panic("Failed to run {}: {}".format(w,err))
+            panic("Callable in phaseB {}: {}\nBody:\n{}".format(repr(w),err,w.__doc__))
     elif str(type(w))=="<class 'code'>": # code object
         exec(w)
     elif type(w)==int:
@@ -395,10 +395,7 @@ def genfunc(body,args,name):
         source = source+"\n    pass\n";
     else:
         source = (source+'\n{}').format(body)
-    try:
-        exec(source,globals(),local)
-    except Exception as err:
-        panic("Failed in genfunc(body,{}): {}\nBody:\n{}".format(args,err,body))
+    exec(source,globals(),local)
     local[name].__doc__ = source
     return local[name]
 
