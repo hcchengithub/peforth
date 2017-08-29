@@ -916,7 +916,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> See Ynote : "peforth -indent command indent 問題探討-- 成功了！ 扫描_20170828180311 _peforth_"
         
 [ ] reset() 能不能強一點? panic() 好幾次很煩....也許有意義?      
-[ ] compyle 裡用到 lambda 來產生 function 有問題！
+[x] compyle 裡用到 lambda 來產生 function 有問題！
     # 這個可以!
         >>> s = '''
         ... dd = {'a':123,'b':456}
@@ -1006,7 +1006,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     pop()(1,2)
     Continue, Debug, or Abort? [C/d/a]
     ----- it works fine --------------
-    [ ] 改用 genfunc() 取代 lambda 之後, indent 習慣又全變了, 因為 function body
+    [x] 改用 genfunc() 取代 lambda 之後, indent 習慣又全變了, 因為 function body
         一定要 indent 而與原來的 exec(body) 相反。 共有 <py> py> py: :: :> 這些
         東西受影響, 剩下 :: :> 要改 
 [ ] code compyle 
@@ -1027,7 +1027,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     OK .
         sdfsdf OK s"          sdfsf" test .
         sdfsf OK    
-        
+[ ] (forget) in trouble now
+    OK (forget)
+    Failed to run <function compyle_anonymous at 0x0000018230B22400>: 'Word' object has no attribute 'cfa'
+    Continue, Debug, or Abort? [C/d/a]        
     
     
     

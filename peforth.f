@@ -1,3 +1,4 @@
+code \ nexttoken('\n') end-code 
 code // last().help += nexttoken('\n|\r'); end-code // ( <comment> -- ) Give help message to the new word with the rest of the line
 code <selftest> 
     push(nexttoken("</selftest>"));
@@ -72,18 +73,16 @@ code ///
             end-code
             // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
 code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
-code \ nexttoken('\n') end-code immediate // ( <comment> -- ) Comment out the rest of the line
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
+
 code compyle 
     # if tos().find('os.system("cls")')!=-1: pdb.set_trace()
     # dictate('-indent indent')  # [ ] 奇怪, dictate 就不行???
     execute('-indent');execute('indent') 
     source = pop()
     try:
-        # f = lambda:exec(source,globals(),vm.local)
         f = genfunc(source,"","compyle_anonymous")  # body,args,name
-        # f.__doc__ = "lambda:exec({})".format(source)
         push(f) 
     except Exception as err:
         panic("Failed in compyle command: {}\nBody:\n{}".format(err, source))
@@ -101,6 +100,7 @@ code indent
     joined = "\n".join(["    "+s for s in array])
     push(joined) 
     end-code // ( string -- string' ) Indent the string    
+
 code -indent    
     lines = pop()+"\n"+" "*100 # guarantee multiple lines
     array = lines.splitlines() # [lines] 
@@ -112,63 +112,39 @@ code -indent
     indent = min(spaces) # number of common indent 
     cooked = [i[indent:].rstrip() for i in array]  # [cooked lines] 
     joined = "\n".join(cooked).rstrip() 
-    # if len(joined.splitlines())==1: joined = "\t"+joined; # one liner's indent
     push(joined) 
     end-code
     // ( multi-lines -- cooked ) Remove common indent of the string
+
 code <py> 
     push(nexttoken("</py>|</pyV>")) 
     end-code immediate
     // ( <python statements> -- "statements" ) Starting in-line python statements
+
 code </py>     
-    source = tos()
     try:
+        source = tos()
         execute('compyle')
+        if compiling:
+            comma(pop()) 
+        else:
+            pop()()
     except Exception as err:
-        panic("Failed in </py> command: {}\nBody:\n{}".format(err, source))
-    if compiling:
-        comma(pop()) 
-    else:
-        try:
-            pop()()  # exec(exec_code)
-        except Exception as err:
-            panic("Failed in </py> command: {}\nBody:\n{}".format(err, source))
+        panic("Failed in </py> (compiling={}): {}\nBody:\n{}".format(compiling,err, source))
     end-code immediate
     // ( "statements" -- ) exec in-line python statements
+
 code </pyV>
     push("push(" + pop() + ")")
     execute('</py>')
-    # source = tos()
-    # try:
-    #     execute('compyle')
-    # except Exception as err:
-    #     panic("Failed in </pyV> command: {}\nBody:\n{}".format(err, source))
-    # # try:
-    # #     f = lambda:push(eval(source))
-    # #     f.__doc__ = "lambda:push(eval({}))".format(source)
-    # # except Exception as err:
-    # #     panic("Failed in </pyV> command: {}\nBody:\n{}".format(err, source))
-    # if compiling:
-    #     comma(pop())
-    # else:
-    #     # push(eval(source))
-    #     pop()()
     end-code immediate
-    // ( "statements" -- value ) eval in-line python statements
-
-\    source = pop()
-\    # exec_code = compile(source,"","exec"); also works but it's an over-kill I think
-\    try:
-\        f = lambda:exec(source,globals(),vm.local)
-\        f.__doc__ = "lambda:exec({})".format(source)
-\        push(f) 
-\    except Exception as err:
-\        panic("Failed in compyle command: {}\nBody:\n{}".format(err, source))
-\    end-code
-
-
+    // ( "statements" -- value ) Eval in-line python statement
     
     <py>
+    # Workarounds when now <PY>...</PY> is available
+    tick('//').immediate=True
+    tick('\\').immediate=True
+    tick('\\').help="( <comment> -- ) Comment out the rest of the line"
     def v(name):
         '''
         # forth variables (value or constant) can be accessed in python code
@@ -295,9 +271,6 @@ code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
     /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
 : py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement    
 : py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
-
-    ( A workaround when py: is now available )
-    py: tick('//').immediate=True
     
 \ ------------ above are most basic words for developing and for debug ----------------
 \ 以下都應該盡量改成 colon words 
@@ -1295,7 +1268,7 @@ variable '<text> private
 : constant  ( n <name> -- ) // Create a constnat
     BL word (create) 
     <py>   
-    source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
+    source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
     last().xt = genxt('constant',source)
     if not getattr(vm,current,False): setattr(vm,current,{})
     exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 

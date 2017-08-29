@@ -363,8 +363,12 @@ def outer(entry=None):
 # need to consider about how to get user input from keyboard.
 def genxt(name, body):
     ll = {}
-    source = "def xt(_me=None): ### {} ###"
     # _me will be the code word object itself.
+    source = "def xt(_me=None): ### {} ###"
+    if tick('-indent') and tick('indent'):
+        # Beautify source code if -indent and indent are defined
+        push(body);execute('-indent');execute('indent')
+        body = pop()
     if body.strip()=="":
         source = (source+"\n    pass\n").format(name)
     else:
@@ -372,7 +376,7 @@ def genxt(name, body):
     try:
         exec(source,globals(),ll)
     except Exception as err:
-        panic("Failed to compose {} : {}\nBody:\n{}".format(name, err, body))
+        panic("Failed in genxt({},Body) : {}\nBody:\n{}".format(name, err, body))
         
     ll['xt'].__doc__ = source
     ll['xt'].name = name 
