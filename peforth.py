@@ -66,12 +66,12 @@ def main():
         if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    
             vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
             cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D     
-        elif vm.tick('accept2') and vm.multiple:     # before the last enter to end the input    
-            vm.execute('accept2')                    # when in multiple-line mode.
+        elif vm.tick('accept2') and vm.multiple:     # before the last <Enter> key to end the    
+            vm.execute('accept2')                    # input when in multiple-line mode.
             cmd = vm.pop().strip()                   # 
         else:                                        #  
             cmd = input("").strip()                  # 
-                                                     
+
         # pass the command line to forth VM          
         if cmd == "":
             print('OK ', end="")
@@ -83,7 +83,7 @@ def main():
             if not vm.multiple: print('OK ', end="")
         else:    
             vm.dictate(cmd)
-            if vm.multiple: print("\nMultiple-line mode is on, Ctrl-D switches it off.")
+            if vm.multiple: vm.multiple = False # switch back to the normal mode
             print('OK ', end="")
 
 if __name__ == '__main__':

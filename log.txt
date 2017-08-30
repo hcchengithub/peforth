@@ -1006,7 +1006,18 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     ----- it works fine --------------
     [x] 改用 genfunc() 取代 lambda 之後, indent 習慣又全變了, 因為 function body
         一定要 indent 而與原來的 exec(body) 相反。 共有 <py> py> py: :: :> 這些
-        東西受影響, 剩下 :: :> 要改 
+        東西受影響, 剩下 :: :> 要改 --> all done.
+    [x] Now without lambda (genfunc instead) test the original problem:
+        <py>
+        dd = {'a':123,'b':456}
+        print(dd)
+        v = [dd[i] for i in dd] # 取得所有的 value of a dict
+        print(v)
+        </py>
+        results: 
+        {'a': 123, 'b': 456}
+        [123, 456]  <---------------- Pass!!
+    
 [x] code compyle 
         execute('-indent');execute('indent') 
     若用 dictate('-indent indent') 則無效, 何故? 
