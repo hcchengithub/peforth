@@ -1132,7 +1132,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
          1/0
         Continue, Debug, or Abort? [C/d/a]
     --> try: exception: 以後繼續改進。。。。。。
-[ ] multiple lines of tib. are not showing correctly.
+[x] multiple lines of tib. are not showing correctly.
     --> try test.f 
         111 tib. 
         222 tib. 
@@ -1147,7 +1147,39 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         111 \ ==> 222 (<class 'int'>)
         111 \ ==> 333 (<class 'int'>)
         OK    
-        
+    --> fixed 
+[ ] RET at end of dictionary is expected but missing <--- problem!!
+    OK create x
+    OK x @ .
+    None OK 123 x !
+    OK x @ .
+    123 OK see x
+    {
+        "__class__": "Word",
+        "__module__": "projectk",
+        "name": "x",
+        "xt": {
+            "__class__": "function",
+            "__module__": "projectk"
+        },
+        "immediate": false,
+        "help": "",
+        "comment": "",
+        "vid": "forth",
+        "wid": 243,
+        "type": "colon",
+        "private": false,
+        "cfa": 717
+    }
+    ------------ Definition in dictionary ------------
+    00717: doVar ( -- a ) 取隨後位址 a , runtime of created words __str__  (<class 'projectk.Word'>)
+    00718: 123  (<class 'int'>)
+
+    Word in phaseB <Word '@'>: list index out of range
+    Body:
+    def xt(_me=None): ### @ ###
+        push(dictionary[pop()])
+    Continue, Debug, or Abort? [C/d/a]    
     
     
     

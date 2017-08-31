@@ -1375,13 +1375,6 @@ code -word
 : ?rewind ( boolean -- ) // Conditional rewind TIB so as to repeat it. 'stop' to terminate.
     if rewind then ;
 
-
-: tib. ( result -- ) // Print the command line and the TOS.
-    <py> re.search(r"\n?(.*) tib\.\s*",tib)</pyV> :> group(1) :> strip() ( result cmd-line )
-    s" {} \ ==> {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
-    /// Good for experiments that need to show command line and the result.
-    /// "" tib. prints the command line only, w/o the TOS.
-
 : tib. ( result -- ) // Print the command line and the TOS.
     py> tib[:ntib].rfind('\n') py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
     s" {} \ ==> {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
