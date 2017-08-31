@@ -1132,7 +1132,22 @@ peforth.main() # 從 python interpreter 切換進入 peforth
          1/0
         Continue, Debug, or Abort? [C/d/a]
     --> try: exception: 以後繼續改進。。。。。。
-    
+[ ] multiple lines of tib. are not showing correctly.
+    --> try test.f 
+        111 tib. 
+        222 tib. 
+        333 tib.
+    --> I've got it. From clipboard is ok, from accept2 is not.
+        OK ^D
+                111 tib.
+                222 tib.
+                333 tib.
+        ^D
+        111 \ ==> 111 (<class 'int'>)
+        111 \ ==> 222 (<class 'int'>)
+        111 \ ==> 333 (<class 'int'>)
+        OK    
+        
     
     
     

@@ -1382,6 +1382,12 @@ code -word
     /// Good for experiments that need to show command line and the result.
     /// "" tib. prints the command line only, w/o the TOS.
 
+: tib. ( result -- ) // Print the command line and the TOS.
+    py> tib[:ntib].rfind('\n') py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
+    s" {} \ ==> {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
+    /// Good for experiments that need to show command line and the result.
+    /// "" tib. prints the command line only, w/o the TOS.
+
 \ To TIB command line TSRs, the tib/ntib is their only private storage. So save-restore and
 \ loop back information must be using the tib. That's why we have >t t@ and t> 
 
