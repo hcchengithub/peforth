@@ -1148,40 +1148,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         111 \ ==> 333 (<class 'int'>)
         OK    
     --> fixed 
-[ ] RET at end of dictionary is expected but missing <--- problem!!
-    OK create x
-    OK x @ .
-    None OK 123 x !
-    OK x @ .
-    123 OK see x
-    {
-        "__class__": "Word",
-        "__module__": "projectk",
-        "name": "x",
-        "xt": {
-            "__class__": "function",
-            "__module__": "projectk"
-        },
-        "immediate": false,
-        "help": "",
-        "comment": "",
-        "vid": "forth",
-        "wid": 243,
-        "type": "colon",
-        "private": false,
-        "cfa": 717
-    }
-    ------------ Definition in dictionary ------------
-    00717: doVar ( -- a ) 取隨後位址 a , runtime of created words __str__  (<class 'projectk.Word'>)
-    00718: 123  (<class 'int'>)
+[x] RET at end of dictionary is expected but missing <--- problem!!
+    --> improve (dump) d dump --> ok now
+[x] Oh, my God! peforth can be a debugger or 內視鏡 of python:
+    <py>
+    any python code; peforth is available e.g. push() 
+    push(123);import peforth;peforth.main() # enter peforth break point, wonderful !!
+    </py>
+    --> The way to enter peforth interpreter is not very good, though it's clear.
+    --> ok now, the breakpoint usage is : 
+            push(locals());ok('111>>')
+            
+            
 
-    Word in phaseB <Word '@'>: list index out of range
-    Body:
-    def xt(_me=None): ### @ ###
-        push(dictionary[pop()])
-    Continue, Debug, or Abort? [C/d/a]    
-    
-    
     
     
     

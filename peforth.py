@@ -45,22 +45,10 @@ if not vm.tick('version'):
     # run from python interpreter only once
     vm.dictate(readTextFile('peforth.f'))
     vm.dictate(readTextFile('quit.f'))
-
-
-
-
-
-
-
-
-
-
-
-
     
 # The eforth.py command line interface, the main program loop
-def main():
-    print('OK ',end='')
+def main(prompt='OK '):
+    print(prompt,end='')
     while True:
         cmd = ""                                     # 
         if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    
@@ -74,17 +62,21 @@ def main():
 
         # pass the command line to forth VM          
         if cmd == "":
-            print('OK ', end="")
+            print(prompt, end="")
             continue
         elif cmd == "exit": # A backup way to stop the program other than the bye command
             break
         elif cmd == chr(4):
             vm.multiple = not vm.multiple
-            if not vm.multiple: print('OK ', end="")
+            if not vm.multiple: print(prompt, end="")
         else:    
             vm.dictate(cmd)
             if vm.multiple: vm.multiple = False # switch back to the normal mode
-            print('OK ', end="")
+            print(prompt, end="")
+            
+# Let project-k knows its parent
+vm.parent = globals()
+vm.ok = main # so ok('prompt') enters peforth breakpoint ! very useful debug or learning tool.
 
 if __name__ == '__main__':
     main()

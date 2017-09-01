@@ -1959,6 +1959,7 @@ code toString # To see a cell in dictionary
                 else 2drop false then ;
                 
 : (dump)        ( addr -- ) // dump one cell of dictionary
+                py> len(dictionary)<=tos() if drop exit then 
                 dup .literal  if drop exit then
                 dup .function if drop exit then
                 dup @ ( addr value ) dup toString ( addr value toString )
@@ -1970,8 +1971,9 @@ code toString # To see a cell in dictionary
                 for ( addr ) dup (dump) 1+ next ;
                 
 : dump2ret      ( addr -- ) // dump dictionary until next RET
-                begin dup (dump) ( addr ) py> dictionary[tos()]==None 
-                if exit then \ it's RET, all done
+                begin dup (dump) ( addr ) 
+                py> dictionary[tos()]==None py> len(dictionary)<=tos() or
+                if drop exit then \ it's RET, all done
                 1+ again ;
                 
 : d             ( <addr> -- ) // dump dictionary
