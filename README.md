@@ -1,5 +1,6 @@
 # peforth
 A Forth programming language in python
+Click above [Wiki] for examples.
 
 ----
 這是個用 python 實現的 forth 語言 interpreter。
