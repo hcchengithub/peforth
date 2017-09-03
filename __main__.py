@@ -1,6 +1,15 @@
 import sys
 import pdb
-import projectk as vm
+
+if __package__:
+    # peforth is imported as a package
+    from . import projectk as vm
+else:    
+    # peforth is run from __main__.py
+    import projectk as vm
+
+# Let projtct-k know itself
+vm.vm = vm
 
 # panic() when something wrong
 def panic(msg,serious=True):
@@ -42,9 +51,16 @@ def writeTextFile(pathname, string):
 vm.writeTextFile = writeTextFile    
 
 if not vm.tick('version'): 
-    # run from python interpreter only once
-    vm.dictate(readTextFile('peforth.f'))
-    vm.dictate(readTextFile('quit.f'))
+    # run from python interpreter only once. 'version' or anthing else.
+    if __package__:
+        # peforth is imported as a module
+        path = __path__
+    else:
+        # peforth is run from __main__.py or from the peforth folder
+        # where __file__ is either '__main__.py' or 'peforth\\__main__.py'
+        path = [i for i in __file__.split('\\') if i.find('__main__')==-1]+["."]
+    vm.dictate(readTextFile(path[0]+'\\'+'peforth.f'))
+    vm.dictate(readTextFile(path[0]+'\\'+'quit.f'))
     
 # The eforth.py command line interface, the main program loop
 def main(prompt='OK '):
@@ -74,9 +90,11 @@ def main(prompt='OK '):
             if vm.multiple: vm.multiple = False # switch back to the normal mode
             print(prompt, end="")
             
+'''
 # Let project-k knows its parent
 vm.parent = globals()
 vm.ok = main # so ok('prompt') enters peforth breakpoint ! very useful debug or learning tool.
+'''
 
 if __name__ == '__main__':
     main()
