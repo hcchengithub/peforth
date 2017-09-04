@@ -1,4 +1,3 @@
-import sys
 import pdb
 
 if __package__:
@@ -12,7 +11,7 @@ else:
 vm.vm = vm
 
 # panic() when something wrong
-def panic(msg,serious=True):
+def panic(msg,serious=False):
     # defined in project-k kernel peforth.py
     print("\n{}".format(msg))
     if serious:
@@ -28,8 +27,9 @@ vm.version = float(vm.major_version) + 0.01 # 0.01 is the minor version or build
 def greeting():
     print("p e f o r t h    v" + str(vm.version));
     print("source code http://github.com/hcchengithub/peforth");
-    if 'peforth.py' not in sys.argv:
-        print("Type 'peforth.main()' enters forth interpreter, 'exit' to come back.");
+    if __package__:
+        print("Type 'peforth.ok()' enters forth interpreter, 'exit' to come back.");
+    print()
     return vm.version;
 vm.greeting = greeting
 
@@ -50,8 +50,8 @@ def writeTextFile(pathname, string):
     f.close
 vm.writeTextFile = writeTextFile    
 
+# Run once
 if not vm.tick('version'): 
-    # run from python interpreter only once. 'version' or anthing else.
     if __package__:
         # peforth is imported as a module
         path = __path__
@@ -62,8 +62,13 @@ if not vm.tick('version'):
     vm.dictate(readTextFile(path[0]+'\\'+'peforth.f'))
     vm.dictate(readTextFile(path[0]+'\\'+'quit.f'))
     
-# The eforth.py command line interface, the main program loop
-def main(prompt='OK '):
+# The peforth interpreter user interface. 
+# This function was named main() that might be clearer of what it is to you. 
+# We can put an ok() anywhere in python code as a breakpoint so we can investigate 
+# that point with all the power peforth provides. That's why I rename main() to ok() 
+# because it invokes the OK prompt of Forth interpreter.
+def ok(prompt='OK ',loc={}):
+    vm.push(('Prompt is',prompt,'Local identifiers at the point this ok() was called, if given.',loc))
     print(prompt,end='')
     while True:
         cmd = ""                                     # 
@@ -80,8 +85,9 @@ def main(prompt='OK '):
         if cmd == "":
             print(prompt, end="")
             continue
-        elif cmd == "exit": # A backup way to stop the program other than the bye command
-            break
+        # elif cmd == "exit": 
+        elif 'exit' == cmd.split()[-1]: # 'exit' appears at EOL?
+            break # Go back to the caller e.g. python interpreter
         elif cmd == chr(4):
             vm.multiple = not vm.multiple
             if not vm.multiple: print(prompt, end="")
@@ -89,12 +95,7 @@ def main(prompt='OK '):
             vm.dictate(cmd)
             if vm.multiple: vm.multiple = False # switch back to the normal mode
             print(prompt, end="")
-            
-'''
-# Let project-k knows its parent
-vm.parent = globals()
-vm.ok = main # so ok('prompt') enters peforth breakpoint ! very useful debug or learning tool.
-'''
+vm.ok = ok
 
 if __name__ == '__main__':
-    main()
+    ok(loc=locals())

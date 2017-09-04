@@ -1160,7 +1160,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             push(locals());ok('111>>')
     ==> python -i 本來就可以回到 phthon interpreter 以便進行靜態分析執行結果。
         寫就 endo.py ( see my ynote) 當作 pdb 的另一選擇，在斷點上查看程式當時狀態。
-[ ] 手動 install peforth 的方法 see my ynote
+[x] 手動 install peforth 的方法 see my ynote
     [x] peforth package 裡面 __init__.py 就是 peforth.py 也就是 __main__.py 
     [x] 這時候要解決的是 peforth.f , quit.f 的 path , 用 __path__[0] 即可。
     [x] import projectk.py as vm 要改成 from . import projectk.py as vm 把 path 指定清楚
@@ -1179,7 +1179,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         3. 安裝好 peforth package 之後,任意 folder 下執行 python -m peforth 後同上。
         4. 安裝好 peforth package 之後,任意 folder 下執行 python 然後 import peforth 然後按照指示打 peforth.main() 進入 peforth 後同上。
 
-    
+[x] why peforth? why endo.py? 一個 object 用來保存被觀察的 locals 不就好了？
+        1. indent 自由
+        2. 現成的 tool, forth 可以記住很多命令, 複雜的 command 可以臨時組合而成
+                
     
     
     
