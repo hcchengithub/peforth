@@ -74,7 +74,6 @@ code ///
             // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
 code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
 code stop reset() end-code // ( -- ) Stop the TIB loop
-code debug vm.debug=True end-code // ( -- ) Turn on the debug flag
 
 code compyle 
     execute('-indent');execute('indent') 

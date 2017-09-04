@@ -1190,8 +1190,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> at the point ok() started, TOS is the tuple with information from the caller.
         The data stack was supposed to be empty, here after it won't be.
     --> The TOS provides the prompt, the locals
-    
-    
+[x] debug command 不要了, 會跟 py> debug which is vm.debug 撞名,沒必要增加這個問題。    
+[ ] *debug* 改寫, 不要用 pdb.set_trace() 了    
+[ ] I found a python problem!!    
+    False==0 is True, False<=0 is True, False<=0.1 is True
+    False<0.0001 is True, False<-0.1 is False 
     
     
     
