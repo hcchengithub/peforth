@@ -1158,8 +1158,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> The way to enter peforth interpreter is not very good, though it's clear.
     --> ok now, the breakpoint usage is : 
             push(locals());ok('111>>')
-            
-            
+    ==> python -i 本來就可以回到 phthon interpreter 以便進行靜態分析執行結果。
+        寫就 endo.py ( see my ynote) 當作 pdb 的另一選擇，在斷點上查看程式當時狀態。
+[ ] 手動 install peforth 的方法 see my ynote
+    [x] peforth package 裡面 __init__.py 就是 peforth.py 也就是 __main__.py 
+    [x] 這時候要解決的是 peforth.f , quit.f 的 path , 用 __path__[0] 即可。
+    [x] import projectk.py as vm 要改成 from . import projectk.py as vm 把 path 指定清楚
+    [x] projectk.py 裡面用 vm = __import__(__name__) 在 package 裡不適用
+        改由 __init__.py 來填 vm.vm = vm 即可。
+    ==> 成功了 ！        
+        手動安裝
+        ========
+        1. 把本 project 的四個檔案 projectk.py quit.f peforth.f __main__.py 全部 copy 到如下新創建的 folder: c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth
+        2. 把其中 __main__.py 多 copy 一份成 __init__.py 即可。            
+
+        執行 peforth 有四個方式
+        =======================
+        1. 從 project folder 下執行 python __main__.py OK 後打 : test .’ hello world!’ cr ; test 印出 hello world! 打 bye 離開。
+        2. 從 project folder 外面執行 python peforth OK 後打 : test .’ hello world!’ cr ; test 印出 hello world! 打 bye 離開。
+        3. 安裝好 peforth package 之後,任意 folder 下執行 python -m peforth 後同上。
+        4. 安裝好 peforth package 之後,任意 folder 下執行 python 然後 import peforth 然後按照指示打 peforth.main() 進入 peforth 後同上。
 
     
     
