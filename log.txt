@@ -1191,11 +1191,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         The data stack was supposed to be empty, here after it won't be.
     --> The TOS provides the prompt, the locals
 [x] debug command 不要了, 會跟 py> debug which is vm.debug 撞名,沒必要增加這個問題。    
-[ ] *debug* 改寫, 不要用 pdb.set_trace() 了    
+[x] *debug* 改寫, 不要用 pdb.set_trace() 了    
 [ ] I found a python problem!!    
     False==0 is True, False<=0 is True, False<=0.1 is True
     False<0.0001 is True, False<-0.1 is False 
-    
-    
-    
+    這是在引用 debug 來篩選哪些 breakpoint 做不做用時遇到的問題。debug 初值為 False 結果
+    debug<=33 竟然是成立的!    
+[x] ." a" prints an extra space <--- problem
+    RI: dot . command 早期為了 debug 好看，有多印一個 space 可以不要了。
+[x] peforth.path to indicates the home directory where peforth.f is
+[x] IDLE generates keyboardinterrupts
+    try-except can fix it http://effbot.org/zone/stupid-exceptions-keyboardinterrupt.htm 
+    --> 改寫 accept 加上了 try-except 檢查避免被 IDLE resize window 時的 KeyboardInterrupt
+        意外甩出。
+    --> resize window 的 KeyboardInterrupt 好了，但是 Ctrl-D 不能用，要輸入 multi-lines 可
+        改用 <accept> ... </accept> tib.insert 代替。
     
