@@ -166,7 +166,7 @@ code words
         print(i and i.name, end=" ")
     print() end-code 
     // ( -- ) Prints all words in forth vocabulary
-code . print(pop(),end=" ") end-code // ( x -- ) Print the TOS
+code . print(pop(),end="") end-code // ( x -- ) Print the TOS
 code cr print() end-code // ( -- ) print a carriage return
 \ code .s print(stack) end-code // ( -- ) Print the data stack 
 code help
@@ -1058,8 +1058,7 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                     ---
                 </selftest>
 
-: count         ( string -- string length ) // Get length of the given string
-                \ [ s" push(function(){push(tos().length)})" jsEvalNo , ] ;
+: count         ( thing -- thing length ) // Get length of the thing if it has
                 py: push(len(tos())) ;
 
                 <selftest>
@@ -1069,16 +1068,20 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                 </selftest>
 
 code accept     
-    s = input()
+    # python v3.6 IDLE fires KeyboardInterrupt unexpectedly!
+    try:
+        s = input()
+    except KeyboardInterrupt:
+        s = ""
     push(s)
     end-code // ( -- str ) Read a line from terminal.
     
 code accept2 
-    tail = nexttoken('\\n')+'\n' # rest of the line after accept2
-    result, s = tail, input()+'\n'
+    result = nexttoken('\\n')+'\n' # rest of the line after accept2
+    execute('accept'); s = pop()+'\n'
     while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
         result += s
-        s = input()+'\n'
+        execute('accept'); s = pop()+'\n'
     result += s 
     if len(result):
         push(result)
@@ -1090,8 +1093,10 @@ code accept2
     last alias <accept> // ( -- str ) Read multiple lines from terminal.
 
 code nop end-code // ( -- ) no operation
-    ' nop alias </accept> // ( -- ) Ending mark of a multiple-line input
-    ' nop alias d last py: pop().name=chr(4) // ( -- ) Ctrl-D ending mark of a multiple-line input
+    ' nop alias </accept> last py: pop().help="" 
+        // ( -- ) Ending mark of a multiple-line input, do nothing.
+    ' nop alias temp last py: pop().name=chr(4) last py: pop().help="" 
+        // ( -- ) Ctrl-D ending mark of a multiple-line input, do nothing.
     rescan-word-hash
     
 : refill        ( -- flag ) // Reload TIB from stdin. return false means no input or EOF
