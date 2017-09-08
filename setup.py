@@ -20,5 +20,5 @@ setup(
     author_email="hcchen_1471@hotmail.com",
     url="https://github.com/hcchengithub/peforth",
     install_requires=[],
-    data_files=[('lib/site-packages/peforth', ['peforth/peforth.f','peforth/quit.f'])],
+    data_files=[('lib/site-packages/peforth', ['peforth/peforth.f','peforth/quit.f','peforth/version.txt'])],
 )

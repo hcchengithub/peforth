@@ -23,10 +23,9 @@
         <py>
             os.symlink(v('project-directory')+'setup.py', v('package-directory')+"setup.py")
             for fname in v('source-files'):
-                ok('11> ',fname)
                 os.symlink(v('project-directory')+fname, v('package-directory')+"peforth\\"+fname)
         </py>
-stop    
+
         <comment>
             
             檢查 creating symbolic links 有沒有成功，可能用上的方法。
@@ -58,17 +57,21 @@ stop
     
     \ 檢查 creating symbolic links 有沒有成功 
     
-        py> os.listdir('peforth') py> set(pop()) source-files py> set(pop()) =
+        py> os.listdir(v('package-directory')+"peforth\\") py> set(pop()) 
+        source-files py> set(pop()) =
         [if] [else] 
-            ." Error! sth wrong in creating symbolic links of source code files to working directory." cr 
+            ." Error! somthing wrong in creating symbolic links of source code files to working directory." cr 
             *debug* update.f_1122>>>
         [then]
     
     \ 開始打包 whl 結果出現在 package-directory 之下的 dist directory 裡面：
     
+        py> os.getcwd() ( cwd ) \ Save cwd
+        py: os.chdir(v('package-directory'))
         <py> 
             os.system("pip wheel --wheel-dir=dist " + v('package-directory'))
         </py>
+        py: os.chdir(pop()) \ restore cwd 
 
         <comment>
         
@@ -81,8 +84,7 @@ stop
     
     \ 好了，告知 user whl 在哪裡
     
-        ." whl package has been successfully created at " cr
-        py> v('package-directory')+"dist" . cr cr
-    
+        ." whl package is supposed to have been created at " cr
+        py> v('package-directory')+"dist" . cr
         ." ---- Done ---- " cr
         

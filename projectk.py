@@ -8,8 +8,8 @@
 import re    # import whatever we want, don't rely on parent module
 import pdb
 import os
-import inspect  # print (inspect.getsource(func))
-import dis      # dis.dis(func) 
+import sys
+import dis   # dis.dis(func) 
 import json
 
 name = "peforth"
