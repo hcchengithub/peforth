@@ -32,7 +32,7 @@ Use this method if you are participating peforth developing and debugging.
 
 ### Method-2
 
-Use the pip install: *** Note ready yet ***
+Use the pip install:
 
     pip install peforth 
 
