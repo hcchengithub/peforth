@@ -22,17 +22,6 @@ def panic(msg,serious=False):
             vm.reset()
 vm.panic = panic
 
-# peforth version 
-vm.version = float(vm.major_version) + 0.01 # 0.01 is the minor version or build number
-def greeting():
-    print("p e f o r t h    v" + str(vm.version));
-    print("source code http://github.com/hcchengithub/peforth");
-    if __package__:
-        print("Type 'peforth.ok()' enters forth interpreter, 'exit' to come back.");
-    print()
-    return vm.version;
-vm.greeting = greeting
-
 # Toggle multiple or single lines by ^D 
 vm.multiple = False
 
@@ -65,6 +54,19 @@ else:
     # __init__.py
     path = __file__.split('__init__.py')[0]
     path = (path and [path] or ['.\\'])[0]
+
+# Get version code from peforth/version.txt for whl package
+# to see the single source of version code.
+exec(readTextFile(path + "version.txt"),{},locals())
+vm.version = __version__ 
+def greeting():
+    print("p e f o r t h    v" + str(vm.version));
+    print("source code http://github.com/hcchengithub/peforth");
+    if __package__:
+        print("Type 'peforth.ok()' enters forth interpreter, 'exit' to come back.");
+    print()
+    return vm.version;
+vm.greeting = greeting
     
 # Run once
 if not vm.tick('version'): 

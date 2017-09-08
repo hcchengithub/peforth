@@ -1206,4 +1206,47 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         意外甩出。
     --> resize window 的 KeyboardInterrupt 好了，但是 Ctrl-D 不能用，要輸入 multi-lines 可
         改用 <accept> ... </accept> tib.insert 代替。
+[x] peforth 的 version 在 whl 打包時要如何統一定義來源？
+    本文 "Single sourcing the version" 提供多種選擇。 
+    https://packaging.python.org/guides/single-sourcing-package-version/#single-sourcing-the-version
+    我選用了 version.txt 檔案的方法，好像與 jeforth.3we 類似。
+    peforth/version.txt 只有一行 python statement 讓相關的單位都來參考它。
+    [ ] 因此今後 projectk.major_version 就留在 projectk.py 裡沒有直接用到了。
+
+        __version__ = "1.02"
+    
+    試出適合 setup.py 使用的 experiments 如下:
+    
+        dropall cls    
+        <accept>    
+        <py>
+        loc = {} # locals
+        with open(v('package-directory')+"peforth\\"+"version.txt") as fp:
+            exec(fp.read(),{},loc )
+            # later on we use: loc['__version__']
+        push(loc)    
+        print('loc[\'__version__\'] is ',loc['__version__'])
+        </py>
+        </accept> 
+        tib.insert
+        .s
+    
+    實際在 setup.py 裡的程式：
+    
+        loc = {} # locals
+        with open("peforth/version.txt") as fp:
+            exec(fp.read(),{},loc ) # later on we use: loc['__version__']
+
+        version=loc['__version__'] # Refered in setup(...) as an argument
+
+    在 peforth/__main__.py 裡的程式：
+    
+        # Get version code from peforth/version.txt for whl package
+        # to see the single source of version code.
+        exec(readTextFile(path + "version.txt"),{},locals())
+        vm.version = __version__ 
+    
+        
+    
+    
     

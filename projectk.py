@@ -13,7 +13,6 @@ import dis      # dis.dis(func)
 import json
 
 name = "peforth"
-vm = __import__(__name__)
 major_version = 1;  # major version, peforth.py kernel version, integer.
 ip = 0;
 stack = [] ;
