@@ -125,7 +125,7 @@ Where _me refers to the forth word object itself if you need to access its own a
 # inline python code \<py> \</py> \</pyV> py: py>  
 
 python code can be put inline mixed with forth code. This example brings you the 
-python '''help()''' utility:
+python ```help()``` utility:
 
     OK py: help()
 
