@@ -1197,5 +1197,14 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     False<0.0001 is True, False<-0.1 is False 
     
     
-    
+[ ] Improve (see) to see source code from project-k    
+    OK py> reset (see) <--- no good so far
+        {
+            "__class__": "function",
+            "__module__": "peforth.projectk"
+        }
+    py> reset.__doc__ tib. \ ==> None (<class 'NoneType'>)
+    py> reset.__code__ tib. \ ==> <code object reset at 0x000001CE712C2810, file "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 42> (<class 'code'>)
+    __code__ is the chance to improve.
+    [ ] (see) only sees class and module, that can be improved to include some more e.g. __code__
     
