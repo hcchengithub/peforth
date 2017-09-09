@@ -8,12 +8,11 @@
 import re    # import whatever we want, don't rely on parent module
 import pdb
 import os
-import inspect  # print (inspect.getsource(func))
-import dis      # dis.dis(func) 
+import sys
+import dis   # dis.dis(func) 
 import json
 
 name = "peforth"
-vm = __import__(__name__)
 major_version = 1;  # major version, peforth.py kernel version, integer.
 ip = 0;
 stack = [] ;
