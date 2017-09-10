@@ -20,6 +20,9 @@ def panic(msg,serious=False):
             pdb.set_trace()
         elif c in ['A', 'a']:
             vm.reset()
+    else:
+        vm.reset()
+    
 vm.panic = panic
 
 # Toggle multiple or single lines by ^D 

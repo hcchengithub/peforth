@@ -1916,6 +1916,7 @@ code obj>keys
             d = {}
             d['__class__'] = obj.__class__.__name__
             d['__module__'] = getattr(obj,"__module__","unknown")
+            d['__doc__'] = getattr(obj,"__doc__",None)
             d.update(getattr(obj,"__dict__",{}))
             return d
         push(obj2dict)
@@ -2002,7 +2003,6 @@ code toString # To see a cell in dictionary
                     <js> vm.screenbuffer.indexOf('00000: 0 (number)') !=-1 </jsV> \ True
                     [d True d] [p 'dump', 'd' p]
                 </selftest>
-
 : (see)         ( thing -- ) // See into the given word, object, array, ... anything.
                 dup ( thing thing ) stringify . cr ( thing )
                 \ for colon words, dump its forth code 
@@ -2018,9 +2018,18 @@ code toString # To see a cell in dictionary
                         ." -------------------------------------" cr
                     then
                 then ;
+                /// Also .members .source
+
+: .members      ( obj -- ) // See the object details through inspect.getmembers(obj)
+                py> inspect.getmembers(pop()) cr (see) cr ;
+                /// Also (see) .source
+                
+: .source      ( function -- ) // See source code through inspect.getsource(func)
+                py> inspect.getsource(pop()) cr . cr ;
+                /// Also .members (see)
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
-
+                
                 <selftest>
                     *** see (see)
                     marker ---
@@ -2034,7 +2043,8 @@ code toString # To see a cell in dictionary
                     [d True,True,True d] [p 'see','(see)','(?)' p]
                     ---
                 </selftest>
-                
+: dos py> os.system('cmd/k') ; // ( -- ) Shell to DOS Box
+
 code notpass
     for v in words: 
         print(

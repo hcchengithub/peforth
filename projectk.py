@@ -9,6 +9,7 @@ import re    # import whatever we want, don't rely on parent module
 import pdb
 import os
 import sys
+import inspect
 import dis   # dis.dis(func) 
 import json
 
@@ -284,7 +285,7 @@ def inner(entry, resuming=None):
     # defined in project-k kernel peforth.py
     global ip
     w = phaseA(entry);
-    while True: 
+    while not stop: 
         while w:      # this is the very inner loop
             ip += 1   # Forth general rule. IP points to the *next* word. 
             phaseB(w) # execute it

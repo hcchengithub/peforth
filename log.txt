@@ -1246,9 +1246,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         exec(readTextFile(path + "version.txt"),{},locals())
         vm.version = __version__ 
     
-        
-    
-[ ] Improve (see) to see source code from project-k    
+[x] Improve (see) to see source code from project-k    
     OK py> reset (see) <--- no good so far
         {
             "__class__": "function",
@@ -1257,5 +1255,17 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     py> reset.__doc__ tib. \ ==> None (<class 'NoneType'>)
     py> reset.__code__ tib. \ ==> <code object reset at 0x000001CE712C2810, file "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 42> (<class 'code'>)
     __code__ is the chance to improve.
-    [ ] (see) only sees class and module, that can be improved to include some more e.g. __code__
+    [x] (see) only sees class and module, that can be improved to include some more e.g. __code__
+    ==> circular reference detected 無法解決, 暫用 .members .source 應付。
+[x] 決心用 3hta 寫一個 pykb.f 專門用來給 peforth 當 keyboard input to support multiple lines
+    find the process ID of peforth for sendkey
+    s" where name like '%python%'" see-process
+    --> 已經完成 include pykb.f 之後，用 {F7} 把 inputbox 下給 python  
+[x] improve .members --> __class__ attribute can easily be circularly deep and long
+    m py> inspect.getmembers(pop()) py> str(pop()) tib.
+    [x] try to str(obj) then json.loads(string) and then json.dumps 
+        --> str() generates non-json 不行！
+    --> 暫時放棄了 
+    
+    
     
