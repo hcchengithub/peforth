@@ -1261,11 +1261,73 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     find the process ID of peforth for sendkey
     s" where name like '%python%'" see-process
     --> 已經完成 include pykb.f 之後，用 {F7} 把 inputbox 下給 python  
+    [x] T550 上 activate-shell 無效，sendkeys 還好。但是 git.f 卻又好好的。
+        --> 似乎從 __main__.py 直接執行的 python 是切不過去的，經由 DOS Box 跑起來的才可以。
+            > include git.f \ 對照看看為何人家可以？
+            > s" where name like '%python%'" list-them
+            python.exe:8212 \ 查出 python (直接 double click __main__.py 起來的) 
+            > WshShell :: appActivate(8212)
+            > launch-git-shell
+            > shellId . ==>  1608 \ 查出 git shell 
+            > WshShell :: appActivate(1608)  \ 這個可以切過去
+            > WshShell :: appActivate(8212)  \ 這個就不行
+        --> 如果退出 python 則該 DOS Box 能 activate 嗎？ 
+            > s" where name like '%cmd%'" list-them
+                TOTALCMD64.EXE:20780
+                cmd.exe:22848
+                cmd.exe:9556
+            > WshShell :: appActivate(20780) 可以切到 total commander
+            > WshShell :: appActivate(22848) 可以切到剛退出 peforth 的 DOS Box
+            > WshShell :: appActivate(9556) 這個不知是啥，切不過去！
+                用 see-process 看進去，竟然可能是 Google Chrome 的東西
+                string   Name;                       cmd.exe
+                uint32   ProcessId;                  9556
+                string   Caption;                    cmd.exe
+                string   CommandLine;                C:\WINDOWS\system32\cmd.exe /d /c "C:\Users\hcche\AppData\Local\youdao\Dict\Application\stable\text_extractor_host.exe" chrome-extension://aohddidmgooofkgohkbkaohadkolgejj/ --parent-window=0 < \\.\pipe\chrome.nativeMessaging.in.53dc641bdd08e0c9 > \\.\pipe\chrome.nativeMessaging.out.53dc641bdd08e0c9
+                string   CreationClassName;          Win32_Process
+        --> 所以切不到某些 process 是有的，何解？
+            進一步研究發現，這個 python 是從 Anaconda3 run 起來的 
+            > s" where name like '%python%'" list-them
+                python.exe:20092
+            > WshShell :: appActivate(20092)
+                string   Name;                       python.exe
+                uint32   ProcessId;                  20092
+                string   CommandLine;                C:\ProgramData\Anaconda3\python.exe "C:\Users\hcche\Documents\GitHub\peforth\__main__.py" 
+            --> Not root cause. 即使 Anaconda 的 python 也能切過去，只要。。。
+        --> 把 Title 改成 peforth 吧！看看是否改得到所在的 cmd or powershell 
+            DOS command c:\> title titlename can change the doxbox title but it's not
+            a process attribute so it doen't help.
+        --> 所以答案是： 直接跑 __main__.py 或經過 dosbox 都可能行或不行，
+            process ID 可以用 nnnn to processid 指定的，就算了吧！
+        --> 多印些 info 讓 user 自己手動設 processid, Done!
+        
 [x] improve .members --> __class__ attribute can easily be circularly deep and long
     m py> inspect.getmembers(pop()) py> str(pop()) tib.
     [x] try to str(obj) then json.loads(string) and then json.dumps 
         --> str() generates non-json 不行！
     --> 暫時放棄了 
     
+[ ] C:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tensorflow6_session.f
+    如何一口氣把所有的 python section variables 都變成 forth values? 
+    l :> keys() tib. \ ==> dict_keys(
+        ['result2', 'result', 'sess', 'product', 'matrix2', 'matrix1', 'tf']
+    ) (<class 'dict_keys'>)
     
+    --> 要能 programmatically 產生 constant --> 改寫 constant 得 (constant)
+        : (constant)  ( n "name" -- ) // Create a constnat
+            (create) <py>   
+            source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
+            last().xt = genxt('constant',source)
+            if not getattr(vm,current,False): setattr(vm,current,{})
+            exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
+            </py> 
+            reveal ; 
+        OK 123 char x (constant)
+        OK x . ==> 123 OK
+        --> 一把就成功了！ 能不能用在 colon definition 裡面？
+        : test 234 char y (constant) ;
+        test
+        y . ==> 234 成功！
+    --> 有了 (constant) 應該就可以自動產生所有的 locals() 了
+        
     

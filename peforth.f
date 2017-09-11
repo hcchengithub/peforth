@@ -1267,15 +1267,18 @@ variable '<text> private
                 </selftest>
                 
 \ 2016/12/21 Now constant & value support private and direct-access through vm[vid].name 
-: constant  ( n <name> -- ) // Create a constnat
-    BL word (create) 
-    <py>   
+
+: (constant)  ( n "name" -- ) // Create a constnat
+    (create) <py>   
     source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
     last().xt = genxt('constant',source)
     if not getattr(vm,current,False): setattr(vm,current,{})
     exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
     </py> 
     reveal ; 
+
+: constant  ( n <name> -- ) // Create a constnat
+    BL word (constant) ;
 
 : value         ( n <name> -- ) // Create a 'value' variable.
                 constant last :: type='value' ; 
