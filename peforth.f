@@ -1894,6 +1894,9 @@ code tib.insert
 : include       ( <filename> -- ... ) // Load the source file
                 BL word sinclude ; interpret-only
     
+: type  ( x -- type ) // get type object of anything x                
+    py> type(pop()) ;
+        
 code obj>keys      
     if type(tos())==dict:
         push(pop().keys())

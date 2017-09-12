@@ -2,10 +2,6 @@
 
     version drop 
     
-\ Drop a fence 
-
-    marker ---
-    
 \ My misc tools 
 
     <py>
@@ -22,15 +18,18 @@
     vm.outport = outport
     </py>
 
-    : type  ( x -- type ) // get type object of anything x                
-        py> type(pop()) ;
-        
+    : OK ; // Do nothing, 方便 copy-paste 螢幕重跑
+    
     : dir   ( x -- dir ) // get dir list of anything x                
         py> dir(pop()) ;
 
     : keys  ( x -- keys ) // get keys of the dict
         py> pop().keys() ;
 
+\ Drop a fence before running the rest of the command line
+
+    marker ---
+    
 \ Run the command line commands
     
     <py> " ".join(sys.argv[1:]) </pyV> tib.insert
