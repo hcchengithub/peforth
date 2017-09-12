@@ -6,10 +6,6 @@
 
     marker ---
     
-\ Run the command line commands
-    
-    <py> " ".join(sys.argv[1:]) </pyV> tib.insert
-
 \ My misc tools 
 
     <py>
@@ -22,6 +18,21 @@
             push(loc[i]) # vale
             push(i) # variable name
             execute('(constant)')
+            last().type='value'
     vm.outport = outport
     </py>
+
+    : type  ( x -- type ) // get type object of anything x                
+        py> type(pop()) ;
+        
+    : dir   ( x -- dir ) // get dir list of anything x                
+        py> dir(pop()) ;
+
+    : keys  ( x -- keys ) // get keys of the dict
+        py> pop().keys() ;
+
+\ Run the command line commands
+    
+    <py> " ".join(sys.argv[1:]) </pyV> tib.insert
+
     

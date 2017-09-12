@@ -1893,15 +1893,6 @@ code tib.insert
 
 : include       ( <filename> -- ... ) // Load the source file
                 BL word sinclude ; interpret-only
-
-: type  ( x -- type ) // get type object of anything x                
-    py> type(pop()) ;
-    
-: dir   ( x -- dir ) // get dir list of anything x                
-    py> dir(pop()) ;
-
-: keys  ( x -- keys ) // get keys of dict x
-    py> pop().keys() ;
     
 code obj>keys      
     if type(tos())==dict:
