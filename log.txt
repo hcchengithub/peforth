@@ -1329,6 +1329,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         test
         y . ==> 234 成功！
     --> 有了 (constant) 應該就可以自動產生所有的 locals() 了
+    ==> ok now! vm.outport(loc) defined in quit.f 
+    
 [x] a command to update the peforth module 
     @ c:\Users\...\Python36\Lib\site-packages\peforth\.. 
     Get the path 
