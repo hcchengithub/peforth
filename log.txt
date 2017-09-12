@@ -1307,7 +1307,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         --> str() generates non-json 不行！
     --> 暫時放棄了 
     
-[ ] C:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tensorflow6_session.f
+[x] C:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tensorflow6_session.f
     如何一口氣把所有的 python section variables 都變成 forth values? 
     l :> keys() tib. \ ==> dict_keys(
         ['result2', 'result', 'sess', 'product', 'matrix2', 'matrix1', 'tf']
@@ -1329,5 +1329,36 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         test
         y . ==> 234 成功！
     --> 有了 (constant) 應該就可以自動產生所有的 locals() 了
+[x] a command to update the peforth module 
+    @ c:\Users\...\Python36\Lib\site-packages\peforth\.. 
+    Get the path 
+        import os.path as ospath
+        # py> pdb :> __file__ tib. \ ==> C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\pdb.py (<class 'str'>)
+        # py> ospath.dirname(pdb.__file__) tib. \ ==> C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib (<class 'str'>)
+        # py> ospath.split(pdb.__file__) tib. \ ==> ('C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib', 'pdb.py') (<class 'tuple'>)
+        # py> ospath.splitdrive(pdb.__file__) tib. \ ==> ('C:', '\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\pdb.py') (<class 'tuple'>)
+        # py> ospath.splitext(pdb.__file__) tib. \ ==> ('C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\pdb', '.py') (<class 'tuple'>)
+        # py> ospath.splitunc(pdb.__file__) tib. \ ==> ('', 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\pdb.py') (<class 'tuple'>)
+        py> ospath.dirname(pdb.__file__)+"\\site-packages\\peforth\\" ( targetPath )
+    getenv(key, default=None)
+        Get an environment variable, return None if it doesn't exist.
+        The optional second argument can specify an alternate default.
+        key, default and the result are str.
+    getenv compare with py> ospath.dirname(pdb.__file__)
+    if same then proceed the patch program to copy all files
+    if not then warning and stop 
+    算了，直接 copy 就好了
         
-    
+    ------ update.bat ------ 
+    set pythonlib=C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib
+    copy -y version.txt %pythonlib%\site-packages\peforth
+    copy -y projectk.py %pythonlib%\site-packages\peforth
+    copy -y __main__.py %pythonlib%\site-packages\peforth
+    copy -y __init__.py %pythonlib%\site-packages\peforth
+    copy -y peforth.f   %pythonlib%\site-packages\peforth
+    copy -y quit.f      %pythonlib%\site-packages\peforth
+    ------ ------ ------ ------ ------ 
+        
+[ ] 螢幕編輯器    
+    os.get_terminal_size(...)
+            Return the size of the terminal window as (columns, lines).    
