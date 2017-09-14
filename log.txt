@@ -1364,3 +1364,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] 螢幕編輯器    
     os.get_terminal_size(...)
             Return the size of the terminal window as (columns, lines).    
+[ ] (forget) 有 error 
+    OK (forget)
+    Callable in phaseB <function compyle_anonymous at 0x000001A2F0791488>: 'Word' object has no attribute 'cfa'
+    Body:
+    def compyle_anonymous():
+        push(last().cfa)
+    OK
+    

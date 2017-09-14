@@ -5,3 +5,4 @@ copy /y __main__.py %pythonlib%\site-packages\peforth\
 copy /y __init__.py %pythonlib%\site-packages\peforth\
 copy /y peforth.f   %pythonlib%\site-packages\peforth\
 copy /y quit.f      %pythonlib%\site-packages\peforth\
+pause 
