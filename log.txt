@@ -1371,4 +1371,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     def compyle_anonymous():
         push(last().cfa)
     OK
+[ ] 發現 pip help install 列出了 pip install 的種種用法。
+    我寫了個 update.bat 直接從 project directly update peforth package 到
+    lib\site-packages\peforth 的方式太暴力了。
+    
+[ ] peforth 1.3 uploaded to pypi. 準備來寫 wiki 介紹怎麼
+    應用 peforth 來學習 TensorFlow.
+    
     

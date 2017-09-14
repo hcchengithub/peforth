@@ -20,6 +20,9 @@ def panic(msg,serious=False):
             pdb.set_trace()
         elif c in ['A', 'a']:
             vm.reset()
+    else:
+        vm.reset()
+    
 vm.panic = panic
 
 # Toggle multiple or single lines by ^D 
@@ -79,7 +82,7 @@ if not vm.tick('version'):
 # that point with all the power peforth provides. That's why I rename main() to ok() 
 # because it invokes the OK prompt of Forth interpreter.
 def ok(prompt='OK ',loc={}):
-    vm.push(('Prompt is',prompt,'Local identifiers at the point this ok() was called, if given.',loc))
+    vm.push((loc,'Prompt is',prompt,'Local identifiers and the console prompt at the point this ok() was called, if given.'))
     print(prompt,end='')
     while True:
         cmd = ""                                     # 
