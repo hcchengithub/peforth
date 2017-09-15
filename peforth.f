@@ -36,17 +36,22 @@ code </selftest>
         大的幫助。 
         </comment>
 
-        marker ~~selftest~~ // ( -- ) marker, clean selftest garbage
+        --- marker ---
         .( *** Start self-test ) cr
         *** Data stack should be empty
             depth [d 0 d] 
-            [p 'code','end-code','.', '."', '.(', ':', ';', 'if', 'else', 'then', 
-            'js>', 'parse-help','cr','depth','<selftest>','</self'+'test>','word',
-            '<js>', '</'+'jsV>' p]
+            
+            \ [p 'code','end-code',':',';','if','else','then', 
+            \ 'py>','cr','depth','<selftest>','</self'+'test>','word','<py>',
+            \ '</'+'pyV>' p]
+            
+            [p 'code','end-code' p]
+
+            
         *** Rreturn stack should have less than 2 cells
-            description . 
-            js> rstack.length dup . space 2 <= [if] .( pass) cr [else] .( failed!) cr stop [then]
-            [p 'dup','<=','[if]', '[else]', '[then]' p]
+            py> len(rstack) dup . space 2 <= 
+            [if] .( pass) cr [else] .( failed!) cr stop [then]
+            [p 'dup','<=','[if]', '[else]', '[then]', '.(', 'cr','space' p]
         *** // adds help to the last word
             ' // :> help.indexOf("message")!=-1 [d True d] [p "//", ":>", "'" p]
         *** version should return a number
@@ -313,7 +318,7 @@ code compiling push(compiling) end-code // ( -- boolean ) Get system state
 : char ( <str> -- str ) // Get character(s).
     BL word compiling if literal then ; immediate
     /// "char abc" gets "abc", unlike ANS forth "char abc" gets only 'a'.
-: CR char \\n|\\r ; // ( -- '\\n|\\r' ) RegEx new line, works with 'word' command.
+: CR char \n|\r ; // ( -- '\\n|\\r' ) RegEx new line, works with 'word' command.
 code last push(last()) end-code // ( -- word ) Get the word that was last defined.
 : version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
 code execute execute(pop()); end-code
@@ -2134,9 +2139,9 @@ code passed
 \                 /// colon definition 的半途，此時 q 要下成 [ q ] , .s 要下成 
 \                 /// [ .s ] ... etc
 
-: slice ( 1 2 3 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
+: slice ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
     ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
-    \ 很多 function 的傳回值是一列 tuple, 有需要把它們集合起來。    
+    /// 很多 function 的傳回值是一列 tuple, 有需要把它們集合起來。    
 
 \ ----------------- Self Test -------------------------------------
 
@@ -2160,37 +2165,54 @@ code passed
                     ." *** Warning, Data stack is not empty." cr
                     stop
                 then ;
-stop _stop_
-
                 
-code all-pass   ( ["name",...] -- ) // Pass-mark all these word's selftest flag
-                var a=pop();
-                for (var i in a) {
-                    var w = vm.tick(a[i]); // use the original tick()
-                    if(!w) panic("Error! " + a[i] + "?\n");
-                    else w.selftest='pass';
-                }
+code all-pass   
+                a = pop();
+                for i in a:
+                    w = tick(a[i])
+                    if not w: 
+                        panic("Error! {} unknown!\n".format(a[i]));
+                    else: 
+                        w.selftest='pass';
                 end-code private
-                
+                // ( ["name",...] -- ) Mark 'pass' to these word's selftest flag
+
 : [r            ( <"text"> -- ) // Prepare an array of data to compare with rstack in selftest.
-                char r] word js> eval("["+pop()+"]") to expected_rstack ;
+                char r] word s" [{}]" :> format(pop()) \ string
+                py> eval(pop()) \ string to array
+                to expected_rstack ;
+                /// Example: [r 1,2,3 r] [d True d] [p 'word1','word2' p]
+                /// [r...r] section is optional, [d...d] section is the judge.
 : r]            ( -- boolean ) // compare rstack and expected_rstack in selftest
-                js> vm.g.isSameArray(rstack,vm.forth.expected_rstack) ;
-: [d            ( <"text"> -- ) // Prepare an array to compare with data stack. End of a selftest section.
-                char d] word js> eval("["+pop()+"]") to expected_stack ;
-                /// Data stack will be clean after check
-: d]            ( -- boolean ) // compare data stack and expected_stack in selftest
-                js> vm.g.isSameArray(stack,vm.forth.expected_stack) to test-result 
-                description . test-result if ." pass" cr dropall
-                else ." fail" cr stop then ;
-                /// Data stack will be clean after check
-: [p            ( <"text"> -- ) // Prepare an array ([all-pass]) of words for all-pass if test-result.
-                char p] word js> eval("["+pop()+"]") to [all-pass] ; /// In selftest
-: p]            ( -- boolean ) // all-pass if test-result
-                test-result if [all-pass] all-pass then ; /// In selftest
+                py> rstack expected_rstack = ;
+                ' [r :> comment last :: comment+=pop(1)
                 
-                \ Make these words private. Do it this way instead of at their definitions 
-                \ to void selftest_tick() warnings
+: [d            ( <"text"> -- ) // Prepare an array to compare with data stack. End of a selftest section.
+                char d] word s" [{}]" :> format(pop()) \ string
+                py> eval(pop()) \ string to array
+                to expected_stack ;
+                /// Data stack will be clean after check
+                ' [r :> comment last :: comment+=pop(1)
+                
+: d]            ( -- boolean ) // compare data stack and expected_stack in selftest
+                depth negate slice expected_stack =  to test-result 
+                description . test-result if ." pass" cr
+				else ." fail" cr stop then ;                
+                /// Data stack will be clean after check
+                ' [r :> comment last :: comment+=pop(1)
+
+: [p            ( <"text"> -- ) // Prepare an array of words for all-pass if test-result is True
+                char p] word s" [{}]" :> format(pop()) \ string
+                py> eval(pop()) \ string to array
+                to [all-pass] ; 
+                ' [r :> comment last :: comment+=pop(1)
+                
+: p]            ( -- boolean ) // all-pass if test-result is True
+                test-result if [all-pass] all-pass then ; 
+                ' [r :> comment last :: comment+=pop(1)
+                
+                \ Make these words private. Do it this way instead 
+                \ of at their definitions to void selftest_tick() warnings
                 ' description     :: private=True
                 ' expected_rstack :: private=True
                 ' expected_stack  :: private=True
@@ -2203,8 +2225,8 @@ code all-pass   ( ["name",...] -- ) // Pass-mark all these word's selftest flag
     ~~selftest~~
 </selftest>
 
-\ jeforth.f kernel code is now common for different application. I/O may not ready enough to read 
-\ selftest.f at this moment, so the below code has been moved to quit.f of each applications.
+\ I/O may not be ready enough to read selftest.f at this moment, 
+\ so the below code has been moved to quit.f of each applications.
     \ Do the jeforth.f self-test only when there's no command line
     \   js> vm.argv.length 1 > \ Do we have jobs from command line?
     \   [if] \ We have jobs from command line to do. Disable self-test.

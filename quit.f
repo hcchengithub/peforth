@@ -26,12 +26,24 @@
     : keys  ( x -- keys ) // get keys of the dict
         py> pop().keys() ;
 
-\ Drop a fence before running the rest of the command line
+\ Drop a fence 
 
     marker ---
+
+\ Do selftest or run command-line
     
-\ Run the command line commands
+    ' <selftest> :: enabled=False \ Assume command line has jobs to do
+    <py> " ".join(sys.argv[1:]) </pyV> trim ( commandLine ) 
+    ?dup [if] 
+        \ Run the command line commands
+        tib.insert
+    [else] 
+        \ No command line, do selftest.
+        py: tick('<selftest>').enabled=True
+        py> tick('<selftest>').buffer tib.insert
+    [then] py: tick('<selftest>').buffer="" \ release the memory
+
     
-    <py> " ".join(sys.argv[1:]) </pyV> tib.insert
+    
 
     

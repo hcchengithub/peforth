@@ -1375,7 +1375,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     我寫了個 update.bat 直接從 project directly update peforth package 到
     lib\site-packages\peforth 的方式太暴力了。
     
-[ ] peforth 1.3 uploaded to pypi. 準備來寫 wiki 介紹怎麼
+[x] peforth 1.3 uploaded to pypi. 準備來寫 wiki 介紹怎麼
     應用 peforth 來學習 TensorFlow.
-    
+    --> Done https://github.com/hcchengithub/peforth/wiki/Example-4-Examine-a-Machine-Learning-exercise
+
+[ ] 繼續完成 peforth.f 的 selftest 元件
+    --> string 轉譯成 array [d ... d] [r ... r] 要用到
+    : test2 char 123,456 s" [{}]" :> format(pop()) py> eval(pop()) ;
+     
     
