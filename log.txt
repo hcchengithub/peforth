@@ -1360,27 +1360,121 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     copy -y peforth.f   %pythonlib%\site-packages\peforth
     copy -y quit.f      %pythonlib%\site-packages\peforth
     ------ ------ ------ ------ ------ 
+    [ ] 發現 pip help install 列出了 pip install 的種種用法。
+        update.bat 直接從 project directly update peforth package 到
+        lib\site-packages\peforth 的方式太暴力了。
         
 [ ] 螢幕編輯器    
     os.get_terminal_size(...)
             Return the size of the terminal window as (columns, lines).    
-[ ] (forget) 有 error 
-    OK (forget)
-    Callable in phaseB <function compyle_anonymous at 0x000001A2F0791488>: 'Word' object has no attribute 'cfa'
-    Body:
-    def compyle_anonymous():
-        push(last().cfa)
-    OK
-[ ] 發現 pip help install 列出了 pip install 的種種用法。
-    我寫了個 update.bat 直接從 project directly update peforth package 到
-    lib\site-packages\peforth 的方式太暴力了。
-    
+[x] (forget) 有 error 
+    'Word' object has no attribute 'cfa' <-- 用 getattr(obj,name,None) 即可。
+
 [x] peforth 1.3 uploaded to pypi. 準備來寫 wiki 介紹怎麼
     應用 peforth 來學習 TensorFlow.
     --> Done https://github.com/hcchengithub/peforth/wiki/Example-4-Examine-a-Machine-Learning-exercise
 
-[ ] 繼續完成 peforth.f 的 selftest 元件
+[x] 列出所有的 selftest passed words
+    <py> [w for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr 
+[x] 繼續完成 peforth.f 的 selftest 元件
     --> string 轉譯成 array [d ... d] [r ... r] 要用到
     : test2 char 123,456 s" [{}]" :> format(pop()) py> eval(pop()) ;
-     
+    --> String.indexOf 改成 String.find 
+
+    \ Selftest 要 redirect print() 方便取得並檢查螢幕輸出的內容。
+    \ 這是個 redirect print() 的有效範例
+ 
+    \ Selftest 要 redirect print() 方便取得並檢查螢幕輸出的內容。
+    \ 改寫成輸出到 buffer. See http://www.cnblogs.com/turtle-fly/p/3280519.html 
+        <accept>
+        py> [""] value screen-buffer // ( -- 'string' ) Selftest screen buffer
+        <py>
+        class Screenbuffer:
+            def __init__(self,buf):
+                self.stdoutwas=sys.stdout
+                self.buffer=buf
+                
+            def write(self, output_stream):
+                self.buffer[0] += output_stream
+                
+            def view(self):
+                self.stdoutwas.write(self.buffer[0])
+            
+            def reset(self):
+                sys.stdout=self.stdoutwas
+        vm.Screenbuffer=Screenbuffer
+
+        # redirection
+        sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+        
+        # print to screen buffer
+        sys.stdout.stdoutwas.write("-------1111-----\n")
+        print( 'hello')
+        print( 'world')
+        sys.stdout.stdoutwas.write("-------2222-----\n")
+        
+        # view screen buffer
+        sys.stdout.view()
+        
+        # reset
+        sys.stdout.reset()
+        outport(locals())
+        </py>
+        </accept>
+        tib.insert
+[x] 探討，整理，討論幾種產生 function 或執行 inline python code 的方法
+    1. projectk.py genxt() 有 __doc__ 專為 code word xt 硬性 _me argument
+    2. projectk.py genfunc() 有 __doc__ 一般用途 name args body 
+    3. peforth.f compyle 產生一般用途的 annonymous function 沒有 args
+    4. <py>...</py> 前後都是 immediate 正常使用沒問題。但若想先組合好 source code 再讓
+       </py> or </pyV> 去執行，就有變化了。以下 try, try2 兩個都是有意義的、可以的
+           OK : try char 123 [compile] </pyV> ;
+           OK try .
+           123OK
+           OK : try2 [ char 123 ] </pyV> ;
+           OK try2 .
+           123OK
+       但是下面這個其實是不知所云的：
+           OK : try3 char 123 </pyV> ;
+       其結果也是莫名其妙的：
+           Error! try3 unknown.
+           OK 
+    5. 直接用 exec(), eval() 執行臨時組合出來的 string, e.g. [r [d [p 的定義。
+    6. 直接用 compile(), genfunc() 可能不會有，吧？
+ 
+[x] 有很嚴重的 bug 
+    OK : test <py> 123 </pyV> ;
+    OK see test
+    ...snip...
+    ------------ Definition in dictionary ------------
+    00784: def compyle_anonymous():
+        push(123 ) (<class 'function'>)
+      2           0 LOAD_GLOBAL              0 (push)
+                  2 LOAD_CONST               1 (123)
+                  4 CALL_FUNCTION            1
+                  6 POP_TOP
+                  8 LOAD_CONST               0 (None)
+                 10 RETURN_VALUE
+    00785: RET  (<class 'NoneType'>)
+    ------------ End of the difinition ---------------
+    OK
+    OK : test py> "abc" ;
+    reDef test
+    OK see test <----------- 沒反應！
+    OK ' test (see)  <----------- 沒反應！
+    OK ' test .  <----------- 沒反應！
+    --> 順序倒過來怎樣？ 先試 : test py> "abc" ;
+        --> OK 一切正常
+        --> 再一個空的東西 : nothing ; --> 也正常！
+        --> 就是不能有 inline python? : test2 py> 1234 ; 
+            --> OK 一切正常
+    --> 整個重來，那這樣呢？
+        : test <py> 123 </pyV> ; : test2 py> "abc" ; 
+        --> 都 OK, 算了，不了了之。可能是寫 selftest 捅出來的哈哈題。
+[ ] 照著 MetaMoji 2017-9-17 15:15 的討論, 研究把 <selftest> sections 都 dump 出來的辦法。
+    --> 從 quit.f 裡一查即知, 應該是一行解決：
+        py> tick('<selftest>').buffer char peforth-selftest.f writeTextFile stop 
+    --> 成功！    
+    --> 此後就是改寫 peforth-selftest.f 而已。
+    
     

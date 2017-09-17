@@ -5,20 +5,22 @@
 \ My misc tools 
 
     <py>
-    def outport(loc): 
-        # The input argument is supposed locals() of the caller.
-        # Make all local variables forth constants
-        # Examine locals after a <Py>...</Py> section 
-        # For studying maching learning, tersorflow, ... etc.
-        for i in loc: 
-            push(loc[i]) # vale
-            push(i) # variable name
-            execute('(constant)')
-            last().type='value'
-    vm.outport = outport
+        def outport(loc): 
+            '''
+            # The input argument is supposed locals() of the caller.
+            # Make all local variables forth constants
+            # Examine locals after a <Py>...</Py> section 
+            # For studying maching learning, tersorflow, ... etc. 
+            '''
+            for i in loc: 
+                push(loc[i]) # vale
+                push(i) # variable name
+                execute('(constant)')
+                last().type='value'
+        vm.outport = outport
     </py>
 
-    : OK ; // Do nothing, 方便 copy-paste 螢幕重跑
+    : OK ; // ( -- ) Do nothing, ignore it when copy-paste the display
     
     : dir   ( x -- dir ) // get dir list of anything x                
         py> dir(pop()) ;
@@ -39,8 +41,9 @@
         tib.insert
     [else] 
         \ No command line, do selftest.
-        py: tick('<selftest>').enabled=True
-        py> tick('<selftest>').buffer tib.insert
+        \ py: tick('<selftest>').enabled=True
+        \ py> tick('<selftest>').buffer tib.insert
+        char peforth-selftest.f readTextFile tib.insert
     [then] py: tick('<selftest>').buffer="" \ release the memory
 
     
