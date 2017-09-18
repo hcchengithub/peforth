@@ -1471,7 +1471,17 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 整個重來，那這樣呢？
         : test <py> 123 </pyV> ; : test2 py> "abc" ; 
         --> 都 OK, 算了，不了了之。可能是寫 selftest 捅出來的哈哈題。
-[ ] 照著 MetaMoji 2017-9-17 15:15 的討論, 研究把 <selftest> sections 都 dump 出來的辦法。
+
+
+[x] python or javascript can't access by address then how to 
+    access by reference instead of access by value? (call by name call by address call by reference)         
+    昨天寫 selftest 為了取得 screenbuffer 就是得定義成
+        py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
+    而非
+        py> "" value screen-buffer // ( -- 'string' ) Selftest screen buffer
+    否則會 access 不到這個特定的 string. 
+        
+[x] 照著 MetaMoji 2017-9-17 15:15 的討論, 研究把 <selftest> sections 都 dump 出來的辦法。
     --> 從 quit.f 裡一查即知, 應該是一行解決：
         py> tick('<selftest>').buffer char peforth-selftest.f writeTextFile stop 
     --> 成功！    

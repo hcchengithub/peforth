@@ -36,13 +36,13 @@
     
     </comment>
 
-    --- marker ---
+    ---
     
     \
     \ Redirect print() to screen-buffer 
     \
-    py> [""] value screen-buffer // ( -- 'string' ) Selftest screen buffer
-    
+    py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
+                                 /// Enveloped in array is for "access by reference"
     <py>
         class Screenbuffer:
             def __init__(self,buf):
@@ -76,6 +76,8 @@
     : display-on ( -- ) // Redirect stdout back to what it was. screen-buffer has data during it off.
         py: sys.stdout.reset() ;
     
+    marker ---
+     
     .( *** Start self-test ) cr
     
     *** Data stack should be empty
@@ -87,24 +89,22 @@
     *** // adds help to the last word
         ' // :> help.find("message")!=-1 [d True d] [p "//", ":>", "'" p]
     *** TIB lines after \ should be ignored
-        marker ===
+        --- marker ---
         111 \ 222
         : dummy
             999
             \ 333 444 555
-        ; last execute ===
+        ; last execute
         [d 111,999 d] [p '\\' p]
     *** /// add comment to the last word 
-        marker ===
+        --- marker ---
         : dummy ; /// 98787665453
         ' dummy :> comment.find('98787665453')!=-1 ( True )
-        ===
         [d True d] [p '///',':',';','marker' p] 
     *** immediate makes the LAST an immediate word
-        marker ===
+        --- marker ---
         : dummy ; immediate
         ' dummy :> immediate ( True )
-        ===
         [d True d] [p 'immediate' p] 
     *** compyle source code to function 
         display-off
@@ -113,10 +113,10 @@
         screen-buffer <py> pop()[0].find('nice to meet you')!=-1 </pyV> ( True )
         [d True d] [p 'compyle' p]
     *** </pyV> based on </py> and on compyle
-        marker ===
+        --- marker ---
         : try char 123 [compile] </pyV> ; try ( 123 )
         : try2 [ char "abc" ] </pyV> ; try2 ( 123 'abc' )
-        === [d 123,'abc' d] [p 'compyle','</py>','</pyV>' p]
+        [d 123,'abc' d] [p 'compyle','</py>','</pyV>' p]
     *** interpret-only marks the last word an interpret-only word
         ' execute py> getattr(pop(),'interpretonly',False) ( False ) 
         ' interpret-only :> interpretonly==True ( True )
@@ -130,8 +130,8 @@
         ' if :> compileonly==True ( True )
         [d False,True d] [p "compile-only" p]
     *** literal is a compiling comamnd that can improve run time performance
-        marker === : test [ py> sum(range(101)) literal ] ;
-        display-off see test === display-on
+        --- marker --- : test [ py> sum(range(101)) literal ] ;
+        display-off see test display-on
         screen-buffer <py> pop()[0].find('Literal: 5050')!=-1 </pyV> ( True )            
         [d True d] [p "(create)","(forget)",'char' p]
     *** (create) creates a new word
@@ -145,13 +145,11 @@
         654 456 ' drop execute \ 321 654
         [d 321,654 d] [p 'drop', "'", "execute", '\\' p]
     *** here points to next available address 
-        marker ~~~
+        --- marker ---
         \ Assume dictionary is clean from garbages
         here >r : test ; here 1+ py> len(dictionary) = ( True | here )
         [d True d] [p 'here' p]
         \ here! 靠 allot 檢查，只它用到。
-        
-    
     *** version should return a floating point number
         display-off
         version 
@@ -161,24 +159,25 @@
         [d True,True d]
         [p 'version','py:','(' p]
     *** (space) puts a 0x20 on TOS
-        (space) py> String.fromCharCode(32) =
-        [d True d] [p "(space)","=" p]
+        (space) char>ASCII 32 = 
+        [d True d] [p "(space)","=","char>ASCII" p]
     *** BL should return the string '\s' literally
         BL [d "\\s" d] [p "BL" p]
     *** CR should return the string \n|\r literally
-        CR js> "\\n|\\r" = 
+        CR py> "\\n|\\r" = 
         [d True d] [p "CR","=" p]                       
     *** word reads "string" from TIB
-        marker ---
-        char \s word    111    222 222 === >r s" 111" === r> and \ True , whitespace 會切掉
-        char  2 word    111    222 222 === >r s"    111    " === r> and \ True , whitespace 照收
-        : </div> ;
-        char </div> word    此後到 </ div> 之
-                    前都被收進，可
-                    以跨行！ come-find-me-!!
-        </div> js> pop().find("come-find-me-!!")!=-1 \ True
-        [d True,True,True d] [p "word" p]
-        ---
+        --- marker ---
+        BL word        11    22 33 ( '11',22,33 )
+        char 5 word    11    55 66 ( '   11    ',55,66 )
+        : </div> ; char </div> word    
+            此後到 '</'+'div>' 之
+            前都被收進，可
+            以跨行！ come-find-me-!!
+        </div> :> find("come-find-me-!!")!=-1 ( True )
+        [d '11',22,33,'   11    ',55,66,True d] 
+        [p "word",'BL',':>','char' p]
+stop _stop_         
     *** pyEval should exec(tos) 
         456 char pop()+1 jsEval [d 457 d] [p "jsEval" p]
     *** last should return the last word
@@ -190,13 +189,12 @@
         last execute [d 123 d] [p "exit" p]
         (forget)
     *** branch should jump to run hello
-        marker ---
+        --- marker ---
         : sum 0 1 begin 2dup + -rot nip 1+ dup 10 > if drop exit then again ;
         : test sum 55 = ;
         test [d True d] [p '2dup', '-rot', 'nip', '1+', '>', '0branch' p]
-        ---
     *** ! @ >r r> r@ drop dup swap over 0<
-        marker ---
+        --- marker ---
         variable x 123 x ! x @ 123 = \ True
         111 dup >r r@ r> + swap 2 * = and \ True
         333 444 drop 333 = and \ True
@@ -207,7 +205,6 @@
         False over \ True
         [d True, False, True d] [p '!', '@', '>r', 'r>', 'r@', 'swap', 'drop',
         'dup', 'over', '0<', '2drop','marker' p]
-        ---
     *** (forget) should forget the last word
         : remember-me ; (forget)
         last :> name=="remember-me" [d False d] 
@@ -313,7 +310,7 @@
         1 -2 3 min min ( -2 )
         [d 3,-2 d] [p "max","min" p]
     *** doVar doNext
-        marker ---
+        --- marker ---
         variable x
         : tt for x @ . x @ 1+ x ! next ;
         js: vm.selftest_visible=False;vm.screenbuffer=""
@@ -324,7 +321,6 @@
         [d 10,True d]
         [p 'doNext','space', ',', 'colon-word', 'create',
         'for', 'next' p]
-        ---
     *** pick 2 from 1 2 3 gets 1 2 3 1
         1 2 3 0 pick 3 = depth 4 = and >r 3 drops \ True
         1 2 3 1 pick 2 = depth 4 = and >r 3 drops \ True
@@ -336,19 +332,17 @@
         1 2 3 2 roll 1 = depth 3 = and >r 2 drops \ True
         r> r> r> [d True,True,True d] [p "roll" p]
     *** [compile] compile [ ]
-        marker ---
+        --- marker ---
         : iii ; immediate
         : jjj ;
         : test [compile] iii compile jjj ; \ 正常執行 iii，把 jjj 放進 dictionary
         : use [ test ] ; \ 如果 jjj 是 immediate 就可以不要 [ ... ]
         ' use js> pop().cfa @ ' jjj = [d True d]
         [p "[compile]",'compile', '[', ']' p]
-        ---
     *** alias should create a new word that acts same
-        marker ---
+        --- marker ---
         1234 constant x ' x alias y
         y [d 1234 d] [p "alias" p] 
-        ---
     *** nip rot -rot 2drop 2dup invert negate within
         1 2 3 4 nip \ 1 2 4
         -rot \ 4 1 2
@@ -365,22 +359,21 @@
         [d True,True,False,False,True,False,False d]
         [p 'rot', '-rot', '2drop', '2dup', 'negate', 'invert', 'within' p]
     *** ['] tick next word immediately
-        marker ---
+        --- marker ---
         : x ;
         : test ['] x ;
         test ' x = [d True d] [p "[']" p]
-        ---
     *** allot should consume some dictionary cells
-        marker ---
+        --- marker ---
         : a ; : b ; ' b :> cfa ' a :> cfa - \ normal distance
         : aa ;
         10 allot
         : bb ; ' bb :> cfa ' aa :> cfa - \ 10 more expected
-        *debug* 1122> ---
+        *debug* 1122>
         [d 10 d] [p "allot" p]
         
     *** begin again , begin until
-        marker ---
+        --- marker ---
         : tt
             1 0 \ index sum
             begin \ index sum
@@ -405,123 +398,113 @@
             nip
         ; last execute 55 = \ True
         [d True,True d] [p 'again', 'until', 'over', 'swap', 'dup', 'exit', 'nip' p]
-        ---
     *** aft for then next ahead begin while repeat
-                marker ---
-                : tt 5 for r@ next ; last execute + + + + 15 = \ True
-                : ttt 5 for aft r@ then next ; last execute + + + 10 = \ True True
-                depth 2 = \ T T T
-                : tttt
-                    0 0 \ index sum
-                    begin \ idx sum
-                        over 10 <=
-                    while \ idx sum
-                        over +
-                        swap 1+ swap
-                    repeat \ idx sum
-                    nip
-                ; last execute 55 = \ T T T T
-                [d True,True,True,True d]
-                [p 'for', 'then', 'next', 'ahead', 'begin', 'while', 'repeat' p]
-                ---
+        --- marker ---
+        : tt 5 for r@ next ; last execute + + + + 15 = \ True
+        : ttt 5 for aft r@ then next ; last execute + + + 10 = \ True True
+        depth 2 = \ T T T
+        : tttt
+            0 0 \ index sum
+            begin \ idx sum
+                over 10 <=
+            while \ idx sum
+                over +
+                swap 1+ swap
+            repeat \ idx sum
+            nip
+        ; last execute 55 = \ T T T T
+        [d True,True,True,True d]
+        [p 'for', 'then', 'next', 'ahead', 'begin', 'while', 'repeat' p]
     *** ?dup dup only when it's True
-                1 0 ?dup \ 1 0
-                2 ?dup \ 1 0 2 2 
-                [d 1,0,2,2 d] [p "?dup" p]
+        1 0 ?dup \ 1 0
+        2 ?dup \ 1 0 2 2 
+        [d 1,0,2,2 d] [p "?dup" p]
     *** +! variable
-                marker ---
-                variable x 10 x !
-                5 x +! x @ ( 15 )
-                [d 15 d] [p 'variable', 'marker', '+!', '@', '!', '(' p]
-                ---
+        --- marker ---
+        variable x 10 x !
+        5 x +! x @ ( 15 )
+        [d 15 d] [p 'variable', 'marker', '+!', '@', '!', '(' p]
     *** spaces chars
-                marker ---
-                : test 3 spaces ;
-                js: vm.selftest_visible=False;vm.screenbuffer=""
-                test
-                js: vm.selftest_visible=True
-                <js> vm.screenbuffer.slice(-3)=='   '</jsV>
-                [d True d] [p 'chars',"spaces","(space)" p]
-                ---
+        --- marker ---
+        : test 3 spaces ;
+        js: vm.selftest_visible=False;vm.screenbuffer=""
+        test
+        js: vm.selftest_visible=True
+        <js> vm.screenbuffer.slice(-3)=='   '</jsV>
+        [d True d] [p 'chars',"spaces","(space)" p]
     *** .( ( ." .' s" s' s`
-                marker ---
-                js: vm.selftest_visible=False;vm.screenbuffer=""
-                .( ff) ( now vm.screenbuffer should be 'ff' )
-                js> vm.screenbuffer.slice(-2)=="ff" \ True
-                : test ." aa" .' bb' s' cc' . s` dd` . s" ee" . ;
-                test js> vm.screenbuffer.slice(-10)=="aabbccddee" \ True
-                js: vm.selftest_visible=True
-                [d True,True d] [p '(', '."', ".'", "s'", "s`", 's"' p]
-                ---
+        --- marker ---
+        js: vm.selftest_visible=False;vm.screenbuffer=""
+        .( ff) ( now vm.screenbuffer should be 'ff' )
+        js> vm.screenbuffer.slice(-2)=="ff" \ True
+        : test ." aa" .' bb' s' cc' . s` dd` . s" ee" . ;
+        test js> vm.screenbuffer.slice(-10)=="aabbccddee" \ True
+        js: vm.selftest_visible=True
+        [d True,True d] [p '(', '."', ".'", "s'", "s`", 's"' p]
     *** count
-                    s" abc" count depth
-                    [d "abc",3,2 d] [p "count" p]
+        s" abc" count depth
+        [d "abc",3,2 d] [p "count" p]
     *** value and to work together
-        marker -%-%-%-%-%-
+        --- marker ---
         112233 value x x 112233 = \ True
         445566 to x x 445566 = \ True
         : test 778899 to x ; test x 778899 = \ True
-        -%-%-%-%-%-
         [d True,True,True d] [p 'value','to' p]
     *** <comment>...</comment> can be nested now
-                <comment> 
-                    aaaa <comment> bbbbbb </comment> cccccc 
-                </comment> 
-                111 222 <comment> 333 </comment> 444
-                [d 111,222,444 d] [p '<comment>', '</comment>', '::' p]
+        <comment> 
+            aaaa <comment> bbbbbb </comment> cccccc 
+        </comment> 
+        111 222 <comment> 333 </comment> 444
+        [d 111,222,444 d] [p '<comment>', '</comment>', '::' p]
     *** constant value and to
-                marker ---
-                112233 constant x
-                x value y
-                x y = \ True
-                332211 to y x y = \ False
-                ' x :> type=="constant" \ True
-                ' y :> type=="value" \ True
-                [d True,False,True,True d] [p "constant","value","to" p]
-                ---
+        --- marker ---
+        112233 constant x
+        x value y
+        x y = \ True
+        332211 to y x y = \ False
+        ' x :> type=="constant" \ True
+        ' y :> type=="value" \ True
+        [d True,False,True,True d] [p "constant","value","to" p]
     *** int 3.14 is 3, 12.34AB is 12
-                3.14 int char 12.34AB int
-                [d 3,12 d] [p "int" p]
+        3.14 int char 12.34AB int
+        [d 3,12 d] [p "int" p]
     *** drops n data stack cells ...
-                    1 2 3 4 5 2 drops [d 1,2,3 d] [p "drops" p]
+        1 2 3 4 5 2 drops [d 1,2,3 d] [p "drops" p]
     *** dropall clean the data stack
-                1 2 3 4 5 dropall depth 0= [d True d] [p "dropall","0=" p]
+        1 2 3 4 5 dropall depth 0= [d True d] [p "dropall","0=" p]
     *** ASCII char>ASCII ASCII>char
-                marker ---
-                char abc char>ASCII ( 97 )
-                98 ASCII>char ( b )
-                : test ASCII c ; test ( 99 )
-                [d 97,'b',99 d] [p 'char>ASCII', 'ASCII>char', "ASCII" p]
-                ---
+        --- marker ---
+        char abc char>ASCII ( 97 )
+        98 ASCII>char ( b )
+        : test ASCII c ; test ( 99 )
+        [d 97,'b',99 d] [p 'char>ASCII', 'ASCII>char', "ASCII" p]
     *** .s is probably the most used word
-                marker ---
-                js: vm.selftest_visible=False;vm.screenbuffer=""
-                32424 -24324 .s
-                js: vm.selftest_visible=True
-                <js> vm.screenbuffer.find('32424')    !=-1 </jsV> \ True
-                <js> vm.screenbuffer.find('7ea8h')    !=-1 </jsV> \ True
-                <js> vm.screenbuffer.find('-24324')   !=-1 </jsV> \ True
-                <js> vm.screenbuffer.find('ffffa0fch')!=-1 </jsV> \ True
-                <js> vm.screenbuffer.find('2:')       ==-1 </jsV> \ True
-                [d 32424,-24324,True,True,True,True,True d] [p ".s" p]
-                ---
+        --- marker ---
+        js: vm.selftest_visible=False;vm.screenbuffer=""
+        32424 -24324 .s
+        js: vm.selftest_visible=True
+        <js> vm.screenbuffer.find('32424')    !=-1 </jsV> \ True
+        <js> vm.screenbuffer.find('7ea8h')    !=-1 </jsV> \ True
+        <js> vm.screenbuffer.find('-24324')   !=-1 </jsV> \ True
+        <js> vm.screenbuffer.find('ffffa0fch')!=-1 </jsV> \ True
+        <js> vm.screenbuffer.find('2:')       ==-1 </jsV> \ True
+        [d 32424,-24324,True,True,True,True,True d] [p ".s" p]
     *** d dump
-                js: vm.selftest_visible=False;vm.screenbuffer=""
-                d 0
-                js: vm.selftest_visible=True
-                <js> vm.screenbuffer.find('00000: 0 (number)') !=-1 </jsV> \ True
-                [d True d] [p 'dump', 'd' p]
+        js: vm.selftest_visible=False;vm.screenbuffer=""
+        d 0
+        js: vm.selftest_visible=True
+        <js> vm.screenbuffer.find('00000: 0 (number)') !=-1 </jsV> \ True
+        [d True d] [p 'dump', 'd' p]
     *** see (see)
-                marker ---
-                : test ; // test.test.test
-                js: vm.selftest_visible=False;vm.screenbuffer=""
-                see test
-                js: vm.selftest_visible=True
-                <js> vm.screenbuffer.find('test.test.test') !=-1 </jsV> \ True
-                <js> vm.screenbuffer.find('cfa') !=-1 </jsV> \ True
-                <js> vm.screenbuffer.find('colon') !=-1 </jsV> \ True
-                [d True,True,True d] [p 'see','(see)','(?)' p]
-                ---
+        --- marker ---
+        : test ; // test.test.test
+        js: vm.selftest_visible=False;vm.screenbuffer=""
+        see test
+        js: vm.selftest_visible=True
+        <js> vm.screenbuffer.find('test.test.test') !=-1 </jsV> \ True
+        <js> vm.screenbuffer.find('cfa') !=-1 </jsV> \ True
+        <js> vm.screenbuffer.find('colon') !=-1 </jsV> \ True
+        [d True,True,True d] [p 'see','(see)','(?)' p]
     *** End of kernel self-test
         [d d] [p 'accept', 'refill', '***' p]
 

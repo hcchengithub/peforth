@@ -76,11 +76,11 @@ if not vm.tick('version'):
     vm.dictate(readTextFile(path+'peforth.f'))
     vm.dictate(readTextFile(path+'quit.f'))
     
-# The peforth interpreter user interface. 
-# This function was named main() that might be clearer of what it is to you. 
-# We can put an ok() anywhere in python code as a breakpoint so we can investigate 
-# that point with all the power peforth provides. That's why I rename main() to ok() 
-# because it invokes the OK prompt of Forth interpreter.
+# Invoke the peforth interpreter or, in another word, shells to peforth.
+# Put an ok() anywhere in python code as a breakpoint. The prompt argument
+# indicates which breakpoint it is. The loc (locals) argument passes the 
+# recent locals as a dictionary to peforth so we can investigate them with 
+# all the power of peforth.  
 def ok(prompt='OK ',loc={}):
     vm.push((loc,'Prompt is',prompt,'Local identifiers and the console prompt at the point this ok() was called, if given.'))
     print(prompt,end='')
