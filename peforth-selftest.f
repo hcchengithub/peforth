@@ -177,22 +177,25 @@
         </div> :> find("come-find-me-!!")!=-1 ( True )
         [d '11',22,33,'   11    ',55,66,True d] 
         [p "word",'BL',':>','char' p]
-stop _stop_         
-    *** pyEval should exec(tos) 
-        456 char pop()+1 jsEval [d 457 d] [p "jsEval" p]
+    *** py> eval(pop()) should eval(tos) 
+        --- marker ---
+        456 char pop()+1 py> eval(pop()) [d 457 d] [p "py>" p]
     *** last should return the last word
         0 constant xxx
-        last :> name [d "xxx" d] [p "last" p]
+        last :> name [d "xxx" d] [p "last","constant" p]
         (forget)
     *** exit should stop a colon word
         : dummy 123 exit 456 ;
         last execute [d 123 d] [p "exit" p]
         (forget)
-    *** branch should jump to run hello
+    *** (forget) forgets the last word 
+        ' dummy [d 0 d] [p "(forget)" p]
+    *** begin ... again loop covers many things
         --- marker ---
-        : sum 0 1 begin 2dup + -rot nip 1+ dup 10 > if drop exit then again ;
-        : test sum 55 = ;
-        test [d True d] [p '2dup', '-rot', 'nip', '1+', '>', '0branch' p]
+        : sum 0 1 begin 2dup + -rot nip 1+ dup 10 > 
+        if drop exit else then again ; sum
+        [d 55 d] [p '2dup', '-rot', 'nip', '1+', '>', 
+        '0branch', 'if', 'then','else','begin','again' p]
     *** ! @ >r r> r@ drop dup swap over 0<
         --- marker ---
         variable x 123 x ! x @ 123 = \ True
@@ -202,48 +205,28 @@ stop _stop_
         rot and swap \ True 666
         0< not and \ True
         -1 0< and \ True
-        False over \ True
+        false over \ True
         [d True, False, True d] [p '!', '@', '>r', 'r>', 'r@', 'swap', 'drop',
         'dup', 'over', '0<', '2drop','marker' p]
-    *** (forget) should forget the last word
-        : remember-me ; (forget)
-        last :> name=="remember-me" [d False d] 
-        [p "(forget)","rescan-word-hash" p]
     *** ' tick and (') should return a word object
         ' code :> name char end-code (') :> name
         [d "code","end-code" d] [p "'","(')" p]
-    *** boolean and or && || not AND OR NOT XOR
-        undefined not \ True
-        "" boolean \ True False
-        and \ False
-        False and \ False
-        False or \ False
-        True or \ True
-        True and \ True
-        True or \ True
-        False or \ True
-        {} [] || \ True [] {}
-        && \ True []
-        || \ [] True
-        && \ True
-        "" && \ True ""
-        not \ False
-        1 2 AND \ True 0
-        2 OR NOT  \ True -3
-        -3 = \ True True
-        1 2 XOR \ True True 3
-        0 XOR 3 = \ True True True
-        and and \ True
-        <js> function test(x){ return x }; test() </jsV> null = \ True True
-        [d True,True d] [p 'and', 'or', 'not', '||', '&&', 'AND', 'OR', 'NOT', 'XOR',
-        'True', 'False', '""', '[]', '{}', 'undefined', 'boolean', 'null' p] 
+    *** bool and or not AND OR NOT XOR
+        none not \ True
+        "" bool \ False
+        [] bool \ False
+        {} bool \ False
+        {} [] and \ False
+        true false or \ True
+        1 2 AND \ 0
+        1 2 OR NOT  \ -4
+        1 2 XOR \ 3
+        [d True,False,False,False,False,True,0,-4,3 d] 
+        [p 'bool','and','or','not','AND','OR','NOT','XOR',
+        'true','false','""','[]','{}','none' p] 
     *** + * - / 1+ 2+ 1- 2-
         1 1 + 2 * 1 - 3 / 1+ 2+ 1- 2- 1 = [d True d]
         [p '+', '*', '-', '/', '1+', '2+', '1-', '2-' p]
-    *** mod 7 mod 3 is 1
-        7 3 mod [d 1 d] [p "mod" p]
-    *** div 7 div 3 is 2
-        7 3 div [d 2 d] [p "div" p]
     *** >> -1 signed right shift n times will be still -1
         -1 9 >> [d -1 d] [p ">>" p]
     *** >> -4 signed right shift becomes -2

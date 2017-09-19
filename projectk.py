@@ -332,11 +332,19 @@ def outer(entry=None):
         else:
             try:
                 # token is a number
-                n = complex(token) # triggers exception if token is not a number
-                if int(n.real)==float(n.real): 
-                    n = int(n.real)
+                if token[:2] in ["0x","0X"]:
+                    n = int(token,base=16)
+                elif token[:2] in ["0o","0O"]:
+                    n = int(token,base=8)
+                elif token[:2] in ["0b","0B"]:
+                    n = int(token,base=2)
                 else:
-                    n = float(n.real)
+                    i = int(token)   # integer
+                    f = float(token) # triggers exception if token is malformed
+                    if i==f: 
+                        n = i
+                    else:
+                        n = f
                 push(n)
                 if (compiling):
                     execute("literal");
