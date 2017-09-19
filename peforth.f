@@ -227,6 +227,7 @@ code (
     end-code immediate
     // ( <stack diagram> -- ) Get stack diagram to the last's help.  
 code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
+code CR push("\\n|\\r") end-code // ( -- '\n|\r' ) RegEx new line, works with 'word' command.
 code word push(nexttoken(pop())) end-code
     // ( "delimiter" -- "token" <delimiter> ) Get next "token" from TIB.
     /// First character after 'word' will always be skipped first, token separator.
@@ -240,8 +241,10 @@ code ' push(tick(nexttoken())) # use the original tick() to avoid warning
 code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
 : [compile] ' , ; immediate // ( <string> -- ) Compile the next immediate word.
     /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
-: py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement    
-: py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement    
+: py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement down to the next whitespace   
+: py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement down to the next whitespace
+: py:~ ( <statement> -- ) CR word [compile] </py> ; immediate // Inline python statement for rest of the line
+: py>~ ( <statement> -- ) CR word [compile] </pyV> ; immediate // Inline python statement for rest of the line
     
 \ ------------ above are most basic words for developing and for debug ----------------
 \ 以下都應該盡量改成 colon words 
@@ -287,7 +290,6 @@ code compiling push(compiling) end-code // ( -- boolean ) Get system state
 : char ( <str> -- str ) // Get character(s).
     BL word compiling if literal then ; immediate
     /// "char abc" gets "abc", unlike ANS forth "char abc" gets only 'a'.
-: CR char \n|\r ; // ( -- '\\n|\\r' ) RegEx new line, works with 'word' command.
 code last push(last()) end-code // ( -- word ) Get the word that was last defined.
 : version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
 
@@ -612,16 +614,27 @@ code nop end-code // ( -- ) no operation
 
 : [then]        ( -- ) // Conditional compilation [if] [else] [then]
                 ; immediate
-: ::    ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
-        BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
-        if char pop() else char pop(). then 
-        swap + compiling if compyle , 
-        else [compile] </py> then ; immediate
-: :>    ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
-        BL word <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
-        if char push(pop() else char push(pop(). then 
-        swap + char ) + compiling if compyle ,
-        else [compile] </py> then ; immediate
+                
+: (::)          ( obj "sub-statement" -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+                <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
+                if char pop() else char pop(). then 
+                swap + compiling if compyle , 
+                else [compile] </py> then ;
+                
+: (:>)          ( obj "sub-statement" -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
+                <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
+                if char push(pop() else char push(pop(). then 
+                swap + char ) + compiling if compyle ,
+                else [compile] </py> then ;
+                        
+: ::            ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+                BL word (::) ; immediate   /// down to the next whitespace
+: :>            ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
+                BL word (:>) ; immediate   /// down to the next whitespace
+: ::~           ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+                CR word (::) ; immediate   /// for rest of the line
+: :>~           ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
+                CR word (:>) ; immediate   /// for rest of the line
 
 \ 有 bug 先暫時不要這個 nested ( ) comment
 \ : (     ( <str> -- ) // Ignore the comment down to ')', can be nested but must be balanced

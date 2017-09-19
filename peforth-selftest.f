@@ -191,13 +191,12 @@
     *** (forget) forgets the last word 
         ' dummy [d 0 d] [p "(forget)" p]
     *** begin ... again loop covers many things
-        --- marker ---
         : sum 0 1 begin 2dup + -rot nip 1+ dup 10 > 
         if drop exit else then again ; sum
         [d 55 d] [p '2dup', '-rot', 'nip', '1+', '>', 
         '0branch', 'if', 'then','else','begin','again' p]
-    *** ! @ >r r> r@ drop dup swap over 0<
         --- marker ---
+    *** ! @ >r r> r@ drop dup swap over 0<
         variable x 123 x ! x @ 123 = \ True
         111 dup >r r@ r> + swap 2 * = and \ True
         333 444 drop 333 = and \ True
@@ -208,6 +207,7 @@
         false over \ True
         [d True, False, True d] [p '!', '@', '>r', 'r>', 'r@', 'swap', 'drop',
         'dup', 'over', '0<', '2drop','marker' p]
+        --- marker ---
     *** ' tick and (') should return a word object
         ' code :> name char end-code (') :> name
         [d "code","end-code" d] [p "'","(')" p]
@@ -232,28 +232,20 @@
     *** >> -4 signed right shift becomes -2
         -4 1 >> [d -2 d] [p ">>" p]
     *** << -1 signed left shift 63 times become the smallest int number
-        -1 63 << 0x80000000 -1 * = [d True d] [p "<<" p]
-    *** >>> -1 >>> 1 become 7fffffff
-        -1 1 >>> 0x7fffffff = [d True d] [p ">>>" p]
-    *** 0= 0> 0<> 0 <= 0>=
-        "" 0= \ True
-        undefined 0= \ True False
-        1 0> \ True False True
-        0 0> \ True False True False
-        XOR -rot XOR + 2 = \ True
-        0<> \ False
-        0= \ True
-        0<> \ True
-        0<= \ True
-        0>= \ True
-        99 && \ 99
-        0= \ False
-        99 || 0<> \ True
-        -1 0<= \ True True
-        1 0>= \ True True True
-        s" 123" 123 = \ \ True True True True
-        [d True,True,True,True d]
-        [p '0=', '0>', '0<>', '0<=', '0>=', '=' p]
+        -1 31 << 0x80000000 -1 * = [d True d] [p "<<" p]
+    *** 0= 0<> 0> 0>= 0< 0<=
+        "" 0= \ False
+        none 0= \ False
+        {} 0<> \ True
+        1 0> \ True
+        0 0> \ False
+        -2739473 0<= \ True
+        py> 123e-456 0>= \ True
+        false 0= \ True
+        s" 123" 123 = \ False
+        0 "" <> \ True
+        [d False, False, True, True, False, True, True, True, False, True d]
+        [p '0=', '0>', '0>=','0<>', '0<=', '0<', '=', '<>' p]
     *** == compares after booleanized
         {} [] == \ True
         "" null == \ True
