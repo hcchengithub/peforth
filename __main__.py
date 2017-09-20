@@ -74,6 +74,7 @@ vm.greeting = greeting
 # Run once
 if not vm.tick('version'): 
     vm.dictate(readTextFile(path+'peforth.f'))
+    vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
     
 # Invoke the peforth interpreter or, in another word, shells to peforth.
@@ -81,19 +82,19 @@ if not vm.tick('version'):
 # indicates which breakpoint it is. The loc (locals) argument passes the 
 # recent locals as a dictionary to peforth so we can investigate them with 
 # all the power of peforth.  
-def ok(prompt='OK ',loc={}):
-    vm.push((loc,'Prompt is',prompt,'Local identifiers and the console prompt at the point this ok() was called, if given.'))
+def ok(prompt='OK ',loc={}, cmd=""):
+    if loc: vm.push((loc,'<== Identifiers ok() Prompt ==>',prompt))
     print(prompt,end='')
     while True:
-        cmd = ""                                     # 
-        if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    
-            vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
-            cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D     
-        elif vm.tick('accept2') and vm.multiple:     # before the last <Enter> key to end the    
-            vm.execute('accept2')                    # input when in multiple-line mode.
-            cmd = vm.pop().strip()                   # 
-        else:                                        #  
-            cmd = input("").strip()                  # 
+        if cmd == "":                                    # 
+            if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    
+                vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
+                cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D     
+            elif vm.tick('accept2') and vm.multiple:     # before the last <Enter> key to end the    
+                vm.execute('accept2')                    # input when in multiple-line mode.
+                cmd = vm.pop().strip()                   # 
+            else:                                        #  
+                cmd = input("").strip()                  # 
 
         # pass the command line to forth VM          
         if cmd == "":
@@ -109,7 +110,9 @@ def ok(prompt='OK ',loc={}):
             vm.dictate(cmd)
             if vm.multiple: vm.multiple = False # switch back to the normal mode
             print(prompt, end="")
+        cmd = ""
 vm.ok = ok
 
 if __name__ == '__main__':
-    ok(loc=locals())
+    ok(loc=locals(), cmd=":> [0] inport") # for investigating the application root
+    # ok()

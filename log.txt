@@ -744,7 +744,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [if] tib.insert help sys [then]
 [x] examples tools utilities goodies 
     \ 列出所有的 code words
-        <py> [w for w in words['forth'][1:] if 'code' in w.type] </pyV>
+        <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
+    \ 列出所有的 selftest passed words
+        <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr        
     \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array) 
         ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
         --> slice 
@@ -781,6 +783,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string 
         [if] tib.insert help sys [then]
         </comment>
+    \ DOS command line one-liner to print the path environment variable
+        c:\Users\hcche\Desktop>python -m peforth s' push(os.get_exec_path())' compyle execute (see) bye    
     
 [x] <accept> <py> does not work when unless putting <py> to next line <---- problem
     --> rest of the line after <accept> should be the first line of the multiple lines
@@ -1486,5 +1490,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         py> tick('<selftest>').buffer char peforth-selftest.f writeTextFile stop 
     --> 成功！    
     --> 此後就是改寫 peforth-selftest.f 而已。
-    
-    
+[x] (constant) 遇到 reDef writeTextFile 會議常中止 --> 不能用 panic 警告，用 print 即可。
+[x] About to release peforth v1.4
+    1. py:~ py>~ ::~ :>~ are so good to have.
+    2. selftest not completed yet but nice to have some
+    Release steps see Ynote: "Pack peforth to peforth.whl" > 打包步驟。
+[ ] 錄 elearning 介紹 peforth 

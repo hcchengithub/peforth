@@ -1,14 +1,14 @@
 
-
+<selftest>
     \
     \ 取出整個 selftest buffer 
-    \ py> tick('<selftest>').buffer char peforth-selftest.f writeTextFile stop 
+    \ py> tick('<self'+'test>').buffer char peforth-selftest.f writeTextFile stop 
     \
     \ 經過 15:34 2017-09-17 on MetaMoji 的討論，這個 selftest 的方法只適合從頭做起的
     \ jeforth 開發階段。來到 peforth 時是從先前的 jeforth 繼承過來的，本有的 selftest
-    \ sections 又亂、順序也不對，若還想要整理到讓它們都跟在各自 word 的 source code 旁邊
-    \ 就太累，也沒必要。因此，略施小計如上，把 selftest section 整個都抓在一起，集中編輯
-    \ 比較方便。
+    \ sections 順序已經不對，若還想要整理到讓它們都跟在各自 word 的 source code 旁邊
+    \ 太累，也沒必要。因此，略施小計如上，把 selftest section 整個都抓在一起，集中編
+    \ 輯比較方便。
     \
 
     <comment>
@@ -27,10 +27,10 @@
     很大 source code 篇幅。以下是發展到目前最好的方法。
     
     project-k kernel 裡只有 code end-code 兩個基本 forth words。只憑這兩個基本 words 
-    就馬上要為每個 word 都做 self-test 原本是很困難的。然而 peforth.f 是整個檔案一次
+    就馬上要為每個 word 都做 self-test 原本很困難。然而 peforth.f 是整個檔案一次
     讀進來成為大大的一個 TIB 的， 所以其中已經含有全部功能。如果 self-test 安排在所有
-    的 words 都 load 好以後做，資源充分就不困難。利用〈selftest〉〈/selftest〉這對「文
-    字蒐集器」在任意處所蒐集「測試程式的本文」，最後再一次把它當成 TIB 執行。實用上
+    的 words 都 load 好以後做就不困難。利用〈selftest〉〈/selftest〉這對「文
+    字蒐集器」在任意處所「蒐集測試程式」，最後一次把它當成 TIB 執行。實用上
     〈selftest〉〈/selftest〉出現在每個 word 定義處，裡頭可以放心自由地使用尚未出生的
     「未來 words」, 對寫程式時的頭腦有很大的幫助。 
     
@@ -81,7 +81,7 @@
     .( *** Start self-test ) cr
     
     *** Data stack should be empty
-        depth [d 0 d] [p 'code','end-code','<py>','cr','depth','<selftest>',
+        depth [d 0 d] [p 'code','end-code','<py>','cr','depth','<self'+'test>',
         '</self'+'test>','<py>','</'+'pyV>','\\','<comment>','</comment>',
         '.(', 'cr','***' p]
     *** Rreturn stack should have less than 2 cells
@@ -246,6 +246,9 @@
         0 "" <> \ True
         [d False, False, True, True, False, True, True, True, False, True d]
         [p '0=', '0>', '0>=','0<>', '0<=', '0<', '=', '<>' p]
+
+stop _stop_ 
+
     *** == compares after booleanized
         {} [] == \ True
         "" null == \ True
@@ -483,4 +486,4 @@
     *** End of kernel self-test
         [d d] [p 'accept', 'refill', '***' p]
 
-    ~~selftest~~
+</selftest>

@@ -181,7 +181,7 @@ code (create)
     global newname
     newname = pop()
     if not newname: panic("(create) what?") 
-    if isReDef(newname): panic("reDef "+newname, False); # 若用 tick(newname) 就錯了
+    if isReDef(newname): print("reDef "+newname); # 不能用 tick(newname) 檢查
     current_word_list().append(Word(newname,None));
     last().vid = current; # vocabulary ID
     last().wid = len(current_word_list())-1; # word ID

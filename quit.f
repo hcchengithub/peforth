@@ -20,13 +20,18 @@
         vm.outport = outport
     </py>
 
-    : OK ; // ( -- ) Do nothing, ignore it when copy-paste the display
+    : inport    ( dict -- ) // Make all pairs in dict peforth values. 
+                py: outport(pop()) ; 
+                /// Example: investigate the root application
+                /// ( locals() when calling ok() ) :> [0] inport 
+                
+    : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     
-    : dir   ( x -- dir ) // get dir list of anything x                
-        py> dir(pop()) ;
-
-    : keys  ( x -- keys ) // get keys of the dict
-        py> pop().keys() ;
+    : dir       ( x -- dir ) // get dir list of anything x                
+                py> dir(pop()) ;
+                
+    : keys      ( x -- keys ) // get keys of the dict
+                py> pop().keys() ;
 
 \ Drop a fence 
 
@@ -41,9 +46,8 @@
         tib.insert
     [else] 
         \ No command line, do selftest.
-        \ py: tick('<selftest>').enabled=True
-        \ py> tick('<selftest>').buffer tib.insert
-        char peforth-selftest.f readTextFile tib.insert
+        py: tick('<selftest>').enabled=True
+        py> tick('<selftest>').buffer tib.insert
     [then] py: tick('<selftest>').buffer="" \ release the memory
 
     
