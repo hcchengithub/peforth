@@ -1,3 +1,4 @@
+import sys
 import pdb
 
 if __package__:
@@ -9,6 +10,9 @@ else:
 
 # Let projtct-k know itself
 vm.vm = vm
+
+# Get command line, as is
+vm.commandline = " ".join(sys.argv[1:])
 
 # panic() when something wrong
 def panic(msg,serious=False):
@@ -57,7 +61,8 @@ else:
     # __init__.py
     path = __file__.split('__init__.py')[0]
     path = (path and [path] or ['.\\'])[0]
-
+vm.path = path
+    
 # Get version code from peforth/version.txt for whl package
 # to see the single source of version code.
 exec(readTextFile(path + "version.txt"),{},locals())
@@ -84,7 +89,7 @@ if not vm.tick('version'):
 # all the power of peforth.  
 def ok(prompt='OK ',loc={}, cmd=""):
     if loc: vm.push((loc,'<== Identifiers ok() Prompt ==>',prompt))
-    print(prompt,end='')
+    if not vm.commandline.strip(): print(prompt,end='')
     while True:
         if cmd == "":                                    # 
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    

@@ -416,7 +416,7 @@ def docode(_me=None):
     global compiling, newname, newxt, newhelp, ntib
     newname = nexttoken();
     if isReDef(newname): # don't use tick(newname), it's wrong.
-        panic("reDef "+newname, False);
+        print("reDef " + newname);
     # get code body
     push(nextstring("end-code")); 
     if tos()['flag']:

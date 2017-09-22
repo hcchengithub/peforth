@@ -7,7 +7,7 @@
         
         char c:\Users\hcche\Documents\GitHub\peforth\ to project-directory 
         char c:\Users\hcche\Desktop\peforth-master\   to package-directory
-        py> ['projectk.py','__main__.py','__init__.py','peforth.f','quit.f','README.md','version.txt','peforth.selftest'] 
+        py> ['projectk.py','__main__.py','__init__.py','peforth.f','quit.f','README.md','README.rst','version.txt','peforth.selftest'] 
                                                   to source-files
     \ Please confirm the directory paths and source files
     

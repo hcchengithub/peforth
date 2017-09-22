@@ -1495,4 +1495,49 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     1. py:~ py>~ ::~ :>~ are so good to have.
     2. selftest not completed yet but nice to have some
     Release steps see Ynote: "Pack peforth to peforth.whl" > 打包步驟。
+    
+[x] v1.4 released, from now on v1.5     
+
+[x] 有了 argv 就不要有 greeting 也不要 reDef warnings.
+    --> 所以要提早取得 command line, quit.f 太晚了。
+    --> Done!
+[x] PyPI README.rst 有辦法了 可查看 rst2html 也可以 convert from markdown 
+    https://stackoverflow.com/questions/26737222/pypi-description-markdown-doesnt-work
+    --> 先用 pypandoc module 用轉的看看
+        py:~ import pypandoc; push(pypandoc)
+        constant pypandoc // ( -- module ) 
+        pypandoc :: convert('README.md','rst')
+        Failed in </py> (compiling=False): No pandoc was found: 
+        either install pandoc and add it to your PATH or or call 
+        pypandoc.download_pandoc(...) or install pypandoc wheels 
+        with included pandoc.
+    --> OK pypandoc :> download_pandoc py: help(pop())
+        Help on function download_pandoc in module pypandoc.pandoc_download:
+
+        download_pandoc(url=None, targetfolder=None, version='latest')
+            Download and unpack pandoc
+
+            Downloads prebuild binaries for pandoc from `url` and unpacks it into
+            `targetfolder`.
+
+            :param str url: URL for the to be downloaded pandoc binary distribution for
+                the platform under which this python runs. If no `url` is give, uses
+                the latest available release at the time pypandoc was released.
+
+            :param str targetfolder: directory, where the binaries should be installed
+                to. If no `targetfolder` is give, uses a platform specific user
+                location: `~/bin` on Linux, `~/Applications/pandoc` on Mac OS X, and
+                `~\AppData\Local\Pandoc` on Windows.
+
+        OK pypandoc :: download_pandoc()
+        * Downloading pandoc from https://github.com/jgm/pandoc/releases/download/1.19.2.1/pandoc-1.19.2.1-windows.msi ...
+        --> download 半天下不來。。。很煩
+    --> http://pandoc.org/ 有 online converter , 分小段手動把 README.md 轉成 README.rst 吧！
+        pandoc.org 專門做各種文檔格式轉換。
+    --> Online reStructuredText editor http://rst.ninjs.org/ 
+    --> Yes!!
+[ ] Release v1.5    
+[ ] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
 [ ] 錄 elearning 介紹 peforth 
+    
+    

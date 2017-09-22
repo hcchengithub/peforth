@@ -1,9 +1,11 @@
-# peforth
 
-### A FORTH programming language lives in python and begins with only two words 'code' and 'end-code'.
+peforth
+#######
 
-There are many ways to run peforth:
+A FORTH programming language begins with only two words 'code' and 'end-code'.
 
+Ways to run peforth
+***********************************
 1. In the project folder 
    run ```python __main__.py``` or ```python __init__.py``` or double click them.
    
@@ -16,36 +18,31 @@ There are many ways to run peforth:
    to come back to python interpreter, and do it again and again. peforth context 
    will be all of the same session for all runs.
 
-# Install peforth as a package:
+Install peforth
+***************
 
-### Method-1
+Use the pip install
 
-Copy all five files (```projectk.py quit.f peforth.f __main__.py __init__.py```) from the peforth project folder to the new created folder: ```c:\Users\...\Python36\Lib\site-packages\peforth``` , that's all.
-The sample path is for this computer on my desk. For your computer, do these steps to get the corresponding path:
+::
 
-    >>> import re
-    >>> re
-    <module 're' from '*C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\*re.py'>
-    >>>
-    
-Use this method if you are participating peforth developing and debugging.
+     pip install peforth 
 
-### Method-2
-
-Use the pip install:
-
-    pip install peforth 
-
-# Hello World! 
+Hello World!
+************ 
 
 All peforth words have their help messages.
+
+::
 
     : hi  ( -- ) // The hello world! command
         ." Hello World!!" cr ;
         /// if help message is not enough then use /// leading lines to add comments.
         /// Both // and /// leading messages go to the last word.
 
-The first stack diagram and the // leading comment line become help messages.
+
+The first stack diagram and the ```//``` leading comment line become help messages. Let's execute it and see its help:
+
+::
 
     OK hi
     Hello World!!
@@ -54,7 +51,9 @@ The first stack diagram and the // leading comment line become help messages.
         if help message is not enough then use /// leading lines to add comments.
         Both // and /// leading messages go to the last word.
 
-'see' command to see a word's source code and attributes.
+
+```see``` command sees a word's source code and attributes.
+::
 
     OK see hi
     {
@@ -82,17 +81,29 @@ The first stack diagram and the // leading comment line become help messages.
     ------------ End of the difinition ---------------
     OK
 
-# code ... end-code 
 
-peforth like eforth attempts to use very basic words to build the entire forth system. Actually, peforth is started with only two words 'code' and 'end-code'. 
+code ... end-code 
+*****************
 
-To define a code word, we press Ctrl-D to make the Windows DOS-Box CLI to accept multiple lines at once then type in the example and at the end drop another Ctrl-D to terminate the multiple-line input.
+peforth, like eforth, attempts to use very basic words to build the entire
+forth system. Actually, peforth is started with only two words ```code```
+and ```end-code```. As a demo to define a code word, let's press Ctrl-D to make the Windows 
+DOS-Box CLI to accept multiple lines at once, then type in the example, and at the end
+drop another Ctrl-D to terminate the multiple-line input.
+
+::
 
     OK ^D
     code hello
         print('hello world!\n')
     end-code
     ^D
+    OK
+
+We have defined our first code word ```hello```. Let's execute it and ```see``` its details,
+
+::
+
     OK hello
     hello world!
 
@@ -120,40 +131,24 @@ To define a code word, we press Ctrl-D to make the Windows DOS-Box CLI to accept
     -------------------------------------
     OK
 
-Where _me refers to the forth word object itself if you need to access its own attributes.
+Where ```_me``` refers to the forth word object itself if you need to access
+its own attributes.
 
-# inline python code \<py> \</py> \</pyV> py: py>  
+inline python code
+******************
 
-python code can be put inline mixed with forth code. This example brings you the 
-python ```help()``` utility:
+python code can be put inline mixed with forth code. 
+This example defines a ```dos-dir``` command to go out to DOS box, run the
+```dir``` DOS command, and come back.
 
-    OK py: help()
-
-    Welcome to Python 3.6's help utility!
-
-    If this is your first time using Python, you should definitely check out
-    the tutorial on the Internet at http://docs.python.org/3.6/tutorial/.
-
-    Enter the name of any module, keyword, or topic to get help on writing
-    Python programs and using Python modules.  To quit this help utility and
-    return to the interpreter, just type "quit".
-
-    To get a list of available modules, keywords, symbols, or topics, type
-    "modules", "keywords", "symbols", or "topics".  Each module also comes
-    with a one-line summary of what it does; to list the modules whose name
-    or summary contain a given string such as "spam", type "modules spam".
-
-    help> quit
-
-    You are now leaving help and returning to the Python interpreter.
-    If you want to ask for help on a particular object directly from the
-    interpreter, you can type "help(object)".  Executing "help('string')"
-    has the same effect as typing a particular string at the help> prompt.
-    OK
-
-This example defines a 'dos-dir' command to go out to DOS box, run the 'dir' DOS command, and come back.
+::
 
     OK : dos-dir <py> import os; os.system('dir') </py> ;
+
+Statements in between ```<py> ... </py>``` are python code. Let's execute the new word:
+
+::
+
     OK dos-dir
      Volume in drive C is Windows
      Volume Serial Number is 2EA4-3202
@@ -173,7 +168,9 @@ This example defines a 'dos-dir' command to go out to DOS box, run the 'dir' DOS
                    4 Dir(s)  262,004,789,248 bytes free
     OK
 
-Again, use 'see' to view its source code:
+Again, use ```see``` to view its source code:
+
+::
 
     OK see dos-dir
     {
@@ -211,25 +208,39 @@ Again, use 'see' to view its source code:
     ------------ End of the difinition ---------------
     OK
 
-Now we have seen ```<py> ... </py>``` brings in a block of python code that does 
-not return value. While ```<py> ... </pyV>``` is to envelope a python statement 
-that returns a value back to forth's top of the data stack. We'll use it's short 
-form ```py>``` that followed with a statement without space to get CPU information 
-from DOS environment variable PROCESSOR_IDENTIFIER:
+Now we have seen ```<py> ... </py>``` brings in a block of python code
+that does not return value. While ```<py> ... </pyV>``` is to envelope a
+python statement that returns a value back to forth's top of the data
+stack. We'll use it's short form ```py>``` that followed with a statement
+without space to get CPU information from DOS environment variable
+PROCESSOR\_IDENTIFIER:
 
-    OK : CPU ( -- string ) // View CPU info
-    OK   py> os.getenv('PROCESSOR_IDENTIFIER') . cr ;
+::
+
+    : CPU ( -- string ) // View CPU info
+    py> os.getenv('PROCESSOR_IDENTIFIER') . cr ;
+  
+Type ```CPU``` to execute the new word:
+
+::
+
     OK CPU
     Intel64 Family 6 Model 142 Stepping 9, GenuineIntel  
     OK
 
-So ```py>``` and ```py:``` are short form of ```<py>...</pyV>``` and ```<py>...</py>``` respectively.
-    
 
-Visit this project's [Wiki](https://github.com/hcchengithub/peforth/wiki) for more examples.
+So ```py>``` and ```py:``` are short forms of ```<py>...</pyV>``` and
+```<py>...</py>``` respectively if the python statement after them do 
+not contain any space character. Visit this project's `Wiki`_ for more 
+examples.
 
-FigTaiwan H.C. Chen<br>
-hcchen_1471@hotmail.com<br>
-Just undo it!</br>
+- H.C. Chen, FigTaiwan
+- hcchen\_1471@hotmail.com
+- 2017.9.21 
+
+Edited by: `rst online editor`_
+
+.. _Wiki: https://github.com/hcchengithub/peforth/wiki
+.. _rst online editor: http://rst.ninjs.org
 
 

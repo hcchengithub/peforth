@@ -1,6 +1,3 @@
-\ Show the start up greeting
-
-    version drop 
     
 \ My misc tools 
 
@@ -40,12 +37,13 @@
 \ Do selftest or run command-line
     
     ' <selftest> :: enabled=False \ Assume command line has jobs to do
-    <py> " ".join(sys.argv[1:]) </pyV> trim ( commandLine ) 
+    py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
         \ Run the command line commands
         tib.insert
     [else] 
-        \ No command line, do selftest.
+        \ No command line, show greeting and run selftest
+        version drop 
         py: tick('<selftest>').enabled=True
         py> tick('<selftest>').buffer tib.insert
     [then] py: tick('<selftest>').buffer="" \ release the memory
