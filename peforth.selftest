@@ -246,25 +246,16 @@
         0 "" <> \ True
         [d False, False, True, True, False, True, True, True, False, True d]
         [p '0=', '0>', '0>=','0<>', '0<=', '0<', '=', '<>' p]
-
-stop _stop_ 
-
-    *** == compares after booleanized
+    *** == compares tos(1) and tos() after booleanized
+        {} [] = \ False
         {} [] == \ True
-        "" null == \ True
-        "" undefined == \ True
+        "" none = \ False
+        "" none == \ True
+        s" 123" 123 = \ False
         s" 123" 123 == \ True
-        [d True,True,True,True d] [p "==",'""',"null", "undefined" p]
-    *** === compares the type also
-        "" 0 = \ True
-        "" 0 == \ True
-        "" 0 === \ False
-        s" 123" 123 = \ True
-        s" 123" 123 == \ True
-        s" 123" 123 === \ False
-        [d True,True,False,True,True,False d]
-        [p "===" p]
-    *** > < >= <= != !== <>
+        [d False,True,False,True,False,True d] [p "=","==",'""',"none", 
+        "{}","[]" p]
+    *** > < >= <= != != <>
         1 2 > \ False
         1 1 > \ False
         2 1 > \ True
@@ -280,25 +271,27 @@ stop _stop_
         1 1 <> \ False
         0 1 <> \ True
         [d False,False,True,True,False,False,False,True,True,True,True,False,False,True d]
-        [p '<', '>=', '<=', '!=', '!==', '<>' p]
+        [p '<', '>=', '<=', '!=', '<>' p]
     *** abs makes negative positive
-        1 63 << abs [d 0x80000000 d] [p "abs" p]
-    *** max min
+        -1 10 << abs [d 1024 d] [p "abs","<<" p]
+    *** max min within
         1 -2 3 max max (  3 )
         1 -2 3 min min ( -2 )
-        [d 3,-2 d] [p "max","min" p]
+        1 2 3 within ( False )
+        2 1 3 within ( True )
+        [d 3,-2,False,True d] [p "max","min" p]
     *** doVar doNext
-        --- marker ---
         variable x
         : tt for x @ . x @ 1+ x ! next ;
-        js: vm.selftest_visible=False;vm.screenbuffer=""
+        display-off
         10 tt space \ "0123456789 "
         x @ ( 10 )
-        js: vm.selftest_visible=True
-        <js> vm.screenbuffer.slice(-11)=="0123456789 "</jsV> ( True )
+        display-on
+        screen-buffer <py> pop()[0].find('0123456789 ')!=-1 </pyV> ( True )
         [d 10,True d]
         [p 'doNext','space', ',', 'colon-word', 'create',
         'for', 'next' p]
+        --- marker ---
     *** pick 2 from 1 2 3 gets 1 2 3 1
         1 2 3 0 pick 3 = depth 4 = and >r 3 drops \ True
         1 2 3 1 pick 2 = depth 4 = and >r 3 drops \ True
@@ -310,17 +303,17 @@ stop _stop_
         1 2 3 2 roll 1 = depth 3 = and >r 2 drops \ True
         r> r> r> [d True,True,True d] [p "roll" p]
     *** [compile] compile [ ]
-        --- marker ---
         : iii ; immediate
         : jjj ;
         : test [compile] iii compile jjj ; \ 正常執行 iii，把 jjj 放進 dictionary
         : use [ test ] ; \ 如果 jjj 是 immediate 就可以不要 [ ... ]
-        ' use js> pop().cfa @ ' jjj = [d True d]
+        ' use py> pop().cfa @ ' jjj = [d True d]
         [p "[compile]",'compile', '[', ']' p]
-    *** alias should create a new word that acts same
         --- marker ---
+    *** alias should create a new word that acts same
         1234 constant x ' x alias y
         y [d 1234 d] [p "alias" p] 
+        --- marker ---
     *** nip rot -rot 2drop 2dup invert negate within
         1 2 3 4 nip \ 1 2 4
         -rot \ 4 1 2
@@ -342,16 +335,13 @@ stop _stop_
         : test ['] x ;
         test ' x = [d True d] [p "[']" p]
     *** allot should consume some dictionary cells
-        --- marker ---
         : a ; : b ; ' b :> cfa ' a :> cfa - \ normal distance
         : aa ;
         10 allot
-        : bb ; ' bb :> cfa ' aa :> cfa - \ 10 more expected
-        *debug* 1122>
+        : bb ; ' bb :> cfa ' aa :> cfa - swap - \ 10 more expected
         [d 10 d] [p "allot" p]
-        
-    *** begin again , begin until
         --- marker ---
+    *** begin again , begin until
         : tt
             1 0 \ index sum
             begin \ index sum
@@ -376,6 +366,7 @@ stop _stop_
             nip
         ; last execute 55 = \ True
         [d True,True d] [p 'again', 'until', 'over', 'swap', 'dup', 'exit', 'nip' p]
+        --- marker ---
     *** aft for then next ahead begin while repeat
         --- marker ---
         : tt 5 for r@ next ; last execute + + + + 15 = \ True
@@ -403,31 +394,34 @@ stop _stop_
         5 x +! x @ ( 15 )
         [d 15 d] [p 'variable', 'marker', '+!', '@', '!', '(' p]
     *** spaces chars
-        --- marker ---
         : test 3 spaces ;
-        js: vm.selftest_visible=False;vm.screenbuffer=""
+        display-off
         test
-        js: vm.selftest_visible=True
-        <js> vm.screenbuffer.slice(-3)=='   '</jsV>
+        display-on
+        screen-buffer <py> pop()[0][-3:]=='   ' </pyV> ( True )
         [d True d] [p 'chars',"spaces","(space)" p]
+        --- marker ---
     *** .( ( ." .' s" s' s`
         --- marker ---
-        js: vm.selftest_visible=False;vm.screenbuffer=""
+        display-off
         .( ff) ( now vm.screenbuffer should be 'ff' )
-        js> vm.screenbuffer.slice(-2)=="ff" \ True
+        screen-buffer <py> pop()[0][-2:]=='ff' </pyV> ( True )
         : test ." aa" .' bb' s' cc' . s` dd` . s" ee" . ;
-        test js> vm.screenbuffer.slice(-10)=="aabbccddee" \ True
-        js: vm.selftest_visible=True
+        test 
+        screen-buffer <py> pop()[0][-10:]=='aabbccddee' </pyV> ( True )
+        display-on
         [d True,True d] [p '(', '."', ".'", "s'", "s`", 's"' p]
+        --- marker ---
     *** count
         s" abc" count depth
         [d "abc",3,2 d] [p "count" p]
-    *** value and to work together
         --- marker ---
+    *** value and to work together
         112233 value x x 112233 = \ True
         445566 to x x 445566 = \ True
         : test 778899 to x ; test x 778899 = \ True
         [d True,True,True d] [p 'value','to' p]
+        --- marker ---
     *** <comment>...</comment> can be nested now
         <comment> 
             aaaa <comment> bbbbbb </comment> cccccc 
@@ -435,7 +429,6 @@ stop _stop_
         111 222 <comment> 333 </comment> 444
         [d 111,222,444 d] [p '<comment>', '</comment>', '::' p]
     *** constant value and to
-        --- marker ---
         112233 constant x
         x value y
         x y = \ True
@@ -443,46 +436,47 @@ stop _stop_
         ' x :> type=="constant" \ True
         ' y :> type=="value" \ True
         [d True,False,True,True d] [p "constant","value","to" p]
-    *** int 3.14 is 3, 12.34AB is 12
-        3.14 int char 12.34AB int
+        --- marker ---
+    *** int 3.14 is 3, 12.34 is 12
+        3.14 int char 12.34 float int
         [d 3,12 d] [p "int" p]
     *** drops n data stack cells ...
         1 2 3 4 5 2 drops [d 1,2,3 d] [p "drops" p]
     *** dropall clean the data stack
         1 2 3 4 5 dropall depth 0= [d True d] [p "dropall","0=" p]
     *** ASCII char>ASCII ASCII>char
-        --- marker ---
         char abc char>ASCII ( 97 )
         98 ASCII>char ( b )
         : test ASCII c ; test ( 99 )
         [d 97,'b',99 d] [p 'char>ASCII', 'ASCII>char', "ASCII" p]
-    *** .s is probably the most used word
         --- marker ---
-        js: vm.selftest_visible=False;vm.screenbuffer=""
+    *** .s is probably the most frequently used word
+        display-off
         32424 -24324 .s
-        js: vm.selftest_visible=True
-        <js> vm.screenbuffer.find('32424')    !=-1 </jsV> \ True
-        <js> vm.screenbuffer.find('7ea8h')    !=-1 </jsV> \ True
-        <js> vm.screenbuffer.find('-24324')   !=-1 </jsV> \ True
-        <js> vm.screenbuffer.find('ffffa0fch')!=-1 </jsV> \ True
-        <js> vm.screenbuffer.find('2:')       ==-1 </jsV> \ True
+        display-on
+        screen-buffer <py> pop()[0].find('32,424')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('7EA8h')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('-24,324')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('-5F04h')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('2:')==-1 </pyV> ( True )
         [d 32424,-24324,True,True,True,True,True d] [p ".s" p]
+        --- marker ---
     *** d dump
-        js: vm.selftest_visible=False;vm.screenbuffer=""
+        display-off
         d 0
-        js: vm.selftest_visible=True
-        <js> vm.screenbuffer.find('00000: 0 (number)') !=-1 </jsV> \ True
+        display-on
+        screen-buffer <py> pop()[0].find("00000: 0  (<class 'int'>)")!=-1 </pyV> ( True )
         [d True d] [p 'dump', 'd' p]
     *** see (see)
-        --- marker ---
         : test ; // test.test.test
-        js: vm.selftest_visible=False;vm.screenbuffer=""
+        display-off
         see test
-        js: vm.selftest_visible=True
-        <js> vm.screenbuffer.find('test.test.test') !=-1 </jsV> \ True
-        <js> vm.screenbuffer.find('cfa') !=-1 </jsV> \ True
-        <js> vm.screenbuffer.find('colon') !=-1 </jsV> \ True
-        [d True,True,True d] [p 'see','(see)','(?)' p]
+        display-on
+        screen-buffer <py> pop()[0].find('test.test.test')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('cfa')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('colon')!=-1 </pyV> ( True )
+        [d True,True,True d] [p 'see','(see)' p]
+        --- marker ---
     *** End of kernel self-test
         [d d] [p 'accept', 'refill', '***' p]
 

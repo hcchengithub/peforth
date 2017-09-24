@@ -1539,5 +1539,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] Release v1.5    
 [ ] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
 [ ] 錄 elearning 介紹 peforth 
-    
+[ ] peforth.f selftest almost done, still many to go:
+    <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV>    
     

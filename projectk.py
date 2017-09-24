@@ -339,8 +339,8 @@ def outer(entry=None):
                 elif token[:2] in ["0b","0B"]:
                     n = int(token,base=2)
                 else:
-                    i = int(token)   # integer
                     f = float(token) # triggers exception if token is malformed
+                    i = int(f)
                     if i==f: 
                         n = i
                     else:

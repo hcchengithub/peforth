@@ -370,7 +370,7 @@ code 0<> push(pop()!=0) end-code // ( a -- f ) 比較 a 是否不等於 0
 code 0<= push(pop()<=0) end-code // ( a -- f ) 比較 a 是否小於等於 0
 code 0>= push(pop()>=0) end-code // ( a -- f ) 比較 a 是否大於等於 0
 code =   push(pop()==pop()) end-code // ( a b -- a=b ) 經轉換後比較 a 是否等於 b, "123" = 123.
-code ==         push(Boolean(pop())==Boolean(pop())) end-code // ( a b -- f ) 比較 a 與 b 的邏輯
+code ==         push(bool(pop())==bool(pop())) end-code // ( a b -- f ) 比較 a 與 b 的邏輯
 code >          b=pop();push(pop()>b) end-code // ( a b -- f ) 比較 a 是否大於 b
 code <          b=pop();push(pop()<b) end-code // ( a b -- f ) 比較 a 是否小於 b
 code !=         push(pop()!=pop()) end-code // ( a b -- f ) 比較 a 是否不等於 b
@@ -734,6 +734,7 @@ variable '<text> private
                 last().xt = genxt('constant',source)
                 if not getattr(vm,current,False): setattr(vm,current,{})
                 exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
+                last().type = 'constant'
                 </py> 
                 reveal ; 
 : constant      ( n <name> -- ) // Create a constnat
@@ -866,15 +867,15 @@ code t>
 
 \ ------------------ Tools  ----------------------------------------------------------------------
                 
-code int        push(int(pop())) end-code   // ( float|string -- integer|NaN )
-code float      push(float(pop())) end-code // ( string -- float|NaN ) 
+code int        push(int(float(pop()))) end-code   // ( float|string -- integer )
+code float      push(float(pop())) end-code // ( string -- float ) 
 : drops         ( ... n -- ... ) // Drop n cells from data stack.
                 py: vm.stack=stack[:-pop()] ;
                 /// We need 'drops' <py> sections in a colon definition are easily 
                 /// to have many input arguments that need to be dropped.
 : dropall       ( ... -- empty ) // Drop all cells from data stack
                 0 drops ;
-code char>ASCII push(ord(pop())) end-code // ( str -- ASCII ) Get str[0]'s ASCII or whatever code
+code char>ASCII push(ord(pop()[0])) end-code // ( str -- ASCII ) Get str[0]'s ASCII or whatever code
                 /// Actually it returns utf-8, big-5, or whatever numeric code.
                 \ https://stackoverflow.com/questions/227459/ascii-value-of-a-character-in-python
                 
