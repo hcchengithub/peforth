@@ -687,9 +687,6 @@ peforth
     --> </py> 直接 comma(exec_code) 實在沒有好處, 犧牲了 __doc__ 又
         迫使 phaseB 無謂地變得複雜。
     --> [x] 改掉!     
-[x] 利用 python 的 list filter 列出某些 words 
-    ==> OK <py> [w for w in words['forth'] if getattr(w,'immediate',False) ] </pyV> .
-    [<Word 'end-code'>, <Word '//'>, <Word '\'>, <Word '<py>'>, ...snip..., <Word '*debug*'>] OK
 [x] these lines are strange, 
         "" value description     ( private ) // ( -- "text" ) description of a selftest section
         [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
@@ -742,11 +739,16 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     // ( -- sys ) The sys module. Try: sys py: help(pop())
     </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string 
     [if] tib.insert help sys [then]
-[x] examples tools utilities goodies 
+[x] examples tools utilities goodies 範例 栗子 例子
     \ 列出所有的 code words
         <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
     \ 列出所有的 selftest passed words
         <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr        
+    \ 利用 python 的 list filter 列出某些 words 
+        ==> OK <py> [w for w in words['forth'] if getattr(w,'immediate',False) ] </pyV> .
+        [<Word 'end-code'>, <Word '//'>, <Word '\'>, <Word '<py>'>, ...snip..., <Word '*debug*'>] OK
+    \ 列出所有的 selftest passed words
+        <py> [w for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr 
     \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array) 
         ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
         --> slice 
@@ -1378,8 +1380,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     應用 peforth 來學習 TensorFlow.
     --> Done https://github.com/hcchengithub/peforth/wiki/Example-4-Examine-a-Machine-Learning-exercise
 
-[x] 列出所有的 selftest passed words
-    <py> [w for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr 
 [x] 繼續完成 peforth.f 的 selftest 元件
     --> string 轉譯成 array [d ... d] [r ... r] 要用到
     : test2 char 123,456 s" [{}]" :> format(pop()) py> eval(pop()) ;
@@ -1536,7 +1536,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         pandoc.org 專門做各種文檔格式轉換。
     --> Online reStructuredText editor http://rst.ninjs.org/ 
     --> Yes!!
-[ ] Release v1.5    
+[x] Release v1.5    
 [ ] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
 [ ] 錄 elearning 介紹 peforth 
     
