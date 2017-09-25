@@ -2,7 +2,7 @@
 @rem Pause and quit if the script is not running with admin PRIVILEGES
 @rem from stackoverflow : http://stackoverflow.com/questions/4051883/batch-script-how-to-check-for-admin-rights#11995662
 
-echo OFF
+@echo OFF
 NET SESSION >nul 2>&1
 IF %ERRORLEVEL% EQU 0 (
     ECHO Administrator PRIVILEGES Detected! 

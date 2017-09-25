@@ -15,7 +15,7 @@ setup(
     packages=["peforth", ],
     license='The MIT License (MIT) Copyright © 2017 H.C. Chen',
     description="A FORTH programming language lives in python and begins with only two words 'code' and 'end-code'.",
-    long_description=open("peforth/README.rst", "r").read(),
+    long_description=open("README.rst", "r").read(),
     author="H.C. Chen",
     author_email="hcchen_1471@hotmail.com",
     url="https://github.com/hcchengithub/peforth",
