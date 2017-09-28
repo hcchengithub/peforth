@@ -22,10 +22,11 @@ Use the pip install:
 
     pip install peforth 
 
-If you were participating the development of peforth project or playing with it with 
+If you were participating the development of peforth project or if you were playing 
+with it with 
 your experiments, after once installed, you can run setup.bat at the project root 
-directory to update your new code into the peforth package so ```import peforth```
-gets your modified code. 
+directory to update your new code into the peforth module so ```import peforth```
+will get your latest code. 
 
 # Hello World! 
 
