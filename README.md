@@ -18,23 +18,14 @@ There are many ways to run peforth:
 
 # Install peforth as a package:
 
-### Method-1
-
-Copy all five files (```projectk.py quit.f peforth.f __main__.py __init__.py```) from the peforth project folder to the new created folder: ```c:\Users\...\Python36\Lib\site-packages\peforth``` , that's all.
-The sample path is for this computer on my desk. For your computer, do these steps to get the corresponding path:
-
-    >>> import re
-    >>> re
-    <module 're' from '*C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\*re.py'>
-    >>>
-    
-Use this method if you are participating peforth developing and debugging.
-
-### Method-2
-
 Use the pip install:
 
     pip install peforth 
+
+If you were participating the development of peforth project or playing with it with 
+your experiments, after once installed, you can run setup.bat at the project root 
+directory to update your new code into the peforth package so ```import peforth```
+gets your modified code. 
 
 # Hello World! 
 
