@@ -130,10 +130,11 @@
         ' if :> compileonly==True ( True )
         [d False,True d] [p "compile-only" p]
     *** literal is a compiling comamnd that can improve run time performance
-        --- marker --- : test [ py> sum(range(101)) literal ] ;
+        : test [ py> sum(range(101)) literal ] ;
         display-off see test display-on
         screen-buffer <py> pop()[0].find('Literal: 5050')!=-1 </pyV> ( True )            
-        [d True d] [p "(create)","(forget)",'char' p]
+        [d True d] [p "(create)","(forget)",'char','literal' p]
+        --- marker --- 
     *** (create) creates a new word
         char ~(create)~ (create) py> last().name \ ( "~(create)~" )
         (forget) py> last().name=="~(create)~" \ ( "~(create)~" False ) 
@@ -477,7 +478,39 @@
         screen-buffer <py> pop()[0].find('colon')!=-1 </pyV> ( True )
         [d True,True,True d] [p 'see','(see)' p]
         --- marker ---
+    *** trim indent -indent
+        <text>
+        aa
+            bb
+        </text> constant ss
+        ( true  ) ss :>~ find("    aa")!=-1
+        ( false ) ss -indent :>~ find("    aa")!=-1
+        ( true  ) ss -indent :>~ find("    bb")!=-1
+        ( true  ) ss -indent indent :>~ find("    aa")!=-1
+        ss :> split('\n') s"  " :> join(pop()) trim \ "aa            bb"
+        [d True,False,True,True,"aa             bb" d]
+        [p 'trim', 'indent', '-indent',':>~' p]
+        --- marker ---
+
+        <comment>
+        <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr            
+        'reveal', 'privacy', 'py:~', 'py>~', 'here!', '?', 'compiling', 
+        'cls', 'private', 'nonprivate', '\\s', 'ret', 'rescan-word-hash', 'branch', 
+        'doVar', '(marker)', 'abort', 'public', 'never', 'aft', '?stop', 'does>', 
+        'accept2', '<accept>', 'nop', '</accept>', '\x04', '[else]', '[if]', '[then]', 
+        '(::)', '(:>)', '::~', ':>~', '"msg"abort', 'abort"', '"msg"?abort', 
+        '?abort"', "'<text>", '(<text>)', '<text>', '</text>', '(constant)', 'cut', 
+        '-word', 'rewind', '?rewind', 'tib.', '>t', 't@', 't>', '[begin]', '[again]', 
+        '[until]', '[for]', '[next]', 'float', '(*debug*)', '*debug*', 'readTextFile', 
+        'writeTextFile', 'tib.insert', 'sinclude', 'include', 'type', 'obj>keys', 
+        'obj2dict', 'stringify', 'toString', '.literal', '.function', '(dump)', 
+        'dump2ret', '.members', '.source', 'dos','slice', 
+        , '[r', 'r]',]
+        </comment>
+
     *** End of kernel self-test
-        [d d] [p 'accept', 'refill', '***' p]
+        [d d] [p 'screen-buffer','display-off','display-on','***','[all-pass]', 
+        'all-pass','description', 'expected_rstack', 'expected_stack', 
+        'test-result' p]
 
 </selftest>

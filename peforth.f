@@ -1055,30 +1055,22 @@ code toString # To see a cell in dictionary
                 /// Also .members (see)
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
-: dos           py> os.system('cmd/k') ; // ( -- ) Shell to DOS Box
 
-code notpass
-                for v in words: 
-                    print(
-                        v,
-                        ':',
-                        [w for w in words[v] if getattr(w,'selftest',False)!='pass']
-                    )
-                end-code // ( -- ) List words who's selftest flag are not 'pass'.
+: dos           ( <command line> -- errorlevel ) // Shell to DOS Box run rest of the line
+                CR word ( cml ) trim ( cml' )
+                ?dup if py> os.system(pop())
+                else py> os.system('cmd/k') then ;
                 
+: cd            ( <path> -- ) // Mimic DOS cd command
+                CR word ?dup if py: os.chdir(pop())
+                else py> os.getcwd() . cr then ;
+                /// Use 'dos' command can do the same thing.
+                /// Ex. 'dos dir', 'dos cd', and all other dos commands.
+                /// But 'dos cd ..' does not work!
                 
-code passed
-                for v in words: 
-                    print(
-                        v,
-                        ':',
-                        [w for w in words[v] if getattr(w,'selftest',False)=='pass']
-                    )
-                end-code // List words who's sleftest flag are 'pass'.
-
 : slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
                 ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
-                /// 很多 function 的傳回值是一列 tuple, 有需要把它們集合起來。    
+                /// Group the tuple returned from a function
 
 \ ----------------- Self Test -------------------------------------
 
@@ -1104,6 +1096,8 @@ code passed
                     ." *** Warning, Data stack is not empty." cr
                     stop
                 then ;
+                /// List words that have not passed selftest 
+                /// <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)]</pyV> . cr
                 
 code all-pass   
                 a = pop();
@@ -1115,6 +1109,7 @@ code all-pass
                         w.selftest='pass';
                 end-code private
                 // ( ["name",...] -- ) Mark 'pass' to these word's selftest flag
+                ' *** :> comment last :: comment=pop(1)
 
 : [r            ( <"text"> -- ) // Prepare an array of data to compare with rstack in selftest.
                 char r] word s" [{}]" :> format(pop()) \ string

@@ -1537,9 +1537,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> Online reStructuredText editor http://rst.ninjs.org/ 
     --> Yes!!
 [x] Release v1.5    
+[x] 把 update.bat setup.bat setup.py 等等統一起來
+    --> 抄 3we 的 setup.bat 
+    --> done!
 [ ] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
 [ ] 錄 elearning 介紹 peforth 
 [ ] peforth.f selftest almost done, still many to go:
-    <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV>    
-[ ] 把 update.bat setup.bat setup.py 等等統一起來
-    --> 抄 3we 的 setup.bat
+    <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr    
