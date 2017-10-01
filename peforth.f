@@ -1060,7 +1060,7 @@ code toString # To see a cell in dictionary
                 else py> os.getcwd() . cr then ;
                 /// Use 'dos' command can do the same thing.
                 /// Ex. 'dos dir', 'dos cd', and all other dos commands.
-                /// But 'dos cd ..' does not work!
+                /// But 'dos cd ..' does not work while 'cd ..' works fine.
                 
 : slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
                 ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;

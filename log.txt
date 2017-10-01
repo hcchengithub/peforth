@@ -1554,4 +1554,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] 最進新發現的 bug 特別要加進 selftest 
     --> (see) none Word 之後 stack 沒清乾淨 --> 有兩條路的 words 都可疑！
     --> 甚至，例如 words 最後有多印一個 print() 也是測試的重點。
+[ ] <accept> nop </accept> 同一行不行，要改良嗎？
+
+
+
 

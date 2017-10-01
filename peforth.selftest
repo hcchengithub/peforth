@@ -68,7 +68,7 @@
     \ # reset
     \ sys.stdout.reset()
     
-    : display-off ( -- ) // Redirect stdout to screen-buffer
+    : display-off ( -- ) // Redirect stdout to a empty screen-buffer
         py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
         screen-buffer :: [0]="" ;
 
@@ -110,7 +110,7 @@
         <text> print("Hi! Harry, nice to meet you.") </text> compyle execute
         display-on
         screen-buffer <py> pop()[0].find('nice to meet you')!=-1 </pyV> ( True )
-        [d True d] [p 'compyle' p]
+        [d True d] [p 'compyle','<text>','</text>',"'<text>",'(<text>)' p]
     *** </pyV> based on </py> and on compyle
         --- marker ---
         : try char 123 [compile] </pyV> ; try ( 123 )
@@ -157,7 +157,7 @@
         float type py> pop()==float ( True )
         screen-buffer <py> pop()[0].find('p e f o r t h')!=-1 </pyV> ( True )
         [d True,True d]
-        [p 'version','py:','(' p]
+        [p 'version','py:','(','float' p]
     *** (space) puts a 0x20 on TOS
         (space) char>ASCII 32 = 
         [d True d] [p "(space)","=","char>ASCII" p]
@@ -439,7 +439,7 @@
         --- marker ---
     *** int 3.14 is 3, 12.34 is 12
         3.14 int char 12.34 float int
-        [d 3,12 d] [p "int" p]
+        [d 3,12 d] [p "int","float" p]
     *** drops n data stack cells ...
         1 2 3 4 5 2 drops [d 1,2,3 d] [p "drops" p]
     *** dropall clean the data stack
@@ -488,28 +488,71 @@
         ( true  ) ss -indent indent :>~ find("    aa")!=-1
         ss :> split('\n') s"  " :> join(pop()) trim \ "aa            bb"
         [d True,False,True,True,"aa             bb" d]
-        [p 'trim', 'indent', '-indent',':>~' p]
+        [p 'trim', 'indent', '-indent',':>~','(:>)' p]
         --- marker ---
+    *** py:~ py>~ 
+        py:~ push ( 1234 )
+        py>~ pop() / 100
+        [d 12.34 d] [p 'py:~','py>~' p]
+    *** here here! , ? allot
+        here \ h0
+        10 allot here \ h0+10
+        123 , 456 , here \ h0+10+2
+        py> tos(2) here! here 789 , @ \ h0 h0+10 h0+12 789 
+        py> pop(1) py> tos(3) - \  h0 h0+10 789 12
+        py> pop(2) py> tos(3) - \  h0 789 12 10
+        py> pop(3) here! \ 789 12 10
+        display-off
+        here ? 
+        display-on
+        screen-buffer <py> pop()[0].find('789')!=-1 </pyV> ( True )
+        [d 789,12,10,True d] [p 'here','here!',',','allot','?' p]
+    *** create does> 
+        : bonjour
+            create ,
+            does> ." Hello " r> @ . cr ;
+        char Bill bonjour William
+        display-off
+        William
+        display-on
+        screen-buffer <py> pop()[0].find('Hello Bill')!=-1 </pyV> ( True )
+        [d True d] [p 'create','does>','doVar' p]
+        --- marker ---
+    *** words help 
+        display-off
+        words
+        display-on 
+        display-off
+        screen-buffer <py> pop()[0].find('code end-code')!=-1 </pyV> ( True )
+        help
+        display-off
+        screen-buffer <py> pop()[0].find('d] ( -- boolean )')!=-1 </pyV> ( True )
+        [d True,True d] [p 'words','help' p]
+    *** keys dir type
+        py> words keys py> type(pop())==type({}.keys()) ( True )
+        123 dir py> type(pop())==list ( True )
+        123 type py> type(pop())==type ( True ) 
+        [d True,True,True d] [p 'keys','dir','type' p]
+        
+        
 
+            
         <comment>
         <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr            
-        'privacy', 'py:~', 'py>~', 'here!', '?',  
-        'cls', 'private', 'nonprivate', 'ret', 'rescan-word-hash', 'branch', 
-        'doVar', '(marker)', 'abort', 'public', 'never', 'aft', '?stop', 'does>', 
-        'accept2', '<accept>', 'nop', '</accept>', '\x04', '[else]', '[if]', '[then]', 
-        '(::)', '(:>)', '::~', ':>~', '"msg"abort', 'abort"', '"msg"?abort', 
-        '?abort"', "'<text>", '(<text>)', '<text>', '</text>', '(constant)', 'cut', 
+        [ 'privacy', 'private', 'nonprivate', 'ret', 
+        'rescan-word-hash', 'branch', 'abort', 'public', 'never', 'aft', '?stop', 'accept', 
+        'accept2', '<accept>', 'nop', '</accept>', '\x04', 'refill', '[else]', '[if]', 
+        '[then]', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', '(constant)', 'cut', 
         '-word', 'rewind', '?rewind', 'tib.', '>t', 't@', 't>', '[begin]', '[again]', 
-        '[until]', '[for]', '[next]', 'float', '(*debug*)', '*debug*', 'readTextFile', 
-        'writeTextFile', 'tib.insert', 'sinclude', 'include', 'type', 'obj>keys', 
-        'obj2dict', 'stringify', 'toString', '.literal', '.function', '(dump)', 
-        'dump2ret', '.members', '.source', 'dos','slice', 
-        , '[r', 'r]',]
+        '[until]', '[for]', '[next]', '(*debug*)', '*debug*', 'readTextFile', 'writeTextFile', 
+        'tib.insert', 'sinclude', 'include', 'obj>keys', 'obj2dict', 'stringify', 
+        'toString', '.literal', '.function', '(dump)', 'dump2ret', '.members', '.source', 
+        'dos', 'cd', 'slice', '[r', 'r]', 'inport', 'OK','---']
         </comment>
 
     *** End of kernel self-test
-        [d d] [p 'compiling','reveal','screen-buffer','display-off','display-on','***','[all-pass]', 
-        'all-pass','description', 'expected_rstack', 'expected_stack', 
-        'test-result' p]
+        [d d] [p 'cls','compiling','reveal','screen-buffer','display-off','display-on','***','[all-pass]', 
+        'all-pass','description', 'expected_rstack', 'expected_stack','(::)', '(:>)', '::~', ':>~', 
+        'test-result','(marker)','bye', 'stop','.' p]
 
 </selftest>
