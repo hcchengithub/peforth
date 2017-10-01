@@ -1,5 +1,5 @@
 code \ nexttoken('\n') end-code 
-code // last().help += nexttoken('\n|\r'); end-code // ( <comment> -- ) Give help message to the new word with the rest of the line
+code // last().help += nexttoken('\n|\r'); end-code // ( <comment> -- ) Give help message to the last word
 code <selftest> 
     push(nexttoken("</selftest>"));
     end-code
@@ -116,19 +116,19 @@ code </pyV>
     </py>
     
 code words
-    for i in words['forth']: 
-        print(i and i.name, end=" ")
+    pattern = nexttoken()
+    if pattern: screened = [w.name for w in words['forth'][1:] if w.name.find(pattern)!=-1]
+    else: screened = [w.name for w in words['forth'][1:]]
+    for i in screened: print(i, end=" ")
     print() end-code 
-    // ( -- ) List all words in active vocabularies.
+    // ( <pattern> -- ) List all words, in the active vocabularies, with the pattern in their name.
     /// Examples of listing screened words:
     /// 1.List all code words
     ///   <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
-    /// 2.List all words that have passed their own selftest
-    ///   <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV>
-    /// 3.List all words named with something like 'ASCII'
-    ///   <py> [w.name for w in words['forth'][1:] if w.name.find('ASCII')!=-1] </pyV>
-    /// 4.List all words named, helped, or commented with something like 'self'
-    ///   <py> [w.name for w in words['forth'][1:] if w.name.find('self')!=-1 or w.help.find('self')!=-1 or w.comment.find('self')!=-1]</pyV> 
+    /// 2.List all words that have not passed their own selftest
+    ///   <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV>
+    /// 3.List all words named, helped, or commented with something like 'self'
+    ///   <py> eval("[w.name for w in words['forth'][1:] if w.name.find('{0}')!=-1 or w.help.find('{0}')!=-1 or w.comment.find('{0}')!=-1]".format('self'))</pyV>
     
 code . print(pop(),end="") end-code // ( x -- ) Print the TOS
 code cr print() end-code // ( -- ) print a carriage return
@@ -306,12 +306,6 @@ code execute execute(pop()); end-code
 : nonprivate ( -- ) // Make the last word non-private so it's globally visible.
     py: last().private=False ;
     /// The opposite of 'private'.
-                
-
-: \s ( -- ) // Stop outer loop which may be loading forth source files.
-    py: vm.stop=True
-    py: vm.ntib=len(tib) ; \ 雙重保險。
-
 
 \ ------------------ Fundamental words ------------------------------------------------------
 
@@ -437,6 +431,26 @@ code next
     end-code immediate compile-only 
     // ( -- ) for ... next (FigTaiwan SamSuanChen)
 code abort reset() end-code // ( -- ) Reset the forth system.
+
+    \
+    \ Redefine // to "replace" alias' help message instead of "append".
+    \
+    \ Append if last().help has stack diagram but no help message, otherewise replace. 
+    \ Stack diagram might be unexpectedly given again. That can be resolved by putting 
+    \ complete help message to the original word or use the trick of // dummy and then 
+    \ // again or simply don't give it again in the alias' help message.
+    \
+    <py> 
+    '''
+    m = re.match("(?P<before>.*?)(?P<stackdiagram>\(.*\))(?P<after>.*)", last().help)
+    if m and (m.groupdict()['before'] + m.groupdict()['after']).strip()=="":
+        last().help += nexttoken('\\n|\\r'); 
+    else:
+        last().help = nexttoken('\\n|\\r'); 
+    ''' 
+    </pyV> -indent ' // py: pop().xt=genxt("//",pop(1)) 
+    \ 等號的右邊先 pop() 然後才輪到等號的左邊 pop()。不容易發現前面這個 pop(1) 應該這樣寫。
+
 code alias      
     w = pop();
     # Avoid corrupting TIB use execute("word") instead of dictate("word").
@@ -845,26 +859,6 @@ code t>
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
 
-\ code (run:)     ( "..if.." -- "..[if].." ) // Run string with "if","begin","for" in interpret mode
-\                 var ss = pop();
-\                 var result = ss
-\                     .replace(/(^|\s)(if|else|then|begin|again|until|for|next)(\s|$)/mg,"$1[$2]$3")
-\                     .replace(/(^|\s)(if|else|then|begin|again|until|for|next)(\s|$)/mg,"$1[$2]$3");
-\                     // 連做兩次解決 if else then 翻成 [if] else [then] 的現象。 
-\                 push(result);execute("tib.insert"); // 不能用 dictate(), 多重 suspend 時，會有怪現象。
-\                 end-code
-\                 /// Replace "if", "for", "begin", .. etc to "[if]", "[for]", "[beign]" .. etc
-\                 /// I like to use "if" in interpret mode directly instead of "[if]" and
-\                 /// to merge them is difficult to me so far. So I defined this word.
-\ : run:          ( <string> -- ... ) // Run one-liner with "if","begin","for", in interpret mode
-\                 CR word (run:) ; interpret-only
-\                 /// To run multiple lines use <text>...</text> (run:) or "run>" instead of "run:".
-\                 /// run: is oneliner. I think run: may be used in ~.f files while run> certainly can't.
-\ : run>          ( <string> -- ... ) // Run multiple lines with "if","begin","for", in interpret mode
-\                 js> push(ntib);ntib=tib.length;tib.slice(pop()) (run:) ; interpret-only
-\                 /// run> go through all the rest of the inputbox; 
-\                 /// run: is oneliner. I think run: may be used in ~.f files while run> certainly can't.
-
 \ ------------------ Tools  ----------------------------------------------------------------------
                 
 code int        push(int(float(pop()))) end-code   // ( float|string -- integer )
@@ -1043,7 +1037,7 @@ code toString # To see a cell in dictionary
                         :> xt.__doc__ . cr cr
                         ." -------------------------------------" cr
                     then
-                then ;
+                else drop then ;
                 /// Also .members .source
 
 : .members      ( obj -- ) // See the object details through inspect.getmembers(obj)

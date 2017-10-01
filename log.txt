@@ -744,11 +744,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
     \ 列出所有的 selftest passed words
         <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr        
-    \ 利用 python 的 list filter 列出某些 words 
-        ==> OK <py> [w for w in words['forth'] if getattr(w,'immediate',False) ] </pyV> .
-        [<Word 'end-code'>, <Word '//'>, <Word '\'>, <Word '<py>'>, ...snip..., <Word '*debug*'>] OK
-    \ 列出所有的 selftest passed words
-        <py> [w for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr 
+    \ 列出所有 immediate words 
+        <py> [w.name for w in words['forth'] if getattr(w,'immediate',False) ] </pyV> . cr
     \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array) 
         ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
         --> slice 
@@ -1540,7 +1537,21 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] 把 update.bat setup.bat setup.py 等等統一起來
     --> 抄 3we 的 setup.bat 
     --> done!
+[x] Example in comment of the "words" command needs improvement
+    --> 整個改良了，如今可以接受 pattern
+[x] alias 要繼承原來的 help & comment 嗎？ 整個檢查看看。。。
+    --> 要，但是 // 改成只有現有的 help 是 "(...)" 才用尾綴的，否則都用取代的。
+[x] Bug: (see) unexpectedly leaves the given tos on the data stack if it's not a Word.
 [ ] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
 [ ] 錄 elearning 介紹 peforth 
+[ ] wiki 介紹 py: help(genxt) py> genxt .source ' + . members 等好用的東西
+[ ] 把網頁或至少 3hta 變成 peforth 的 input box, 解決 multiple line input 的問題。
+    --> 從 peforth 去 launch 3hta include pykb.f 
+    --> python 能不能知道自己是誰 run 的？如果知道，就可以解決 Wsh.sendkey() 不知往哪 send
+        的問題。
 [ ] peforth.f selftest almost done, still many to go:
     <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr    
+[ ] 最進新發現的 bug 特別要加進 selftest 
+    --> (see) none Word 之後 stack 沒清乾淨 --> 有兩條路的 words 都可疑！
+    --> 甚至，例如 words 最後有多印一個 print() 也是測試的重點。
+

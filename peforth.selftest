@@ -13,26 +13,25 @@
 
     <comment>
 
-    程式只要稍微大一點點，附上一些 self-test 讓它伺機檢查自身，隨便有做穩定性
+    程式只要稍微大一點點，附上一些 self-test 讓它伺機檢查自身，隨便做做穩定性
     就會提升。 Forth 的結構全部都是 global words， 改動之後難以一一去檢討影響
     到了哪些 words，與其努力抓 bug 不如早點把 self-test 做進去。
+ 
+    project-k kernel 裡只有 code end-code 兩個基本 forth words。只憑這兩個 words 
+    就馬上要為每個 word 都做 self-test 原本很困難。然而 peforth.f 是整個檔案一次
+    讀進來成為大大的一個 TIB 的， 所以其中已經含有全部功能。如果 self-test 安
+    排在所有 words 都 load 好以後做就不困難。利用〈selftest〉〈/selftest〉這對
+    「文字蒐集器」在任意處所「蒐集測試程式」，最後一次把它當成 TIB 執行。實用上
+    〈selftest〉〈/selftest〉出現在每個 word 定義處，裡頭可以放心自由地使用尚
+    未出生的「未來 words」, 對寫程式時的頭腦有很大的幫助。 
+
+    我嘗試了種種的 self-test 寫法。有的很醜，混在正常程式裡面有礙視線；不醜的很
+    累，佔很大 source code 篇幅。以上是發展到目前最好的方法。
 
     Self-test 的執行時機是程式開始時，或開機時。沒有特定任務就做 self-test.
-
-    include 各個 modules 時，循序就做 self-test。藉由 forth 的 marker, (forget) 等
-    self-test 用過即丟， 只花時間，不佔空間。花平時的開發時間不要緊，有特定任務時就
-    跳過 self-test 不佔執行系統時間、空間，只佔 source code 的篇幅。
-
-    我嘗試了種種的 self-test 寫法。有的很醜，混在正常程式裡面有礙視線；不醜的很累，佔
-    很大 source code 篇幅。以下是發展到目前最好的方法。
-    
-    project-k kernel 裡只有 code end-code 兩個基本 forth words。只憑這兩個基本 words 
-    就馬上要為每個 word 都做 self-test 原本很困難。然而 peforth.f 是整個檔案一次
-    讀進來成為大大的一個 TIB 的， 所以其中已經含有全部功能。如果 self-test 安排在所有
-    的 words 都 load 好以後做就不困難。利用〈selftest〉〈/selftest〉這對「文
-    字蒐集器」在任意處所「蒐集測試程式」，最後一次把它當成 TIB 執行。實用上
-    〈selftest〉〈/selftest〉出現在每個 word 定義處，裡頭可以放心自由地使用尚未出生的
-    「未來 words」, 對寫程式時的頭腦有很大的幫助。 
+    include 各個 modules 時，循序就做 self-test。藉由 forth 的 marker, (forget) 
+    等 self-test 用過即丟， 只花時間，不佔空間。花平時的開發時間不要緊，有特定任
+    務時就跳過 self-test 不佔執行系統時間、空間，只佔 source code 的篇幅。
     
     </comment>
 
@@ -494,8 +493,8 @@
 
         <comment>
         <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr            
-        'reveal', 'privacy', 'py:~', 'py>~', 'here!', '?', 'compiling', 
-        'cls', 'private', 'nonprivate', '\\s', 'ret', 'rescan-word-hash', 'branch', 
+        'privacy', 'py:~', 'py>~', 'here!', '?',  
+        'cls', 'private', 'nonprivate', 'ret', 'rescan-word-hash', 'branch', 
         'doVar', '(marker)', 'abort', 'public', 'never', 'aft', '?stop', 'does>', 
         'accept2', '<accept>', 'nop', '</accept>', '\x04', '[else]', '[if]', '[then]', 
         '(::)', '(:>)', '::~', ':>~', '"msg"abort', 'abort"', '"msg"?abort', 
@@ -509,7 +508,7 @@
         </comment>
 
     *** End of kernel self-test
-        [d d] [p 'screen-buffer','display-off','display-on','***','[all-pass]', 
+        [d d] [p 'compiling','reveal','screen-buffer','display-off','display-on','***','[all-pass]', 
         'all-pass','description', 'expected_rstack', 'expected_stack', 
         'test-result' p]
 
