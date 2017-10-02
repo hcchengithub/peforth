@@ -119,5 +119,5 @@ def ok(prompt='OK ',loc={}, cmd=""):
 vm.ok = ok
 
 if __name__ == '__main__':
-    ok(loc=locals(), cmd=":> [0] inport") # for investigating the application root
-    # ok()
+    # ok(loc=locals(), cmd=":> [0] inport") # for investigating the application root
+    ok()

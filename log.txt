@@ -1542,20 +1542,28 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] alias 要繼承原來的 help & comment 嗎？ 整個檢查看看。。。
     --> 要，但是 // 改成只有現有的 help 是 "(...)" 才用尾綴的，否則都用取代的。
 [x] Bug: (see) unexpectedly leaves the given tos on the data stack if it's not a Word.
-[ ] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
+[x] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
 [ ] 錄 elearning 介紹 peforth 
 [ ] wiki 介紹 py: help(genxt) py> genxt .source ' + . members 等好用的東西
 [ ] 把網頁或至少 3hta 變成 peforth 的 input box, 解決 multiple line input 的問題。
     --> 從 peforth 去 launch 3hta include pykb.f 
     --> python 能不能知道自己是誰 run 的？如果知道，就可以解決 Wsh.sendkey() 不知往哪 send
         的問題。
-[ ] peforth.f selftest almost done, still many to go:
+[x] peforth.f selftest almost done, still many to go:
     <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr    
-[ ] 最進新發現的 bug 特別要加進 selftest 
+[x] 最進新發現的 bug 特別要加進 selftest 
     --> (see) none Word 之後 stack 沒清乾淨 --> 有兩條路的 words 都可疑！
     --> 甚至，例如 words 最後有多印一個 print() 也是測試的重點。
 [ ] <accept> nop </accept> 同一行不行，要改良嗎？
-
-
+[/] readTextFile, writeTextFile 好像都還不能用 -- haha bug 被 inport 取代掉的
+[x] display-off 之後 on 不回來，突然發生，很奇怪。沒了 display 不好 debug.
+    display-off 之內如果是 ." hello world" 就沒問題。
+    是 words help 才有問題,而且是卡在 words 裡面了 <== 因為 words 出錯，導致 display-on 
+    沒 run 到。只要在 words 後面加上 e 就好了。表示是 nexttoken() 又出問題了，從
+    檔案裡執行（而非console command line）時它會繞過 CRLF 往下抓到下一個 token 因此
+    程式都亂了，特別是被他抓走的正好就是 display-on 螢幕都沒了，所以難搞。
+    這類 nexttoken 可有可無的命令在 selftest 時都可能有問題。
+    應該都會被挑出來。 
+    [x] review 所有用到 word 以及 nexttoken() 的地方。。。
 
 

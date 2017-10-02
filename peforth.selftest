@@ -1,100 +1,6 @@
 
 <selftest>
-    \
-    \ 取出整個 selftest buffer 
-    \ py> tick('<self'+'test>').buffer char peforth-selftest.f writeTextFile stop 
-    \
-    \ 經過 15:34 2017-09-17 on MetaMoji 的討論，這個 selftest 的方法只適合從頭做起的
-    \ jeforth 開發階段。來到 peforth 時是從先前的 jeforth 繼承過來的，本有的 selftest
-    \ sections 順序已經不對，若還想要整理到讓它們都跟在各自 word 的 source code 旁邊
-    \ 太累，也沒必要。因此，略施小計如上，把 selftest section 整個都抓在一起，集中編
-    \ 輯比較方便。
-    \
 
-    <comment>
-
-    程式只要稍微大一點點，附上一些 self-test 讓它伺機檢查自身，隨便做做穩定性
-    就會提升。 Forth 的結構全部都是 global words， 改動之後難以一一去檢討影響
-    到了哪些 words，與其努力抓 bug 不如早點把 self-test 做進去。
- 
-    project-k kernel 裡只有 code end-code 兩個基本 forth words。只憑這兩個 words 
-    就馬上要為每個 word 都做 self-test 原本很困難。然而 peforth.f 是整個檔案一次
-    讀進來成為大大的一個 TIB 的， 所以其中已經含有全部功能。如果 self-test 安
-    排在所有 words 都 load 好以後做就不困難。利用〈selftest〉〈/selftest〉這對
-    「文字蒐集器」在任意處所「蒐集測試程式」，最後一次把它當成 TIB 執行。實用上
-    〈selftest〉〈/selftest〉出現在每個 word 定義處，裡頭可以放心自由地使用尚
-    未出生的「未來 words」, 對寫程式時的頭腦有很大的幫助。 
-
-    我嘗試了種種的 self-test 寫法。有的很醜，混在正常程式裡面有礙視線；不醜的很
-    累，佔很大 source code 篇幅。以上是發展到目前最好的方法。
-
-    Self-test 的執行時機是程式開始時，或開機時。沒有特定任務就做 self-test.
-    include 各個 modules 時，循序就做 self-test。藉由 forth 的 marker, (forget) 
-    等 self-test 用過即丟， 只花時間，不佔空間。花平時的開發時間不要緊，有特定任
-    務時就跳過 self-test 不佔執行系統時間、空間，只佔 source code 的篇幅。
-    
-    </comment>
-
-    ---
-    
-    \
-    \ Redirect print() to screen-buffer 
-    \
-    py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
-                                 /// Enveloped in array is for "access by reference"
-    <py>
-        class Screenbuffer:
-            def __init__(self,buf):
-                self.stdoutwas=sys.stdout
-                self.buffer=buf
-            def write(self, output_stream):
-                self.buffer[0] += output_stream
-            def view(self):
-                self.stdoutwas.write(self.buffer[0])
-            def reset(self):
-                sys.stdout=self.stdoutwas
-        vm.Screenbuffer=Screenbuffer
-    </py>
-    \ # Start redirection
-    \ sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
-    \ 
-    \ # Print to screen when redirected
-    \ sys.stdout.stdoutwas.write("-------1111-----\n")
-    \ sys.stdout.stdoutwas.write("-------2222-----\n")
-    \ 
-    \ # view screen buffer
-    \ sys.stdout.view()
-    \ 
-    \ # reset
-    \ sys.stdout.reset()
-    
-    : display-off ( -- ) // Redirect stdout to a empty screen-buffer
-        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
-        screen-buffer :: [0]="" ;
-
-    : display-on ( -- ) // Redirect stdout back to what it was. screen-buffer has data during it off.
-        py: sys.stdout.reset() ;
-    
-    marker ---
-     
-    .( *** Start self-test ) cr
-    
-    *** Data stack should be empty
-        depth [d 0 d] [p 'code','end-code','<py>','cr','depth','<self'+'test>',
-        '</self'+'test>','<py>','</'+'pyV>','\\','<comment>','</comment>',
-        '.(', 'cr','***' p]
-    *** Rreturn stack should have less than 2 cells
-        py> len(rstack)<=2 [d True d] [p 'py>','<=','[d','d]','[p','p'+']' p]
-    *** // adds help to the last word
-        ' // :> help.find("message")!=-1 [d True d] [p "//", ":>", "'" p]
-    *** TIB lines after \ should be ignored
-        --- marker ---
-        111 \ 222
-        : dummy
-            999
-            \ 333 444 555
-        ; last execute
-        [d 111,999 d] [p '\\' p]
     *** /// add comment to the last word 
         --- marker ---
         : dummy ; /// 98787665453
@@ -182,7 +88,7 @@
         456 char pop()+1 py> eval(pop()) [d 457 d] [p "py>" p]
     *** last should return the last word
         0 constant xxx
-        last :> name [d "xxx" d] [p "last","constant" p]
+        last :> name [d "xxx" d] [p "last","constant",'(constant)' p]
         (forget)
     *** exit should stop a colon word
         : dummy 123 exit 456 ;
@@ -471,11 +377,13 @@
         : test ; // test.test.test
         display-off
         see test
+        py> {'aa':11,'bb':22} (see)
         display-on
         screen-buffer <py> pop()[0].find('test.test.test')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('cfa')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('colon')!=-1 </pyV> ( True )
-        [d True,True,True d] [p 'see','(see)' p]
+        screen-buffer <py> pop()[0].find('"bb": 22')!=-1 </pyV> ( True )
+        [d True,True,True,True d] [p 'see','(see)','stringify','dump2ret','obj2dict' p]
         --- marker ---
     *** trim indent -indent
         <text>
@@ -522,10 +430,10 @@
         display-off
         words
         display-on 
-        display-off
         screen-buffer <py> pop()[0].find('code end-code')!=-1 </pyV> ( True )
-        help
         display-off
+        help
+        display-on
         screen-buffer <py> pop()[0].find('d] ( -- boolean )')!=-1 </pyV> ( True )
         [d True,True d] [p 'words','help' p]
     *** keys dir type
@@ -533,26 +441,73 @@
         123 dir py> type(pop())==list ( True )
         123 type py> type(pop())==type ( True ) 
         [d True,True,True d] [p 'keys','dir','type' p]
-        
-        
+    *** [if] [else] [then] [begin] [again] [until] [for] [next] 
+        py> sys.modules['time'].time() int
+        [begin] ( char . . ) py> sys.modules['time'].time() int over != [until] drop
+        py> sys.modules['time'].time() int
+        [begin] ( char . . ) py> sys.modules['time'].time() int over != 
+        [if] drop [else] [again] [then]
+        0 100 [for] t@ + [next] ( 5050 )
+        [d 5050 d] [p '[if]','[else]','[then]','[begin]',
+        '[again]','[until]','[for]','[next]','>t','t@','t>' p]
+    *** d dump 
+        display-off
+        d 0
+        d
+        d
+        d
+        d
+        d
+        d
+        10 800 dump ( 10 + 800 )
+        display-on
+        screen-buffer <py> pop()[0].find('00000: 0')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('00798: ')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('00799: ')!=-1 </pyV> ( True )
+        [d 810,True,True,True d] [p '<accept>','</accept>','accept','accept2','d','dump',
+        '(dump)','toString', '.literal', '.function' p]
+    *** obj>keys .members .source
+        py> {'aa':11,'bb':22} obj>keys py> set(pop()) ( {'aa','bb'} ) \ cast to set for compare
+        ( True ) ' + obj>keys py>~ 'xt'  in pop()  
+        ( True ) ' + obj>keys py>~ 'vid' in pop() 
+        ( True ) ' + obj>keys py>~ 'wid' in pop() 
+        display-off
+        ' + .members
+        py> genxt .source
+        display-on
+        screen-buffer <py> pop()[0].find('"name": "+"')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('__doc__ = source')!=-1 </pyV> ( True )
+        [d {'aa','bb'},True,True,True,True,True d]
+        [p 'obj>keys','.members','.source' p]
+    *** dos cd slice WshShell 
+        WshShell :> CurrentDirectory ( path )
+        display-off
+        cd
+        display-on
+        screen-buffer <py> pop()[0].find(pop())!=-1 </pyV> ( True )
+        ( 123 ) dos python -m peforth 123 bye 
+        4 5 6 -2 slice ( ... 4,[5,6] )
+        [d True,123,4,[5,6] d] [p 'dos','cd','slice','WshShell','win32com.client' p]
+\   *** [r r]
+\       py> rstack ( save )
+\       11 >r 22 >r 
+\       [r 835,11,22,0 r] [d True d] [p '[r','r]' p]
 
-            
         <comment>
-        <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr            
-        [ 'privacy', 'private', 'nonprivate', 'ret', 
-        'rescan-word-hash', 'branch', 'abort', 'public', 'never', 'aft', '?stop', 'accept', 
-        'accept2', '<accept>', 'nop', '</accept>', '\x04', 'refill', '[else]', '[if]', 
-        '[then]', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', '(constant)', 'cut', 
-        '-word', 'rewind', '?rewind', 'tib.', '>t', 't@', 't>', '[begin]', '[again]', 
-        '[until]', '[for]', '[next]', '(*debug*)', '*debug*', 'readTextFile', 'writeTextFile', 
-        'tib.insert', 'sinclude', 'include', 'obj>keys', 'obj2dict', 'stringify', 
-        'toString', '.literal', '.function', '(dump)', 'dump2ret', '.members', '.source', 
-        'dos', 'cd', 'slice', '[r', 'r]', 'inport', 'OK','---']
+        Run the below line to list words that have not passed its selftest
+        <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr
+         'readTextFile', 'writeTextFile',  'inport',
         </comment>
 
     *** End of kernel self-test
-        [d d] [p 'cls','compiling','reveal','screen-buffer','display-off','display-on','***','[all-pass]', 
-        'all-pass','description', 'expected_rstack', 'expected_stack','(::)', '(:>)', '::~', ':>~', 
-        'test-result','(marker)','bye', 'stop','.' p]
+        \ 這些 words 都武斷地算 pass 了
+        [d d] [p 'cls','compiling','reveal','screen-buffer','display-off','display-on',
+        '***','[all-pass]','all-pass','description', 'expected_rstack', 'expected_stack',
+        'test-result','(marker)','bye', 'stop','.',
+        'privacy', 'private', 'nonprivate', 'ret', 'rescan-word-hash', 
+        'branch', 'abort', 'public', 'never', 'aft', '?stop', 'nop', '\x04', 
+        'refill', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', 'tib.', 
+        '(*debug*)', '*debug*','tib.insert', 
+        'sinclude', 'include', 'OK' p]
 
 </selftest>

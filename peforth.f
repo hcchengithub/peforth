@@ -11,6 +11,109 @@ code </selftest>
     end-code
     // ( "selftest" -- ) Save the self-test statements to <selftest>.buffer. interpret-only
 
+    <selftest>
+    
+    \
+    \ 取出整個 selftest buffer 
+    \ py> tick('<self'+'test>').buffer char peforth-selftest.f writeTextFile stop 
+    \
+    \ 經過 15:34 2017-09-17 on MetaMoji 的討論，這個 selftest 的方法只適合從頭做起的
+    \ jeforth 開發階段。來到 peforth 時是從先前的 jeforth 繼承過來的，本有的 selftest
+    \ sections 順序已經不對，若還想要整理到讓它們都跟在各自 word 的 source code 旁邊
+    \ 太累，也沒必要。因此，略施小計如上，把 selftest section 整個都抓在一起，集中編
+    \ 輯比較方便。
+    \
+
+    <comment>
+
+    程式只要稍微大一點點，附上一些 self-test 讓它伺機檢查自身，隨便做做穩定性
+    就會提升。 Forth 的結構全部都是 global words， 改動之後難以一一去檢討影響
+    到了哪些 words，與其努力抓 bug 不如早點把 self-test 做進去。
+ 
+    project-k kernel 裡只有 code end-code 兩個基本 forth words。只憑這兩個 words 
+    就馬上要為每個 word 都做 self-test 原本很困難。然而 peforth.f 是整個檔案一次
+    讀進來成為大大的一個 TIB 的， 所以其中已經含有全部功能。如果 self-test 安
+    排在所有 words 都 load 好以後做就不困難。利用〈selftest〉〈/selftest〉這對
+    「文字蒐集器」在任意處所「蒐集測試程式」，最後一次把它當成 TIB 執行。實用上
+    〈selftest〉〈/selftest〉出現在每個 word 定義處，裡頭可以放心自由地使用尚
+    未出生的「未來 words」, 對寫程式時的頭腦有很大的幫助。 
+
+    我嘗試了種種的 self-test 寫法。有的很醜，混在正常程式裡面有礙視線；不醜的很
+    累，佔很大 source code 篇幅。以上是發展到目前最好的方法。
+
+    Self-test 的執行時機是程式開始時，或開機時。沒有特定任務就做 self-test.
+    include 各個 modules 時，循序就做 self-test。藉由 forth 的 marker, (forget) 
+    等 self-test 用過即丟， 只花時間，不佔空間。花平時的開發時間不要緊，有特定任
+    務時就跳過 self-test 不佔執行系統時間、空間，只佔 source code 的篇幅。
+    
+    </comment>
+
+    ---
+    
+    \
+    \ Redirect print() to screen-buffer 
+    \
+    py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
+                                 /// Enveloped in array is for "access by reference"
+    <py>
+        class Screenbuffer:
+            def __init__(self,buf):
+                self.stdoutwas=sys.stdout
+                self.buffer=buf
+            def write(self, output_stream):
+                self.buffer[0] += output_stream
+            def view(self):
+                self.stdoutwas.write(self.buffer[0])
+            def reset(self):
+                sys.stdout=self.stdoutwas
+            def flush(self):
+                # self.buffer[0]=''
+                pass
+        vm.Screenbuffer=Screenbuffer
+    </py>
+    \ # Start redirection
+    \ sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+    \ 
+    \ # Print to screen when redirected
+    \ sys.stdout.stdoutwas.write("-------1111-----\n")
+    \ sys.stdout.stdoutwas.write("-------2222-----\n")
+    \ 
+    \ # view screen buffer
+    \ sys.stdout.view()
+    \ 
+    \ # reset
+    \ sys.stdout.reset()
+    
+    : display-off ( -- ) // Redirect stdout to a empty screen-buffer
+        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
+        screen-buffer :: [0]="" ;
+
+    : display-on ( -- ) // Redirect stdout back to what it was. screen-buffer has data during it off.
+        py: sys.stdout.reset() ;
+    
+    marker ---
+     
+    .( *** Start self-test ) cr
+    
+    *** Data stack should be empty
+        depth [d 0 d] [p 'code','end-code','<py>','cr','depth','<self'+'test>',
+        '</self'+'test>','<py>','</'+'pyV>','\\','<comment>','</comment>',
+        '.(', 'cr','***' p]
+    *** Rreturn stack should have less than 2 cells
+        py> len(rstack)<=2 [d True d] [p 'py>','<=','[d','d]','[p','p'+']' p]
+    *** // adds help to the last word
+        ' // :> help.find("message")!=-1 [d True d] [p "//", ":>", "'" p]
+    *** TIB lines after \ should be ignored
+        111 \ 222
+        : dummy
+            999
+            \ 333 444 555
+        ; last execute
+        [d 111,999 d] [p '\\' p]
+        --- marker ---
+        
+    </selftest>
+
 code bye 
             if len(stack) and type(tos())==int: 
                 exit(pop()) 
@@ -116,10 +219,13 @@ code </pyV>
     </py>
     
 code words
-    pattern = nexttoken()
-    if pattern: screened = [w.name for w in words['forth'][1:] if w.name.find(pattern)!=-1]
-    else: screened = [w.name for w in words['forth'][1:]]
-    for i in screened: print(i, end=" ")
+    pattern = nexttoken('\n|\r').strip() # 避免 selftest 時抓 tib 過頭，本來 nexttoken() 就可以。
+    if pattern: 
+        screened = [w.name for w in words['forth'][1:] if w.name.find(pattern)!=-1]
+    else: 
+        screened = [w.name for w in words['forth'][1:]]
+    for i in screened: 
+        print(i, end=" ")
     print() end-code 
     // ( <pattern> -- ) List all words, in the active vocabularies, with the pattern in their name.
     /// Examples of listing screened words:
@@ -134,7 +240,7 @@ code . print(pop(),end="") end-code // ( x -- ) Print the TOS
 code cr print() end-code // ( -- ) print a carriage return
 
 code help
-    n=nexttoken();
+    n = nexttoken('\n|\r').strip();  # 避免 selftest 時抓 tib 過頭，本來 nexttoken() 就可以。
     if n:
         print(tick(n).help)
         print(tick(n).comment or "") 
@@ -568,7 +674,7 @@ code accept
     end-code // ( -- str ) Read a line from terminal.
     
 code accept2 
-    result = nexttoken('\\n')+'\n' # rest of the line after accept2
+    result = nexttoken('\n')+'\n' # rest of the line after accept2
     execute('accept'); s = pop()+'\n'
     while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
         result += s
@@ -765,21 +871,21 @@ variable '<text> private
                 else ( n word )
                     py: getattr(vm,tos().vid)[pop().name]=pop(1)
                 then ; immediate
-code            cut vm.tib=tib[ntib:];vm.ntib=0 end-code
-                // ( -- ) // Cut off used TIB.
-                /// "cut ~ 10 nap rewind" repeat running the TIB.
-                /// See also <task>
-code -word 
-                # 加上 dummy 頭尾再 split 以統一所有狀況。丟掉 dummy 頭尾 
-                push(('h ' + tib[:ntib] + ' t').split()[1:-1]); end-code
-                // ( -- array[] ) Get TIB used tokens.
-                /// 跟 word 有點相反的味道，故以 -word 為名。用來找 nap。peforth 可能沒用?
-: rewind ( -- ) // Rewind TIB so as to repeat it. 'stop' to terminate.
-                py: vm.ntib=0 ;
-                /// "cut ~ 10 nap rewind" repeat running the TIB.
-                /// See also <task>
-: ?rewind ( boolean -- ) // Conditional rewind TIB so as to repeat it. 'stop' to terminate.
-                if rewind then ;
+\ code cut        vm.tib=tib[ntib:];vm.ntib=0 end-code
+\                 // ( -- ) // Cut off used TIB.
+\                 /// "cut ~ 10 nap rewind" repeat running the TIB.
+\                 /// See also <task>
+\ code -word 
+\                 # 加上 dummy 頭尾再 split 以統一所有狀況。丟掉 dummy 頭尾 
+\                 push(('h ' + tib[:ntib] + ' t').split()[1:-1]); end-code
+\                 // ( -- array[] ) Get TIB used tokens.
+\                 /// 跟 word 有點相反的味道，故以 -word 為名。用來找 nap。peforth 可能沒用?
+\ : rewind ( -- ) // Rewind TIB so as to repeat it. 'stop' to terminate.
+\                 py: vm.ntib=0 ;
+\                 /// "cut ~ 10 nap rewind" repeat running the TIB.
+\                 /// See also <task>
+\ : ?rewind ( boolean -- ) // Conditional rewind TIB so as to repeat it. 'stop' to terminate.
+\                 if rewind then ;
 
 : tib. ( result -- ) // Print the command line and the TOS.
                 py> tib[:ntib].rfind('\n') py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
@@ -818,7 +924,7 @@ code t>
                 t@ py: vm.ntib=pop() ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
-
+                /// Add condition: [if] [again] [then]    
 : [until]       ( flag -- ) // [begin].. flag [until]
                 if  t> drop else [compile] [again] then ; interpret-only
                 /// Don't forget some nap.
@@ -861,6 +967,27 @@ code t>
 
 \ ------------------ Tools  ----------------------------------------------------------------------
                 
+: modules ( <pattern> -- ) // List imported modules
+    CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
+    if py>~ [i for i in sys.modules.keys() if i.find(tos())!=-1]
+    nip else  py>~ [i for i in sys.modules.keys()]
+    then py:~ for i in pop(): print(i,end=" ")
+    cr ;
+
+    <selftest>
+    *** modules lists imported modules
+        display-off
+        modules
+        display-on
+        screen-buffer <py> pop()[0].find('builtins sys')!=-1 </pyV> ( True )
+        display-off
+        modules os
+        display-on
+        screen-buffer <py> pop()[0].find('builtins sys')!=-1 </pyV> ( False )
+        screen-buffer <py> pop()[0].find('os os.path')!=-1 </pyV> ( True )
+        [d True,False,True d] [p 'modules' p]
+    </selftest>
+    
 code int        push(int(float(pop()))) end-code   // ( float|string -- integer )
 code float      push(float(pop())) end-code // ( string -- float ) 
 : drops         ( ... n -- ... ) // Drop n cells from data stack.
@@ -1011,7 +1138,7 @@ code toString # To see a cell in dictionary
                 
 : d             ( <addr> -- ) // dump dictionary
                 [ last literal ]
-                BL word                     \ (me str)
+                CR word trim                \ (me str) 避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
                 count 0=                    \ (me str undef?) No start address?
                 if                          \ (me str)
                     drop                    \ drop the null str (me)
@@ -1065,6 +1192,18 @@ code toString # To see a cell in dictionary
 : slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
                 ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
                 /// Group the tuple returned from a function
+
+\ Setup WshShell                 
+
+    py:~ import win32com.client; push(win32com.client)
+    constant win32com.client // ( -- module )
+    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
+        /// 把螢幕關掉，任意鍵回亮，即 Windows 的 display off power saving mode.
+        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") 
+        /// WshShell :> run("__main__.py",5,True) \ True to wait for errorlevel
+        /// WshShell ::~ run("cmd /k __main__.py",5,True) \ Stay in the DOSBox
+        /// WshShell :: SendKeys("abc")
+        /// WshShell :: AppActivate("python.exe")
 
 \ ----------------- Self Test -------------------------------------
 
