@@ -2,7 +2,7 @@
 peforth
 #######
 
-A FORTH programming language begins with only two words 'code' and 'end-code'.
+A python programable debugger in FORTH syntax.
 
 Ways to run peforth
 ***********************************
@@ -242,5 +242,4 @@ Edited by: `rst online editor`_
 
 .. _Wiki: https://github.com/hcchengithub/peforth/wiki
 .. _rst online editor: http://rst.ninjs.org
-
 

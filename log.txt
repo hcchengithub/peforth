@@ -1565,5 +1565,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     這類 nexttoken 可有可無的命令在 selftest 時都可能有問題。
     應該都會被挑出來。 
     [x] review 所有用到 word 以及 nexttoken() 的地方。。。
-
+[ ] python -i -m peforth version
+    exit 之後會有 error
+    
+    
 

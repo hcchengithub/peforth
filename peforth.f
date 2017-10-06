@@ -3,7 +3,7 @@ code // last().help += nexttoken('\n|\r'); end-code // ( <comment> -- ) Give hel
 code <selftest> 
     push(nexttoken("</selftest>"));
     end-code
-    // ( <statements> -- ) \ Collect self-test statements. interpret-only
+    // ( <statements> -- ) Collect self-test statements. interpret-only
 code </selftest> 
     my = tick("<selftest>");
     my.buffer = getattr(my, "buffer", "") # initialize my.buffer
@@ -354,7 +354,6 @@ code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
 : py>~ ( <statement> -- ) CR word [compile] </pyV> ; immediate // Inline python statement for rest of the line
     
 \ ------------ above are most basic words for developing and for debug ----------------
-\ 以下都應該盡量改成 colon words 
 
 code 0branch 
     global ip;
@@ -603,7 +602,7 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
     ///   : test ?dup if for r@ . space next then ;
     ///   5 test ==> 5 4 3 2 1
     /// Pattern : Normalized for-loop pattern but n based.
-    ///   : test js: push(tos()+3,0) for dup r@ - ( count+n i ) . space next drop ; 
+    ///   : test py: push(tos()+3,0) for dup r@ - ( count+n i ) . space next drop ; 
     ///   5 test ==> 3 4 5 6 7 ; 1 test ==> 1 ; 0 test ==> nothing
     /// Pattern : Simplest, fixed times.
     ///   : test 5 for r@ . space next ; 
@@ -611,7 +610,7 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
     /// Pattern : fixed times and 0 based index
     ///   : test 5 for 5 r@ - . space next ; 
     ///   test ==> 0 1 2 3 4 
-    /// Pattern of break : "r> drop 0 >r" or "js: rstack[rstack.length-1]=0"
+    /// Pattern of break : "r> drop 0 >r" or "py: rstack[rstack.length-1]=0"
     ///   : test 10 for 10 r@ - dup . space 5 >= if r> drop 0 >r then next ; 
     ///   test ==> 0 1 2 3 4 5 
                 
@@ -660,7 +659,6 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
                 char ` word compiling if literal then BL word drop ; immediate
 : does>         ( -- ) // redirect the last new colon word.xt to after does>
                 [compile] ret \ dummy 'ret' mark for 'see' to know where is the end of a creat-does word
-                \ r> [ s" push(function(){push(last().cfa)})" jsEvalNo , ] ! ; 
                 r> py: push(last().cfa) ! ; 
 : count         ( thing -- thing length ) // Get length of the thing if it has
                 py: push(len(tos())) ;
@@ -742,7 +740,7 @@ code nop end-code // ( -- ) no operation
                 swap + compiling if compyle , 
                 else [compile] </py> then ;
                 
-: (:>)          ( obj "sub-statement" -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
+: (:>)          ( obj "sub-statement" -- value ) // Simplified form of "obj py> pop().foo.bar" w/return value
                 <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
                 if char push(pop() else char push(pop(). then 
                 swap + char ) + compiling if compyle ,
@@ -750,11 +748,11 @@ code nop end-code // ( -- ) no operation
                         
 : ::            ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
                 BL word (::) ; immediate   /// down to the next whitespace
-: :>            ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
+: :>            ( obj <sub-statement> -- value ) // Simplified form of "obj py> pop().foo.bar" w/return value
                 BL word (:>) ; immediate   /// down to the next whitespace
 : ::~           ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
                 CR word (::) ; immediate   /// for rest of the line
-: :>~           ( obj <sub-statement> -- value ) // Simplified form of "obj js> pop().foo.bar" w/return value
+: :>~           ( obj <sub-statement> -- value ) // Simplified form of "obj py> pop().foo.bar" w/return value
                 CR word (:>) ; immediate   /// for rest of the line
 
 \ 有 bug 先暫時不要這個 nested ( ) comment
@@ -918,7 +916,7 @@ code t>
                 py> ntib >t ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
-                /// ex. [begin] .s js> rstack . cr 1000 nap [again]
+                /// ex. [begin] .s py> rstack . cr 1000 nap [again]
                 
 : [again]       ( -- ) // [begin]..[again]
                 t@ py: vm.ntib=pop() ; interpret-only
@@ -940,7 +938,7 @@ code t>
                 ///   5 ?dup [if] dup [for] dup t@ - ( COUNT i ) . space ( COUNT ) [next] drop [then]
                 ///   ==> 0 1 2 3 4
                 /// Pattern : Normalized for-loop pattern but n(66) based.
-                ///   5 js: push(tos()+66,0) [for] dup t@ - ( count+n i ) . space [next] drop
+                ///   5 py: push(tos()+66,0) [for] dup t@ - ( count+n i ) . space [next] drop
                 ///   ==> 66 67 68 69 70  OK        
                 /// Pattern : Simplest, fixed times.
                 ///   5 [for] t@ . space [next]
@@ -948,7 +946,7 @@ code t>
                 /// Pattern : fixed times and 0 based index
                 ///   5 [for] 5 t@ - . space [next]
                 ///   ==> 0 1 2 3 4
-                /// Pattern of break : "t> drop 0 >t" or "js: rstack[rstack.length-1]=0"
+                /// Pattern of break : "t> drop 0 >t" or "py: rstack[rstack.length-1]=0"
                 ///   10 [for] 10 t@ - dup . space 5 >= [if] t> drop 0 >t [then] [next]
                 ///   ==> 0 1 2 3 4 5
                 /// Don't forget some nap.
@@ -1212,9 +1210,9 @@ code toString # To see a cell in dictionary
 \ private words called (execute) or referenced (tick) by name warning when in 
 \ selftest to find them without reducing the performance of none-selftest mode. 
 \ : referenced-by-name-warning-on    ( -- ) // Turn on run-time warnings 
-\                 js: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
+\                 py: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
 \ : referenced-by-name-warning-off   ( -- ) // Turn off run-time warnings
-\                 js: tick=vm.tick;execute=vm.execute ;
+\                 py: tick=vm.tick;execute=vm.execute ;
                 
 "" value description     ( private ) // ( -- "text" ) description of a selftest section
 [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
@@ -1289,12 +1287,12 @@ code all-pass
     \ I/O may not be ready enough to read selftest.f at this moment, 
     \ so the below code has been moved to quit.f of each applications.
     \ Do the jeforth.f self-test only when there's no command line
-    \   js> vm.argv.length 1 > \ Do we have jobs from command line?
+    \   py> vm.argv.length 1 > \ Do we have jobs from command line?
     \   [if] \ We have jobs from command line to do. Disable self-test.
-    \       js: tick('<selftest>').enabled=False
+    \       py: tick('<selftest>').enabled=False
     \   [else] \ We don't have jobs from command line to do. So we do the self-test.
-    \       js> tick('<selftest>').enabled=True;tick('<selftest>').buffer tib.insert
-    \   [then] js: tick('<selftest>').buffer="" \ recycle the memory
+    \       py> tick('<selftest>').enabled=True;tick('<selftest>').buffer tib.insert
+    \   [then] py: tick('<selftest>').buffer="" \ recycle the memory
 
     
     

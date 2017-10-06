@@ -499,7 +499,7 @@
          'readTextFile', 'writeTextFile',  'inport',
         </comment>
 
-    *** End of kernel self-test
+    *** End of peforth.f self-test
         \ 這些 words 都武斷地算 pass 了
         [d d] [p 'cls','compiling','reveal','screen-buffer','display-off','display-on',
         '***','[all-pass]','all-pass','description', 'expected_rstack', 'expected_stack',
