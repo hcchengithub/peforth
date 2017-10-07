@@ -291,7 +291,7 @@ peforth
     --> outer() 用 eval(token) 想判斷 token 是否 number 不行, 
         當 token='compiling' 時不會觸發 exception 反而傳回其值 True or False !! 
     --> 改用 complex(token) 很完美! 
-[ ] t> >t t@ 
+[x] t> >t t@ 
     >>> line = 'Cats are smarter than dogs\n\\ 1234\n\\ 2233'
     >>> matchObj = re.search( r'\n\\ (\d*)$', line)
     >>> matchObj.group()
@@ -1543,8 +1543,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 要，但是 // 改成只有現有的 help 是 "(...)" 才用尾綴的，否則都用取代的。
 [x] Bug: (see) unexpectedly leaves the given tos on the data stack if it's not a Word.
 [x] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
-[ ] 錄 elearning 介紹 peforth 
+[x] 錄 elearning 介紹 peforth 
 [ ] wiki 介紹 py: help(genxt) py> genxt .source ' + . members 等好用的東西
+    --> 唉，當時的層次真是，不好說啊！好是好，推薦自己的好東西，沒有照
+        顧 user 的需求。
 [ ] 把網頁或至少 3hta 變成 peforth 的 input box, 解決 multiple line input 的問題。
     --> 從 peforth 去 launch 3hta include pykb.f 
     --> python 能不能知道自己是誰 run 的？如果知道，就可以解決 Wsh.sendkey() 不知往哪 send
@@ -1565,8 +1567,71 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     這類 nexttoken 可有可無的命令在 selftest 時都可能有問題。
     應該都會被挑出來。 
     [x] review 所有用到 word 以及 nexttoken() 的地方。。。
-[ ] python -i -m peforth version
-    exit 之後會有 error
-    
-    
+[x] python -i -m peforth version
+    exit 之後會有 error ---> 不見了！可能是 WshShell win32 package
+    --> 又來了！！！
+        c:\Users\hcche\Documents\GitHub\peforth>python -i __main__.py
+        p e f o r t h    v1.07
+        source code http://github.com/hcchengithub/peforth
 
+        *** Start self-test
+        *** End of peforth.f self-test ... pass
+        OK bye
+        Traceback (most recent call last):
+          File "__main__.py", line 129, in <module>
+            ok()
+          .... snip ......
+          File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\_sitebuiltins.py", line 26, in __call__
+            raise SystemExit(code)
+        SystemExit: None
+        >>>    
+    --> can repro? python -i __main__.py and bye ... Yes, repro'ed
+    --> OK py: exit() <--- can repro 
+        OK py: exit(0) <--- repro too!!!
+    --> can it repro on a simplified ~.py instead of peforth?
+        --> Yes!! as simple as only one statement in test.py :
+            c:\Users\hcche\Downloads>type test.py
+            exit()
+
+            c:\Users\hcche\Downloads>python -i test.py
+            Traceback (most recent call last):
+              File "test.py", line 1, in <module>
+                exit()
+              File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\_sitebuiltins.py", line 26, in __call__
+                raise SystemExit(code)
+            SystemExit: None
+            >>> exit()
+            c:\Users\hcche\Downloads>        
+    --> It's not a problem. -i switch in command line normal behavior.
+    --> bye to use os._exit(0) instead of exit() can fix the problem.
+    
+[x] exit command to set vm.exit=True to stop the ok() in __main__.py
+[/] add bp('prompt') in addition to ok() to avoid the unnecesary awkward
+    breakpoint instruction 
+    --> Listen to users, don't assume. ok(prompt,loc,cmd) arguments are
+        all very useful.
+[x] how to get vm's parent? so as to show greeting message differently
+    for different situations. i.e. ok() or peforth.ok() to enter peforth
+    interpreter
+    --> 本來的目的不知能不能達到，有 parent 的 data 總是好的。
+    
+[x] Tests before a Release  v1.07
+    [x] 所有 run 法帶 selftest 跑一遍
+        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 2. python __main__.py version drop [ ] .s [ ] exit [ ] bye
+        [x] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 4. python -i __main__.py version drop [ ] .s [ ] exit [ ] bye
+    [x] Run setup.bat 把 package 更新成 release 版    
+        [x] 3. python -i -m peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 4. python -i -m peforth version drop [ ] .s [ ] exit [ ] bye
+        [x] 5. import peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+    [ ] 考慮 README.rst 改良
+        --> GitHub 版的先弄好 
+            [ ] 草稿 peforth wiki article hello world  _wiki_
+[ ] Bug found
+    c:\Users\hcche\Documents\GitHub\peforth>python -i -m peforth exit
+    OK
+    OK <=== python interpreter prompte expected
+    --> 因為 vm.ret 有兩個！！！！
+    peforth module __init__.py __main__.py 的關係不是一個！！！
+    module 裡面的 __main__.py 專攻 -m 執行用，改寫看看。。。。

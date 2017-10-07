@@ -116,9 +116,9 @@ code </selftest>
 
 code bye 
             if len(stack) and type(tos())==int: 
-                exit(pop()) 
+                os._exit(pop()) 
             else:
-                exit()
+                os._exit(0)
             end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
 code /// 
             ss = nexttoken('\n|\r');
@@ -415,7 +415,10 @@ code execute execute(pop()); end-code
 \ ------------------ Fundamental words ------------------------------------------------------
 
 code (space) push(" ") end-code // ( -- " " ) Put a space on TOS.
-code exit comma(EXIT) end-code immediate compile-only
+code exit 
+    if compiling: comma(EXIT) 
+    else: vm.ret=True
+    end-code immediate
     // ( -- ) Exit this colon word.
 code ret comma(RET) end-code immediate compile-only
     // ( -- ) Mark at the end of a colon word.
@@ -1190,18 +1193,6 @@ code toString # To see a cell in dictionary
 : slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
                 ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
                 /// Group the tuple returned from a function
-
-\ Setup WshShell                 
-
-    py:~ import win32com.client; push(win32com.client)
-    constant win32com.client // ( -- module )
-    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
-        /// 把螢幕關掉，任意鍵回亮，即 Windows 的 display off power saving mode.
-        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") 
-        /// WshShell :> run("__main__.py",5,True) \ True to wait for errorlevel
-        /// WshShell ::~ run("cmd /k __main__.py",5,True) \ Stay in the DOSBox
-        /// WshShell :: SendKeys("abc")
-        /// WshShell :: AppActivate("python.exe")
 
 \ ----------------- Self Test -------------------------------------
 

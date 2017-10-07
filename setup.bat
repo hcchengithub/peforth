@@ -76,8 +76,9 @@
         py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
             
         cr 
-        ." Check ~\GitHub\peforth\setup.py and ~\GitHub\peforth\setup.bat files" cr
-        ." to make sure no new files are missing." cr
+        ." o  Check ~\GitHub\peforth\setup.py and ~\GitHub\peforth\setup.bat" cr
+        ."    files to make sure no new files are missing." cr cr
+        ." o  Check quit.f to make sure selftest is Disabled before a release." cr cr
         ." Press Enter to stop it or 'continue' to proceed. "
         py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
 

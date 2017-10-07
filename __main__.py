@@ -71,26 +71,32 @@ def greeting():
     print("p e f o r t h    v" + str(vm.version));
     print("source code http://github.com/hcchengithub/peforth");
     if __package__:
-        print("Type 'peforth.ok()' enters forth interpreter, 'exit' to come back.");
+        print("Type 'peforth.ok()' or 'ok()' to enter forth interpreter, 'exit' to come back.");
     print()
     return vm.version;
 vm.greeting = greeting
+
+# Master switch to break ok() and return to python interpreter
+vm.ret = False  
     
 # Run once
 if not vm.tick('version'): 
     vm.dictate(readTextFile(path+'peforth.f'))
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
-    
-# Invoke the peforth interpreter or, in another word, shells to peforth.
-# Put an ok() anywhere in python code as a breakpoint. The prompt argument
-# indicates which breakpoint it is. The loc (locals) argument passes the 
-# recent locals as a dictionary to peforth so we can investigate them with 
-# all the power of peforth.  
-def ok(prompt='OK ',loc={}, cmd=""):
-    if loc: vm.push((loc,'<== Identifiers ok() Prompt ==>',prompt))
-    if not vm.commandline.strip(): print(prompt,end='')
+
+# Invoke the peforth interpreter or shell to peforth.
+# Put an ok() anywhere in python code as a breakpoint. The command prompt
+# indicates which breakpoint it is. The loc (locals) and glo (globals) 
+# arguments passes the caller's (the parent) information. So peforth can 
+# investigate the parent with its context. ok() returns when vm.ret==True 
+def ok(prompt='OK ', loc={}, glo={}, cmd=""):
+    if loc or glo: vm.push((loc,glo,prompt))  # parent's (the caller) data
     while True:
+        if vm.ret: # vm.ret is a flag of boolean
+            vm.ret = False # Avoid return immediately when called again
+            break # Go back to the caller e.g. python interpreter
+            
         if cmd == "":                                    # 
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or    
                 vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
@@ -105,9 +111,6 @@ def ok(prompt='OK ',loc={}, cmd=""):
         if cmd == "":
             print(prompt, end="")
             continue
-        # elif cmd == "exit": 
-        elif 'exit' == cmd.split()[-1]: # 'exit' appears at EOL?
-            break # Go back to the caller e.g. python interpreter
         elif cmd == chr(4):
             vm.multiple = not vm.multiple
             if not vm.multiple: print(prompt, end="")
@@ -119,5 +122,10 @@ def ok(prompt='OK ',loc={}, cmd=""):
 vm.ok = ok
 
 if __name__ == '__main__':
-    # ok(loc=locals(), cmd=":> [0] inport") # for investigating the application root
-    ok()
+    ok( loc=locals(),
+        glo=globals(),
+        cmd = 
+        '''
+        constant parent // ( -- (locals,globals,prompt) ) A tuple about the parent
+        '''
+        )

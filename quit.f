@@ -1,6 +1,21 @@
     
 \ My misc tools 
 
+    <text>
+    \ 
+    \ WshShell - users may not install win32 packages so only a clue here
+    \ 
+    py:~ import win32com.client; push(win32com.client)
+    constant win32com.client // ( -- module )
+    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
+        /// Windows display off power saving mode:
+        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") 
+        /// WshShell :> run("__main__.py",5,True) \ True to wait for errorlevel
+        /// WshShell ::~ run("cmd /k __main__.py",5,True) \ Stay in the DOSBox
+        /// WshShell :: SendKeys("abc")
+        /// WshShell :: AppActivate("python.exe")
+    </text> constant WshShell // ( -- "clue" ) Guide how to use WshShell
+
     <py>
         def outport(loc): 
             '''
@@ -36,7 +51,8 @@
 
 \ Do selftest or run command-line
     
-    ' <selftest> :: enabled=False \ Assume command line has jobs to do
+    ' <selftest> :: enabled=True \ Master switch of selftest 
+
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
         \ Run the command line commands
@@ -44,10 +60,10 @@
     [else] 
         \ No command line, show greeting and run selftest
         version drop 
-        py: tick('<selftest>').enabled=True
-        py> tick('<selftest>').buffer tib.insert
+        ' <selftest> :> enabled [if]
+            ' <selftest> :> buffer tib.insert
+        [then]
     [then] py: tick('<selftest>').buffer="" \ release the memory
-
     
     
 

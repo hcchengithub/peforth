@@ -442,6 +442,7 @@
         123 type py> type(pop())==type ( True ) 
         [d True,True,True d] [p 'keys','dir','type' p]
     *** [if] [else] [then] [begin] [again] [until] [for] [next] 
+        py:~ import time
         py> sys.modules['time'].time() int
         [begin] ( char . . ) py> sys.modules['time'].time() int over != [until] drop
         py> sys.modules['time'].time() int
@@ -479,15 +480,16 @@
         screen-buffer <py> pop()[0].find('__doc__ = source')!=-1 </pyV> ( True )
         [d {'aa','bb'},True,True,True,True,True d]
         [p 'obj>keys','.members','.source' p]
-    *** dos cd slice WshShell 
-        WshShell :> CurrentDirectory ( path )
+    *** dos cd slice
         display-off
         cd
         display-on
-        screen-buffer <py> pop()[0].find(pop())!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find(":")!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find("\\")!=-1 </pyV> ( True )
         ( 123 ) dos python -m peforth 123 bye 
         4 5 6 -2 slice ( ... 4,[5,6] )
-        [d True,123,4,[5,6] d] [p 'dos','cd','slice','WshShell','win32com.client' p]
+        [d True,True,123,4,[5,6] d] 
+        [p 'dos','cd','slice' p]
 \   *** [r r]
 \       py> rstack ( save )
 \       11 >r 22 >r 
