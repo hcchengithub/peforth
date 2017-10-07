@@ -1,6 +1,6 @@
 # peforth
 
-### A FORTH programming language lives in python and begins with only two words 'code' and 'end-code'.
+### A programmable python debugger. Set one breakpoint to x-ray everything.
 
 There are many ways to run peforth:
 
