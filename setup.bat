@@ -67,6 +67,15 @@
                 cmd = "copy /y {} {}".format(i,v('dest'))
                 os.system(cmd)
             </py>
+            
+        \ 暫時請 user 手動把 __main__.py 不要的部分刪除
+        
+            cr 
+            ." ------- Manually edit __main__.py ------------- " cr
+            ." Edit __main__.py in desktop\peforth-master\peforth " cr
+            ." Remove everything before: if __name__ == '__main__':" cr cr
+            ." Press Enter to stop it or 'continue' to proceed. "
+            py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
 
     \ 問要不要打包 whl?
 
@@ -151,7 +160,7 @@
                 該有的檔案 list 改成 set 以便比較
                 source-files py> set(pop())
 
-            最終，一行搞定，得 creating symbolic links 有沒有成功的一個 boolean 
+            最終，一行搞定，得 copy files 有沒有成功的一個 boolean 
 
                 py> os.listdir('peforth') py> set(pop()) source-files py> set(pop()) =
             
@@ -173,6 +182,15 @@
                 abort
             [then]
             
+        \ 暫時請 user 手動把 __main__.py 不要的部分刪除
+        
+            cr 
+            ." ------- Manually edit __main__.py ------------- " cr
+            ." Edit __main__.py in desktop\peforth-master\peforth " cr
+            ." Remove everything before: if __name__ == '__main__':" cr cr
+            ." Press Enter to stop it or 'continue' to proceed. "
+            py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
+        
         \ 開始打包 whl 結果出現在 peforth-master 之下的 dist directory 裡面：
         
             py> os.getcwd() ( cwd ) \ Save cwd

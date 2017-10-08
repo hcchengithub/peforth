@@ -417,7 +417,7 @@ code execute execute(pop()); end-code
 code (space) push(" ") end-code // ( -- " " ) Put a space on TOS.
 code exit 
     if compiling: comma(EXIT) 
-    else: vm.ret=True
+    else: vm.exit=True
     end-code immediate
     // ( -- ) Exit this colon word.
 code ret comma(RET) end-code immediate compile-only

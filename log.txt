@@ -1615,23 +1615,28 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     interpreter
     --> 本來的目的不知能不能達到，有 parent 的 data 總是好的。
     
-[x] Tests before a Release  v1.07
-    [x] 所有 run 法帶 selftest 跑一遍
-        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-        [x] 2. python __main__.py version drop [ ] .s [ ] exit [ ] bye
-        [x] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-        [x] 4. python -i __main__.py version drop [ ] .s [ ] exit [ ] bye
-    [x] Run setup.bat 把 package 更新成 release 版    
-        [x] 3. python -i -m peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-        [x] 4. python -i -m peforth version drop [ ] .s [ ] exit [ ] bye
-        [x] 5. import peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-    [ ] 考慮 README.rst 改良
-        --> GitHub 版的先弄好 
-            [ ] 草稿 peforth wiki article hello world  _wiki_
-[ ] Bug found
+[x] Bug found
     c:\Users\hcche\Documents\GitHub\peforth>python -i -m peforth exit
     OK
     OK <=== python interpreter prompte expected
-    --> 因為 vm.ret 有兩個！！！！
+    --> 因為 vm.exit 有兩個！！！！
     peforth module __init__.py __main__.py 的關係不是一個！！！
     module 裡面的 __main__.py 專攻 -m 執行用，改寫看看。。。。
+    ==> 簡化整個執行方式，決心放棄從 project folder 執行。
+        只保留 import peforth 或 python -m peforth 兩種。
+[ ] 因應新檔案配置，setup.bat 的自動化晚點再做
+[ ] Tests before a Release  v1.07
+    [ ] Run setup.bat 半手動先做成 wheel 
+        [ ] pip uninstall peforth
+        [ ] pip install c:\Users\hcche\Desktop\peforth-master\dist\peforth-1.6-py3-none-any.whl 
+        [ ] 3. python -i -m peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [ ] 4. python -i -m peforth version drop [ ] .s [ ] exit [ ] bye
+        [ ] 5. import peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+    [ ] 所有 run 法帶 selftest 跑一遍
+        [ ] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [ ] 2. python __main__.py version drop [ ] .s [ ] exit [ ] bye
+        [ ] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [ ] 4. python -i __main__.py version drop [ ] .s [ ] exit [ ] bye
+    [ ] 考慮 README.rst 改良
+        --> GitHub 版的先弄好 
+            [ ] 草稿 peforth wiki article hello world  _wiki_
