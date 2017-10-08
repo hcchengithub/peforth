@@ -122,6 +122,108 @@ Now leave the breakpoint and let the program continue:
 
     c:\Users\your-working-folder>
 
+
+### Investigate by running experiments right at a breakpoint
+    
+When at a breakpoint in Tensorfow tutorials, I always want to
+make some experiments on those frustrating *tf.something(tf.something(...),...)*
+things to have a clearer understanding of them 
+without leaving the underlying tutorial. Let's use the above example
+again in another way to demonstrate how to do that with peforth:  
+
+Run peforth:
+
+    Microsoft Windows [Version 10.0.15063]
+    (c) 2017 Microsoft Corporation. All rights reserved.
+
+    c:\Users\hcche\Downloads>python
+    Python 3.6.0 (v3.6.0:41df79263a11, Dec 23 2016, 08:06:12) [MSC v.1900 64 bit (AMD64)] on win32
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> import peforth
+    p e f o r t h    v1.07
+    source code http://github.com/hcchengithub/peforth
+    Type 'peforth.ok()' to enter forth interpreter, 'exit' to come back.
+
+    >>> peforth.ok()
+
+    OK   <-------- Default FORTH command prompt
+    OK    
+
+Assume we are at a breakpoint and we need a procedure to
+add 1..100 to get the sum of them. We are not sure if the procedure
+is correct so we need to try. Now copy the procedure from 
+your text editor. The <py>...</py> tells the debugger that 
+the code within is a block of in-line python. 
+The ```outport()``` function outports the given ```locals()``` to the
+FORTH environment outside the in-line python block.
+
+    <py>
+    sum = 0
+    for i in range(100):
+        sum += i
+    print("The sum of 1..100 is ", sum)
+    outport(locals())
+    </py>
+    
+It's a block of multiple-line text strings so we press Ctrl-D
+to start a multiple-line input, copy-paste, and press another Ctrl-D
+to end the multiple-line block. Like this:
+
+    OK
+    OK ^D
+        <py>
+        sum = 0
+        for i in range(100):
+            sum += i
+        print("The sum of 1..100 is ", sum)
+        outport(locals())
+        </py>
+    ^D
+    The sum of 1..100 is  4950
+    OK
+
+Now use the 'words' command to see what have we got:
+
+    OK words
+    code end-code \ // <selftest> </selftest> bye /// immediate stop compyle 
+    trim indent -indent <py> </py> </pyV> words . cr help interpret-only 
+    compile-only literal reveal privacy (create) : ; ( BL CR word ' , 
+    [compile] py: py> py:~ py>~ 0branch here! here swap ! @ ? >r r> r@ drop 
+    dup over 0< + * - / 1+ 2+ 1- 2- compile if then compiling char last 
+    version execute cls private nonprivate (space) exit ret rescan-word-hash 
+    (') branch bool and or not (forget) AND OR NOT XOR true false "" [] {} 
+    none >> << 0= 0> 0<> 0<= 0>= = == > < != >= <= abs max min doVar doNext 
+    depth pick roll space [ ] colon-word create (marker) marker next abort 
+    alias <> public nip rot -rot 2drop 2dup invert negate within ['] allot 
+    for begin until again ahead never repeat aft else while ?stop ?dup 
+    variable +! chars spaces .( ." .' s" s' s` does> count accept accept2 
+    <accept> nop </accept> refill [else] [if] [then] (::) (:>) :: :> ::~ 
+    :>~ "msg"abort abort" "msg"?abort ?abort" '<text> (<text>) <text> </text> 
+    <comment> </comment> (constant) constant value to tib. >t t@ t> [begin] 
+    [again] [until] [for] [next] modules int float drops dropall char>ASCII 
+    ASCII>char ASCII .s (*debug*) *debug* readTextFile writeTextFile 
+    tib.insert sinclude include type obj>keys obj2dict stringify toString 
+    .literal .function (dump) dump dump2ret d (see) .members .source see dos 
+    cd slice description expected_rstack expected_stack test-result 
+    [all-pass] *** all-pass [r r] [d d] [p p] WshShell inport OK dir keys 
+    --- i sum
+    OK
+
+And the end of the long list after the ``` --- ``` marker we found ``` i ``` and 
+``` sum ```. They are all locals() at the point in the in-line python block.
+Let's see them:
+
+    OK i . cr
+    99
+    OK sum . cr
+    4950
+    OK
+    
+Again, we found the root cause of why the sum is not 5050 because
+``` i ``` didn't reach to 100 as anticipated. That's exactly how the 
+python ```range()``` works and that has actually confused me many times.
+
+
 Visit this project's 
 [Wiki](https://github.com/hcchengithub/peforth/wiki) pages
 for more examples about how to view MNIST handwritten digit images
