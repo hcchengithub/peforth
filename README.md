@@ -69,12 +69,12 @@ Run it:
 The result should be 5050 but it's not! Let's drop a breakpoint 
 to see what's wrong:
 
-    # 100.py with breakpoing
-    
-    import peforth
-    sum = 0
-    for i in range(100):
-        sum += i
+    # 100.py with breakpoing   .----- Specify an unique command prompt to indicate where 
+                               |      the breakpoint is from if there are many of them
+    import peforth             |            .----- pass locals() at the breakpoint
+    sum = 0                    |            |      to our debugger
+    for i in range(100):       |            |               .------- use a FORTH constant   
+        sum += i               |            |               |        to represent the locals()
     peforth.ok('my first breakpoint> ',loc=locals(),cmd="constant locals-after-the-for-loop")
     print("The sum of 1..100 is ", sum)
 
@@ -87,8 +87,8 @@ Run again:
 
                          .--------------- at the breakpoint, type in 'words' 
                          |                command to see what have we got   
-    my first breakpoint> words        .-------- it's a long list of 'words'
-    ... snip .......                  |         or available commands
+    my first breakpoint> words        .-------- It's a long list of 'words'
+    ... snip .......                  |         or available commands. Don't worry, we'll use only some of them.
     expected_rstack expected_stack test-result [all-pass] *** all-pass [r r] [d d] [p 
     p] WshShell inport OK dir keys --- locals-after-the-for-loop
                                            |
