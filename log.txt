@@ -1626,17 +1626,32 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         只保留 import peforth 或 python -m peforth 兩種。
 [ ] 因應新檔案配置，setup.bat 的自動化晚點再做
 [ ] Tests before a Release  v1.07
-    [ ] Run setup.bat 半手動先做成 wheel 
-        [ ] pip uninstall peforth
-        [ ] pip install c:\Users\hcche\Desktop\peforth-master\dist\peforth-1.6-py3-none-any.whl 
-        [ ] 3. python -i -m peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-        [ ] 4. python -i -m peforth version drop [ ] .s [ ] exit [ ] bye
-        [ ] 5. import peforth [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-    [ ] 所有 run 法帶 selftest 跑一遍
-        [ ] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-        [ ] 2. python __main__.py version drop [ ] .s [ ] exit [ ] bye
-        [ ] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
-        [ ] 4. python -i __main__.py version drop [ ] .s [ ] exit [ ] bye
-    [ ] 考慮 README.rst 改良
-        --> GitHub 版的先弄好 
-            [ ] 草稿 peforth wiki article hello world  _wiki_
+    [x] 所有 run 法帶 selftest 跑一遍
+        [x] Run setup.bat 做出有 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth  <==== 啊！不行，會上網抓。
+            pip install 剛做好的 wheel 
+        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 2. python __main__.py version drop [ ] .s words [ ] exit [ ] bye
+        [x] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 4. python -i __main__.py version drop [ ] .s [ ] exit [ ] bye
+        [x] 5. python -i -m peforth [ ] selftest .s words exit 
+        [x] 6. python -i -m peforth version drop
+        [x] 7. python import peforth 
+                [ ] selftest peforth.ok() .s words <--- no parent
+                [ ] 1234 bye check echo %errorlevel% 
+    [x] 所有 run 不帶 selftest 再跑一遍
+        [x] Run setup.bat 做出取消 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth  <==== 啊！不行，會上網抓。
+            pip install 剛做好的 wheel 
+        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 2. python -i -m peforth [ ] selftest .s words exit bye
+        [x] 3. python -i -m peforth .' Hello World!!' cr bye
+        [x] 4. python import peforth 
+        [x] 考慮 README.rst 改良
+            --> GitHub 版的先弄好 
+                [x] hello world
+                    Ynote: 草稿 peforth wiki article hello world  _wiki_
+                [x] README.md --> README.rst by http://rst.ninjs.org
+                

@@ -48,35 +48,28 @@
             py> os.getcwd() char \ + value source // ( -- "path" ) ~\GitHub\peforth\
             
             \ 檢查 source 雖然應該不會錯
-            source :> find('peforth')!=-1
-            [if] [else] cr ." Error! unexpected source." cr abort [then]
+            source :> find('peforth')!=-1 source :> lower().find('GitHub'.lower())!=-1
+            and [if] [else] cr ." Error! unexpected source." cr abort [then]
 
         \ 直接用 DOS 的 copy /y from to 就可以了
 
             \ List peforth package files 
-            py>~ ["version.txt", "projectk.py", "__main__.py", "quit.f", "peforth.f", "peforth.selftest"] 
+            py>~ ["version.txt", "projectk.py", "__main__.py", "__init__.py", "quit.f", "peforth.f", "peforth.selftest"] 
             constant files // ( -- [filenames] ) peforth package files in site-packages/
 
+            \ ---- 作廢老 code -----------
             \ 這個 file 從 __main__.py copy 出來，單獨 copy。
-            s" copy /y {}__main__.py {}__init__.py" :> format(v('source'),v('dest'))
-            py: os.system(pop())
+            \ s" copy /y {}__main__.py {}__init__.py" :> format(v('source'),v('dest'))
+            \ py: os.system(pop())
 
-            \ 把其他 peforth package files 都 copy 過去
+            \ peforth package files 都 copy 過去
             <py>
             for i in v('files'):
                 cmd = "copy /y {} {}".format(i,v('dest'))
                 os.system(cmd)
             </py>
-            
-        \ 暫時請 user 手動把 __main__.py 不要的部分刪除
-        
-            cr 
-            ." ------- Manually edit __main__.py ------------- " cr
-            ." Edit __main__.py in desktop\peforth-master\peforth " cr
-            ." Remove everything before: if __name__ == '__main__':" cr cr
-            ." Press Enter to stop it or 'continue' to proceed. "
-            py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
 
+            
     \ 問要不要打包 whl?
 
         cr 
@@ -87,7 +80,7 @@
         cr 
         ." o  Check ~\GitHub\peforth\setup.py and ~\GitHub\peforth\setup.bat" cr
         ."    files to make sure no new files are missing." cr cr
-        ." o  Check quit.f to make sure selftest is Disabled before a release." cr cr
+        ." o  Check the package quit.f to make sure selftest is Disabled before a release." cr cr
         ." Press Enter to stop it or 'continue' to proceed. "
         py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
 
@@ -114,18 +107,14 @@
             desktop char peforth-master\ + constant peforth-master // ( -- "path" ) working directory to build wheel
             peforth-master char peforth\ + constant peforth-master\peforth // ( -- "path" ) working directory to build wheel
             
-        \ 把所需的 files 都 copy 過去
+        \ 把所需的 files 都從 site-packages\peforth copy 過去
         
             \ Copy peforth package files to peforth-master
 
-                \ 這個 file 從 __main__.py copy 出來，單獨 copy。 [ ] if this ok, the above similar line can be also simplified too
-                s" copy /y __main__.py {}__init__.py" :> format(v('peforth-master\peforth'))
-                py: os.system(pop())
-
-                \ 把其他 peforth package files 都 copy 過去
+                \ peforth package files 都從 site-packages\peforth copy 過去
                 <py>
                 for i in v('files'):
-                    cmd = "copy /y {} {}".format(i,v('peforth-master\peforth'))
+                    cmd = "copy /y {} {}".format(v('dest')+i,v('peforth-master\peforth'))
                     os.system(cmd)
                 </py>
                 
@@ -168,7 +157,7 @@
 
             \ 檢查 peforth-master\peforth 裡面
             py> os.listdir(v('peforth-master\peforth')) py> set(pop()) 
-            files py> ['__init__.py'] + py> set(pop()) =
+            files py> set(pop()) =
             [if] [else] 
                 ." Error! files not correct in desktop\peforth-master\peforth " cr 
                 abort
@@ -182,14 +171,6 @@
                 abort
             [then]
             
-        \ 暫時請 user 手動把 __main__.py 不要的部分刪除
-        
-            cr 
-            ." ------- Manually edit __main__.py ------------- " cr
-            ." Edit __main__.py in desktop\peforth-master\peforth " cr
-            ." Remove everything before: if __name__ == '__main__':" cr cr
-            ." Press Enter to stop it or 'continue' to proceed. "
-            py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
         
         \ 開始打包 whl 結果出現在 peforth-master 之下的 dist directory 裡面：
         

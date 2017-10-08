@@ -1,242 +1,283 @@
-
 peforth
 #######
 
-A python programable debugger in FORTH syntax.
+A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+********************************************************************************
 
-Ways to run peforth
-***********************************
-1. In the project folder 
-   run ```python __main__.py``` or ```python __init__.py``` or double click them.
-   
-2. From above the project folder run ```python peforth```
+You guys know how to bebug already. We all do.
+But when it comes to Machine Learning and Tensorflow or the likes, 
+things are getting annoying if we were still using traditional debuggers.
+A programmable debugger is what in my mind and probably in yours too. 
+One breakpoint to investigate about everything with procedures that we
+come out at the point depend on variant needs of emerged ideas good or bad.
 
-3. If the peforth package is installed. At any folder, run ```python -m peforth```
+Debug commands in FORTH syntax
+##############################
 
-4. If the peforth package is installed. At any folder, run ```python``` 
-   then ```import peforth``` then type ```peforth.ok()``` to run it, type ```exit``` 
-   to come back to python interpreter, and do it again and again. peforth context 
-   will be all of the same session for all runs.
+So now we need to choose an interactive UI and its syntax that 
+is light weight, reliable and flexible so we won't regret of choosing it 
+someday, has been there for decades so many people don't need to learn about 
+another new language although we are only to use some debug commands, yet easy 
+enough for new users, that's FORTH. 
 
 Install peforth
-***************
-
-Use the pip install
+###############
 
 ::
 
-     pip install peforth 
+    pip install peforth 
 
-Hello World!
-************ 
+Run peforth:
+#############
 
-All peforth words have their help messages.
-
-::
-
-    : hi  ( -- ) // The hello world! command
-        ." Hello World!!" cr ;
-        /// if help message is not enough then use /// leading lines to add comments.
-        /// Both // and /// leading messages go to the last word.
-
-
-The first stack diagram and the ```//``` leading comment line become help messages. Let's execute it and see its help:
+Print "Hello World!"
 
 ::
 
-    OK hi
+    Microsoft Windows [Version 10.0.15063]
+    (c) 2017 Microsoft Corporation. All rights reserved.
+
+    c:\Users\your-working-folder>python -m peforth .' Hello World!!' cr bye
     Hello World!!
-    OK help hi
-    ( -- ) The hello world! command
-        if help message is not enough then use /// leading lines to add comments.
-        Both // and /// leading messages go to the last word.
 
+    c:\Users\your-working-folder>
 
-```see``` command sees a word's source code and attributes.
+    
+so your peforth has been working fine. 
+To your application, ``import peforth`` as usual to bring in the debugger:
+
 ::
 
-    OK see hi
-    {
-        "__class__": "Word",
-        "__module__": "peforth.projectk",
-        "name": "hi",
-        "xt": {
-            "__class__": "function",
-            "__module__": "peforth.projectk"
-        },
-        "immediate": false,
-        "help": "( -- ) The hello world! command",
-        "comment": "\tif help message is not enough then use /// leading lines to add comments.\n\tBoth // and /// leading messages goes to the last word.\n",
-        "vid": "forth",
-        "wid": 242,
-        "type": "colon",
-        "private": false,
-        "cfa": 717
-    }
-    ------------ Definition in dictionary ------------
-    00717: Literal: Hello World!! <class 'str'>
-    00718: . ( x -- ) Print the TOS __str__  (<class 'peforth.projectk.Word'>)
-    00719: cr ( -- ) print a carriage return __str__  (<class 'peforth.projectk.Word'>)
-    00720: RET  (<class 'NoneType'>)
-    ------------ End of the difinition ---------------
+    c:\Users\your-working-folder>python
+    Python 3.6.0 (v3.6.0:41df79263a11, Dec 23 2016, 08:06:12) [MSC v.1900 64 bit (AMD64)] on win32
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> import peforth
+    p e f o r t h    v1.07
+    source code http://github.com/hcchengithub/peforth
+    Type 'peforth.ok()' to enter forth interpreter, 'exit' to come back.
+
+    >>>
+
+
+The greeing message tells us how to enter the FORTH interpreter for your 
+debugging or investigating and how to come back to continue running your 
+code.     
+    
+Let's try to debug a program
+############################
+
+::
+    
+    # 100.py
+    
+    sum = 0
+    for i in range(100):
+        sum += i
+    print("The sum of 1..100 is ", sum)
+
+    
+Run it:
+
+::
+
+    c:\Users\your-working-folder>python 100.py
+    The sum of 1..100 is 4950
+
+    c:\Users\your-working-folder>
+
+The result should be 5050 but it's not! Let's drop a breakpoint 
+to see what's wrong:
+
+::
+
+    # 100.py with breakpoing   .----- Specify an unique command prompt to indicate where 
+                               |      the breakpoint is from if there are many of them
+    import peforth             |            .----- pass locals() at the breakpoint
+    sum = 0                    |            |      to our debugger
+    for i in range(100):       |            |               .------- use a FORTH constant   
+        sum += i               |            |               |        to represent the locals()
+    peforth.ok('my first breakpoint> ',loc=locals(),cmd="constant locals-after-the-for-loop")
+    print("The sum of 1..100 is ", sum)
+
+
+Run again:
+
+::
+    
+    c:\Users\your-working-folder>python 100.py
+    p e f o r t h    v1.07
+    source code http://github.com/hcchengithub/peforth
+    Type 'peforth.ok()' to enter forth interpreter, 'exit' to come back.
+
+                         .--------------- at the breakpoint, type in 'words' 
+                         |                command to see what have we got   
+    my first breakpoint> words        .-------- It's a long list of 'words'
+    ... snip .......                  |         or available commands. Don't worry, we'll use only some of them.
+    expected_rstack expected_stack test-result [all-pass] *** all-pass [r r] [d d] [p 
+    p] WshShell inport OK dir keys --- locals-after-the-for-loop
+                                           |
+                The last one is what ------' 
+                we have just created throuth the breakpoint statement    
+                , named "locals-after-the-for-loop"
+
+Let's see it:
+
+::
+
+           print a carriage return at the end -------.
+                              print the thing -----. | 
+                                                   | |
+    my first breakpoint> locals-after-the-for-loop . cr
+    ({'__name__': '__main__', '__doc__': None, '__package__': None, '__loader__': 
+    <_frozen_importlib_external.SourceFileLoader object at 0x000001DD2D737710>, 
+    '__spec__': None, '__annotations__': {}, '__builtins__': <module 'builtins' 
+    (built-in)>, '__file__': '100.py', '__cached__': None, 'peforth': <module 'peforth' 
+    from 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\pe
+    forth\\__init__.py'>, 'sum': 4950, 'i': 99}, {}, 'my first breakpoint> ')
+    my first breakpoint>    |           |                   |
+                            |           |                   '--- our command
+               our sum -----'           |                        prompt
+                                        |                  indicates where the 
+            99 instead of 100 ----------'                  breakpoint is from
+            this is the problem !!            
+
+
+Now leave the breakpoint and let the program continue:
+
+::
+
+    my first breakpoint> exit
+    my first breakpoint> The sum of 1..100 is  4950
+
+    c:\Users\your-working-folder>
+
+
+Investigate by doing experiments right at a breakpoint
+######################################################
+    
+When at a breakpoint in Tensorfow tutorials, I always want to
+make some experiments on those frustrating *tf.something(tf.something(...),...)*
+things to have a clearer understanding of them 
+without leaving the underlying tutorial. Let's use the above example
+again in another way to demonstrate how to do that with peforth:  
+
+Run peforth:
+
+::
+
+    Microsoft Windows [Version 10.0.15063]
+    (c) 2017 Microsoft Corporation. All rights reserved.
+
+    c:\Users\your-working-folder>python
+    Python 3.6.0 (v3.6.0:41df79263a11, Dec 23 2016, 08:06:12) [MSC v.1900 64 bit (AMD64)] on win32
+    Type "help", "copyright", "credits" or "license" for more information.
+    >>> import peforth
+    p e f o r t h    v1.07
+    source code http://github.com/hcchengithub/peforth
+    Type 'peforth.ok()' to enter forth interpreter, 'exit' to come back.
+
+    >>> peforth.ok()
+
+    OK   <-------- Default FORTH command prompt
+    OK    
+
+Assume we are at a breakpoint and we need a procedure to
+add 1..100 to get the sum of them. We are not sure if the procedure
+is correct so we need to try. Now copy the procedure from 
+your text editor. The ``` <py>...</py> ``` tells the debugger that 
+the code within is a block of in-line python. 
+The ```outport()``` function outports the given ```locals()``` to the
+FORTH environment outside the in-line python block.
+
+::
+
+    <py>
+    sum = 0
+    for i in range(100):
+        sum += i
+    print("The sum of 1..100 is ", sum)
+    outport(locals())
+    </py>
+    
+It's a block of multiple-line text strings so we press Ctrl-D
+to start a multiple-line input, copy-paste, and press another Ctrl-D
+to end the multiple-line block. Like this:
+
+::
+
     OK
-
-
-code ... end-code 
-*****************
-
-peforth, like eforth, attempts to use very basic words to build the entire
-forth system. Actually, peforth is started with only two words ```code```
-and ```end-code```. As a demo to define a code word, let's press Ctrl-D to make the Windows 
-DOS-Box CLI to accept multiple lines at once, then type in the example, and at the end
-drop another Ctrl-D to terminate the multiple-line input.
-
-::
-
     OK ^D
-    code hello
-        print('hello world!\n')
-    end-code
+        <py>
+        sum = 0
+        for i in range(100):
+            sum += i
+        print("The sum of 1..100 is ", sum)
+        outport(locals())
+        </py>
     ^D
+    The sum of 1..100 is  4950
     OK
 
-We have defined our first code word ```hello```. Let's execute it and ```see``` its details,
+Now use the 'words' command to see what have we got:
 
 ::
 
-    OK hello
-    hello world!
-
-    OK see hello
-    {
-        "__class__": "Word",
-        "__module__": "peforth.projectk",
-        "name": "hello",
-        "xt": {
-            "__class__": "function",
-            "__module__": "peforth.projectk",
-            "name": "hello"
-        },
-        "immediate": false,
-        "help": "",
-        "comment": "",
-        "vid": "forth",
-        "wid": 243,
-        "type": "code"
-    }
-    ------------ Source code ------------
-    def xt(_me=None): ### hello ###
-        print('hello world!\n')
-
-    -------------------------------------
+    OK words
+    code end-code \ // <selftest> </selftest> bye /// immediate stop compyle 
+    trim indent -indent <py> </py> </pyV> words . cr help interpret-only 
+    compile-only literal reveal privacy (create) : ; ( BL CR word ' , 
+    [compile] py: py> py:~ py>~ 0branch here! here swap ! @ ? >r r> r@ drop 
+    dup over 0< + * - / 1+ 2+ 1- 2- compile if then compiling char last 
+    version execute cls private nonprivate (space) exit ret rescan-word-hash 
+    (') branch bool and or not (forget) AND OR NOT XOR true false "" [] {} 
+    none >> << 0= 0> 0<> 0<= 0>= = == > < != >= <= abs max min doVar doNext 
+    depth pick roll space [ ] colon-word create (marker) marker next abort 
+    alias <> public nip rot -rot 2drop 2dup invert negate within ['] allot 
+    for begin until again ahead never repeat aft else while ?stop ?dup 
+    variable +! chars spaces .( ." .' s" s' s` does> count accept accept2 
+    <accept> nop </accept> refill [else] [if] [then] (::) (:>) :: :> ::~ 
+    :>~ "msg"abort abort" "msg"?abort ?abort" '<text> (<text>) <text> </text> 
+    <comment> </comment> (constant) constant value to tib. >t t@ t> [begin] 
+    [again] [until] [for] [next] modules int float drops dropall char>ASCII 
+    ASCII>char ASCII .s (*debug*) *debug* readTextFile writeTextFile 
+    tib.insert sinclude include type obj>keys obj2dict stringify toString 
+    .literal .function (dump) dump dump2ret d (see) .members .source see dos 
+    cd slice description expected_rstack expected_stack test-result 
+    [all-pass] *** all-pass [r r] [d d] [p p] WshShell inport OK dir keys 
+    --- i sum
     OK
 
-Where ```_me``` refers to the forth word object itself if you need to access
-its own attributes.
-
-inline python code
-******************
-
-python code can be put inline mixed with forth code. 
-This example defines a ```dos-dir``` command to go out to DOS box, run the
-```dir``` DOS command, and come back.
+Around the end of the long list after the ``` --- ``` marker we found ``` i ``` and 
+``` sum ```. They are all locals() at the point in the in-line python block.
+Let's see them:
 
 ::
 
-    OK : dos-dir <py> import os; os.system('dir') </py> ;
-
-Statements in between ```<py> ... </py>``` are python code. Let's execute the new word:
-
-::
-
-    OK dos-dir
-     Volume in drive C is Windows
-     Volume Serial Number is 2EA4-3202
-
-     Directory of c:\Users\hcche\Documents\GitHub\ML\machine-learning-recipes\src\part_5
-
-    2017-09-03  16:09    <DIR>          .
-    2017-09-03  16:09    <DIR>          ..
-    2017-06-11  08:53               240 check.py
-    2017-06-23  17:00    <DIR>          Datasets
-    2017-06-11  08:53             2,218 Fisher.csv
-    2017-09-03  17:41             6,912 kNNClassifier.f
-    2017-09-01  19:45             2,256 kNNClassifier.py
-    2017-06-11  08:53             2,079 Part5.py
-    2017-09-03  16:09    <DIR>          __pycache__
-                   5 File(s)         13,705 bytes
-                   4 Dir(s)  262,004,789,248 bytes free
+    OK i . cr
+    99
+    OK sum . cr
+    4950
     OK
-
-Again, use ```see``` to view its source code:
-
-::
-
-    OK see dos-dir
-    {
-        "__class__": "Word",
-        "__module__": "peforth.projectk",
-        "name": "dos-dir",
-        "xt": {
-            "__class__": "function",
-            "__module__": "peforth.projectk"
-        },
-        "immediate": false,
-        "help": "",
-        "comment": "",
-        "vid": "forth",
-        "wid": 242,
-        "type": "colon",
-        "private": false,
-        "cfa": 717
-    }
-    ------------ Definition in dictionary ------------
-    00717: def compyle_anonymous():
-        import os; os.system('dir') (<class 'function'>)
-      2           0 LOAD_CONST               1 (0)
-                  2 LOAD_CONST               0 (None)
-                  4 IMPORT_NAME              0 (os)
-                  6 STORE_FAST               0 (os)
-                  8 LOAD_FAST                0 (os)
-                 10 LOAD_ATTR                1 (system)
-                 12 LOAD_CONST               2 ('dir')
-                 14 CALL_FUNCTION            1
-                 16 POP_TOP
-                 18 LOAD_CONST               0 (None)
-                 20 RETURN_VALUE
-    00718: RET  (<class 'NoneType'>)
-    ------------ End of the difinition ---------------
-    OK
-
-Now we have seen ```<py> ... </py>``` brings in a block of python code
-that does not return value. While ```<py> ... </pyV>``` is to envelope a
-python statement that returns a value back to forth's top of the data
-stack. We'll use it's short form ```py>``` that followed with a statement
-without space to get CPU information from DOS environment variable
-PROCESSOR\_IDENTIFIER:
-
-::
-
-    : CPU ( -- string ) // View CPU info
-    py> os.getenv('PROCESSOR_IDENTIFIER') . cr ;
-  
-Type ```CPU``` to execute the new word:
-
-::
-
-    OK CPU
-    Intel64 Family 6 Model 142 Stepping 9, GenuineIntel  
-    OK
+    
+Again, we found the root cause of why the sum is not 5050 because
+``` i ``` didn't reach to 100 as anticipated. That's exactly how the 
+python ```range()``` works and that has actually confused me many times.
 
 
-So ```py>``` and ```py:``` are short forms of ```<py>...</pyV>``` and
-```<py>...</py>``` respectively if the python statement after them do 
-not contain any space character. Visit this project's `Wiki`_ for more 
-examples.
+Visit this project's 
+`Wiki`_
+pages
+for more examples about how to view MNIST handwritten digit images
+at the half way of your investigating in a Tensorflow tutorial, for
+example, and the usages of this programmable debugger.
+
+Have fun!
+*********
 
 - H.C. Chen, FigTaiwan
-- hcchen\_1471@hotmail.com
-- 2017.9.21 
+- hcchen5600@gmail.com
+- Just undo it! 
+- 2017.10.8
 
 Edited by: `rst online editor`_
 

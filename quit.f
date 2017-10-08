@@ -51,7 +51,7 @@
 
 \ Do selftest or run command-line
     
-    ' <selftest> :: enabled=True \ Master switch of selftest 
+    ' <selftest> :: enabled=True \ Master switch of selftest, True:on or False:off
 
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
