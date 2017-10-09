@@ -152,7 +152,7 @@ Run peforth:
 Assume we are at a breakpoint and we need a procedure to
 add 1..100 to get the sum of them. We are not sure if the procedure
 is correct so we need to try. Now copy the procedure from 
-your text editor. The <py>...</py> tells the debugger that 
+your text editor. The ``` <py>...</py> ``` tells the debugger that 
 the code within is a block of in-line python. 
 The ```outport()``` function outports the given ```locals()``` to the
 FORTH environment outside the in-line python block.
