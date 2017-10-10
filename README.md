@@ -209,7 +209,7 @@ Now use the 'words' command to see what have we got:
     --- i sum
     OK
 
-And the end of the long list after the ``` --- ``` marker we found ``` i ``` and 
+At the end of the long list after the ``` --- ``` marker we found ``` i ``` and 
 ``` sum ```. They are all locals() at the point in the in-line python block.
 Let's see them:
 
