@@ -14,7 +14,7 @@ setup(
     version=loc['__version__'],
     packages=["peforth", ],
     license='The MIT License (MIT) Copyright © 2017 H.C. Chen',
-    description="A programmable python debugger allows you to abruptly setup procedures to investigate your program code when you come to a breakpoint.",
+    description="A programmable python debugger allows you to abruptly setup procedures to investigate your program code when you're at a breakpoint.",
     long_description=open("README.rst", "r").read(),
     author="H.C. Chen",
     author_email="hcchen5600@gmail.com",

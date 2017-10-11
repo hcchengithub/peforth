@@ -1624,8 +1624,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     module 裡面的 __main__.py 專攻 -m 執行用，改寫看看。。。。
     ==> 簡化整個執行方式，決心放棄從 project folder 執行。
         只保留 import peforth 或 python -m peforth 兩種。
-[ ] 因應新檔案配置，setup.bat 的自動化晚點再做
-[ ] Tests before a Release  v1.07
+[x] 因應新檔案配置，setup.bat 的自動化晚點再做 --> Done
+[x] Tests before a Release  v1.07
     [x] 所有 run 法帶 selftest 跑一遍
         [x] Run setup.bat 做出有 selftest 的 wheel 
         [x] pip uninstall peforth
@@ -1680,5 +1680,24 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         /// Auto comment out "from __future__ import print_function" 
         /// that is not allowed when in a <PY>..</PY> space.
 [x] tib.insert is dictate now, an alias.
-
- 
+[x] Tests before a Release  v1.08
+    [x] 所有 run 法帶 selftest 跑一遍
+        [x] Run setup.bat 做出有 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth  <==== 啊！不行，會上網抓。
+            pip install 剛做好的 wheel 
+        [x] 1. python -i -m peforth [ ] selftest .s words exit 
+        [x] 2. python -i -m peforth version drop
+        [x] 3. python import peforth 
+                [x] selftest peforth.ok() .s words <--- no parent
+                [x] 1234 bye check echo %errorlevel% 
+    [x] 所有 run 不帶 selftest 再跑一遍
+        [x] Run setup.bat 做出取消 selftest 的 wheel <-- 注意！改的是 site-packages\peforth
+        [x] pip uninstall peforth
+        [x] pip install peforth  <==== 啊！不行，會上網抓。
+            pip install 剛做好的 wheel 
+        [x] 1. python -i -m peforth [ ] selftest .s words exit bye
+        [x] 2. python -i -m peforth .' Hello World!!' cr bye
+        [x] 3. python import peforth 
+        [x] 考慮 README.rst 改良
+[x] version.txt advanced to v1.09 
