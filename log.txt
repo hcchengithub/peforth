@@ -1654,4 +1654,31 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 [x] hello world
                     Ynote: 草稿 peforth wiki article hello world  _wiki_
                 [x] README.md --> README.rst by http://rst.ninjs.org
-                
+[x] These words should be moved into selftest section
+        'description', 'expected_rstack', 'expected_stack', 'test-result', 
+        '[all-pass]', '***', 'all-pass', '[r', 'r]', '[d', 'd]']
+    [x] while display-off dispaly-on should be moved out!    
+[x] a new word to include python file directly -- pyclude 
+    supports commands after #__peforth__ comment by simply removing 
+    all #__peforth__
+    Also comment out "from __future__ import print_function" lines
+    
+    1. read the file
+    2. find all #__peforth__ replace with null
+    3. find "from __future__ import print_function" comment it out.
+    4. -indent indent 
+    5. add <py> and </py>
+    6. tib.insert the string 
+
+    : pyclude ( <pathname.py> -- ... ) // Run the .py file in a <PY>..</PY> space
+        CR word readTextFile py> re.sub("#__peforth__","",pop()) 
+        py> re.sub(r"(from\s+__future__\s+import\s+print_function)",r"#\1",pop()) 
+        -indent indent <py> "    <p" + "y>\n" + pop() + "\n    </p" + "y>\n" </pyV>
+        tib.insert ;
+        /// Auto-remove all #__peforth__ marks so we can add debug
+        /// statements what are only visible when debugging.
+        /// Auto comment out "from __future__ import print_function" 
+        /// that is not allowed when in a <PY>..</PY> space.
+[x] tib.insert is dictate now, an alias.
+
+ 

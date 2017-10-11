@@ -48,48 +48,86 @@ code </selftest>
     
     </comment>
 
-    ---
+    --- marker ###
     
-    \
-    \ Redirect print() to screen-buffer 
-    \
-    py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
-                                 /// Enveloped in array is for "access by reference"
-    <py>
-        class Screenbuffer:
-            def __init__(self,buf):
-                self.stdoutwas=sys.stdout
-                self.buffer=buf
-            def write(self, output_stream):
-                self.buffer[0] += output_stream
-            def view(self):
-                self.stdoutwas.write(self.buffer[0])
-            def reset(self):
-                sys.stdout=self.stdoutwas
-            def flush(self):
-                # self.buffer[0]=''
-                pass
-        vm.Screenbuffer=Screenbuffer
-    </py>
-    \ # Start redirection
-    \ sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
-    \ 
-    \ # Print to screen when redirected
-    \ sys.stdout.stdoutwas.write("-------1111-----\n")
-    \ sys.stdout.stdoutwas.write("-------2222-----\n")
-    \ 
-    \ # view screen buffer
-    \ sys.stdout.view()
-    \ 
-    \ # reset
-    \ sys.stdout.reset()
-    
-    : display-off ( -- ) // Redirect stdout to a empty screen-buffer
-        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
-        screen-buffer :: [0]="" ;
-
-    : display-on ( -- ) // Redirect stdout back to what it was. screen-buffer has data during it off.
-        py: sys.stdout.reset() ;
+    \ Important!
+    \ private words referenced by name from out of the context will be a problem.
+    \ private words called (execute) or referenced (tick) by name warning when in 
+    \ selftest to find them without reducing the performance of none-selftest mode. 
+    \ : referenced-by-name-warning-on    ( -- ) // Turn on run-time warnings 
+    \                 py: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
+    \ : referenced-by-name-warning-off   ( -- ) // Turn off run-time warnings
+    \                 py: tick=vm.tick;execute=vm.execute ;
+                    
+    "" value description     ( private ) // ( -- "text" ) description of a selftest section
+    [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
+    [] value expected_stack  ( private ) // ( -- [..] ) an array to compare data stack in selftest
+    0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d] 
+    [] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
+    : ***           ( <description> -- ) // Start a selftest section
+            CR word trim ( desc )
+            s" *** {} ... " :> format(pop()) to description
+            depth if 
+                description . ." aborted" cr 
+                ." *** Warning, Data stack is not empty." cr
+                stop
+            then ;
+            /// List words that have not passed selftest 
+            /// <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)]</pyV> . cr
+                    
+    code all-pass   
+            a = pop();
+            for i in a:
+                w = tick(i)
+                if not w: 
+                    panic("Error! {} unknown!\n".format(i));
+                else: 
+                    w.selftest='pass';
+            end-code private
+            // ( ["name",...] -- ) Mark 'pass' to these word's selftest flag
+            ' *** :> comment last :: comment=pop(1)
+            
+    : [r    ( <"text"> -- ) // Prepare an array of data to compare with rstack in selftest.
+            char r] word s" [{}]" :> format(pop()) \ string
+            py> eval(pop()) \ string to array
+            to expected_rstack ;
+            /// Example: [r 1,2,3 r] [d True d] [p 'word1','word2' p]
+            /// [r...r] section is optional, [d...d] section is the judge.
+    : r]    ( -- boolean ) // compare rstack and expected_rstack in selftest
+            py> rstack expected_rstack = ;
+            ' [r :> comment last :: comment+=pop(1)
+            
+    : [d    ( <"text"> -- ) // Prepare an array to compare with data stack. End of a selftest section.
+            char d] word s" [{}]" :> format(pop()) \ string
+            py> eval(pop()) \ string to array
+            to expected_stack ;
+            /// Data stack will be clean after check
+            ' [r :> comment last :: comment+=pop(1)
+            
+    : d]    ( -- boolean ) // compare data stack and expected_stack in selftest
+            depth negate slice expected_stack =  to test-result 
+            description . test-result if ." pass" cr
+            else ." fail" cr stop then ;                
+            /// Data stack will be clean after check
+            ' [r :> comment last :: comment+=pop(1)
+            
+    : [p    ( <"text"> -- ) // Prepare an array of words for all-pass if test-result is True
+            char p] word s" [{}]" :> format(pop()) \ string
+            py> eval(pop()) \ string to array
+            to [all-pass] ; 
+            ' [r :> comment last :: comment+=pop(1)
+            
+    : p]    ( -- boolean ) // all-pass if test-result is True
+            test-result if [all-pass] all-pass then ; 
+            ' [r :> comment last :: comment+=pop(1)
+            
+            \ Make these words private. Do it this way instead 
+            \ of at their definitions to void selftest_tick() warnings
+            ' description     :: private=True
+            ' expected_rstack :: private=True
+            ' expected_stack  :: private=True
+            ' test-result     :: private=True
+            ' [all-pass]      :: private=True
     
     marker ---
      
@@ -1055,7 +1093,8 @@ code writeTextFile
 code tib.insert  
                 before, after = tib[:ntib], tib[ntib:] 
                 vm.tib = before + " " + str(pop()) + " " + after 
-                end-code // ( "string" -- ) Insert the "string" into TIB
+                end-code // ( "string" -- ) Insert the "string" into TIB to run it.
+                ' tib.insert alias dictate // ( "string" -- ) Insert the "string" into TIB to run it.
 
 : sinclude      ( "pathname" -- ... ) // Lodad the given forth source file.
                 readTextFile ( file ) py: dictate(pop()) ;
@@ -1168,116 +1207,16 @@ code toString # To see a cell in dictionary
                 else drop then ;
                 /// Also .members .source
 
-: .members      ( obj -- ) // See the object details through inspect.getmembers(obj)
-                py> inspect.getmembers(pop()) cr (see) cr ;
-                /// Also (see) .source
-                
-: .source      ( function -- ) // See source code through inspect.getsource(func)
-                py> inspect.getsource(pop()) cr . cr ;
-                /// Also .members (see)
-
 : see           ' (see) ; // ( <name> -- ) See definition of the word
-
-: dos           ( <command line> -- errorlevel ) // Shell to DOS Box run rest of the line
-                CR word ( cml ) trim ( cml' )
-                ?dup if py> os.system(pop())
-                else py> os.system('cmd/k') then ;
-                
-: cd            ( <path> -- ) // Mimic DOS cd command
-                CR word ?dup if py: os.chdir(pop())
-                else py> os.getcwd() . cr then ;
-                /// Use 'dos' command can do the same thing.
-                /// Ex. 'dos dir', 'dos cd', and all other dos commands.
-                /// But 'dos cd ..' does not work while 'cd ..' works fine.
                 
 : slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
                 ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
                 /// Group the tuple returned from a function
-
-\ ----------------- Self Test -------------------------------------
-
-\ Important!
-\ private words referenced by name from out of the context will be a problem.
-\ private words called (execute) or referenced (tick) by name warning when in 
-\ selftest to find them without reducing the performance of none-selftest mode. 
-\ : referenced-by-name-warning-on    ( -- ) // Turn on run-time warnings 
-\                 py: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
-\ : referenced-by-name-warning-off   ( -- ) // Turn off run-time warnings
-\                 py: tick=vm.tick;execute=vm.execute ;
-                
-"" value description     ( private ) // ( -- "text" ) description of a selftest section
-[] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
-[] value expected_stack  ( private ) // ( -- [..] ) an array to compare data stack in selftest
-0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d] 
-[] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
-: ***           ( <description> -- ) // Start a selftest section
-                CR word trim ( desc )
-                s" *** {} ... " :> format(pop()) to description
-                depth if 
-                    description . ." aborted" cr 
-                    ." *** Warning, Data stack is not empty." cr
-                    stop
-                then ;
-                /// List words that have not passed selftest 
-                /// <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)]</pyV> . cr
-                
-code all-pass   
-                a = pop();
-                for i in a:
-                    w = tick(i)
-                    if not w: 
-                        panic("Error! {} unknown!\n".format(i));
-                    else: 
-                        w.selftest='pass';
-                end-code private
-                // ( ["name",...] -- ) Mark 'pass' to these word's selftest flag
-                ' *** :> comment last :: comment=pop(1)
-
-: [r            ( <"text"> -- ) // Prepare an array of data to compare with rstack in selftest.
-                char r] word s" [{}]" :> format(pop()) \ string
-                py> eval(pop()) \ string to array
-                to expected_rstack ;
-                /// Example: [r 1,2,3 r] [d True d] [p 'word1','word2' p]
-                /// [r...r] section is optional, [d...d] section is the judge.
-: r]            ( -- boolean ) // compare rstack and expected_rstack in selftest
-                py> rstack expected_rstack = ;
-                ' [r :> comment last :: comment+=pop(1)
-                
-: [d            ( <"text"> -- ) // Prepare an array to compare with data stack. End of a selftest section.
-                char d] word s" [{}]" :> format(pop()) \ string
-                py> eval(pop()) \ string to array
-                to expected_stack ;
-                /// Data stack will be clean after check
-                ' [r :> comment last :: comment+=pop(1)
-                
-: d]            ( -- boolean ) // compare data stack and expected_stack in selftest
-                depth negate slice expected_stack =  to test-result 
-                description . test-result if ." pass" cr
-				else ." fail" cr stop then ;                
-                /// Data stack will be clean after check
-                ' [r :> comment last :: comment+=pop(1)
-
-: [p            ( <"text"> -- ) // Prepare an array of words for all-pass if test-result is True
-                char p] word s" [{}]" :> format(pop()) \ string
-                py> eval(pop()) \ string to array
-                to [all-pass] ; 
-                ' [r :> comment last :: comment+=pop(1)
-                
-: p]            ( -- boolean ) // all-pass if test-result is True
-                test-result if [all-pass] all-pass then ; 
-                ' [r :> comment last :: comment+=pop(1)
-                
-                \ Make these words private. Do it this way instead 
-                \ of at their definitions to void selftest_tick() warnings
-                ' description     :: private=True
-                ' expected_rstack :: private=True
-                ' expected_stack  :: private=True
-                ' test-result     :: private=True
-                ' [all-pass]      :: private=True
+    
 
     \ I/O may not be ready enough to read selftest.f at this moment, 
     \ so the below code has been moved to quit.f of each applications.
-    \ Do the jeforth.f self-test only when there's no command line
+    \ Do the peforth.f self-test only when there's no command line arguments
     \   py> vm.argv.length 1 > \ Do we have jobs from command line?
     \   [if] \ We have jobs from command line to do. Disable self-test.
     \       py: tick('<selftest>').enabled=False
@@ -1285,5 +1224,3 @@ code all-pass
     \       py> tick('<selftest>').enabled=True;tick('<selftest>').buffer tib.insert
     \   [then] py: tick('<selftest>').buffer="" \ recycle the memory
 
-    
-    

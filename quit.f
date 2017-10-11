@@ -1,6 +1,49 @@
     
 \ My misc tools 
 
+    \
+    \ Redirect print() to screen-buffer 
+    \
+
+        py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
+                                     /// Enveloped in array is for "access by reference"
+        <py>
+            class Screenbuffer:
+                def __init__(self,buf):
+                    self.stdoutwas=sys.stdout
+                    self.buffer=buf
+                def write(self, output_stream):
+                    self.buffer[0] += output_stream
+                def view(self):
+                    self.stdoutwas.write(self.buffer[0])
+                def reset(self):
+                    sys.stdout=self.stdoutwas
+                def flush(self):
+                    # self.buffer[0]=''
+                    pass
+            vm.Screenbuffer=Screenbuffer
+        </py>
+        \ # Start redirection
+        \ sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+        \ 
+        \ # Print to screen when redirected
+        \ sys.stdout.stdoutwas.write("-------1111-----\n")
+        \ sys.stdout.stdoutwas.write("-------2222-----\n")
+        \ 
+        \ # view screen buffer
+        \ sys.stdout.view()
+        \ 
+        \ # reset
+        \ sys.stdout.reset()
+
+    : display-off ( -- ) // Redirect stdout to a empty screen-buffer
+        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
+        screen-buffer :: [0]="" ;
+
+    : display-on ( -- ) // Redirect stdout back to what it was. screen-buffer has data during it off.
+        py: sys.stdout.reset() ;
+
+
     <text>
     \ 
     \ WshShell - users may not install win32 packages so only a clue here
@@ -44,8 +87,46 @@
                 
     : keys      ( x -- keys ) // get keys of the dict
                 py> pop().keys() ;
+                
+    : (pyclude) ( <pathname.py> -- "code" ) // Prepare the .py file into a <PY>..</PY> section ready to run
+                CR word readTextFile py> re.sub("#__peforth__","",pop()) 
+                py> re.sub(r"(from\s+__future__\s+import\s+print_function)",r"#\1",pop()) 
+                <text> 
+                os.environ['TF_CPP_MIN_LOG_LEVEL']='2' # https://stackoverflow.com/questions/43134753/tensorflow-wasnt-compiled-to-use-sse-etc-instructions-but-these-are-availab
+                </text> -indent swap + 
+                -indent indent <py> "    <p" + "y>\n" + pop() 
+                + "\n    </p" + "y>\n" </pyV> ;
+                /// Auto-remove all #__peforth__ marks so we can add debug
+                /// statements that are only visible when debugging.
+                /// Auto comment out "from __future__ import print_function" 
+                /// that is not allowed when in a <PY>..</PY> space.
+                
+    : pyclude   ( <pathname.py> -- ... ) // Run the .py file in a <PY>..</PY> space
+                (pyclude) dictate ; 
+                ' (pyclude) :> comment last :: comment=pop(1)
 
-\ Drop a fence 
+    : .members  ( obj -- ) // See the object details through inspect.getmembers(obj)
+                py> inspect.getmembers(pop()) cr (see) cr ;
+                /// Also (see) .source
+                    
+    : .source   ( function -- ) // See source code through inspect.getsource(func)
+                py> inspect.getsource(pop()) cr . cr ;
+                /// Also .members (see)
+
+    : dos       ( <command line> -- errorlevel ) // Shell to DOS Box run rest of the line
+                CR word ( cml ) trim ( cml' )
+                ?dup if py> os.system(pop())
+                else py> os.system('cmd/k') then ;
+                
+    : cd            ( <path> -- ) // Mimic DOS cd command
+                CR word ?dup if py: os.chdir(pop())
+                else py> os.getcwd() . cr then ;
+                /// Use 'dos' command can do the same thing.
+                /// Ex. 'dos dir', 'dos cd', and all other dos commands.
+                /// But 'dos cd ..' does not work while 'cd ..' works fine.
+
+                
+\ Drop a fence before selftest
 
     marker ---
 
