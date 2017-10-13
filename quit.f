@@ -46,17 +46,16 @@
 
     <text>
     \ 
-    \ WshShell - users may not install win32 packages so only a clue here
+    \ WshShell - users may not install win32 packages yet so only a clue here
+    \ Run "WshShell dictate" to vitalize this word
     \ 
     py:~ import win32com.client; push(win32com.client)
     constant win32com.client // ( -- module )
     win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
-        /// Windows display off power saving mode:
-        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") 
-        /// WshShell :> run("__main__.py",5,True) \ True to wait for errorlevel
-        /// WshShell ::~ run("cmd /k __main__.py",5,True) \ Stay in the DOSBox
+        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
         /// WshShell :: SendKeys("abc")
         /// WshShell :: AppActivate("python.exe")
+        /// WshShell ::~ run("python -i -m peforth WshShell dictate cls version drop dos title child peforth")
     </text> constant WshShell // ( -- "clue" ) Guide how to use WshShell
 
     <py>
@@ -71,7 +70,7 @@
                 push(loc[i]) # vale
                 push(i) # variable name
                 execute('(constant)')
-                last().type='value'
+                last().type='value.outport'
         vm.outport = outport
     </py>
 
@@ -79,6 +78,26 @@
                 py: outport(pop()) ; 
                 /// Example: investigate the root application
                 /// ( locals() when calling ok() ) :> [0] inport 
+                
+    <py>
+        def harry_port(loc={},names=""):
+            '''
+            # Get FORTH words whose type with 'outport' into the loc dict. Words type with 
+            # 'outport' are outported values of a locals(). Refer to 1) FORTH word 'inport' 
+            # which converts dict at TOS to FORTH values - 'value.outport' - and 2) python 
+            # function outport() which converts the given locals(), also, to FORTH values. 
+            # The two are similar. While harry_port() does the reverse, it brings FORTH 
+            # values, that were outported from a locals(), back to python locals(). 
+            '''
+            # 從 context word-list 裡面從小到大把 type ~= value.outport 轉給 loc
+            ws = [w.name for w in words[context][1:] 
+                 if 'outport' in w.type and w.name in names]
+            loc.update(ws)
+            return loc 
+        vm.harry_port = harry_port    
+    </py>
+                
+                
                 
     : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     

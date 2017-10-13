@@ -1701,3 +1701,15 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 3. python import peforth 
         [x] 考慮 README.rst 改良
 [x] version.txt advanced to v1.09 
+[x] the way I get the path is not good, data files are in a separated folder
+    in ubuntu. I have to manually copy data files to lib/python3.5
+    Copy : none .py files are in ~/.local/lib/site-packages/peforth
+        peforth.f  peforth.selftest  quit.f  version.txt
+    To : .py files are in ~/.local/lib/python3.5/site-packages/peforth
+        __init__.py  __main__.py  projectk.py
+    Solutions I found on Stackoverflow are bad, do it manually is fine.
+    [x] A wiki page discusses this. done.
+    
+    
+
+    
