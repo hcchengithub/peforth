@@ -80,7 +80,7 @@
                 /// ( locals() when calling ok() ) :> [0] inport 
                 
     <py>
-        def harry_port(loc={},names=""):
+        def harry_port(loc={}):
             '''
             # Get FORTH words whose type with 'outport' into the loc dict. Words type with 
             # 'outport' are outported values of a locals(). Refer to 1) FORTH word 'inport' 
@@ -88,11 +88,11 @@
             # function outport() which converts the given locals(), also, to FORTH values. 
             # The two are similar. While harry_port() does the reverse, it brings FORTH 
             # values, that were outported from a locals(), back to python locals(). 
+            # Usage: locals().update(harry_port())
             '''
-            # 從 context word-list 裡面從小到大把 type ~= value.outport 轉給 loc
-            ws = [w.name for w in words[context][1:] 
-                 if 'outport' in w.type and w.name in names]
-            loc.update(ws)
+            ws = [w.name for w in words[context][1:] if 'outport' in w.type]
+            for i in ws:
+                loc.update({i:v(i)})
             return loc 
         vm.harry_port = harry_port    
     </py>

@@ -1710,6 +1710,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     Solutions I found on Stackoverflow are bad, do it manually is fine.
     [x] A wiki page discusses this. done.
     
+[ ] 從 c:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tf17_dropout\full_code-2.py 
+    裡，開發 harry_port() 的經驗看來，有了這麼強大的工具之後，用它臨時定義出來的 
+    words 不希望隨著 breakpoint 結束而被 --- marker --- 清除。怎麼辦？
+    1.  如果不用 marker (因為我的 marker 太強了，跨 vocabulary 全清！）
+        就是要有 forget 能單清本 current vocabulary 的 words 到 ─── 為止。
+    2.  而且要有 vocabulary, 把要保留的 words 定義到 root 去，平時在 tutorial
+        vocabulary 工作。
     
 
     
