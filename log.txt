@@ -1719,3 +1719,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         vocabulary 工作。
 [ ] 經 marker 刪除的 value & constant 留在 vm[context] 裡面的 garbage
     沒有回收! marker 還要再加強，forget 也要注意。
+
+    
