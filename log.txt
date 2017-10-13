@@ -1717,6 +1717,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         就是要有 forget 能單清本 current vocabulary 的 words 到 ─── 為止。
     2.  而且要有 vocabulary, 把要保留的 words 定義到 root 去，平時在 tutorial
         vocabulary 工作。
-    
+[ ] 經 marker 刪除的 value & constant 留在 vm[context] 裡面的 garbage
+    沒有回收! marker 還要再加強，forget 也要注意。
 
     
