@@ -83,11 +83,11 @@ if not vm.tick('version'):
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
 
-# Invoke the peforth interpreter.
+# Invoke the peforth interpreter or shell to peforth.
 # Put an ok() anywhere in python code as a breakpoint. The command prompt
 # indicates which breakpoint it is. The loc (locals) and glo (globals)
-# arguments passes the caller's information. So peforth can
-# investigate with its context. ok() returns when vm.exit==True
+# arguments passes the caller's (the parent) information. So peforth can
+# investigate the parent with its context. ok() returns when vm.exit==True
 def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     if loc or glo: vm.push((loc,glo,prompt))  # parent's data
     while True:
