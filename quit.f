@@ -46,16 +46,17 @@
 
     <text>
     \ 
-    \ WshShell - users may not install win32 packages yet so only a clue here
-    \ Run "WshShell dictate" to vitalize this word
+    \ WshShell - users may not install win32 packages so only a clue here
     \ 
     py:~ import win32com.client; push(win32com.client)
     constant win32com.client // ( -- module )
     win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
-        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
+        /// Windows display off power saving mode:
+        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") 
+        /// WshShell :> run("__main__.py",5,True) \ True to wait for errorlevel
+        /// WshShell ::~ run("cmd /k __main__.py",5,True) \ Stay in the DOSBox
         /// WshShell :: SendKeys("abc")
         /// WshShell :: AppActivate("python.exe")
-        /// WshShell ::~ run("python -i -m peforth WshShell dictate cls version drop dos title child peforth")
     </text> constant WshShell // ( -- "clue" ) Guide how to use WshShell
 
     <py>
@@ -70,7 +71,7 @@
                 push(loc[i]) # vale
                 push(i) # variable name
                 execute('(constant)')
-                last().type='value.outport'
+                last().type='value'
         vm.outport = outport
     </py>
 
@@ -96,9 +97,7 @@
             return loc 
         vm.harry_port = harry_port    
     </py>
-                
-                
-                
+
     : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     
     : dir       ( x -- dir ) // get dir list of anything x                
