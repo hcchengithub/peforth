@@ -51,7 +51,7 @@
     \ 
     py:~ import win32com.client; push(win32com.client)
     constant win32com.client // ( -- module )
-    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
+    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj ) The "Windows Script Host" object https://technet.microsoft.com/en-us/library/ee156607.aspx
         /// WshShell :: run("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
         /// WshShell :: SendKeys("abc")
         /// WshShell :: AppActivate("python.exe")
