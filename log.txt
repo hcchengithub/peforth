@@ -1733,6 +1733,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     ==> 問題可能是出在 digit 裡面用到 <text>...</text> dictate 的 macro 形式
         證實了，因為不用該 macro 就好了
 
-
+[ ] harry_port() 的使用技巧，要寫進 help 裡！像這個例子，不能用 <py>...</py> block
+    因為它會先 compile 而這個應用不能先被 compile :
+    
+    OK <text> locals().update(harry_port()); 
+    batch_X, batch_Y = mnist.train.next_batch(100); outport(locals()) </text> 
+    py: exec(pop())
 
 
