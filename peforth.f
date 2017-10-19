@@ -455,7 +455,7 @@ code execute execute(pop()); end-code
 code (space) push(" ") end-code // ( -- " " ) Put a space on TOS.
 code exit 
     if compiling: comma(EXIT) 
-    else: vm.exit=True
+    else: vm.exit=True; reset();
     end-code immediate
     // ( -- ) Exit this colon word.
 code ret comma(RET) end-code immediate compile-only
@@ -712,21 +712,17 @@ code accept
     push(s)
     end-code // ( -- str ) Read a line from terminal.
     
-code accept2 
-    result = nexttoken('\n')+'\n' # rest of the line after accept2
-    execute('accept'); s = pop()+'\n'
+code <accept>
+    result = ""
+    s = nexttoken('\n')+'\n' # rest of the line after <accept>
     while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
-        result += s
-        execute('accept'); s = pop()+'\n'
+        result += s; execute('accept'); s = pop()+'\n'
+    s,vm.tib,vm.ntib = tuple(s.replace(chr(4),"</accept>").split('</accept>'))+(0,)
     result += s 
-    if len(result):
-        push(result)
-        execute('-indent')
-    else:
-        push("")
+    if len(result): push(result); execute('-indent')
+    else: push("")
     end-code // ( -- str ) Read multiple lines from terminal. 
     /// Ctrl-D or </accept> appear in the last line to terminate the input. 
-    last alias <accept> // ( -- str ) Read multiple lines from terminal.
 
 code nop end-code // ( -- ) no operation
     ' nop alias </accept> last py: pop().help="" 
@@ -902,7 +898,7 @@ variable '<text> private
                 constant last :: type='value' ; 
 : to            ( n <value> -- ) // Assign n to <value>.
                 ' ( n word ) 
-                py> tos().type!="value" ?abort" Error! Assigning to a none-value."
+                py> tos().type.find("value")==-1 ?abort" Error! Assigning to a none-value."
                 compiling if ( n word ) 
                     char getattr(vm,"{}")["{}"]=pop() 
                     :> format(tos().vid,pop().name) ( n s ) 

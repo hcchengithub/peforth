@@ -51,7 +51,7 @@
     \ 
     py:~ import win32com.client; push(win32com.client)
     constant win32com.client // ( -- module )
-    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj )
+    win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj ) The "Windows Script Host" object https://technet.microsoft.com/en-us/library/ee156607.aspx
         /// WshShell :: run("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
         /// WshShell :: SendKeys("abc")
         /// WshShell :: AppActivate("python.exe")
@@ -61,10 +61,11 @@
     <py>
         def outport(loc): 
             '''
+            # Make all local variables forth constants.
             # The input argument is supposed locals() of the caller.
-            # Make all local variables forth constants
             # Examine locals after a <Py>...</Py> section 
             # For studying maching learning, tersorflow, ... etc. 
+            # Usage: outport(locals())
             '''
             for i in loc: 
                 push(loc[i]) # vale
@@ -77,7 +78,7 @@
     : inport    ( dict -- ) // Make all pairs in dict peforth values. 
                 py: outport(pop()) ; 
                 /// Example: investigate the root application
-                /// ( locals() when calling ok() ) :> [0] inport 
+                /// ok(loc=locals(),glo=globals(),cmd=':> [0] inport')
                 
     <py>
         def harry_port(loc={}):

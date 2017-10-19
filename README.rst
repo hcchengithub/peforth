@@ -1,8 +1,8 @@
 peforth
 #######
 
-A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-********************************************************************************
+A programmable python debugger allows you to abruptly setup procedures to investigate your program code at a breakpoint.
+************************************************************************************************************************
 
 You guys know how to bebug already. We all do.
 But when it comes to Machine Learning and Tensorflow or the likes, 
