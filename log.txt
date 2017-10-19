@@ -1747,12 +1747,32 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         end-code immediate
         // ( -- ) Exit this colon word.
     靠！意外發現這個 bug !! 其實早就看到 exit 之後會暴衝，沒太在意。
-[ ] <accept> nop </accept> 同一行不行，要改良嗎？
-
+[x] <accept> nop </accept> 同一行不行，要改良嗎？ ---> Done! 
 [ ] 開發中，不要動到 site-packages 出錯很麻煩，所以還是要從 working folder 執行
     不要每次都得先 setup.bat 改入 site-packages
     --> 一時搞不定， site-package 裡的 __main__.py 總是要 import peforth 
         因此一定不是用 project directory 版。
     
+[x] Tests before a Release  v1.09
+    [x] 所有 run 法帶 selftest 跑一遍
+        [x] Run setup.bat 做出有 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [ ] selftest .s words exit 
+        [x] 2. python -i -m peforth version drop
+        [x] 3. python import peforth 
+                [x] selftest peforth.ok() .s words <--- no parent
+                [x] 1234 bye check echo %errorlevel% 
+    [x] 所有 run 不帶 selftest 再跑一遍
+        [x] 注意！改的是 site-packages\peforth\quit.f 所以要
+            在 setup.bat 做 wheel 以前插入這個動作！！！！！
+            Run setup.bat 做出取消 selftest 的 wheel
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] selftest .s words exit bye
+        [x] 2. python -i -m peforth .' Hello World!!' cr bye
+        [x] 3. python import peforth 
+        [x] 考慮 README.rst 改良
+    [x] version 改成 1.11    
     
     
