@@ -1774,5 +1774,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 3. python import peforth 
         [x] 考慮 README.rst 改良
     [x] version 改成 1.11    
-    
+[ ] -indent 可以更聰明一點，目的讓 <text>...</text> 內部更自由。
+    當 </text> 所在行是 blank line 時，就用它的長度當作 -indent 的最小值，這
+    麼一來 <text> 之後就可以接著放東西。那它的 space 數比 </text> 之前小，就
+    會被「加長」到「最小值」。這樣更自由。
     
