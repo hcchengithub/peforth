@@ -1556,7 +1556,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] 最進新發現的 bug 特別要加進 selftest 
     --> (see) none Word 之後 stack 沒清乾淨 --> 有兩條路的 words 都可疑！
     --> 甚至，例如 words 最後有多印一個 print() 也是測試的重點。
-[ ] <accept> nop </accept> 同一行不行，要改良嗎？
 [/] readTextFile, writeTextFile 好像都還不能用 -- haha bug 被 inport 取代掉的
 [x] display-off 之後 on 不回來，突然發生，很奇怪。沒了 display 不好 debug.
     display-off 之內如果是 ." hello world" 就沒問題。
@@ -1733,6 +1732,27 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     ==> 問題可能是出在 digit 裡面用到 <text>...</text> dictate 的 macro 形式
         證實了，因為不用該 macro 就好了
 
+[ ] harry_port() 的使用技巧，要寫進 help 裡！像這個例子，不能用 <py>...</py> block
+    因為它會先 compile 而這個應用不能先被 compile :
+    
+    OK <text> locals().update(harry_port()); 
+    batch_X, batch_Y = mnist.train.next_batch(100); outport(locals()) </text> 
+    py: exec(pop())
+    
+[x] exit 不夠力，會往下做。要再補個 stop 才行。
+    code stop reset() end-code // ( -- ) Stop the TIB loop
+    code exit 
+        if compiling: comma(EXIT) 
+        else: vm.exit=True ; reset() <---- 補 reset() 即 stop 
+        end-code immediate
+        // ( -- ) Exit this colon word.
+    靠！意外發現這個 bug !! 其實早就看到 exit 之後會暴衝，沒太在意。
+[ ] <accept> nop </accept> 同一行不行，要改良嗎？
 
-
-
+[ ] 開發中，不要動到 site-packages 出錯很麻煩，所以還是要從 working folder 執行
+    不要每次都得先 setup.bat 改入 site-packages
+    --> 一時搞不定， site-package 裡的 __main__.py 總是要 import peforth 
+        因此一定不是用 project directory 版。
+    
+    
+    

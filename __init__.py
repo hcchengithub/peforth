@@ -95,8 +95,8 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or
                 vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
                 cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D
-            elif vm.tick('accept2') and vm.multiple:     # before the last <Enter> key to end the
-                vm.execute('accept2')                    # input when in multiple-line mode.
+            elif vm.tick('<accept>') and vm.multiple:     # before the last <Enter> key to end the
+                vm.execute('<accept>')                    # input when in multiple-line mode.
                 cmd = vm.pop().strip()                   #
             else:                                        #
                 cmd = input("").strip()                  #

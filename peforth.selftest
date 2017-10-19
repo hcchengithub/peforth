@@ -465,7 +465,7 @@
         screen-buffer <py> pop()[0].find('00000: 0')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('00798: ')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('00799: ')!=-1 </pyV> ( True )
-        [d 810,True,True,True d] [p '<accept>','</accept>','accept','accept2','d','dump',
+        [d 810,True,True,True d] [p '<accept>','</accept>','accept','d','dump',
         '(dump)','toString', '.literal', '.function' p]
     *** obj>keys .members .source
         py> {'aa':11,'bb':22} obj>keys py> set(pop()) ( {'aa','bb'} ) \ cast to set for compare

@@ -75,7 +75,7 @@
         cr 
         ." Packup peforth into a wheel package" cr
         ." Press Enter to stop it or 'continue' to proceed. "
-        py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
+        py> input()=="continue" [if] [else] ." Action aborted by user." cr bye [then] 
             
         cr 
         ." o  Check ~\GitHub\peforth\setup.py and ~\GitHub\peforth\setup.bat" cr

@@ -61,10 +61,11 @@
     <py>
         def outport(loc): 
             '''
+            # Make all local variables forth constants.
             # The input argument is supposed locals() of the caller.
-            # Make all local variables forth constants
             # Examine locals after a <Py>...</Py> section 
             # For studying maching learning, tersorflow, ... etc. 
+            # Usage: outport(locals())
             '''
             for i in loc: 
                 push(loc[i]) # vale
@@ -77,7 +78,7 @@
     : inport    ( dict -- ) // Make all pairs in dict peforth values. 
                 py: outport(pop()) ; 
                 /// Example: investigate the root application
-                /// ( locals() when calling ok() ) :> [0] inport 
+                /// ok(loc=locals(),glo=globals(),cmd=':> [0] inport')
                 
     <py>
         def harry_port(loc={}):
