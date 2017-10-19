@@ -902,7 +902,7 @@ variable '<text> private
                 constant last :: type='value' ; 
 : to            ( n <value> -- ) // Assign n to <value>.
                 ' ( n word ) 
-                py> tos().type!="value" ?abort" Error! Assigning to a none-value."
+                py> tos().type.find("value")==-1 ?abort" Error! Assigning to a none-value."
                 compiling if ( n word ) 
                     char getattr(vm,"{}")["{}"]=pop() 
                     :> format(tos().vid,pop().name) ( n s ) 
