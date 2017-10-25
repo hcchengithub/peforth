@@ -1060,13 +1060,19 @@ code .s
                 end-code
                 // ( ... -- ... ) Dump the data stack.
 
-code (*debug*)
-                print('---- Break point {} ----'.format(pop()))
-                pdb.set_trace() end-code 
-                // ( msg -- ) Invoke python pdb debugger
-: *debug*       ( <prompt> -- resume ) // Breakpoint enters pdb debugger
-                BL word compiling if literal compile (*debug*) 
-                else (*debug*) then ; immediate
+\ code (*debug*)
+\                 print('---- Break point {} ----'.format(pop()))
+\                 pdb.set_trace() end-code 
+\                 // ( msg -- ) Invoke python pdb debugger
+\ : *debug*       ( <prompt> -- resume ) // Breakpoint enters pdb debugger
+\                 BL word compiling if literal compile (*debug*) 
+\                 else (*debug*) then ; immediate
+                
+: *debug*       ( <prompt> -- ... ) // FORTH breakpoint 
+                BL word ( prompt ) py: ok(pop(),cmd="cr") ;
+                /// How to invoke pdb when not locally imported:
+                /// py: sys.modules['pdb'].set_trace()
+
 code readTextFile 
                 pathname = pop()
                 try:
@@ -1097,6 +1103,9 @@ code tib.insert
 
 : include       ( <filename> -- ... ) // Load the source file
                 BL word sinclude ; interpret-only
+    
+: break-include ( -- ) // Break including .f file
+                py: vm.ntib=len(tib) ;
     
 : type          ( x -- type ) // get type object of anything x                
                 py> type(pop()) ;

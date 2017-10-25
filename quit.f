@@ -139,6 +139,7 @@
                 CR word ( cml ) trim ( cml' )
                 ?dup if py> os.system(pop())
                 else py> os.system('cmd/k') then ;
+                /// See also WshShell 
                 
     : cd            ( <path> -- ) // Mimic DOS cd command
                 CR word ?dup if py: os.chdir(pop())
@@ -146,6 +147,7 @@
                 /// Use 'dos' command can do the same thing.
                 /// Ex. 'dos dir', 'dos cd', and all other dos commands.
                 /// But 'dos cd ..' does not work while 'cd ..' works fine.
+                /// See also: os.chdir('path'); path=os.getcwd()
 
                 
 \ Drop a fence before selftest

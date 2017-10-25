@@ -1194,7 +1194,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         The data stack was supposed to be empty, here after it won't be.
     --> The TOS provides the prompt, the locals
 [x] debug command 不要了, 會跟 py> debug which is vm.debug 撞名,沒必要增加這個問題。    
-[x] *debug* 改寫, 不要用 pdb.set_trace() 了    
+
 [ ] I found a python problem!!    
     False==0 is True, False<=0 is True, False<=0.1 is True
     False<0.0001 is True, False<-0.1 is False 
@@ -1779,3 +1779,30 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     麼一來 <text> 之後就可以接著放東西。那它的 space 數比 </text> 之前小，就
     會被「加長」到「最小值」。這樣更自由。
     
+[x] exit stop 之外，還需要一個中止 including 的方法。或者是仔細定義 stop, exit 
+    的差別或者合併。vm.exit 是給 ok() 看的，很明顯它用來回到 python interpreter 
+    這已經有點頭痛了，因為 exit 同時也是給 inner loop 看的 instruction 跟 RET 
+    等效。意思是，如果 exit 再有別的意思，恐怕連我自己都糊塗了。那只剩 stop 了，
+    stop 用來打斷 outer loop 也很明確。所以，需要新的 word ... stop-including
+    因為 sinclude 是用 dictate 來處理 .f file 的，可能把 ntib 改一下就有 stop-including
+    的效果了，試試看，把斷點斷在 xray.f 裡查看半路的 tib 含不含 tutrial 。。。
+    ---> Bingo!! 
+    
+    : break-include ( -- ) // Break including .f file
+        py: vm.ntib=len(tib) ;
+
+[x] peforth 可以用來幫 .py import modules
+        py> os.getcwd() constant working-directory // ( -- "path" ) Tutorial home directory saved copy
+        \ my MNIST_data directory is there
+        cd c:\Users\hcche\Downloads
+        py:~ from tensorflow.examples.tutorials.mnist import input_data as mnist_data; push(mnist_data)
+        parent :: ['mnist_data']=pop(1) \ pop(1) 很傷腦筋， in-line 要還原成 python 才看得懂。
+
+[x] *debug* 改寫, 不要用 pdb.set_trace() 了    
+    不用 import 就使用 pdb 的方法 
+    py: sys.modules['pdb'].set_trace()
+    : *debug* ( <prompt> -- ... ) // FORTH breakpoint 
+        BL word ( prompt ) py: ok(pop(),cmd="cr") ;
+        /// How to invoke pdb:
+        /// py: sys.modules['pdb'].set_trace()
+        
