@@ -1805,4 +1805,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         BL word ( prompt ) py: ok(pop(),cmd="cr") ;
         /// How to invoke pdb:
         /// py: sys.modules['pdb'].set_trace()
-        
+[ ] *debug* can not be used in compiling mode (colon definition) yet
+    because the following prompt needs to read tib immediatedly
+    

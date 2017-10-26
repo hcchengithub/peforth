@@ -509,7 +509,7 @@
         'privacy', 'private', 'nonprivate', 'ret', 'rescan-word-hash', 
         'branch', 'abort', 'public', 'never', 'aft', '?stop', 'nop', '\x04', 
         'refill', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', 'tib.', 
-        '(*debug*)', '*debug*','tib.insert', 
+        '*debug*','tib.insert', 
         'sinclude', 'include', 'OK' p]
 
 </selftest>
