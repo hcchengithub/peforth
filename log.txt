@@ -1805,11 +1805,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         BL word ( prompt ) py: ok(pop(),cmd="cr") ;
         /// How to invoke pdb:
         /// py: sys.modules['pdb'].set_trace()
-    [ ] now 11 *debug* >> 22 <== but 22 got skipped ! <----- problem
-[ ] *debug* can not be used in compiling mode (colon definition) yet
+    [x] now 11 *debug* >> 22 <== but 22 got skipped ! <----- problem
+        --> fixed
+[x] *debug* can not be used in compiling mode (colon definition) yet
     because the following prompt needs to read tib immediatedly
 [x] Bug found,
         OK help a
         Word in phaseB <Word 'help'>: 'int' object has no attribute 'help'        
     help improved    
-        
+[x] new word "import" works fine        
