@@ -1814,3 +1814,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         Word in phaseB <Word 'help'>: 'int' object has no attribute 'help'        
     help improved    
 [x] new word "import" works fine        
+[x] new word __main__ works fine
+    s" dos title " __main__ :> __file__ + dictate

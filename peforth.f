@@ -1016,7 +1016,13 @@ code t>
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
 
 \ ------------------ Tools  ----------------------------------------------------------------------
-                
+
+: __main__ ( -- module ) // Get __main__ module of this python session
+    py> sys.modules['__main__'] ;
+    /// Examples:
+    /// __main__ :> __file__ \ ==> C:\Users\morvanTUT\plt6_ax_setting2.py
+    /// s" dos title " __main__ :> __file__ + dictate
+    
 : import ( <module> -- obj ) // Import the module
     BL word ( <module> )
     s" import {}" :> format(tos()) ( <module> "import <module>" )
