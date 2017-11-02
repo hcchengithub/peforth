@@ -1021,7 +1021,8 @@ code t>
     py> sys.modules['__main__'] ;
     /// Examples:
     /// __main__ :> __file__ \ ==> C:\Users\morvanTUT\plt6_ax_setting2.py
-    /// s" dos title " __main__ :> __file__ + dictate
+    /// s" dos title " __main__ :> __file__ + dictate 
+    /// drop \ drop the errorlevel 
     
 : import ( <module> -- obj ) // Import the module
     BL word ( <module> )
