@@ -83,13 +83,15 @@
     <py>
         def harry_port(loc={}):
             '''
-            # Get FORTH words whose type with 'outport' into the loc dict. Words type with 
-            # 'outport' are outported values of a locals(). Refer to 1) FORTH word 'inport' 
-            # which converts dict at TOS to FORTH values - 'value.outport' - and 2) python 
-            # function outport() which converts the given locals(), also, to FORTH values. 
-            # The two are similar. While harry_port() does the reverse, it brings FORTH 
-            # values, that were outported from a locals(), back to python locals(). 
+            # Note! Don't use this technique in any compiled snippet. Run by exec() is 
+            # good. This function returns a dict of all FORTH values with type of 
+            # "value.outport". Refer to 1) FORTH word 'inport' which converts a dict, a 
+            # snapshot of locals(), at TOS to FORTH values, and 2) python function 
+            # outport() which converts the given locals() to FORTH values. The two are 
+            # similar. While harry_port() does the reverse, it brings FORTH values, that 
+            # were outported from a locals(), back to python locals().             
             # Usage: locals().update(harry_port())
+            # <PY> exec("locals().update(harry_port()); x = sess.run(myXX); print(x)") </PY>
             '''
             ws = [w.name for w in words[context][1:] if 'outport' in w.type]
             for i in ws:
@@ -98,7 +100,7 @@
         vm.harry_port = harry_port    
     </py>
                 
-                
+    : harry_port py> harry_port.__doc__ . cr ; // ( -- ) Print help message
                 
     : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     
@@ -137,6 +139,7 @@
                 CR word ( cml ) trim ( cml' )
                 ?dup if py> os.system(pop())
                 else py> os.system('cmd/k') then ;
+                /// See also WshShell 
                 
     : cd            ( <path> -- ) // Mimic DOS cd command
                 CR word ?dup if py: os.chdir(pop())
@@ -144,6 +147,7 @@
                 /// Use 'dos' command can do the same thing.
                 /// Ex. 'dos dir', 'dos cd', and all other dos commands.
                 /// But 'dos cd ..' does not work while 'cd ..' works fine.
+                /// See also: os.chdir('path'); path=os.getcwd()
 
                 
 \ Drop a fence before selftest

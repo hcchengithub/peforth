@@ -83,11 +83,14 @@ if not vm.tick('version'):
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
 
+
 # Invoke the peforth interpreter.
-# Put an ok() anywhere in python code as a breakpoint. The command prompt
-# indicates which breakpoint it is. The loc (locals) and glo (globals)
-# arguments passes the caller's information. So peforth can
-# investigate with its context. ok() returns when vm.exit==True
+# Put an peforth.ok(prompt='OK ', loc={}, glo={}, cmd="") anywhere in python 
+# code as a breakpoint. The prompt indicates which breakpoint it is if there 
+# are many. The loc (locals) and glo (globals) arguments passes the caller's 
+# information packed as a tuple i.e. (locals,globlas,prompt) down on TOS of the 
+# FORTH vm. So peforth can investigate with that context. ok() returns when 
+# vm.exit==True 
 def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     if loc or glo: vm.push((loc,glo,prompt))  # parent's data
     while True:
@@ -95,8 +98,8 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or
                 vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
                 cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D
-            elif vm.tick('<accept>') and vm.multiple:     # before the last <Enter> key to end the
-                vm.execute('<accept>')                    # input when in multiple-line mode.
+            elif vm.tick('<accept>') and vm.multiple:    # before the last <Enter> key to end the
+                vm.execute('<accept>')                   # input when in multiple-line mode.
                 cmd = vm.pop().strip()                   #
             else:                                        #
                 cmd = input("").strip()                  #

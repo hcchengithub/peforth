@@ -279,20 +279,32 @@ code cr print() end-code // ( -- ) print a carriage return
 
 code help
     n = nexttoken('\n|\r').strip();  # 避免 selftest 時抓 tib 過頭，本來 nexttoken() 就可以。
-    if n:
+    list = context_word_list()  # not wordhash
+    def print_help(i):
+        print(list[i].name, end=" ")
+        if getattr(list[i],"help",False):
+            print(list[i].help)
+        else:
+            print("( ?? ) No help, use // command to add help to the 'last' word")
+        if getattr(list[i],"comment",False):
+            print(list[i].comment)
+    if tick(n):
         print(tick(n).help)
         print(tick(n).comment or "") 
     else:
-        list = context_word_list()
-        for i in range(1,len(list)):
-            print(list[i].name, end=" ")
-            if getattr(list[i],"help",False):
-                print(list[i].help)
-            else:
-                print("( ?? ) No help, use // command to add help to the 'last' word")
-            if getattr(list[i],"comment",False):
-                print(list[i].comment)
-    end-code // ( <word name> -- ) Print word's help and comment of the given word or all of them
+        if n :
+            for i in range(1,len(list)):
+                if n in list[i].name:
+                    print_help(i);
+        else: # list all words 
+            for i in range(1,len(list)):
+                print_help(i);
+    end-code 
+    // ( <pattern> -- ) Print word's help and comment
+    /// 1. Given pattern matches a word's name - print one word.
+    /// 2. otherwise -- print words partially matches the pattern.
+    /// 3. No given pattern -- print all words.
+
     
 code interpret-only
     last().interpretonly=True;
@@ -455,9 +467,12 @@ code execute execute(pop()); end-code
 code (space) push(" ") end-code // ( -- " " ) Put a space on TOS.
 code exit 
     if compiling: comma(EXIT) 
-    else: vm.exit=True; reset();
+    else: vm.exit=True;
     end-code immediate
-    // ( -- ) Exit this colon word.
+    // ( -- ) Exit colon word when in colon definiton or exit ok() when in interpret state.
+    /// exit from *debug* which shells into ok() and continue.
+    /// Use 'exit stop' to completely terminate the interpreter
+    
 code ret comma(RET) end-code immediate compile-only
     // ( -- ) Mark at the end of a colon word.
 code rescan-word-hash    
@@ -1001,7 +1016,23 @@ code t>
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
 
 \ ------------------ Tools  ----------------------------------------------------------------------
-                
+
+: __main__ ( -- module ) // Get __main__ module of this python session
+    py> sys.modules['__main__'] ;
+    /// Examples:
+    /// __main__ :> __file__ \ ==> C:\Users\morvanTUT\plt6_ax_setting2.py
+    /// s" dos title " __main__ :> __file__ + dictate 
+    /// drop \ drop the errorlevel 
+    
+: import ( <module> -- obj ) // Import the module
+    BL word ( <module> )
+    s" import {}" :> format(tos()) ( <module> "import <module>" )
+    py: exec(pop())
+    py> sys.modules[pop()] ( module ) ;
+    /// Introduce the the module to projectk kernel:
+    ///   import numpy constant np // ( -- numpy ) module object
+    ///   py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
+    
 : modules ( <pattern> -- ) // List imported modules
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
     if py>~ [i for i in sys.modules.keys() if i.find(tos())!=-1]
@@ -1060,13 +1091,16 @@ code .s
                 end-code
                 // ( ... -- ... ) Dump the data stack.
 
-code (*debug*)
-                print('---- Break point {} ----'.format(pop()))
-                pdb.set_trace() end-code 
+: (*debug*)     ( "prompt" -- ... ) // FORTH breakpoint 
+                py: ok(pop(),cmd="cr") ;
                 // ( msg -- ) Invoke python pdb debugger
-: *debug*       ( <prompt> -- resume ) // Breakpoint enters pdb debugger
-                BL word compiling if literal compile (*debug*) 
+                
+: *debug*       ( <prompt> -- ... ) // FORTH breakpoint 
+                BL word ( prompt ) compiling if literal compile (*debug*)
                 else (*debug*) then ; immediate
+                /// How to invoke pdb when not locally imported:
+                /// py: sys.modules['pdb'].set_trace()
+
 code readTextFile 
                 pathname = pop()
                 try:
@@ -1097,6 +1131,10 @@ code tib.insert
 
 : include       ( <filename> -- ... ) // Load the source file
                 BL word sinclude ; interpret-only
+                /// See also break-include command 
+    
+: break-include ( -- ) // Break including .f file
+                py: vm.ntib=len(tib) ;
     
 : type          ( x -- type ) // get type object of anything x                
                 py> type(pop()) ;
