@@ -1131,6 +1131,7 @@ code tib.insert
 
 : include       ( <filename> -- ... ) // Load the source file
                 BL word sinclude ; interpret-only
+                /// See also break-include command 
     
 : break-include ( -- ) // Break including .f file
                 py: vm.ntib=len(tib) ;

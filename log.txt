@@ -1773,7 +1773,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 2. python -i -m peforth .' Hello World!!' cr bye
         [x] 3. python import peforth 
         [x] 考慮 README.rst 改良
-    [x] version 改成 1.11    
+    [x] version 改成 1.11  (必須跳過 1.10 會變成 1.1）  
 [ ] -indent 可以更聰明一點，目的讓 <text>...</text> 內部更自由。
     當 </text> 所在行是 blank line 時，就用它的長度當作 -indent 的最小值，這
     麼一來 <text> 之後就可以接著放東西。那它的 space 數比 </text> 之前小，就
@@ -1783,8 +1783,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     的差別或者合併。vm.exit 是給 ok() 看的，很明顯它用來回到 python interpreter 
     這已經有點頭痛了，因為 exit 同時也是給 inner loop 看的 instruction 跟 RET 
     等效。意思是，如果 exit 再有別的意思，恐怕連我自己都糊塗了。那只剩 stop 了，
-    stop 用來打斷 outer loop 也很明確。所以，需要新的 word ... stop-including
-    因為 sinclude 是用 dictate 來處理 .f file 的，可能把 ntib 改一下就有 stop-including
+    stop 用來打斷 outer loop 也很明確。所以，需要新的 word ... break-include
+    因為 sinclude 是用 dictate 來處理 .f file 的，可能把 ntib 改一下就有 break-include
     的效果了，試試看，把斷點斷在 xray.f 裡查看半路的 tib 含不含 tutrial 。。。
     ---> Bingo!! 
     
@@ -1816,3 +1816,28 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] new word "import" works fine        
 [x] new word __main__ works fine
     s" dos title " __main__ :> __file__ + dictate
+[ ] release 1.11 
+    new words import, __main__, break_include, and improved *debug* and help
+[ ] Tests before a Release  v1.11
+    [ ] 所有 run 法帶 selftest 跑一遍
+        [ ] Run setup.bat 做出有 selftest 的 wheel 
+        [ ] pip uninstall peforth
+        [ ] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [ ] 1. python -i -m peforth [ ] selftest .s words exit 
+        [ ] 2. python -i -m peforth version drop
+        [ ] 3. python import peforth 
+                [x] selftest peforth.ok() .s words <--- no parent
+                [x] 1234 bye check echo %errorlevel% 
+    [ ] 所有 run 不帶 selftest 再跑一遍
+        [x] Run setup.bat 做出取消 selftest 的 wheel
+            注意！改的是 site-packages\peforth\quit.f 所以要
+            在 setup.bat 做 wheel 以前插入這個動作！！！！！
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] selftest .s words exit bye
+        [x] 2. python -i -m peforth .' Hello World!!' cr bye
+        [x] 3. python import peforth 
+        [x] 考慮 README.rst 改良
+    [ ] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
+    
+    
