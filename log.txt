@@ -1816,19 +1816,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] new word "import" works fine        
 [x] new word __main__ works fine
     s" dos title " __main__ :> __file__ + dictate
-[ ] release 1.11 
+[x] release 1.11 
     new words import, __main__, break_include, and improved *debug* and help
-[ ] Tests before a Release  v1.11
-    [ ] 所有 run 法帶 selftest 跑一遍
-        [ ] Run setup.bat 做出有 selftest 的 wheel 
-        [ ] pip uninstall peforth
-        [ ] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [ ] 1. python -i -m peforth [ ] selftest .s words exit 
-        [ ] 2. python -i -m peforth version drop
-        [ ] 3. python import peforth 
+[x] Tests before a Release  v1.11
+    [/] 所有 run 法帶 selftest 跑一遍
+        [/] Run setup.bat 做出有 selftest 的 wheel 
+        [/] pip uninstall peforth
+        [/] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [/] 1. python -i -m peforth [ ] selftest .s words exit 
+        [/] 2. python -i -m peforth version drop
+        [/] 3. python import peforth 
                 [x] selftest peforth.ok() .s words <--- no parent
                 [x] 1234 bye check echo %errorlevel% 
-    [ ] 所有 run 不帶 selftest 再跑一遍
+    [/] 所有 run 不帶 selftest 再跑一遍
         [x] Run setup.bat 做出取消 selftest 的 wheel
             注意！改的是 site-packages\peforth\quit.f 所以要
             在 setup.bat 做 wheel 以前插入這個動作！！！！！
@@ -1838,6 +1838,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 2. python -i -m peforth .' Hello World!!' cr bye
         [x] 3. python import peforth 
         [x] 考慮 README.rst 改良
-    [ ] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
-    
+    [x] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
+[x] 因 bug 發現 harry_port() 的更佳用法  （quit.f updated）
+    \ Study 三寶
+    \ 1. DOS Box title 
+        import peforth; peforth.ok(loc=locals(),cmd="include xray.f")
+    \ 2. Breakpoint
+        peforth.ok('11> ',cmd="parent inport")
+    \ 3. Lab of copy-paste
+        <accept> <text> 
+        # ---------------------------------------------------------------------------
+        all locals() can use 
+        # ---------------------------------------------------------------------------
+        </text> -indent py: exec(pop(),harry_port()) # If only globals is given, locals defaults to it.
+        </accept> dictate 
+   
     

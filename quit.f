@@ -90,7 +90,8 @@
             # outport() which converts the given locals() to FORTH values. The two are 
             # similar. While harry_port() does the reverse, it brings FORTH values, that 
             # were outported from a locals(), back to python locals().             
-            # Usage: locals().update(harry_port())
+            # Usage: Method A) exec(python_code, harry_port()) 
+            #        Method B) locals().update(harry_port())
             # <PY> exec("locals().update(harry_port()); x = sess.run(myXX); print(x)") </PY>
             '''
             ws = [w.name for w in words[context][1:] if 'outport' in w.type]
