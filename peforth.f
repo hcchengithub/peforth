@@ -469,9 +469,10 @@ code exit
     if compiling: comma(EXIT) 
     else: vm.exit=True;
     end-code immediate
-    // ( -- ) Exit colon word when in colon definiton or exit ok() when in interpret state.
-    /// exit from *debug* which shells into ok() and continue.
-    /// Use 'exit stop' to completely terminate the interpreter
+    // ( -- ) Exit colon word when in colon definiton or raise flag to exit ok() shell loop.
+    /// exit from *debug*, which shells into ok(), and continue.
+    /// BTW, 'break-include' break including a .f file
+    /// 'exit break-include' break including a .f file and exit the ok() shell
     
 code ret comma(RET) end-code immediate compile-only
     // ( -- ) Mark at the end of a colon word.
@@ -1070,6 +1071,8 @@ code ASCII>char push(chr(pop())) end-code // ( ASCII -- 'c' ) ASCII or whatever 
                 /// 65 ASCII>char tib. \ ==> A (string)
                 \ https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
                 
+py> '\r\n' constant CRLF // ( -- '\r\n' ) leaves '\r\n' on TOS
+
 : ASCII         ( <str> -- ASCII ) // Get <str>[0]'s ASCII code.
                 BL word char>ASCII compiling if literal then
                 ; immediate

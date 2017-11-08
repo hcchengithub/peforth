@@ -62,6 +62,7 @@
             \ s" copy /y {}__main__.py {}__init__.py" :> format(v('source'),v('dest'))
             \ py: os.system(pop())
 
+            \ ---- 本想改用 --upgrade --force-reinstall peforth 但不成功
             \ peforth package files 都 copy 過去
             <py>
             for i in v('files'):
@@ -69,6 +70,23 @@
                 os.system(cmd)
             </py>
 
+            \ 此法失敗
+            \ os.getcwd() --> GitHub/peforth
+            \ cd ..
+            \ dos pip install --upgrade --force-reinstall peforth
+            \ cd peforth
+            \ 此法失敗 症狀如下
+            \ c:\Users\hcche\Documents\GitHub>pip install --upgrade --force-reinstall peforth
+            \ Collecting peforth
+            \   Using cached peforth-1.11-py3-none-any.whl
+            \ Installing collected packages: peforth
+            \   Found existing installation: peforth 1.11
+            \     Uninstalling peforth-1.11:
+            \       Successfully uninstalled peforth-1.11
+            \ Successfully installed peforth-1.11
+            \ 
+            \ c:\Users\hcche\Documents\GitHub>
+            
             
     \ 問要不要打包 whl?
 

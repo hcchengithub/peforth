@@ -1366,6 +1366,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [ ] 發現 pip help install 列出了 pip install 的種種用法。
         update.bat 直接從 project directly update peforth package 到
         lib\site-packages\peforth 的方式太暴力了。
+    [ ] Upgrade from Pypi.org 
+        pip install --upgrade peforth  <--- project folder is github/peforth, 從 github/ 執行
+        github:\>pip install peforth
+        Requirement already satisfied: peforth in c:\...\python\python36\lib\site-packages
+
+
         
 [ ] 螢幕編輯器    
     os.get_terminal_size(...)
@@ -1815,7 +1821,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     help improved    
 [x] new word "import" works fine        
 [x] new word __main__ works fine
-    s" dos title " __main__ :> __file__ + dictate
+    s" dos title " __main__ :> __file__ + CRLF + dictate drop
+    Note! 如果沒有 CRLF 則 dos 會抓到 dictate 之後去，連 drop 都當成 command line 的一部份
 [ ] release 1.11 
     new words import, __main__, break_include, and improved *debug* and help
 [ ] Tests before a Release  v1.11
@@ -1840,4 +1847,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 考慮 README.rst 改良
     [ ] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
     
-    
+[ ] ( ... ) comment nested
+[ ] CRLF leaves '\r\n' on TOS
+
