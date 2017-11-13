@@ -1094,15 +1094,16 @@ code .s
                 end-code
                 // ( ... -- ... ) Dump the data stack.
 
-: (*debug*)     ( "prompt" -- ... ) // FORTH breakpoint 
+: (*debug*)     ( "prompt" -- ... ) // FORTH breakpoint, 'exit' to continue.
                 py: ok(pop(),cmd="cr") ;
-                // ( msg -- ) Invoke python pdb debugger
-                
-: *debug*       ( <prompt> -- ... ) // FORTH breakpoint 
-                BL word ( prompt ) compiling if literal compile (*debug*)
-                else (*debug*) then ; immediate
                 /// How to invoke pdb when not locally imported:
                 /// py: sys.modules['pdb'].set_trace()
+
+                
+: *debug*       ( <prompt> -- ... ) // FORTH breakpoint, 'exit' to continue. 
+                BL word ( prompt ) compiling if literal compile (*debug*)
+                else (*debug*) then ; immediate
+                ' (*debug*) :> comment last :: comment=pop(1)
 
 code readTextFile 
                 pathname = pop()
