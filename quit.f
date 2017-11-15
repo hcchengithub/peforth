@@ -83,15 +83,16 @@
     <py>
         def harry_port(loc={}):
             '''
-            # Note! Don't use this technique in any compiled snippet. Run by exec() is 
-            # good. This function returns a dict of all FORTH values with type of 
+            # Note! Don't use this technique in any compiled snippet, but run by exec() 
+            # instead. This function returns a dict of all FORTH values with type of 
             # "value.outport". Refer to 1) FORTH word 'inport' which converts a dict, a 
             # snapshot of locals(), at TOS to FORTH values, and 2) python function 
             # outport() which converts the given locals() to FORTH values. The two are 
             # similar. While harry_port() does the reverse, it brings FORTH values, that 
             # were outported from a locals(), back to python locals().             
-            # Usage: locals().update(harry_port())
-            # <PY> exec("locals().update(harry_port()); x = sess.run(myXX); print(x)") </PY>
+            # Usage: 
+            #   1. exec("x = sess.run(myXX); print(x)", harry_port())
+            #   2. locals().update(harry_port()) # in code executed by exec()
             '''
             ws = [w.name for w in words[context][1:] if 'outport' in w.type]
             for i in ws:
@@ -100,7 +101,7 @@
         vm.harry_port = harry_port    
     </py>
                 
-    : harry_port py> harry_port.__doc__ . cr ; // ( -- ) Print help message
+    : harry_port py> harry_port.__doc__ -indent . cr ; // ( -- ) Print help message
                 
     : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     

@@ -19,12 +19,90 @@ itchat.run()
     11> :> [0] constant parent // ( -- locals ) echo.py message handler locals
     reDef parent
     11> words
-    code end-code \ // <selftest> </selftest> bye /// immediate stop compyle trim indent -indent <py> </py> </pyV> words . cr help interpret-only compile-only literal reveal privacy (create) : ; ( BL CR word ' , [compile] py: py> py:~ py>~ 0branch here! here swap ! @ ? >r r> r@ drop dup over 0< + * - / 1+ 2+ 1- 2- compile if then compiling char last version execute cls private nonprivate (space) exit ret rescan-word-hash (') branch bool and or not (forget) AND OR NOT XOR true false "" [] {} none >> << 0= 0> 0<> 0<= 0>= = == > < != >= <= abs max min doVar doNext depth pick roll space [ ] colon-word create (marker) marker next abort alias <> public nip rot -rot 2drop 2dup invert negate within ['] allot for begin until again ahead never repeat aft else while ?stop ?dup variable +! chars spaces .( ." .' s" s' s` does> count accept <accept> nop </accept>  refill [else] [if] [then] (::) (:>) :: :> ::~ :>~ "msg"abort abort" "msg"?abort ?abort" '<text> (<text>) <text> </text> <comment> </comment> (constant) constant value to tib. >t t@ t> [begin] [again] [until] [for] [next] __main__ import modules int float drops dropall char>ASCII ASCII>char CRLF ASCII .s (*debug*) *debug* readTextFile writeTextFile tib.insert dictate sinclude include break-include type obj>keys obj2dict stringify toString .literal .function (dump) dump dump2ret d (see) see slice screen-buffer display-off display-on WshShell inport harry_port OK dir keys (pyclude) pyclude .members .source dos cd ### description expected_rstack expected_stack test-result [all-pass] *** all-pass [r r] [d d] [p p] --- parent parent
+    ...snip... --- parent parent
     11> parent inport
     11> words
-    ...snip... --- parent parent msg
+    ...snip... --- parent parent msg <-------- 取得 msg 這才是重點
+    
+    \ 整個 msg 的內容看這裡
     11> msg . cr
-    {'MsgId': '2179882316038211453', 'FromUserName': '@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff', 'ToUserName': '@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff', 'MsgType': 1, 'Content': 'ww', 'Status': 3, 'ImgStatus': 1, 'CreateTime': 1510630563, 'VoiceLength': 0, 'PlayLength': 0, 'FileName': '', 'FileSize': '', 'MediaId': '', 'Url': '', 'AppMsgType': 0, 'StatusNotifyCode': 0, 'StatusNotifyUserName': '', 'RecommendInfo': {'UserName': '', 'NickName': '', 'QQNum': 0, 'Province': '', 'City': '', 'Content': '', 'Signature': '', 'Alias': '', 'Scene': 0, 'VerifyFlag': 0, 'AttrStatus': 0, 'Sex': 0, 'Ticket': '', 'OpCode': 0}, 'ForwardFlag': 0, 'AppInfo': {'AppID': '', 'Type': 0}, 'HasProductId': 0, 'Ticket': '', 'ImgHeight': 0, 'ImgWidth': 0, 'SubMsgType': 0, 'NewMsgId': 2179882316038211453, 'OriContent': '', 'User': <User: {'MemberList': <ContactList: []>, 'UserName': '@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff', 'City': '', 'DisplayName': '', 'PYQuanPin': 'hcchen5600', 'RemarkPYInitial': '', 'Province': 'New Taipei City', 'KeyWord': '', 'RemarkName': '', 'PYInitial': 'HCCHEN5600', 'EncryChatRoomId': '', 'Alias': '', 'Signature': 'hcchen5600', 'NickName': 'hcchen5600', 'RemarkPYQuanPin': '', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=640010596&username=@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff&skey=@crypt_6868670c_a83bc00780ece043f126cad63f3d618a', 'UniFriend': 0, 'Sex': 1, 'AppAccountFlag': 0, 'VerifyFlag': 0, 'ChatRoomId': 0, 'HideInputBarFlag': 0, 'AttrStatus': 33788007, 'SnsFlag': 1, 'MemberCount': 0, 'OwnerUin': 0, 'ContactFlag': 1, 'Uin': 1423539136, 'StarFriend': 0, 'Statues': 0, 'WebWxPluginSwitch': 1, 'HeadImgFlag': 1, 'IsOwner': 0}>, 'Type': 'Text', 'Text': 'ww'}
+    {'MsgId': '2179882316038211453',
+     'FromUserName': '@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff',
+     'ToUserName': '@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff',
+     'MsgType': 1,
+     'Content': 'ww',  <---------- the message I typed
+     'Status': 3,
+     'ImgStatus': 1,
+     'CreateTime': 1510630563,
+     'VoiceLength': 0,
+     'PlayLength': 0,
+     'FileName': '',
+     'FileSize': '',
+     'MediaId': '',
+     'Url': '',
+     'AppMsgType': 0,
+     'StatusNotifyCode': 0,
+     'StatusNotifyUserName': '',
+     'RecommendInfo': {'UserName': '',
+     'NickName': '',
+     'QQNum': 0,
+     'Province': '',
+     'City': '',
+     'Content': '',
+     'Signature': '',
+     'Alias': '',
+     'Scene': 0,
+     'VerifyFlag': 0,
+     'AttrStatus': 0,
+     'Sex': 0,
+     'Ticket': '',
+     'OpCode': 0},
+     'ForwardFlag': 0,
+     'AppInfo': {'AppID': '',
+     'Type': 0},
+     'HasProductId': 0,
+     'Ticket': '',
+     'ImgHeight': 0,
+     'ImgWidth': 0,
+     'SubMsgType': 0,
+     'NewMsgId': 2179882316038211453,
+     'OriContent': '',
+     'User': <User: {'MemberList': <ContactList: []>,
+     'UserName': '@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff',
+     'City': '',
+     'DisplayName': '',
+     'PYQuanPin': 'hcchen5600',
+     'RemarkPYInitial': '',
+     'Province': 'New Taipei City',
+     'KeyWord': '',
+     'RemarkName': '',
+     'PYInitial': 'HCCHEN5600',
+     'EncryChatRoomId': '',
+     'Alias': '',
+     'Signature': 'hcchen5600',
+     'NickName': 'hcchen5600',
+     'RemarkPYQuanPin': '',
+     'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=640010596&username=@4ad76ee64ed7c4c30ab7a9d02c379433b743f242efad9f2a747b912add3620ff&skey=@crypt_6868670c_a83bc00780ece043f126cad63f3d618a',
+     'UniFriend': 0,
+     'Sex': 1,
+     'AppAccountFlag': 0,
+     'VerifyFlag': 0,
+     'ChatRoomId': 0,
+     'HideInputBarFlag': 0,
+     'AttrStatus': 33788007,
+     'SnsFlag': 1,
+     'MemberCount': 0,
+     'OwnerUin': 0,
+     'ContactFlag': 1,
+     'Uin': 1423539136,
+     'StarFriend': 0,
+     'Statues': 0,
+     'WebWxPluginSwitch': 1,
+     'HeadImgFlag': 1,
+     'IsOwner': 0}>,
+     'Type': 'Text',
+     'Text': 'ww'}
+     
     11> msg type . cr
     <class 'itchat.storage.messagequeue.Message'>
     11> msg obj>keys . cr
@@ -39,14 +117,15 @@ itchat.run()
     @081973df42edc4e88530f54cb6a4cd70a28feb34098c9c55ae3ce118d721b97c  # 
     11> msg :> FromUserName . cr                                       # 
     @4377bc6bd0a19220a60c73292271ad391b590282ce9a26271a5fddfbea3cfd0e  # 
+    
     11> msg py: help(pop())
     Help on Message in module itchat.storage.messagequeue object:
-
     class Message(itchat.storage.templates.AttributeDict)
      |  dict() -> new empty dictionary
      |  dict(mapping) -> new dictionary initialized from a mapping object's
      |      (key, value) pairs
      .... snip ......
+     
     11> msg :> values . cr
     <built-in method values of Message object at 0x0000024503C2CB48>
     11> msg :> values() . cr
