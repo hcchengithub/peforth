@@ -260,7 +260,7 @@
 [x] itchat :> check_login() tib. \ ==> 400  login 之後馬上 check 會被 log out 甩出去,
     was that because of peforth environment?
 [x] itchat :> get_friends() . cr \ dump all friends, that's a big list.
-[x] itchat :: send() 
+[x] itchat :: send() \ default is send to myself 
     send(msg, toUserName=None, mediaId=None) method of itchat.core.Core instance
     OK itchat :>~ send("中文也可以")
     OK .s
@@ -272,13 +272,18 @@
     dup :> ['BaseResponse']['Ret'] tib. \ ==> 0 (<class 'int'>)
     dup :> ['BaseResponse']['ErrMsg'] tib. \ ==> 请求成功 (<class 'str'>)
     OK        
-[x] 當另一個 itchat login 時，前一個就會
-    OK LOG OUT!
+[x] 當另一個 itchat login 時，前一個就會 --> OK LOG OUT!
+    * 有些帳號不能 send() 
+    * 有裝了 WeChat App 的電腦可能就不能用 itchat or WeChat Web 
 [x] c:\Users\hcche\Documents\GitHub\itchat_app\echo.py 
     make PC a WeChat echo-er 
     I have a lot of study there in its comments
     這裡教的 https://www.shiyanlou.com/courses/684/labs/2237/document 就是上面的 echo─er
-[x] UserName is dynamic UUID, this is the method to get it:
+[x] itchat :> search_friends("陳厚成0922") <---- best form 等於 (name="陳厚成0922")
+    (default) 'name' is 備註、微信號、昵稱中的任何一項「全等於」name
+    'userName' is dynamic UUID 
+    'nickName' is 昵稱「全等於」name, 但「聊天室」就變成「有出現」 即可。
+    'wechatAccount' 用不上, get_friends() 裡面沒有
 
     author = itchat.search_friends(nickName='LittleCoder')[0]
     author.send('greeting, littlecoder!')
@@ -286,7 +291,7 @@
     OK itchat :> search_friends(nickName='hcchen5600')
     OK constant hcchen5600
     OK hcchen5600 type . cr
-    <class 'list'>   <----------------- 可能找到多個
+    <class 'list'>   <----------------- 可能找到多個嗎？ friends 不會 chatroom 則會
     OK .s
           0: 400 (<class 'str'>)
           1: <class 'list'> (<class 'type'>)
@@ -341,7 +346,74 @@
           0: [<User: {'MemberList': <ContactList: []>, 'Uin': 0, 'UserName': '@df2c50dd67607ed7e711dce512d9a03e', 'NickName': '糖果🐝', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=676898210&username=@df2c50dd67607ed7e711dce512d9a03e&skey=@crypt_6868670c_142e779b38f0f26f5a0cef0ebd565edf', 'ContactFlag': 257, 'MemberCount': 0, 'RemarkName': '22唐', 'HideInputBarFlag': 0, 'Sex': 2, 'Signature': '我木有你想象中那么坚强。', 'VerifyFlag': 0, 'OwnerUin': 0, 'PYInitial': 'TG?', 'PYQuanPin': 'tangguo?', 'RemarkPYInitial': '22T', 'RemarkPYQuanPin': '22tang', 'StarFriend': 0, 'AppAccountFlag': 0, 'Statues': 0, 'AttrStatus': 100453, 'Province': '江苏', 'City': '苏州', 'Alias': '', 'SnsFlag': 177, 'UniFriend': 0, 'DisplayName': '', 'ChatRoomId': 0, 'KeyWord': 'gag', 'EncryChatRoomId': '', 'IsOwner': 0}>] (<class 'list'>)
     \ 看來只有 nickName 能用了
     
-    \ 用對方的 User Object 而非 nickName 才是好辦法
+    OK itchat :> search_friends() . cr
+        {'MemberList': <ContactList: []>,
+         'UserName': '@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c',
+         'City': '',
+         'DisplayName': '',
+         'PYQuanPin': '',
+         'RemarkPYInitial': '',
+         'Province': '',
+         'KeyWord': '',
+         'RemarkName': '',
+         'PYInitial': '',
+         'EncryChatRoomId': '',
+         'Alias': '',
+         'Signature': '',
+         'NickName': '陳厚成0922',
+         'RemarkPYQuanPin': '',
+         'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=109628115&username=@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c&skey=@crypt_7340b66c_8408cf3e69826c36dbf79279137945fb',
+         'UniFriend': 0,
+         'Sex': 0,
+         'AppAccountFlag': 0,
+         'VerifyFlag': 0,
+         'ChatRoomId': 0,
+         'HideInputBarFlag': 0,
+         'AttrStatus': 0,
+         'SnsFlag': 0,
+         'MemberCount': 0,
+         'OwnerUin': 0,
+         'ContactFlag': 0,
+         'Uin': 2609342470,
+         'StarFriend': 0,
+         'Statues': 0,
+         'WebWxPluginSwitch': 0,
+         'HeadImgFlag': 1}
+
+    OK itchat :> search_friends(name='0922') . cr
+    []
+    OK itchat :> search_friends(name='陳厚成') . cr
+    []
+    OK itchat :> search_friends(nickName='陳厚成') . cr
+    []
+    OK itchat :> search_friends(nickName='陳厚成0922') . cr
+    [<User: {'MemberList': <ContactList: []>, 'UserName': '@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c', 'City': '', 'DisplayName': '', 'PYQuanPin': '', 'RemarkPYInitial': '', 'Province': '', 'KeyWord': '', 'RemarkName': '', 'PYInitial': '', 'EncryChatRoomId': '', 'Alias': '', 'Signature': '', 'NickName': '陳厚成0922', 'RemarkPYQuanPin': '', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=109628115&username=@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c&skey=@crypt_7340b66c_8408cf3e69826c36dbf79279137945fb', 'UniFriend': 0, 'Sex': 0, 'AppAccountFlag': 0, 'VerifyFlag': 0, 'ChatRoomId': 0, 'HideInputBarFlag': 0, 'AttrStatus': 0, 'SnsFlag': 0, 'MemberCount': 0, 'OwnerUin': 0, 'ContactFlag': 0, 'Uin': 2609342470, 'StarFriend': 0, 'Statues': 0, 'WebWxPluginSwitch': 0, 'HeadImgFlag': 1}>]
+    OK itchat :> search_friends(name='陳厚成0922') . cr
+    [<User: {'MemberList': <ContactList: []>, 'UserName': '@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c', 'City': '', 'DisplayName': '', 'PYQuanPin': '', 'RemarkPYInitial': '', 'Province': '', 'KeyWord': '', 'RemarkName': '', 'PYInitial': '', 'EncryChatRoomId': '', 'Alias': '', 'Signature': '', 'NickName': '陳厚成0922', 'RemarkPYQuanPin': '', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=109628115&username=@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c&skey=@crypt_7340b66c_8408cf3e69826c36dbf79279137945fb', 'UniFriend': 0, 'Sex': 0, 'AppAccountFlag': 0, 'VerifyFlag': 0, 'ChatRoomId': 0, 'HideInputBarFlag': 0, 'AttrStatus': 0, 'SnsFlag': 0, 'MemberCount': 0, 'OwnerUin': 0, 'ContactFlag': 0, 'Uin': 2609342470, 'StarFriend': 0, 'Statues': 0, 'WebWxPluginSwitch': 0, 'HeadImgFlag': 1}>]
+    OK itchat :> search_friends(name='tw0922417555') . cr
+    []
+    OK itchat :> search_friends(name='chc0922') . cr
+    []
+    OK itchat :> search_friends(name='CHC0922') . cr
+    []
+
+    \ 聊天室 chatrooms 類似 friends 
+    itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 4 (<class 'int'>)
+
+    \ search_chatrooms 是 default 用 'name': '奇迹四阶', 'NickName': '阿公,阿媽,厚伸,厚成,素娟,厚岐', 
+    \ 傳回部分符合的 charroom Name
+    OK  itchat :> search_chatrooms py: help(pop())
+    Help on method search_chatrooms in module itchat.core:
+    search_chatrooms(name=None, userName=None) method of itchat.core.Core instance
+    itchat :> search_chatrooms('奇') . cr  <---- 找到 '奇迹四阶'
+    itchat :> search_chatrooms('小大大客服群') <--- 還是找不到 [X] 奇怪！！！
+    [x] 怎麼沒有 小多 小囡 客服群的聊天室？
+        itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 0 (<class 'int'>) ！！！！
+        --> 保存「聊天室」到「通訊錄」之後，好了！！
+        itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 1 (<class 'int'>)
+        OK        
+    
+[x] 用對方的 User Object 而非 nickName 才是好辦法
     dropall itchat :> search_friends(nickName='陳厚成0922')[0] constant chc0922 
     // ( -- obj ) WeChat user object
 
@@ -384,33 +456,7 @@
         'search_member', 'send', 'send_file', 'send_image', 'send_msg', 
         'send_raw_msg', 'send_video', 'set_alias', 'set_pinned', 
         'setdefault', 'update', 'values', 'verify', 'verifyDict']
-    OK
-    OK chc0922 :> send type . cr
-    <class 'method'>
-    OK chc0922 :> send('aabbcc')
-    OK .s
-          1: {'BaseResponse': {'Ret': 0, 'ErrMsg': '请求成功', 'RawMsg': '请求成功'}, 'MsgID': '5323555895877586049', 'LocalID': '15106427029591'} (<class 'itchat.returnvalues.ReturnValue'>)
-    
-    itchat :> search_friends(nickName='陳厚成0922')[0] constant chc0922 
-    chc0922 :>~ send('Hello H.C.!')
-    :> ['BaseResponse']['Ret'] [if] ." Failed!!" cr [else] ." Success!" cr [then]        
 
-    \ 
-    itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 4 (<class 'int'>)
-
-    \ search_chatrooms 是用 'NickName': '奇迹四阶', 'NickName': '阿公,阿媽,厚伸,厚成,素娟,厚岐', 
-    \ 但 argument 是 'name' 或直接給部分的 charroom Name
-    OK  itchat :> search_chatrooms py: help(pop())
-    Help on method search_chatrooms in module itchat.core:
-    search_chatrooms(name=None, userName=None) method of itchat.core.Core instance
-    itchat :> search_chatrooms('奇') . cr  <---- 找到 '奇迹四阶'
-    itchat :> search_chatrooms('小大大客服群') <--- 還是找不到 [ ] 奇怪！！！
-[x] 怎麼沒有 小多 小囡 客服群的聊天室？
-    用 '陳厚成0922' 帳號試驗，竟然乾脆就是 0 ！
-    itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 0 (<class 'int'>)
-    --> 保存「聊天室」到「通訊錄」之後，好了！！
-    itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 1 (<class 'int'>)
-    OK        
 [x] \ message echo-er
     OK ' itchat :> type tib. \ ==> constant
     OK ' itchat :: type='value.outport'
@@ -474,6 +520,12 @@
         无法给自己发送消息
         Q: 为什么我发送信息的时候部分信息没有成功发出来？
         A: 有些账号是天生无法给自己的账号发送信息的，建议使用filehelper代替。    
+    --> 試試。。果然傳給了自己的「文件傳輸助手」或「檔案傳輸」。
+        Login successfully as 陳厚成0922
+        OK itchat :> send("abc","filehelper") . cr
+        {'BaseResponse': {'Ret': 0, 'ErrMsg': '请求成功', 'RawMsg': '请求成功'}, 'MsgID': '8504523964048646048', 'LocalID': '15107911818667'}
+        OK
+        
 [x] Your wechat account may be LIMITED to log in WEB wechat, error info:
     <error><ret>1203</ret><message>為了你的帳號安全，新註冊的WeChat帳號不能登入網頁WeChat。你可以使用Windows WeChat或Mac WeChat在電腦端登入。 Windows WeChat下載網址：https://pc.weixin.qq.com  Mac WeChat下載網址：https://mac.weixin.qq.com</message></error>
     OK    
@@ -504,4 +556,101 @@
         --> 可能是有裝 app 的電腦就不能用 web 版 
             --> Try vmware ubuntu box ... OK! 
                 證明不是 account 的問題，因為換了 Ubuntu 就可以了。
-        
+[x] 正點！直接用 DOSBox 畫出 QR code ! itChat's README.md @ GitHub 有介紹
+    itchat.auto_login(enableCmdQR=True)
+    # 如部分的linux系统，块字符的宽度为一个字符（正常应为两字符），故赋值为2
+    itchat.auto_login(enableCmdQR=2)
+    默认控制台背景色为暗色（黑色），若背景色为浅色（白色），可以将enableCmdQR赋值为负值：
+    itchat.auto_login(enableCmdQR=-1)
+    --> 查看 itchat 的 QR code 產生器。。。 
+        OK modules qr
+        pyqrcode pyqrcode.tables pyqrcode.builder
+        OK
+        from pyqrcode import QRCode <-- login.py of itchat
+        Downloading pypng-0.0.18.tar.gz (377kB) # itchat installs them too
+        Downloading PyQRCode-1.2.1.zip (41kB)   # itchat installs them too     
+    --> 搞懂了！ see this one liner ...
+        cls pyqrcode :> create("12345").terminal('white','blue') . cr \ default color is ('black','gray') 
+        cls pyqrcode py: help(pop()) \ see its very rich help
+[ ] 
+    [ ] 一定要 itchat.run() 之後才有效
+
+
+    import itchat constant itchat py: last().type='value.outport' // ( -- module ) WeChat automation
+    itchat :: auto_login()
+    <accept> <text> 
+    # ------------ get what we want --------------------------
+    @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
+    def download_files(msg):
+        with open('o.txt', 'w') as f:
+            ok('11>> ',loc=locals(),cmd='cr')
+            d = msg.download(msg.fileName)
+            f.write(d)
+    # ------------ get what we want --------------------------
+    # dictate("--- marker ---"); outport(locals()) # bring out all things
+    </text> -indent py: exec(pop(),globals(),harry_port())
+    </accept> dictate 
+
+TypeError: download() missing 1 required positional argument: 'fileName'
+TypeError: a bytes-like object is required, not 'ReturnValue' <--- open(fname,'wb') 之故？對！
+TypeError: write() argument must be str, not ReturnValue
+TypeError: write() argument must be str, not ReturnValue
+
+msg.downlaod() 傳回 status object, 實際檔案不是直接傳回的 ......
+
+OK itchat :> get_friends().__len__() . cr
+0  <---- zero means status is logout 
+OK
+
+check_login() 即使已經 logout 他也回 400 搞不懂
+OK itchat :> check_login py: help(pop())
+Help on method check_login in module itchat.components.login:
+check_login(uuid=None) method of itchat.core.Core instance
+
+OK
+
+
+
+    
+    <accept> <text> 
+    # ------------ get what we want --------------------------
+    ok('11>> ',loc=locals(),cmd='cr') # itchat.run() 之後無效了
+    # ------------ get what we want --------------------------
+    # dictate("--- marker ---"); outport(locals()) # bring out all things
+    </text> -indent py: exec(pop(),globals(),harry_port())
+    </accept> dictate 
+
+
+@itchat.msg_register([PICTURE, RECORDING, ATTACHMENT, VIDEO])
+def download_files(msg):
+    msg.download(msg.fileName)
+    itchat.send('@%s@%s' % (
+        'img' if msg['Type'] == 'Picture' else 'fil', msg['FileName']),
+        msg['FromUserName'])
+    return '%s received' % msg['Type']
+    
+    import itchat constant itchat py: last().type='value.outport' // ( -- module ) WeChat automation
+    itchat :: auto_login()
+    <accept> <text> 
+    # ------------ get what we want --------------------------
+    @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
+    def download_files(msg):
+        msg.download(msg.fileName)
+        ok('11>> ',loc=locals(),cmd='cr')
+        itchat.send('@%s@%s' % (
+            'img' if msg['Type'] == 'Picture' else 'fil', msg['FileName']),
+            msg['FromUserName'])
+        return '%s received' % msg['Type']
+
+    # ------------ get what we want --------------------------
+    # dictate("--- marker ---"); outport(locals()) # bring out all things
+    </text> -indent py: exec(pop(),globals(),harry_port())
+    </accept> dictate 
+
+    
+[ ]         
+[ ]         
+[ ]         
+[ ]         
+[ ]         
+
