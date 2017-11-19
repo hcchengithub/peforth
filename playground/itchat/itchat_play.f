@@ -198,7 +198,8 @@
     
     \ invoke     
     import itchat constant itchat // ( -- module ) itchat
-    
+    itchat py: vm.itchat=pop(1)
+
     \ login
     itchat :: auto_login()
     \ itchat :: auto_login(hotReload=True)
@@ -211,33 +212,9 @@
     [if] ." Failed!!" cr [else] ." Success!" cr [then]
 
     \ send message to a friend
-    itchat :> search_friends(nickName='陳厚成0922')[0] constant chc0922 \ get user object 
+    itchat :> search_friends('陳厚成0922')[0] constant chc0922 \ get user object 
     chc0922 :>~ send('Hello H.C.!')
     :> ['BaseResponse']['Ret'] [if] ." Failed!!" cr [else] ." Success!" cr [then]        
-    \
-    itchat :> search_friends(nickName='hcchen5600')[0] constant hcchen5600 \ get user object 
-    hcchen5600 :>~ send('Hello H.C.!')
-    :> ['BaseResponse']['Ret'] [if] ." Failed!!" cr [else] ." Success!" cr [then]        
-    
-    \ message echo-er 這裡教的 https://www.shiyanlou.com/courses/684/labs/2237/document
-    OK ' itchat :> type tib. \ ==> constant
-    OK ' itchat :: type='value.outport'
-    OK ' itchat :> type tib. \ ==> value.outport
-
-    marker ---
-    ' itchat :: type='value.outport'
-    <accept> <text> 
-    # ------------ get what we want --------------------------
-    import pdb;pdb.set_trace()
-    @itchat.msg_register(itchat.content.TEXT)
-    def print_content(msg):
-        print(msg['Text'])
-    # itchat.auto_login()
-    itchat.run()
-    # ------------ get what we want --------------------------
-    dictate("--- marker ---"); outport(locals()) # bring out all things
-    </text> -indent py: exec(pop(),harry_port())
-    </accept> dictate 
     
 [x] try itchat attributes,
     OK itchat dir . cr
@@ -259,6 +236,7 @@
 [x] itchat :> dump_login_status() tib. \ ==> None
 [x] itchat :> check_login() tib. \ ==> 400  login 之後馬上 check 會被 log out 甩出去,
     was that because of peforth environment?
+
 [x] itchat :> get_friends() . cr \ dump all friends, that's a big list.
 [x] itchat :: send() \ default is send to myself 
     send(msg, toUserName=None, mediaId=None) method of itchat.core.Core instance
@@ -280,36 +258,11 @@
     I have a lot of study there in its comments
     這裡教的 https://www.shiyanlou.com/courses/684/labs/2237/document 就是上面的 echo─er
 [x] itchat :> search_friends("陳厚成0922") <---- best form 等於 (name="陳厚成0922")
-    (default) 'name' is 備註、微信號、昵稱中的任何一項「全等於」name
+    (default) 'name' is 備註(RemarkName)、昵稱(NickName) 其中的任何一項「全等於」name
     'userName' is dynamic UUID 
     'nickName' is 昵稱「全等於」name, 但「聊天室」就變成「有出現」 即可。
+    'RemarkName' is 備註，也是 name 會搜尋的 key.
     'wechatAccount' 用不上, get_friends() 裡面沒有
-
-    author = itchat.search_friends(nickName='LittleCoder')[0]
-    author.send('greeting, littlecoder!')
-
-    OK itchat :> search_friends(nickName='hcchen5600')
-    OK constant hcchen5600
-    OK hcchen5600 type . cr
-    <class 'list'>   <----------------- 可能找到多個嗎？ friends 不會 chatroom 則會
-    OK .s
-          0: 400 (<class 'str'>)
-          1: <class 'list'> (<class 'type'>)
-    OK dropall
-    OK hcchen5600 type . cr
-    <class 'list'>
-    OK
-    OK hcchen5600 obj>keys . cr
-    ['__add__', '__class__', '__contains__', '__delattr__', '__delitem__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__getitem__', '__gt__', '__hash__', '__iadd__', '__imul__', '__init__', '__init_subclass__', '__iter__', '__le__', '__len__', '__lt__', '__mul__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__reversed__', '__rmul__', '__setattr__', '__setitem__', '__sizeof__', '__str__', '__subclasshook__', 'append', 'clear', 'copy', 'count', 'extend', 'index', 'insert', 'pop', 'remove', 'reverse', 'sort']
-    OK hcchen5600 . cr
-    [<User: {'MemberList': <ContactList: []>, 'UserName': '@a70cde46dabe665b89a1710988706183894babf158b5aa58404278fa8fab8857', 'City': '', 'DisplayName': '', 'PYQuanPin': 'hcchen5600', 'RemarkPYInitial': '', 'Province': 'New Taipei City', 'KeyWord': '', 'RemarkName': '', 'PYInitial': 'HCCHEN5600', 'EncryChatRoomId': '', 'Alias': '', 'Signature': 'hcchen5600', 'NickName': 'hcchen5600', 'RemarkPYQuanPin': '', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=640010596&username=@a70cde46dabe665b89a1710988706183894babf158b5aa58404278fa8fab8857&skey=@crypt_6868670c_142e779b38f0f26f5a0cef0ebd565edf', 'UniFriend': 0, 'Sex': 1, 'AppAccountFlag': 0, 'VerifyFlag': 0, 'ChatRoomId': 0, 'HideInputBarFlag': 0, 'AttrStatus': 33788007, 'SnsFlag': 1, 'MemberCount': 0, 'OwnerUin': 0, 'ContactFlag': 1, 'Uin': 1423539136, 'StarFriend': 0, 'Statues': 0, 'WebWxPluginSwitch': 1, 'HeadImgFlag': 1, 'IsOwner': 0}>]
-    OK hcchen5600 py> len(pop()) . cr
-    1
-    OK hcchen5600 :> [0] type . cr
-    <class 'itchat.storage.templates.User'>
-    OK hcchen5600 :> [0] obj>keys . cr
-    ['__class__', '__contains__', '__deepcopy__', '__delattr__', '__delitem__', '__dict__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattr__', '__getattribute__', '__getitem__', '__getstate__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__iter__', '__le__', '__len__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__setitem__', '__setstate__', '__sizeof__', '__str__', '__subclasshook__', '__weakref__', '_core', 'add_member', 'clear', 'copy', 'core', 'delete_member', 'fromkeys', 'get', 'get_head_image', 'items', 'keys', 'pop', 'popitem', 'search_member', 'send', 'send_file', 'send_image', 'send_msg', 'send_raw_msg', 'send_video', 'set_alias', 'set_pinned', 'setdefault', 'update', 'values', 'verify', 'verifyDict']
-    OK
 
     \ 用 itchat :> get_friends() 先列出所有的人，然後找到目標 nickName。只能這樣，因為 nickName 很搞怪。
     
@@ -324,11 +277,10 @@
     OK dropall itchat :> search_friends(nickName='Natalie') .s
           0: [<User: {'MemberList': <ContactList: []>, 'Uin': 0, 'UserName': '@28b67274eaefe406e2a18a7386719ba110010ee26711dac26c7e2fc97b490eab', 'NickName': 'Natalie', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=661260843&username=@28b67274eaefe406e2a18a7386719ba110010ee26711dac26c7e2fc97b490eab&skey=@crypt_6868670c_142e779b38f0f26f5a0cef0ebd565edf', 'ContactFlag': 2115, 'MemberCount': 0, 'RemarkName': 'nana', 'HideInputBarFlag': 0, 'Sex': 0, 'Signature': '', 'VerifyFlag': 0, 'OwnerUin': 0, 'PYInitial': 'NATALIE', 'PYQuanPin': 'Natalie', 'RemarkPYInitial': 'NANA', 'RemarkPYQuanPin': 'nana', 'StarFriend': 1, 'AppAccountFlag': 0, 'Statues': 0, 'AttrStatus': 33558565, 'Province': '', 'City': '', 'Alias': '', 'SnsFlag': 0, 'UniFriend': 0, 'DisplayName': '', 'ChatRoomId': 0, 'KeyWord': '', 'EncryChatRoomId': '', 'IsOwner': 0}>] (<class 'list'>)
     
-    \ DOSBox 下 Wendy 的 nickName 呈現為 '???', chcp 950 (Big-5) or 65001 (utf-8) 都這樣
-    \ 但是從這裡 copy-paste 過去到 DOSBox 下的 python peforth 執行是可以的，只有簡體字呈現的問題而已，
-    \ 連 copy 過來都還是好的。
+    \ DOSBox 下 Wendy 的 nickName 呈現為 '???', chcp 950 (Big-5) or 65001 (utf-8) 
+    \ 皆然。但是從 npp editor 這裡 copy-paste 過去到 DOSBox 下的 python peforth 
+    \ 執行是可以的，只有簡體字「呈現」的問題而已，連 copy 過來都還是好的。
     dropall itchat :> search_friends(nickName='马玮赟') .s
-    OK dropall itchat :> search_friends(nickName='马玮赟') .s
           0: [<User: {'MemberList': <ContactList: []>, 'Uin': 0, 'UserName': '@d2dc5257a4c2e1064584744b1f96618ddbef6fbd0a4a7b071528607604e654a6', 'NickName': '马玮赟', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=666233582&username=@d2dc5257a4c2e1064584744b1f96618ddbef6fbd0a4a7b071528607604e654a6&skey=@crypt_6868670c_142e779b38f0f26f5a0cef0ebd565edf', 'ContactFlag': 259, 'MemberCount': 0, 'RemarkName': '', 'HideInputBarFlag': 0, 'Sex': 2, 'Signature': '玮赟', 'VerifyFlag': 0, 'OwnerUin': 0, 'PYInitial': 'MWB', 'PYQuanPin': 'maweibin', 'RemarkPYInitial': '', 'RemarkPYQuanPin': '', 'StarFriend': 0, 'AppAccountFlag': 0, 'Statues': 0, 'AttrStatus': 103421, 'Province': '江苏', 'City': '苏州', 'Alias': '', 'SnsFlag': 17, 'UniFriend': 0, 'DisplayName': '', 'ChatRoomId': 0, 'KeyWord': '', 'EncryChatRoomId': '', 'IsOwner': 0}>] (<class 'list'>)
 
     \ 陳厚成0922
@@ -344,9 +296,8 @@
     \ 我知道為何不接受 PYInitial, PYQuanPin 了，因為像以下這個就拼不出來了。。。
     dropall itchat :> search_friends(nickName='糖果🐝') .s
           0: [<User: {'MemberList': <ContactList: []>, 'Uin': 0, 'UserName': '@df2c50dd67607ed7e711dce512d9a03e', 'NickName': '糖果🐝', 'HeadImgUrl': '/cgi-bin/mmwebwx-bin/webwxgeticon?seq=676898210&username=@df2c50dd67607ed7e711dce512d9a03e&skey=@crypt_6868670c_142e779b38f0f26f5a0cef0ebd565edf', 'ContactFlag': 257, 'MemberCount': 0, 'RemarkName': '22唐', 'HideInputBarFlag': 0, 'Sex': 2, 'Signature': '我木有你想象中那么坚强。', 'VerifyFlag': 0, 'OwnerUin': 0, 'PYInitial': 'TG?', 'PYQuanPin': 'tangguo?', 'RemarkPYInitial': '22T', 'RemarkPYQuanPin': '22tang', 'StarFriend': 0, 'AppAccountFlag': 0, 'Statues': 0, 'AttrStatus': 100453, 'Province': '江苏', 'City': '苏州', 'Alias': '', 'SnsFlag': 177, 'UniFriend': 0, 'DisplayName': '', 'ChatRoomId': 0, 'KeyWord': 'gag', 'EncryChatRoomId': '', 'IsOwner': 0}>] (<class 'list'>)
-    \ 看來只有 nickName 能用了
     
-    OK itchat :> search_friends() . cr
+    OK itchat :> search_friends() . cr  \ 當 arg empty 時傳回自己
         {'MemberList': <ContactList: []>,
          'UserName': '@e43c87a61d1a6737b1ae6d8a738f5d4cb2f43b9fbf50796da042ad007012eb2c',
          'City': '',
@@ -380,6 +331,10 @@
          'WebWxPluginSwitch': 0,
          'HeadImgFlag': 1}
 
+    \ search_friends() 的 arg 之 default 是本人，第一個 arg 之 default 是 'name'
+    \ name arg 必須全等，含大小寫。從以上 dump 來看，只有 NickName 存在，但 
+    \ 'RemarkName' 如果全等應該也可以。https://itchat.readthedocs.io/zh/latest/
+
     OK itchat :> search_friends(name='0922') . cr
     []
     OK itchat :> search_friends(name='陳厚成') . cr
@@ -406,7 +361,7 @@
     Help on method search_chatrooms in module itchat.core:
     search_chatrooms(name=None, userName=None) method of itchat.core.Core instance
     itchat :> search_chatrooms('奇') . cr  <---- 找到 '奇迹四阶'
-    itchat :> search_chatrooms('小大大客服群') <--- 還是找不到 [X] 奇怪！！！
+    itchat :> search_chatrooms('小大大客服群') <--- 還是找不到 [X] 奇怪 <-- RI
     [x] 怎麼沒有 小多 小囡 客服群的聊天室？
         itchat :> get_chatrooms() py> len(pop()) tib. \ ==> 0 (<class 'int'>) ！！！！
         --> 保存「聊天室」到「通訊錄」之後，好了！！
@@ -414,8 +369,15 @@
         OK        
     
 [x] 用對方的 User Object 而非 nickName 才是好辦法
-    dropall itchat :> search_friends(nickName='陳厚成0922')[0] constant chc0922 
+    dropall itchat :> search_friends('陳厚成0922')[0] constant chc0922 
     // ( -- obj ) WeChat user object
+
+    author = itchat.search_friends('LittleCoder')[0]
+    author.send('greeting, littlecoder!')
+
+    OK itchat :> search_friends('hcchen5600') :> [0] constant hcchen5600
+    OK hcchen5600 type . cr
+    <class 'itchat.storage.templates.User'>
 
     \ user object 看到的只是 __str__ 它其實有很多 method 
     OK chc0922 . cr
@@ -457,23 +419,6 @@
         'send_raw_msg', 'send_video', 'set_alias', 'set_pinned', 
         'setdefault', 'update', 'values', 'verify', 'verifyDict']
 
-[x] \ message echo-er
-    OK ' itchat :> type tib. \ ==> constant
-    OK ' itchat :: type='value.outport'
-    OK ' itchat :> type tib. \ ==> value.outport
-    ' itchat :: type='value.outport'
-    <accept> <text> 
-    # ------------ get what we want --------------------------
-    import pdb;pdb.set_trace()
-    @itchat.msg_register(itchat.content.TEXT)
-    def print_content(msg):
-        print(msg['Text'])
-    # itchat.auto_login()
-    itchat.run()
-    # ------------ get what we want --------------------------
-    # dictate("--- marker ---"); outport(locals()) # bring out all things
-    </text> -indent py: exec(pop(),harry_port())
-    </accept> dictate 
 [x] 如果你不想要每次运行程序都扫码，可以在登陆命令中进行设置：
     itchat :: auto_login(hotReload=True)
     --> 第一次會要求刷條碼，之後就不再要求了。實際上 logout 時會 log out 多次。
@@ -495,8 +440,29 @@
     LOG OUT!
     LOG OUT!
     LOG OUT!
-    itchat :> check_login() tib. \ ==> 200 (<class 'str'>)
-    OK
+    itchat :> check_login() tib. \ ==> 200 (<class 'str'>) <--- login successful 
+
+    API Document https://itchat.readthedocs.io/zh/latest/api/
+
+    [x] check_login() 即使已經 logout 他也回 400 搞不懂，表示回 200 或 400 都
+        沒有意義，因為兩個值代表 login 或 logout 都有可能。
+        OK itchat :> check_login py: help(pop())
+            Help on method check_login in module itchat.components.login:
+            check_login(uuid=None) method of itchat.core.Core instance
+    [x] 想要查 check_login status, 用替代方法：
+        OK itchat :> get_friends().__len__() . cr
+        0  <---- zero means status is logout 
+        \ 此法證實有效
+        11>> itchat :> get_friends().__len__() . cr
+        117
+        11>> itchat :> logout()
+        LOG OUT!
+        11>> . cr
+        {'BaseResponse': {'ErrMsg': '请求成功', 'Ret': 0, 'RawMsg': 'logout successfully.'}}
+        11>> itchat :> get_friends().__len__() . cr
+        0
+        11>>
+
 [x] 好像用 陳厚成0922 login 時就不能 send('...') 給自己？ 真的！！！ <--- RI: 帳號天生
     OK itchat :> send('abc')
     OK . cr
@@ -556,6 +522,9 @@
         --> 可能是有裝 app 的電腦就不能用 web 版 
             --> Try vmware ubuntu box ... OK! 
                 證明不是 account 的問題，因為換了 Ubuntu 就可以了。
+    --> X1 Yoga was same, but now in C-sotre ok now!!
+        WeChat web ok, itchat ok too.
+
 [x] 正點！直接用 DOSBox 畫出 QR code ! itChat's README.md @ GitHub 有介紹
     itchat.auto_login(enableCmdQR=True)
     # 如部分的linux系统，块字符的宽度为一个字符（正常应为两字符），故赋值为2
@@ -572,85 +541,165 @@
     --> 搞懂了！ see this one liner ...
         cls pyqrcode :> create("12345").terminal('white','blue') . cr \ default color is ('black','gray') 
         cls pyqrcode py: help(pop()) \ see its very rich help
-[ ] 
-    [ ] 一定要 itchat.run() 之後才有效
 
+[x] itchat echo-er 簡單回應收到檔案的種類與檔名
+    https://www.shiyanlou.com/courses/684/labs/2237/document
+    [x] 用 @decorater register event handler 一定要 itchat.run() 之後才有效
+    [x] 這個 demo 收各種檔案並回覆 message 給 sender
+        <py>
+        import itchat; outport(locals())
+        itchat.auto_login()
+        @itchat.msg_register(itchat.content.TEXT)
+        def print_content(msg):
+            return msg['Text']
+        @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
+        def download_files(msg):
+            # f.write(data) 當中 data 要給 byte-like object，原文傳回值是個 status object 不對。
+            # with open(msg.fileName, 'wb') as f:
+            #     f.write(msg.download(msg.fileName))
+            # 光這樣就可以了，自動會存進 working directory
+            msg.download(msg.fileName) 
+            # getattr(vm,context)['msg'] = msg # or simply outport()
+            outport(locals())
+            return msg.fileName + ' received' 
+        itchat.run(
+            debug=True,        # 多出一些 message 
+            blockThread=False  # 這樣就不會 block 住了，所以下面的 peforth.ok() 緊跟著上手。
+            )
+        ok('itchat_2> ',glo=globals(),loc=locals(),cmd='cr')
+        </py>
 
-    import itchat constant itchat py: last().type='value.outport' // ( -- module ) WeChat automation
-    itchat :: auto_login()
-    <accept> <text> 
-    # ------------ get what we want --------------------------
-    @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
-    def download_files(msg):
-        with open('o.txt', 'w') as f:
-            ok('11>> ',loc=locals(),cmd='cr')
-            d = msg.download(msg.fileName)
-            f.write(d)
-    # ------------ get what we want --------------------------
-    # dictate("--- marker ---"); outport(locals()) # bring out all things
-    </text> -indent py: exec(pop(),globals(),harry_port())
-    </accept> dictate 
+    [x] 同上，多了 echo 所收到的檔案
+        <py>
+        import itchat; outport(locals())
+        itchat.auto_login()
+        # ------------ get what we want --------------------------
+        @itchat.msg_register(itchat.content.TEXT)
+        def print_content(msg):
+            return msg['Text']
+        @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
+        def download_files(msg):
+            msg.download(msg.fileName)
+            itchat.send('@%s@%s' % (
+                'img' if msg['Type'] == 'Picture' else 'fil', msg['FileName']),
+                msg['FromUserName'])
+            outport(locals())
+            return '%s received' % msg['Type']
+        itchat.run(
+            debug=True,        # 多出一些 message 
+            blockThread=False  # 這樣就不會 block 住了，所以下面的 peforth.ok() 緊跟著上手。
+            )
+        ok('itchat_2> ',glo=globals(),loc=locals(),cmd='cr')
+        </py>
 
-TypeError: download() missing 1 required positional argument: 'fileName'
-TypeError: a bytes-like object is required, not 'ReturnValue' <--- open(fname,'wb') 之故？對！
-TypeError: write() argument must be str, not ReturnValue
-TypeError: write() argument must be str, not ReturnValue
-
-msg.downlaod() 傳回 status object, 實際檔案不是直接傳回的 ......
-
-OK itchat :> get_friends().__len__() . cr
-0  <---- zero means status is logout 
-OK
-
-check_login() 即使已經 logout 他也回 400 搞不懂
-OK itchat :> check_login py: help(pop())
-Help on method check_login in module itchat.components.login:
-check_login(uuid=None) method of itchat.core.Core instance
-
-OK
-
-
+    [x] 上面兩個方法 (刪掉了，用 <text> dictate 想繼承 peforth 的 value.outport 
+        things) 對 event handler 來說太挑戰了，
+        <py>
+        #
+        # 執行後，從手機端傳照片給自己（hcchen5600可以），過會兒就會收到
+        # 從本程式 echo 回手機的同一張照片以及 'Picture received' message.
+        #
+        import itchat 
+        itchat.auto_login()
+        @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
+        def download_files(msg):
+            # 抓好以後用 "@img@171118-141101.png" or "@fil@filename" access 該 file
+            # 實際抓到 working directory 下
+            msg.download(msg.fileName)
+            # "@img@171118-141101.png" or "@fil@filename" 不只是字串而已，真的會把檔案送出去！
+            itchat.send('@%s@%s' % (
+                'img' if msg['Type'] == 'Picture' else 'fil', msg['FileName']),
+                msg['FromUserName'])
+                # 這個 send() 真的會把該檔案 echo 回去！
+            return '%s received' % msg['Type']  # 手機端收到 'Picture received' string
+            # return string 傳回給 msg['FromUserName']
+        ok('itchat_1> ',cmd='cr')
+        itchat.run(
+            debug=False, 
+            blockThread=False  # 這樣就不會 block 住了，所以下面的 peforth.ok() 緊跟著上手。
+            )
+        ok('itchat_2> ',glo=globals(),loc=locals(),cmd='cr')
+        </py>
 
     
-    <accept> <text> 
-    # ------------ get what we want --------------------------
-    ok('11>> ',loc=locals(),cmd='cr') # itchat.run() 之後無效了
-    # ------------ get what we want --------------------------
-    # dictate("--- marker ---"); outport(locals()) # bring out all things
-    </text> -indent py: exec(pop(),globals(),harry_port())
-    </accept> dictate 
+[x] run() 了以後，怎麼停下來？ --> blockThread=False 即可
+    OK itchat :> run py: help(pop())
+    Help on method run in module itchat.components.register:
+    run(debug=False, blockThread=True) method of itchat.core.Core instance
 
+    Login successfully as 陳厚成0922
+    itchat> import itchat constant itchat
+    itchat :> send('@img@171118-175505.png','hcchen5600') tib. \ ==> {'BaseResponse': {'Ret': -1, 'ErrMsg': '', 'RawMsg': ''}, 'MsgID': '', 'LocalID': ''} (<class 'itchat.returnvalues.ReturnValue'>)
+    itchat> itchat :> find_friends('hcchen5600')
+    itchat> itchat :> search_friends('hcchen5600')
+    itchat> :> [0] constant hcchen5600
+    hcchen5600 :> send('hello') tib. \ ==> {'BaseResponse': {'Ret': 0, 'ErrMsg': '请求成功', 'RawMsg': '请求成功'}, 'MsgID': '3601277865234063183', 'LocalID': '15109991699778'} (<class 'itchat.returnvalues.ReturnValue'>)
+    hcchen5600 :> send('@fil@1') tib. \ ==> {'BaseResponse': {'Ret': 0, 'ErrMsg': '请求成功', 'RawMsg': '请 求成功'}, 'MsgID': '2897197281269928857', 'LocalID': '15109993423516'} (<class 'itchat.returnvalues.ReturnValue'>)
+    itchat> hcchen5600 :> send('@fil@1.txt') tib.
+    hcchen5600 :> send('@fil@1.txt') tib. \ ==> {'BaseResponse': {'Ret': 0, 'ErrMsg': '请求成功', 'RawMsg': '请求成功'}, 'MsgID': '9023165568502968432', 'LocalID': '15109993732982'} (<class 'itchat.returnvalues.ReturnValue'>)
+    itchat>
 
-@itchat.msg_register([PICTURE, RECORDING, ATTACHMENT, VIDEO])
-def download_files(msg):
-    msg.download(msg.fileName)
-    itchat.send('@%s@%s' % (
-        'img' if msg['Type'] == 'Picture' else 'fil', msg['FileName']),
-        msg['FromUserName'])
-    return '%s received' % msg['Type']
+[x] 在使用个人微信的过程当中主要有三种账号需要获取 https://itchat.readthedocs.io/zh/latest/intro/contact/        
+    •好友 friends •公众号 mps •群聊 chatrooms
+    itchat_2> itchat :> get_friends() <py> [ n.nickName for n in tos() ]</pyV> . cr
+    ['陳厚成0922', 'hcchen5600', 'Ada', 'dada', 'Natalie', 'coder']
+    itchat_2> itchat :> get_contact() <py> [ n.nickName for n in tos() ]</pyV> . cr
+    ['☆☆ 熱情 MAMA MIA 洋溢 ☆☆', 'test,coder,华,陳厚成0922,hcchen5600', 'WeChat remote control Lab']
+    itchat_2> itchat :> get_chatrooms() <py> [ n['NickName'] for n in tos() ]</pyV> . cr
+    ['☆☆ 熱情 MAMA MIA 洋溢 ☆☆', 'test,coder,华,陳厚成0922,hcchen5600', 'WeChat remote control Lab']
+    itchat_2> itchat :> get_contact(update=True) <py> [ n['NickName'] for n in tos() ]</pyV> . cr
+    ['test,coder,华,陳厚成0922,hcchen5600', 'WeChat remote control Lab']
+    --> 好像 contact 就是 chatrooms
+    --> 不知 update 何義？ --> 上網重抓，而非直回 memory 裡的資料
+    itchat_2> itchat :> get_chatrooms(update=True) <py> [ n['NickName'] for n in tos() ]</pyV> . cr
+    ['☆☆ 熱情 MAMA MIA 洋溢 ☆☆', 'test,coder,华,陳厚成0922,hcchen5600', 'WeChat remote control Lab']
+    itchat_2> itchat :> get_chatrooms(contactOnly=True) <py> [ n['NickName'] for n in tos() ]</pyV> . cr
+    ['test,coder,华,陳厚成0922,hcchen5600', 'WeChat remote control Lab']
+    itchat_2>    
+
+[ ] 通过如下代码，微信已经可以就日常的各种信息进行获取与回复。
+    https://itchat.readthedocs.io/zh/latest/
     
-    import itchat constant itchat py: last().type='value.outport' // ( -- module ) WeChat automation
-    itchat :: auto_login()
-    <accept> <text> 
-    # ------------ get what we want --------------------------
-    @itchat.msg_register([itchat.content.PICTURE, itchat.content.RECORDING, itchat.content.ATTACHMENT, itchat.content.VIDEO])
+    {} value itchat // ( -- module ) WeChat automation
+    {} value msg // ( -- dict ) WeChat received message 
+    <py>
+    import itchat
+    from itchat.content import * # TEXT PICTURE 等 constant 的定義
+        # Failed in compyle command : import * only allowed at module level 
+        # 因此本程式適合用 .py 直接執行
+    @itchat.msg_register([TEXT, MAP, CARD, NOTE, SHARING])
+    def text_reply(msg):
+        msg.user.send('%s: %s' % (msg.type, msg.text))
+
+    @itchat.msg_register([PICTURE, RECORDING, ATTACHMENT, VIDEO])
     def download_files(msg):
         msg.download(msg.fileName)
-        ok('11>> ',loc=locals(),cmd='cr')
-        itchat.send('@%s@%s' % (
-            'img' if msg['Type'] == 'Picture' else 'fil', msg['FileName']),
-            msg['FromUserName'])
-        return '%s received' % msg['Type']
+        typeSymbol = {
+            PICTURE: 'img',
+            VIDEO: 'vid', }.get(msg.type, 'fil')
+        return '@%s@%s' % (typeSymbol, msg.fileName)
 
-    # ------------ get what we want --------------------------
-    # dictate("--- marker ---"); outport(locals()) # bring out all things
-    </text> -indent py: exec(pop(),globals(),harry_port())
-    </accept> dictate 
+    @itchat.msg_register(FRIENDS)
+    def add_friend(msg):
+        msg.user.verify()
+        msg.user.send('Nice to meet you!')
 
-    
+    @itchat.msg_register(TEXT, isGroupChat=True)
+    def text_reply(msg):
+        if msg.isAt:
+            msg.user.send(u'@%s\u2005I received: %s' % (
+                msg.actualNickName, msg.text))
+    pdb.set_trace() # 222
+
+    itchat.auto_login(True)  # hotReload=True
+    itchat.run(True, blockThread=False) # debug=True 
+    outport(locals()) 
+    ok('itchat> ',cmd='cr')
+    </py>
+
+
+        
 [ ]         
 [ ]         
-[ ]         
-[ ]         
-[ ]         
+
 
