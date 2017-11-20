@@ -4,12 +4,12 @@ from itchat.content import * # TEXT PICTURE 等 constant 的定義
     # Failed in compyle command : import * only allowed at module level 
     # 因此本程式適合用 .py 直接執行
 @itchat.msg_register([TEXT, MAP, CARD, NOTE, SHARING])
-def text_reply(msg):
+def _(msg):
     peforth.ok('notGrupChat> ',loc=locals(),cmd=':> [0] inport cr')
     msg.user.send('%s: %s' % (msg.type, msg.text))
 
 @itchat.msg_register([PICTURE, RECORDING, ATTACHMENT, VIDEO])
-def download_files(msg):
+def _(msg):
     msg.download(msg.fileName)
     typeSymbol = {
         PICTURE: 'img',
@@ -17,30 +17,32 @@ def download_files(msg):
     return '@%s@%s' % (typeSymbol, msg.fileName)
 
 @itchat.msg_register(FRIENDS)
-def add_friend(msg):
+def _(msg):
     msg.user.verify()
     msg.user.send('Nice to meet you!')
 
 @itchat.msg_register(TEXT, isGroupChat=True)
-def text_reply(msg):
+def _(msg):
     peforth.ok('isGrupChat> ',loc=locals(),cmd=':> [0] inport cr')
-    if msg.isAt:
-        msg.user.send(u'@%s\u2005I received: %s' % (
-            msg.actualNickName, msg.text))
+    # if msg.isAt:
+    msg.user.send(u'@%s\u2005I received: %s' % (
+        msg.actualNickName, msg.text))
 
-itchat.auto_login(False)  # hotReload=True
-itchat.run(True, blockThread=False) # debug=True 
+itchat.auto_login(True)  # hotReload=True
+itchat.run(True, blockThread=True) # debug=True 
 
-peforth.vm.outport(locals()) 
-peforth.ok('itchat> ',cmd='cr')
+peforth.ok('itChat> ',loc=locals(),cmd=':> [0] inport cr')
+
 
 '''
 [x] 用 PC client 視訊或語音時，itchat 端就會斷掉。
     itchat.run(True, blockThread=True) 經 blockThread=True 就可以避免
-[ ] debug isGroupChat 時，發現 function name 都是 text_reply() 
-    decorator 裡好像這個無所謂。
-[ ] 不會 echo chatroom 的 message <== bug!
-    RI: msg.isAt 是 False !! 所以沒反應。 
+[x] isGroupChat> 與最後的 itChat> 交替出現, 一 exit 就整個結束
+    經 blockThread=True --> 果然就好了！！！
+[x] debug isGroupChat 時，發現 function name 都是 text_reply() 
+    decorator 裡好像這個無所謂，其實是個 anonymous function。
+[x] 不會 echo chatroom 的 message <== bug!
+    RI: msg.isAt 是 False !! 所以沒反應。 --> FP: 不考慮 msg.isAt 即可。
     --> 比對普通 chat 與 GroupChat 的 msg ...... 
     isGroupChat> msg . cr
         {'MsgId': '1422233572015927974',
@@ -262,8 +264,6 @@ peforth.ok('itchat> ',cmd='cr')
         'Type': 'Text',
         'Text': 'not groupchat'}
     notGrupChat>
-
-
 
 '''
 

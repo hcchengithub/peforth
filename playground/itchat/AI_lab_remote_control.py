@@ -14,7 +14,7 @@ Add a itchat controller with multi thread
 
 from __future__ import print_function
 
-import peforth; peforth.ok(loc=locals(),cmd="include xray.f")  # tool kits
+import peforth; peforth.ok(loc=locals(),cmd=":> [0] constant locals // ( -- dict ) locals of debugee")
 
 import tensorflow as tf
 
