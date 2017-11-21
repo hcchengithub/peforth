@@ -42,10 +42,38 @@ def _(msg):
 
 @itchat.msg_register(TEXT, isGroupChat=True)
 def _(msg):
-    if peforth.vm.debug: peforth.ok('isGrupChat> ',cmd="cr")  # breakpoint
-    # if msg.isAt:
-    msg.user.send(u'@%s\u2005I received: %s' % (
-        msg.actualNickName, msg.text))
+    if msg.isAt:
+        def print_piece(str, pcs=2000):
+            i = 0; s = str
+            while True:
+                if len(s)>2000:
+                    print(s[:2000]); msg.user.send(s[:2000])
+                else:
+                    print(s); msg.user.send(s)
+                    break
+                s = s[2000:]    
+                
+                
+            
+        cmd = msg.Text.strip()
+        print(cmd)
+        if cmd:
+            peforth.vm.dictate("display-off")
+            try:
+                peforth.vm.dictate(cmd)
+            except Exception as err:
+                errmsg = "Failed! : {}".format(err)
+                peforth.vm.dictate("display-on")
+                print(errmsg); msg.user.send(errmsg)
+            else:
+                peforth.vm.dictate("display-on screen-buffer")
+                screen = peforth.vm.pop()[0]
+                # 不能太大，要切小塊
+                print(screen); msg.user.send(screen)
+                
+        print("OK"); msg.user.send("OK")
+        if peforth.vm.debug: peforth.ok('console> ',cmd="cr")  # breakpoint
+        
 
 itchat.auto_login(False)  # hotReload=True
 itchat.run(True, blockThread=True) # debug=True 

@@ -49,13 +49,12 @@
     \ WshShell - users may not install win32 packages yet so only a clue here
     \ Run "WshShell dictate" to vitalize this word
     \ 
-    py:~ import win32com.client; push(win32com.client)
-    constant win32com.client // ( -- module )
+    import win32com.client constant win32com.client // ( -- module )
     win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj ) The "Windows Script Host" object https://technet.microsoft.com/en-us/library/ee156607.aspx
-        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
-        /// WshShell :: SendKeys("abc")
-        /// WshShell :: AppActivate("python.exe")
-        /// WshShell ::~ run("python -i -m peforth WshShell dictate cls version drop dos title child peforth")
+        /// WshShell :: rUn("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
+        /// WshShell :: SeNdKeYs("abc")
+        /// WshShell :: ApPaCtIvAtE("c:\\") \ beginning 2+ chars of the window title, case insensitive.
+        /// WshShell ::~ RuN("python -i -m peforth WshShell dictate cls version drop dos title child peforth")
     </text> constant WshShell // ( -- "clue" ) Guide how to use WshShell
 
     <py>

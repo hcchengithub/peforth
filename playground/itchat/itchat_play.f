@@ -623,6 +623,13 @@
 
     
 [x] run() 了以後，怎麼停下來？ --> blockThread=False 即可
+    但是 blockThread=False 有諸多問題：
+    [x] blockThread=False 時 Friend 傳來視訊或語音時，itchat 端就會斷掉。
+        blockThread=True 就可以避免
+    [x] Event handler 內部的 peforth breakpoint isGroupChat> 與最後的 
+        itChat> 交替出現, 一 exit 就整個結束
+        經 blockThread=True --> 果然就好了！！！
+
     OK itchat :> run py: help(pop())
     Help on method run in module itchat.components.register:
     run(debug=False, blockThread=True) method of itchat.core.Core instance
@@ -698,7 +705,31 @@
     </py>
 
 
+[x] debug isGroupChat 時，發現 function name 都是 text_reply() 
+    decorator 裡好像這個無所謂，其實是個 anonymous function。
+[x] 不會 echo chatroom 的 msg.isAt message <== bug!
+    RI: msg.isAt 是 False !! 所以沒反應。 --> FP: 不考慮 msg.isAt 即可。
+    目前 itchat v1.3.10 , msg.isAt 我查看都是 False 所以來自作者 demo 的這段 code 無反應
+    ```
+    @itchat.msg_register(TEXT, isGroupChat=True)
+    def text_reply(msg):
+        if msg.isAt:
+            msg.user.send(u'@%s\u2005I received: %s' % (
+                msg.actualNickName, msg.text))
+    ```
+    還是有問題呀！是同一個問題嗎？  ---> #425 可能就是答案
+    或者根本沒問題！要加 @name 才回答
         
+[ ] Unexpected sync check result: window.synccheck={retcode:"1101",selector:"0"}
+    LOG OUT!
+    See https://github.com/littlecodersh/ItChat/issues/441
+    --> 改寫成 itchat_remote_peforth2.py 希望用自動重起的方式避開問題。
+    
+[ ]         
+[ ]         
+[ ]         
+[ ]         
+[ ]         
 [ ]         
 [ ]         
 
