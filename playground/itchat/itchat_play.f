@@ -725,7 +725,25 @@
     See https://github.com/littlecodersh/ItChat/issues/441
     --> 改寫成 itchat_remote_peforth2.py 希望用自動重起的方式避開問題。
     
-[ ]         
+[ ] WeChat 傳訊息，不能太大，要分 chunk 傳，或者打包成 file 來傳 -- 兩個都要
+    <accept> <text> 
+    def send_chunk(text, send, pcs=2000):
+        s = text
+        while True:
+            if len(s)>pcs:
+                print(s[:pcs]); send(s[:pcs])
+            else:
+                print(s); send(s)
+                break
+            s = s[pcs:]    
+    push(send_chunk)
+    </text> -indent py: exec(pop())
+    </accept> dictate constant send_chunk // ( -- function ) send a chunk to Wechat
+    /// Where send can be itchat.send or msg.user.send up to the caller
+
+    \ 成功！
+    itChat> hcchen5600 :> send send_chunk :> ("lalalalsdfsdsdfdsfdsfdsfdsfsdfala",pop(),3)
+
 [ ]         
 [ ]         
 [ ]         

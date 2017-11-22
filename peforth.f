@@ -1031,8 +1031,8 @@ code t>
     py: exec(pop())
     py> sys.modules[pop()] ( module ) ;
     /// Introduce the the module to projectk kernel:
-    ///   import numpy constant np // ( -- numpy ) module object
-    ///   py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
+    ///   1. import numpy constant np // ( -- numpy ) module object
+    ///   2. py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
     
 : modules ( <pattern> -- ) // List modules in memory
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
@@ -1043,7 +1043,8 @@ code t>
     /// Use import <module name> to get the module object
     /// Ex: import foobar constant foobar // ( -- obj ) The 'foobar' module
     /// To avoid overkill of importing, instead with:
-    ///   char foobar py> sys.modules[pop()] 
+    ///   1. char foobar py> sys.modules[pop()] ( module ) 
+    ///   2. py: setattr(sys.modules['foobar'].projectk,'foobar',v('foobar')) \ add to peforth
 
     <selftest>
     *** modules lists imported modules
