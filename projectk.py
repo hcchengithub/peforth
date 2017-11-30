@@ -348,9 +348,9 @@ def outer(entry=None):
                 push(n)
                 if (compiling):
                     execute("literal");
-            except:
+            except Exception as err:
                 panic(
-                    "Error! "+token+" unknown.", 
+                    "Error! "+token+" unknown. " + err + "\n", 
                     len(tib)-ntib>100  # error or warning? depends
                 );
     if (entry):

@@ -1849,4 +1849,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     
 [ ] ( ... ) comment nested
 [ ] CRLF leaves '\r\n' on TOS
+[ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+
 

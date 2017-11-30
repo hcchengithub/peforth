@@ -725,7 +725,7 @@
     See https://github.com/littlecodersh/ItChat/issues/441
     --> 改寫成 itchat_remote_peforth2.py 希望用自動重起的方式避開問題。
     
-[ ] WeChat 傳訊息，不能太大，要分 chunk 傳，或者打包成 file 來傳 -- 兩個都要
+[x] WeChat 傳訊息，不能太大，要分 chunk 傳，或者打包成 file 來傳 -- 兩個都要
     <accept> <text> 
     def send_chunk(text, send, pcs=2000):
         s = text
@@ -744,8 +744,57 @@
     \ 成功！
     itChat> hcchen5600 :> send send_chunk :> ("lalalalsdfsdsdfdsfdsfdsfdsfsdfala",pop(),3)
 
-[ ]         
-[ ]         
+[x] Moniter UUT
+    \ UUT is running AI training, also running itchat_remote_peforth.py
+    \ from my OA computer control the UUT through WeChat :
+    import PIL.ImageGrab constant im 
+        \ 取得 PIL 圖像處理工具
+        // ( -- module ) PIL.ImageGrab
+    im tib. \ ==> <module 'PIL.ImageGrab' from 'C:\\Users\\YY\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\PIL\\ImageGrab.py'>
+    im :> grab() value grab \ or 'to grab'
+        \ 抓好桌面畫面
+        // ( -- obj ) full screen
+    grab :> size tib. \ ==> (1536, 864) (<class 'tuple'>) 圖片大小，看好玩的。
+    grab :> mode tib. \ ==> RGB (<class 'str'>) 圖片種類，看好玩的。
+    grab :: save("1.jpg") \ 圖片存檔。用 cd command 即可看到 working directory 在哪。
+    \ 準備由 WeChat 把圖片送到遠端（OA or Cell phone）來
+    py> sys.modules['itchat'] constant itchat 
+        \ 取得 itchat module object 
+        // ( -- module ) WeChat automation
+    itchat :> search_friends('hcchen5600')[0] constant hcchen5600 
+        \ 取得聯絡對象
+        // ( -- obj ) WeChat friend
+    hcchen5600 :> send("@img@1.jpg") tib. \ ==> {'BaseResponse': {'Ret': 0, 'ErrMsg': '请求成功', 'RawMsg': '请求成功'}, 'MsgID': '7603896662611832927', 'LocalID': '15120087471654'} (<class 'itchat.returnvalues.ReturnValue'>)
+        \ 圖片送過來，成功了！
+        
+    : check ( -- ) // check UUT
+        im :> grab() to grab
+        grab :: save("1.jpg") 
+        hcchen5600 :> send("@img@1.jpg")
+        . cr ;
+[x] 改用 chatroom 其他同上
+    \ 用部分 nickName 取得 chatroom object 
+    itchat :> search_chatrooms('ITLAB')[0] constant itlab // ( -- obj ) ITLAB chatroom object
+    : check ( -- ) // check UUT
+        im :: grab().save("1.jpg") 
+        itlab :> send("@img@1.jpg")
+        . cr ;
+
+[x] check command 的完整設定過程，讓 UUT 回覆它的畫面：
+    \ 取得 itchat module object 
+        py> sys.modules['itchat'] constant itchat // ( -- module ) WeChat automation
+    \ 取得 PIL 圖像處理工具
+        import PIL.ImageGrab constant im // ( -- module ) PIL.ImageGrab
+    \ 用部分 nickName 取得 chatroom object 
+        itchat :> search_chatrooms('ITLAB')[0] constant itlab // ( -- obj ) ITLAB chatroom object
+    \ 定義 check command :
+        : check ( -- ) // check UUT
+            im :: grab().save("1.jpg") 
+            itlab :> send("@img@1.jpg")
+            . cr ;
+    \ 完成設定，可以從遠端下達 check 命令取得 UUT 畫面了。
+    
+
 [ ]         
 [ ]         
 [ ]         
