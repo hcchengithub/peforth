@@ -781,19 +781,19 @@
         . cr ;
 
 [x] check command 的完整設定過程，讓 UUT 回覆它的畫面：
+    \ [ ] power saving setting AC 'never' sleep 
     \ 取得 itchat module object 
         py> sys.modules['itchat'] constant itchat // ( -- module ) WeChat automation
     \ 取得 PIL 圖像處理工具
         import PIL.ImageGrab constant im // ( -- module ) PIL.ImageGrab
     \ 用部分 nickName 取得 chatroom object 
-        itchat :> search_chatrooms('ITLAB')[0] constant itlab // ( -- obj ) ITLAB chatroom object
+        itchat :> search_chatrooms('AILAB')[0] constant ailab // ( -- obj ) AILAB chatroom object
     \ 定義 check command :
         : check ( -- ) // check UUT
-            im :: grab().save("1.jpg") 
-            itlab :> send("@img@1.jpg")
+            im :: grab().save("1.jpg") \ Windows 顯示比例不要改，100% 就是全螢幕。
+            ailab :> send("@img@1.jpg") \ 結果都送到 chatroom 
             . cr ;
-    \ 完成設定，可以從遠端下達 check 命令取得 UUT 畫面了。
-    
+    \ 完成設定，可以從遠端下達 @陳厚成0922 check 命令取得 UUT 畫面了。
 
 [ ]         
 [ ]         
