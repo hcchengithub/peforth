@@ -383,6 +383,7 @@ code (
         last().help = '( ' + a + b + ' ' 
     end-code immediate
     // ( <stack diagram> -- ) Get stack diagram to the last's help.  
+    /// Nested not allowed yet.
 code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
 code CR push("\\n|\\r") end-code // ( -- '\n|\r' ) RegEx new line, works with 'word' command.
 code word push(nexttoken(pop())) end-code
