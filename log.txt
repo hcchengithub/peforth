@@ -1850,5 +1850,28 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] ( ... ) comment nested
 [ ] CRLF leaves '\r\n' on TOS
 [ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+[x] Ignore command line when running in jupyter notebook
+    (Pdb) vm.commandline
+    '-f C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json'
+    (Pdb) sys.argv
+    ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py', '-f', 'C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json']
+    (Pdb) sys.argv[0]
+    'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py'
+    (Pdb) sys.argv[0].endswith('ipykernel_launcher.py') --> True , the key to know about the case
 
-
+[ ] SRP for the problem : ValueError: could not convert string to float: 'sys'
+    Reproducing steps :
+        c:\Users\hcche\Documents\GitHub\ibrainfuck\bfinterpreter>python  v1.12 at home
+        >>> import peforth
+        >>> peforth.ok()
+        OK sys . cr
+        Traceback (most recent call last):
+          File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
+            f = float(token) # triggers exception if token is malformed
+        ValueError: could not convert string to float: 'sys'
+    終於找到複製方法了。。。。
+    
+[ ] study how to run brainfuck interpreter
+    c:\Users\hcche\Documents\GitHub\ibrainfuck 
+    
+    

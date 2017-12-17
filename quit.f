@@ -160,8 +160,13 @@
 
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
-        \ Run the command line commands
-        tib.insert
+        py> sys.argv[0].endswith('ipykernel_launcher.py') [if] 
+            \ ignore if running in jupyter notebook is suspected
+            drop
+        [else]
+            \ Run the command line commands
+            tib.insert
+        [then]
     [else] 
         \ No command line, show greeting and run selftest
         version drop 
