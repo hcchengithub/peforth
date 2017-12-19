@@ -1851,4 +1851,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] CRLF leaves '\r\n' on TOS
 [ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
 
-
+[ ] itchat 執行中，常有這個問題發生：
+    Traceback (most recent call last):
+      File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
+        f = float(token) # triggers exception if token is malformed
+    ValueError: could not convert string to float: '<mmreader><category'
+    為何 try: exception: 攔不住它？
+    
+    

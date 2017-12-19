@@ -4,8 +4,9 @@ from itchat.content import * # TEXT PICTURE 等 constant 的定義
 import peforth
 
 # Inhibit 'bye' command, it terminates DOSBox session immediately 
-# and leaves 'bye' in msg!
-peforth.ok(cmd=": bye .' Bye does nothing.' cr ; exit")  
+# and leaves 'bye' in msg! Only a re-login can resolve it. To avoid this,
+# decorator must return instead of doing the 'bye' command directly.
+peforth.ok(loc=locals(),cmd=":> [0] constant locals : bye locals :> ['itchat'].logout() ; exit")  
 
 # Send message to friend or chatroom depends on the given 'send'
 # function. It can be itchat.send or msg.user.send up to the caller.
@@ -22,7 +23,6 @@ def send_chunk(text, send, pcs=2000):
 # Console is like a robot that listens and talks.
 # Used in chating with friends and in a chatroom.
 def console(msg,cmd):
-    # cmd = msg.Text.strip()
     if cmd:
         print(cmd)
         peforth.vm.dictate("display-off")
@@ -73,5 +73,5 @@ def _(msg):
 # peforth.vm.debug=99
 itchat.auto_login(True)  # hotReload=True
 itchat.run(False, blockThread=True) # debug=True 
-peforth.ok('itChat> ',loc=locals(),cmd=":> [0] inport cr")  # breakpoint    
+peforth.ok()  # breakpoint    
 
