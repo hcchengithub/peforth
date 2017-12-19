@@ -160,8 +160,8 @@
 
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
-        py> sys.argv[0].endswith('ipykernel_launcher.py') [if] 
-            \ ignore if running in jupyter notebook is suspected
+        py> sys.argv[0].endswith('.py') [if] 
+            \ ignore if running in jupyter notebook or the likes is suspected
             drop
         [else]
             \ Run the command line commands
