@@ -784,23 +784,35 @@
     \ UUT 注意要領：
         [ ] 跑 demo2.py 以及 itchat bot ～\GitHub\peforth\playground\itchat\itchat_remote_peforth.py 
         [ ] power saving setting AC 'never' sleep 
-    \ 完整設定過程，讓 UUT 回覆它的畫面經由 itchat bot 傳給遠端的 PC 或手機。
+    \ 完整設定過程，讓 UUT 回覆它的畫面經由 itchat bot 傳給 AILAB Chatroom.
     \ 讓遠端可以來監看執行狀況。這段程式是由遠端灌過來給 UUT 的。
         \ 取得 itchat module object. UUT 的 peforth 是
         py> sys.modules['itchat'] constant itchat // ( -- module ) WeChat automation
         \ 取得 PIL 圖像處理工具
         import PIL.ImageGrab constant im // ( -- module ) PIL.ImageGrab
-        \ 用部分 nickName 取得 chatroom object 
+        \ 用部分 nickName 取得 AILAB chatroom object 
         itchat :> search_chatrooms('AILAB')[0] constant ailab // ( -- obj ) AILAB chatroom object
         \ 定義 check command :
         import time constant time // ( -- module )
-        time :> ctime() . cr \ print now time
+        cr time :> ctime() . cr \ print recent time on UUT when making this setting
         : check ( -- ) // check UUT
-            time :> ctime() . cr \ print now time
-            im :: grab().save("1.jpg") \ Windows 顯示比例不要改，100% 就是全螢幕。
-            ailab :> send("@img@1.jpg") \ 結果都送到 chatroom 
+            time :: sleep(7) \ 固定 anti-robot delay time 7 sec.
+            cr time :> ctime() . cr \ print the recent time on UUT 
+            im :: grab().save("1.jpg") \ 抓 Screenshot 
+            \ Windows 10 的顯示比例設定不要改 100% 就是全螢幕。
+            ailab :> send("@img@1.jpg") \ 結果都送到 AILAB chatroom 
             . cr ;
-        \ 完成設定，可以從遠端下達 @陳厚成0922 check 命令取得 UUT 畫面了。
+        \ 完成設定，可以從遠端下達 @<版主> check 命令取得 UUT 畫面了。
+        \ ( 注意！ 注意！ ) exit \ 現在 console() 裡改用 peforth.ok() 可能就要記得 exit 
+        
+        : getfile ( "pathname" -- ) // Get source code for debugging
+            time :: sleep(7) \ 固定 anti-robot delay time 7 sec.
+            py> str(pop()).strip() \ 整理 pathname 
+            s" @fil@" swap + \ command string 
+            cr time :> ctime() . space s" getfile: " . dup . cr
+            ailab :> send(pop()) \ 傳送到 AILAB chatroom 
+            . cr \ 顯示打印結果
+            ;
 
 [ ]         
 [ ]         
