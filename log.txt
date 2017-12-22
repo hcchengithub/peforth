@@ -1880,4 +1880,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] study how to run brainfuck interpreter
     c:\Users\hcche\Documents\GitHub\ibrainfuck 
     --> See Ynote __brainfuck_ 
+
+[ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help 
     
