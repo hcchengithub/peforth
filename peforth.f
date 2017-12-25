@@ -1021,19 +1021,21 @@ code t>
 
 : __main__ ( -- module ) // Get __main__ module of this python session
     py> sys.modules['__main__'] ;
-    /// Examples:
     /// __main__ :> __file__ \ ==> C:\Users\morvanTUT\plt6_ax_setting2.py
-    /// s" dos title " __main__ :> __file__ + dictate 
-    /// drop \ drop the errorlevel 
+    /// s" dos title " __main__ :> __file__ + dictate drop \ change DOSBox title
+    /// __main__ :: x=123 \ Define main global variable
+    /// __main__ :: peforth.projectk.y=456 \ Define peforth global variable
     
 : import ( <module> -- obj ) // Import the module
     BL word ( <module> )
     s" import {}" :> format(tos()) ( <module> "import <module>" )
     py: exec(pop())
     py> sys.modules[pop()] ( module ) ;
-    /// Introduce the the module to projectk kernel:
-    ///   1. import numpy constant np // ( -- numpy ) module object
-    ///   2. py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
+    /// Introduce a module to global of peforth or the main program
+    /// 1. import numpy constant np // ( -- numpy ) module object
+    /// 2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
+    ///    np __main__ :: np=pop(1) \ __main__ global
+    /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
     
 : modules ( <pattern> -- ) // List modules in memory
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
