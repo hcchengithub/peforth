@@ -1882,4 +1882,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> See Ynote __brainfuck_ 
 
 [ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help 
-    
+[ ] msg is a forth value and also a peforth global.
+    \ Why this does not work?
+    Examine> msg ::~ test ="1234 . cr"
+    Examine> msg :> text . cr
+    Message text from the WeChat cloud
+
+    \ And this works?
+    Examine> py> msg.text . cr
+    Message text from the WeChat cloud
+    Examine> py:~ msg.text="1234 . cr"
+    Examine> py> msg.text . cr
+    1234 . cr
+    Examine> msg :> text . cr
+    1234 . cr
+    Examine>
+    --> 因為 :: :> 繼承 JavaScript 的想法，object 與 dict 不分，造成的混淆。

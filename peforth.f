@@ -1025,6 +1025,7 @@ code t>
     /// s" dos title " __main__ :> __file__ + dictate drop \ change DOSBox title
     /// __main__ :: x=123 \ Define main global variable
     /// __main__ :: peforth.projectk.y=456 \ Define peforth global variable
+    /// __main__ :> np constant np // ( -- moduel ) numpy, see 'help import'
     
 : import ( <module> -- obj ) // Import the module
     BL word ( <module> )
@@ -1032,10 +1033,12 @@ code t>
     py: exec(pop())
     py> sys.modules[pop()] ( module ) ;
     /// Introduce a module to global of peforth or the main program
-    /// 1. import numpy constant np // ( -- numpy ) module object
+    /// 1. import numpy constant np // ( -- numpy ) module object, method #1
+    ///    py> sys.modules['numpy'] constant np // ( -- numpy ) method #2
+    ///    __main__ :> np constant np // ( -- numpy ) method #3
     /// 2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
-    ///    np __main__ :: np=pop(1) \ __main__ global
-    /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
+    ///    np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
+    /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
     
 : modules ( <pattern> -- ) // List modules in memory
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
