@@ -1823,9 +1823,55 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] new word __main__ works fine
     s" dos title " __main__ :> __file__ + CRLF + dictate drop
     Note! 如果沒有 CRLF 則 dos 會抓到 dictate 之後去，連 drop 都當成 command line 的一部份
-[ ] release 1.11 
+[x] release 1.11 
     new words import, __main__, break_include, and improved *debug* and help
-[ ] Tests before a Release  v1.11
+    
+[ ] ( ... ) comment nested
+[x] CRLF leaves '\r\n' on TOS
+[ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+[x] Ignore command line when running in jupyter notebook
+    (Pdb) vm.commandline
+    '-f C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json'
+    (Pdb) sys.argv
+    ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py', '-f', 'C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json']
+    (Pdb) sys.argv[0]
+    'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py'
+    (Pdb) sys.argv[0].endswith('ipykernel_launcher.py') --> True , the key to know about the case
+
+[x] itchat 執行中，常有這個問題發生：
+    Traceback (most recent call last):
+      File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
+        f = float(token) # triggers exception if token is malformed
+    ValueError: could not convert string to float: '<mmreader><category'
+    為何 try: exception: 攔不住它？
+    
+    Reproducing steps (at home on my desktop) :
+        c:\Users\hcche\Documents\GitHub\ibrainfuck\bfinterpreter>python  v1.12 at home
+        >>> import peforth
+        >>> peforth.ok()
+        OK sys . cr
+        Traceback (most recent call last):
+          File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
+            f = float(token) # triggers exception if token is malformed
+        ValueError: could not convert string to float: 'sys'
+    終於找到複製方法了。。。。
+    --> 改寫 projectk.py > outer() 之後好了。
+    
+[x] study how to run brainfuck interpreter
+    c:\Users\hcche\Documents\GitHub\ibrainfuck 
+    --> See Ynote __brainfuck_ 
+
+[ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help 
+    --> 唉，試了就知道，很醜！
+[x] msg is a forth value and also a peforth global.
+    blabla bla something wrong.
+    --> 不是因為繼承 JavaScript 的想法，object 與 dict 不分所造成的混淆。
+         (::) (:>) 都是中性的 obj :: methed 或 obj :: ['property'] 隨人自己
+         的認知而定，語法並無問題。
+[ ] Ipeforth kernel for Jupyter is ok now. Bring peforth to
+    http://nbviewer.jupyter.org/
+    
+[ ] Tests before a Release  v1.12
     [ ] 所有 run 法帶 selftest 跑一遍
         [ ] Run setup.bat 做出有 selftest 的 wheel 
         [ ] pip uninstall peforth
@@ -1847,54 +1893,3 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 考慮 README.rst 改良
     [ ] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
     
-[ ] ( ... ) comment nested
-[ ] CRLF leaves '\r\n' on TOS
-[ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
-[x] Ignore command line when running in jupyter notebook
-    (Pdb) vm.commandline
-    '-f C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json'
-    (Pdb) sys.argv
-    ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py', '-f', 'C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json']
-    (Pdb) sys.argv[0]
-    'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py'
-    (Pdb) sys.argv[0].endswith('ipykernel_launcher.py') --> True , the key to know about the case
-
-[ ] itchat 執行中，常有這個問題發生：
-    Traceback (most recent call last):
-      File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
-        f = float(token) # triggers exception if token is malformed
-    ValueError: could not convert string to float: '<mmreader><category'
-    為何 try: exception: 攔不住它？
-    
-    Reproducing steps (at home on my desktop) :
-        c:\Users\hcche\Documents\GitHub\ibrainfuck\bfinterpreter>python  v1.12 at home
-        >>> import peforth
-        >>> peforth.ok()
-        OK sys . cr
-        Traceback (most recent call last):
-          File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
-            f = float(token) # triggers exception if token is malformed
-        ValueError: could not convert string to float: 'sys'
-    終於找到複製方法了。。。。
-    
-[x] study how to run brainfuck interpreter
-    c:\Users\hcche\Documents\GitHub\ibrainfuck 
-    --> See Ynote __brainfuck_ 
-
-[ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help 
-[ ] msg is a forth value and also a peforth global.
-    \ Why this does not work?
-    Examine> msg ::~ test ="1234 . cr"
-    Examine> msg :> text . cr
-    Message text from the WeChat cloud
-
-    \ And this works?
-    Examine> py> msg.text . cr
-    Message text from the WeChat cloud
-    Examine> py:~ msg.text="1234 . cr"
-    Examine> py> msg.text . cr
-    1234 . cr
-    Examine> msg :> text . cr
-    1234 . cr
-    Examine>
-    --> 因為 :: :> 繼承 JavaScript 的想法，object 與 dict 不分，造成的混淆。
