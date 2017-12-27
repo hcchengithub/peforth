@@ -1,4 +1,5 @@
-
-*.pyc
 jeforth.js
-playground/itchat/itchat.pkl
+**/.ipynb_checkpoints/
+**/Untitled*.*
+**/*.pkl
+**/*.pyc

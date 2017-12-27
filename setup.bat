@@ -54,7 +54,19 @@
         \ 直接用 DOS 的 copy /y from to 就可以了
 
             \ List peforth package files 
-            py>~ ["version.txt", "projectk.py", "__main__.py", "__init__.py", "quit.f", "peforth.f", "peforth.selftest"] 
+            <py> 
+            [
+            "version.txt", 
+            "projectk.py", 
+            "__main__.py", 
+            "__init__.py", 
+            "quit.f", 
+            "peforth.f", 
+            "peforth.selftest",
+            "kernel.json",
+            "peforthkernel.py",
+            ]
+            </pyV>
             constant files // ( -- [filenames] ) peforth package files in site-packages/
 
             \ ---- 作廢老 code -----------
@@ -62,6 +74,7 @@
             \ s" copy /y {}__main__.py {}__init__.py" :> format(v('source'),v('dest'))
             \ py: os.system(pop())
 
+            \ ---- 本想改用 --upgrade --force-reinstall peforth 但不成功
             \ peforth package files 都 copy 過去
             <py>
             for i in v('files'):
@@ -69,6 +82,23 @@
                 os.system(cmd)
             </py>
 
+            \ 此法失敗
+            \ os.getcwd() --> GitHub/peforth
+            \ cd ..
+            \ dos pip install --upgrade --force-reinstall peforth
+            \ cd peforth
+            \ 此法失敗 症狀如下
+            \ c:\Users\hcche\Documents\GitHub>pip install --upgrade --force-reinstall peforth
+            \ Collecting peforth
+            \   Using cached peforth-1.11-py3-none-any.whl
+            \ Installing collected packages: peforth
+            \   Found existing installation: peforth 1.11
+            \     Uninstalling peforth-1.11:
+            \       Successfully uninstalled peforth-1.11
+            \ Successfully installed peforth-1.11
+            \ 
+            \ c:\Users\hcche\Documents\GitHub>
+            
             
     \ 問要不要打包 whl?
 
@@ -128,30 +158,30 @@
         
             <comment>
             
-            檢查 creating symbolic links 有沒有成功，可能用上的方法。
+                檢查 creating symbolic links 有沒有成功，可能用上的方法。
 
-            1. 土土地看檔案在不在
+                1. 土土地看檔案在不在
 
-                py> os.path.isfile(r'c:\Users\hcche\Desktop\peforth-master\peforth\quit.f') tib. \ ==> True (<class 'bool'>)
-                py> os.path.isfile(r'c:\Users\hcche\Desktop\peforth-master\peforth\quit.fff') tib. \ ==> False (<class 'bool'>)
+                    py> os.path.isfile(r'c:\Users\hcche\Desktop\peforth-master\peforth\quit.f') tib. \ ==> True (<class 'bool'>)
+                    py> os.path.isfile(r'c:\Users\hcche\Desktop\peforth-master\peforth\quit.fff') tib. \ ==> False (<class 'bool'>)
 
-            2. 跟目標比較看是否完全一樣，這個好！
+                2. 跟目標比較看是否完全一樣，這個好！
 
-                查看咱 target directory 裡有哪些檔案
-                py> os.listdir('peforth') tib. \ ==> ['peforth.f', 'projectk.py', 'quit.f', '__init__.py', '__main__.py'] (<class 'list'>)
-                
-                把咱 target directory 檔案 list 改成 set 以便比較
-                py> os.listdir('peforth') py> set(pop())
-                
-                應該要有這些檔案
-                source-files tib. \ ==> ['projectk.py', '__main__.py', '__init__.py', 'peforth.f', 'quit.f']
-                
-                該有的檔案 list 改成 set 以便比較
-                source-files py> set(pop())
+                    查看咱 target directory 裡有哪些檔案
+                    py> os.listdir('peforth') tib. \ ==> ['peforth.f', 'projectk.py', 'quit.f', '__init__.py', '__main__.py'] (<class 'list'>)
+                    
+                    把咱 target directory 檔案 list 改成 set 以便比較
+                    py> os.listdir('peforth') py> set(pop())
+                    
+                    應該要有這些檔案
+                    source-files tib. \ ==> ['projectk.py', '__main__.py', '__init__.py', 'peforth.f', 'quit.f']
+                    
+                    該有的檔案 list 改成 set 以便比較
+                    source-files py> set(pop())
 
-            最終，一行搞定，得 copy files 有沒有成功的一個 boolean 
+                最終，一行搞定，得 copy files 有沒有成功的一個 boolean 
 
-                py> os.listdir('peforth') py> set(pop()) source-files py> set(pop()) =
+                    py> os.listdir('peforth') py> set(pop()) source-files py> set(pop()) =
             
             </comment>
 
@@ -216,7 +246,7 @@
     \ The end
 
         cr ." ----------- All Done --------------" cr 
-        bye
+        \ bye <-- don't we may need to see the error messages
         
 \ ---------------- end peforth code -----------------------
 

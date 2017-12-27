@@ -49,13 +49,12 @@
     \ WshShell - users may not install win32 packages yet so only a clue here
     \ Run "WshShell dictate" to vitalize this word
     \ 
-    py:~ import win32com.client; push(win32com.client)
-    constant win32com.client // ( -- module )
+    import win32com.client constant win32com.client // ( -- module )
     win32com.client :> Dispatch("WScript.Shell") constant WshShell // ( -- obj ) The "Windows Script Host" object https://technet.microsoft.com/en-us/library/ee156607.aspx
-        /// WshShell :: run("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
-        /// WshShell :: SendKeys("abc")
-        /// WshShell :: AppActivate("python.exe")
-        /// WshShell ::~ run("python -i -m peforth WshShell dictate cls version drop dos title child peforth")
+        /// WshShell :: rUn("c:\Windows\System32\scrnsave.scr") \ Windows display off power saving mode
+        /// WshShell :: SeNdKeYs("abc")
+        /// WshShell :: ApPaCtIvAtE("c:\\") \ beginning 2+ chars of the window title, case insensitive.
+        /// WshShell ::~ RuN("python -i -m peforth WshShell dictate cls version drop dos title child peforth")
     </text> constant WshShell // ( -- "clue" ) Guide how to use WshShell
 
     <py>
@@ -83,8 +82,8 @@
     <py>
         def harry_port(loc={}):
             '''
-            # Note! Don't use this technique in any compiled snippet. Run by exec() is 
-            # good. This function returns a dict of all FORTH values with type of 
+            # Note! Don't use this technique in any compiled snippet, but run by exec() 
+            # instead. This function returns a dict of all FORTH values with type of 
             # "value.outport". Refer to 1) FORTH word 'inport' which converts a dict, a 
             # snapshot of locals(), at TOS to FORTH values, and 2) python function 
             # outport() which converts the given locals() to FORTH values. The two are 
@@ -93,6 +92,9 @@
             # Usage: Method A) exec(python_code, harry_port()) 
             #        Method B) locals().update(harry_port())
             # <PY> exec("locals().update(harry_port()); x = sess.run(myXX); print(x)") </PY>
+            # Usage: 
+            #   1. exec("x = sess.run(myXX); print(x)", harry_port())
+            #   2. locals().update(harry_port()) # in code executed by exec()
             '''
             ws = [w.name for w in words[context][1:] if 'outport' in w.type]
             for i in ws:
@@ -101,7 +103,7 @@
         vm.harry_port = harry_port    
     </py>
                 
-    : harry_port py> harry_port.__doc__ . cr ; // ( -- ) Print help message
+    : harry_port py> harry_port.__doc__ -indent . cr ; // ( -- ) Print help message
                 
     : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     
@@ -161,8 +163,13 @@
 
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
-        \ Run the command line commands
-        tib.insert
+        py> sys.argv[0].endswith('.py') [if] 
+            \ ignore if running in jupyter notebook or the likes is suspected
+            drop
+        [else]
+            \ Run the command line commands
+            tib.insert
+        [then]
     [else] 
         \ No command line, show greeting and run selftest
         version drop 

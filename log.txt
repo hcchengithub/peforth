@@ -1366,6 +1366,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [ ] 發現 pip help install 列出了 pip install 的種種用法。
         update.bat 直接從 project directly update peforth package 到
         lib\site-packages\peforth 的方式太暴力了。
+    [ ] Upgrade from Pypi.org 
+        pip install --upgrade peforth  <--- project folder is github/peforth, 從 github/ 執行
+        github:\>pip install peforth
+        Requirement already satisfied: peforth in c:\...\python\python36\lib\site-packages
+
+
         
 [ ] 螢幕編輯器    
     os.get_terminal_size(...)
@@ -1815,30 +1821,45 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     help improved    
 [x] new word "import" works fine        
 [x] new word __main__ works fine
-    s" dos title " __main__ :> __file__ + dictate
+    s" dos title " __main__ :> __file__ + CRLF + dictate drop
+    Note! 如果沒有 CRLF 則 dos 會抓到 dictate 之後去，連 drop 都當成 command line 的一部份
 [x] release 1.11 
     new words import, __main__, break_include, and improved *debug* and help
-[x] Tests before a Release  v1.11
-    [/] 所有 run 法帶 selftest 跑一遍
-        [/] Run setup.bat 做出有 selftest 的 wheel 
-        [/] pip uninstall peforth
-        [/] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [/] 1. python -i -m peforth [ ] selftest .s words exit 
-        [/] 2. python -i -m peforth version drop
-        [/] 3. python import peforth 
-                [x] selftest peforth.ok() .s words <--- no parent
-                [x] 1234 bye check echo %errorlevel% 
-    [/] 所有 run 不帶 selftest 再跑一遍
-        [x] Run setup.bat 做出取消 selftest 的 wheel
-            注意！改的是 site-packages\peforth\quit.f 所以要
-            在 setup.bat 做 wheel 以前插入這個動作！！！！！
-        [x] pip uninstall peforth
-        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [x] selftest .s words exit bye
-        [x] 2. python -i -m peforth .' Hello World!!' cr bye
-        [x] 3. python import peforth 
-        [x] 考慮 README.rst 改良
-    [x] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
+    
+[ ] ( ... ) comment nested
+[x] CRLF leaves '\r\n' on TOS
+[ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+[x] Ignore command line when running in jupyter notebook
+    (Pdb) vm.commandline
+    '-f C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json'
+    (Pdb) sys.argv
+    ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py', '-f', 'C:\\Users\\hcche\\AppData\\Roaming\\jupyter\\runtime\\kernel-be1c3297-f7a9-4cb2-a7aa-b06e29f158ea.json']
+    (Pdb) sys.argv[0]
+    'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py'
+    (Pdb) sys.argv[0].endswith('ipykernel_launcher.py') --> True , the key to know about the case
+
+[x] itchat 執行中，常有這個問題發生：
+    Traceback (most recent call last):
+      File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
+        f = float(token) # triggers exception if token is malformed
+    ValueError: could not convert string to float: '<mmreader><category'
+    為何 try: exception: 攔不住它？
+    
+    Reproducing steps (at home on my desktop) :
+        c:\Users\hcche\Documents\GitHub\ibrainfuck\bfinterpreter>python  v1.12 at home
+        >>> import peforth
+        >>> peforth.ok()
+        OK sys . cr
+        Traceback (most recent call last):
+          File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
+            f = float(token) # triggers exception if token is malformed
+        ValueError: could not convert string to float: 'sys'
+    終於找到複製方法了。。。。
+    --> 改寫 projectk.py > outer() 之後好了。
+    
+[x] study how to run brainfuck interpreter
+    c:\Users\hcche\Documents\GitHub\ibrainfuck 
+    --> See Ynote __brainfuck_ 
 [x] 因 bug 發現 harry_port() 的更佳用法  （quit.f updated）
     \ Study 三寶
     \ 1. DOS Box title 
@@ -1852,5 +1873,52 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         # ---------------------------------------------------------------------------
         </text> -indent py: exec(pop(),harry_port()) # If only globals is given, locals defaults to it.
         </accept> dictate 
-   
+
+[ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help 
+    --> 唉，試了就知道，很醜！
+[x] msg is a forth value and also a peforth global.
+    blabla bla something wrong.
+    --> 不是因為繼承 JavaScript 的想法，object 與 dict 不分所造成的混淆。
+         (::) (:>) 都是中性的 obj :: methed 或 obj :: ['property'] 隨人自己
+         的認知而定，語法並無問題。
+[x] Ipeforth kernel for Jupyter is ok now. Bring peforth to
+    http://nbviewer.jupyter.org/
+    How to install Ipeforth kernel for jupyter notebook :
+    Copy kernel.json to here:
+        %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+        c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+    manually create the directory if 
+        %USERPROFILE%\AppData\Roaming\jupyter\kernels\
+    is not existing.
     
+[x] Tests before a Release  v1.13
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=False
+            Run setup.bat 做出取消 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [ ] no-selftest .s words exit 
+        [x] 2. python -i -m peforth version drop
+        [x] 3. python import peforth 
+               [x] selftest peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel% 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
+        [x] 考慮 README.rst 改良
+            [x] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+    [x] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=True
+            Run setup.bat 更新本地版本以供測試
+        [x] 1. python -i -m peforth [ ] with-selftest .s words exit bye
+        [x] 2. ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3. ipython import peforth .s words 
+               [x] selftest peforth.ok() .s words <--- w/parent
+               [x] 1234 bye check echo %errorlevel% 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
+        [x] 考慮 README.rst 改良 
+            [x] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+    [x] version 改成 1.14  (必須跳過 1.10 會變成 1.1）  
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。

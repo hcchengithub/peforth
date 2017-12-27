@@ -330,29 +330,47 @@ def outer(entry=None):
                         return;
                     comma(w);  # compile w into dictionary. w is a Word() object
         else:
-            try:
-                # token is a number
-                if token[:2] in ["0x","0X"]:
-                    n = int(token,base=16)
-                elif token[:2] in ["0o","0O"]:
-                    n = int(token,base=8)
-                elif token[:2] in ["0b","0B"]:
-                    n = int(token,base=2)
+            # token is unknown or number
+            # This line: f = float(token) makes problems try-except can not catch
+            def is_number(s):
+                # https://stackoverflow.com/questions/354038/how-do-i-check-if-a-string-is-a-number-float
+                try:
+                    complex(s) # for int, float and complex
+                except ValueError:
+                    return False
+                return True            
+            n = None  # 
+            if is_number(token):
+                # token is (int, float, complex) we ignore complex so far
+                f = complex(token).real
+                i = int(f)
+                if i==f: 
+                    n = i
                 else:
-                    f = float(token) # triggers exception if token is malformed
-                    i = int(f)
-                    if i==f: 
-                        n = i
+                    n = f
+            else: 
+                # token is unknown or (hex, oct, binary)
+                def panic_unknown():
+                    panic(
+                        "Error! "+token+" unknown.\n", 
+                        len(tib)-ntib>100  # error or warning? depends
+                    );
+                try:
+                    # token is a number
+                    if token[:2] in ["0x","0X"]:
+                        n = int(token,base=16)
+                    elif token[:2] in ["0o","0O"]:
+                        n = int(token,base=8)
+                    elif token[:2] in ["0b","0B"]:
+                        n = int(token,base=2)
                     else:
-                        n = f
+                        panic_unknown()
+                except Exception as err:
+                    panic_unknown()
+            if n != None :
                 push(n)
                 if (compiling):
                     execute("literal");
-            except:
-                panic(
-                    "Error! "+token+" unknown.", 
-                    len(tib)-ntib>100  # error or warning? depends
-                );
     if (entry):
         inner(entry, True);  # resume from the breakpoint 
     while(not stop):

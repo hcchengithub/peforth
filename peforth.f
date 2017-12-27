@@ -383,6 +383,7 @@ code (
         last().help = '( ' + a + b + ' ' 
     end-code immediate
     // ( <stack diagram> -- ) Get stack diagram to the last's help.  
+    /// Nested not allowed yet.
 code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
 code CR push("\\n|\\r") end-code // ( -- '\n|\r' ) RegEx new line, works with 'word' command.
 code word push(nexttoken(pop())) end-code
@@ -469,9 +470,10 @@ code exit
     if compiling: comma(EXIT) 
     else: vm.exit=True;
     end-code immediate
-    // ( -- ) Exit colon word when in colon definiton or exit ok() when in interpret state.
-    /// exit from *debug* which shells into ok() and continue.
-    /// Use 'exit stop' to completely terminate the interpreter
+    // ( -- ) Exit colon word when in colon definiton or raise flag to exit ok() shell loop.
+    /// exit from *debug*, which shells into ok(), and continue.
+    /// BTW, 'break-include' break including a .f file
+    /// 'exit break-include' break including a .f file and exit the ok() shell
     
 code ret comma(RET) end-code immediate compile-only
     // ( -- ) Mark at the end of a colon word.
@@ -1019,26 +1021,36 @@ code t>
 
 : __main__ ( -- module ) // Get __main__ module of this python session
     py> sys.modules['__main__'] ;
-    /// Examples:
     /// __main__ :> __file__ \ ==> C:\Users\morvanTUT\plt6_ax_setting2.py
-    /// s" dos title " __main__ :> __file__ + dictate 
-    /// drop \ drop the errorlevel 
+    /// s" dos title " __main__ :> __file__ + dictate drop \ change DOSBox title
+    /// __main__ :: x=123 \ Define main global variable
+    /// __main__ :: peforth.projectk.y=456 \ Define peforth global variable
+    /// __main__ :> np constant np // ( -- moduel ) numpy, see 'help import'
     
 : import ( <module> -- obj ) // Import the module
     BL word ( <module> )
     s" import {}" :> format(tos()) ( <module> "import <module>" )
     py: exec(pop())
     py> sys.modules[pop()] ( module ) ;
-    /// Introduce the the module to projectk kernel:
-    ///   import numpy constant np // ( -- numpy ) module object
-    ///   py: setattr(sys.modules['peforth'].projectk,'np',v('np'))
+    /// Introduce a module to global of peforth or the main program
+    /// 1. import numpy constant np // ( -- numpy ) module object, method #1
+    ///    py> sys.modules['numpy'] constant np // ( -- numpy ) method #2
+    ///    __main__ :> np constant np // ( -- numpy ) method #3
+    /// 2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
+    ///    np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
+    /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
     
-: modules ( <pattern> -- ) // List imported modules
+: modules ( <pattern> -- ) // List modules in memory
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
     if py>~ [i for i in sys.modules.keys() if i.find(tos())!=-1]
     nip else  py>~ [i for i in sys.modules.keys()]
     then py:~ for i in pop(): print(i,end=" ")
     cr ;
+    /// Use import <module name> to get the module object
+    /// Ex: import foobar constant foobar // ( -- obj ) The 'foobar' module
+    /// To avoid overkill of importing, instead with:
+    ///   1. char foobar py> sys.modules[pop()] ( module ) 
+    ///   2. py: setattr(sys.modules['foobar'].projectk,'foobar',v('foobar')) \ add to peforth
 
     <selftest>
     *** modules lists imported modules
@@ -1070,6 +1082,8 @@ code ASCII>char push(chr(pop())) end-code // ( ASCII -- 'c' ) ASCII or whatever 
                 /// 65 ASCII>char tib. \ ==> A (string)
                 \ https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
                 
+py> '\r\n' constant CRLF // ( -- '\r\n' ) leaves '\r\n' on TOS
+
 : ASCII         ( <str> -- ASCII ) // Get <str>[0]'s ASCII code.
                 BL word char>ASCII compiling if literal then
                 ; immediate
@@ -1091,15 +1105,16 @@ code .s
                 end-code
                 // ( ... -- ... ) Dump the data stack.
 
-: (*debug*)     ( "prompt" -- ... ) // FORTH breakpoint 
+: (*debug*)     ( "prompt" -- ... ) // FORTH breakpoint, 'exit' to continue.
                 py: ok(pop(),cmd="cr") ;
-                // ( msg -- ) Invoke python pdb debugger
-                
-: *debug*       ( <prompt> -- ... ) // FORTH breakpoint 
-                BL word ( prompt ) compiling if literal compile (*debug*)
-                else (*debug*) then ; immediate
                 /// How to invoke pdb when not locally imported:
                 /// py: sys.modules['pdb'].set_trace()
+
+                
+: *debug*       ( <prompt> -- ... ) // FORTH breakpoint, 'exit' to continue. 
+                BL word ( prompt ) compiling if literal compile (*debug*)
+                else (*debug*) then ; immediate
+                ' (*debug*) :> comment last :: comment=pop(1)
 
 code readTextFile 
                 pathname = pop()
