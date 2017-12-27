@@ -1,0 +1,9 @@
+{
+  "argv": [
+    "python",
+    "c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforthkernel.py",
+    "-f",
+    "{connection_file}"
+  ],
+  "display_name": "peforth"
+}
