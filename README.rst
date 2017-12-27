@@ -1,13 +1,12 @@
 peforth
 #######
 
-A programmable python debugger allows you to abruptly setup procedures to investigate your program code at a breakpoint.
-************************************************************************************************************************
+A programmable python debugger allows you to abruptly setup procedures to investigate your program code on the fly at a breakpoint.
+********************************************************************************************************************************************
 
 You guys know how to bebug already. We all do.
 But when it comes to Machine Learning and Tensorflow or the likes, 
-things are getting annoying if we were still using traditional debuggers.
-A programmable debugger is what in my mind and probably in yours too. 
+things are getting annoying. A programmable debugger is what in my mind and probably in yours too. 
 One breakpoint to investigate about everything with procedures that we
 come out at the point depend on variant needs of emerged ideas good or bad.
 
@@ -26,6 +25,17 @@ Install peforth
 ::
 
     pip install peforth 
+
+**Option**, you have ipython and jupyter installed already and you want peforth to support 
+`Jupyter Notebook`_.
+You do only a copy as shown below. If any target directory ``..\kernels\ or ..\peforth\``  is not existing you manually create them. Read this: `Linux Users`_.
+
+::
+
+    @rem This is for Windows 10 
+    copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+
+
 
 Run peforth:
 #############
@@ -274,13 +284,13 @@ example, and the usages of this programmable debugger.
 Have fun!
 *********
 
-- H.C. Chen, FigTaiwan
+- H.C. Chen, FigTaiwan, 2017.12.27
 - hcchen5600@gmail.com
 - Just undo it! 
-- 2017.10.8
 
 Edited by: `rst online editor`_
 
 .. _Wiki: https://github.com/hcchengithub/peforth/wiki
 .. _rst online editor: http://rst.ninjs.org
-
+.. _Jupyter Notebook: http://nbviewer.jupyter.org/
+.. _Linux Users: http://robl.co/brainfuck-ipython/

@@ -1868,28 +1868,40 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 不是因為繼承 JavaScript 的想法，object 與 dict 不分所造成的混淆。
          (::) (:>) 都是中性的 obj :: methed 或 obj :: ['property'] 隨人自己
          的認知而定，語法並無問題。
-[ ] Ipeforth kernel for Jupyter is ok now. Bring peforth to
+[x] Ipeforth kernel for Jupyter is ok now. Bring peforth to
     http://nbviewer.jupyter.org/
+    How to install Ipeforth kernel for jupyter notebook :
+    Copy kernel.json to here:
+        %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+        c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+    manually create the directory if 
+        %USERPROFILE%\AppData\Roaming\jupyter\kernels\
+    is not existing.
     
 [ ] Tests before a Release  v1.12
-    [ ] 所有 run 法帶 selftest 跑一遍
-        [ ] Run setup.bat 做出有 selftest 的 wheel 
-        [ ] pip uninstall peforth
-        [ ] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [ ] 1. python -i -m peforth [ ] selftest .s words exit 
-        [ ] 2. python -i -m peforth version drop
-        [ ] 3. python import peforth 
-                [x] selftest peforth.ok() .s words <--- no parent
-                [x] 1234 bye check echo %errorlevel% 
-    [ ] 所有 run 不帶 selftest 再跑一遍
-        [x] Run setup.bat 做出取消 selftest 的 wheel
-            注意！改的是 site-packages\peforth\quit.f 所以要
-            在 setup.bat 做 wheel 以前插入這個動作！！！！！
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=False
+            Run setup.bat 做出取消 selftest 的 wheel 
         [x] pip uninstall peforth
         [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [x] selftest .s words exit bye
-        [x] 2. python -i -m peforth .' Hello World!!' cr bye
+        [x] 1. python -i -m peforth [ ] no-selftest .s words exit 
+        [x] 2. python -i -m peforth version drop
         [x] 3. python import peforth 
-        [x] 考慮 README.rst 改良
-    [ ] version 改成 1.12  (必須跳過 1.10 會變成 1.1）  
+                [x] selftest peforth.ok() .s words <--- no parent
+                [x] 1234 bye check echo %errorlevel% 
+    [x] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=True
+            Run setup.bat 更新本地版本以供測試
+        [x] 1. python -i -m peforth [ ] with-selftest .s words exit bye
+        [x] 2. ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3. ipython import peforth .s words 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
+        [x] 考慮 README.rst 改良 
+            [x] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+    [x] version 改成 1.14  (必須跳過 1.10 會變成 1.1）  
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+    
     
