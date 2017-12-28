@@ -1922,3 +1922,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 --> quit.f selftest=False --> 重來
     [x] version 改成 1.14  (必須跳過 1.10 會變成 1.1）  
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+[x] 讓 jupyter feature peforth --> 已經加進 jupyter 的 kernel list:
+        https://github.com/jupyter/jupyter/wiki/Jupyter-kernels
