@@ -21,6 +21,14 @@ enough for new users, that's FORTH.
 
     pip install peforth 
 
+**Option**, if you have ipython and jupyter installed and you want peforth to support [Jupyter Notebook](http://nbviewer.jupyter.org/)
+do only a copy as shown below. If any target directory ``..\kernels\ or ..\peforth\``  is not existing you manually create them. Read this: [Linux Users](http://robl.co/brainfuck-ipython/).
+
+    @rem This is for Windows 10 
+    copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+
+and then edit the above ``...\jupyter\kernels\peforth\kernel.json`` text file to correct the path which is supposed to be  ``%USERPROFILE%\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py`` for example on my Windows 10 computer. 
+
 ### Run peforth:
 
 Print "Hello World!"
