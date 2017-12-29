@@ -36,6 +36,8 @@ You do only a copy as shown below. If any target directory ``..\kernels\ or ..\p
     copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
 
 
+and then edit the above ``...\jupyter\kernels\peforth\kernel.json`` text file to correct the path which is supposed to be  ``%USERPROFILE%\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py`` for example on my Windows 10 computer. 
+
 
 Run peforth:
 #############

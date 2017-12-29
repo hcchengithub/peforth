@@ -1,7 +1,7 @@
 {
   "argv": [
     "python",
-    "c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforthkernel.py",
+    "c:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\Lib\\site-packages\\peforth\\peforthkernel.py",
     "-f",
     "{connection_file}"
   ],
