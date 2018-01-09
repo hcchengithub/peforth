@@ -1924,3 +1924,41 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] 讓 jupyter feature peforth --> 已經加進 jupyter 的 kernel list:
         https://github.com/jupyter/jupyter/wiki/Jupyter-kernels
+
+
+[ ] Like harry_port that brings all wanted variables to peforth and to projectk
+    How to make it easier? 
+    [ ] Study when deep in a certain module, how peforth find and bring in
+        specified variables? 
+        1. debug the toy.. keras exercise, breakpoint deep in a keras module 
+        2. instead of using the trick of loc={**locals(),**{'foo':foo,'bar':bar}}
+           try to find foo,bar actual parent
+        3. access volatile variables out of their scope may not be a good idea
+           but being able to access them at a peforth breakpoint is necessary.
+           
+        tensor_shape is imported in C:\Users\hcche\AppData\Local\Programs\Python\Python36\Lib\site-packages\tensorflow\python\keras\_impl\keras\layers\wrappers.py
+                                                        
+        
+    
+    char input_shape <text> \ local variable
+    locals :> ['{0}'] constant {0}
+    __main__ :: peforth.projectk.{0}=v('{0}') 
+    </text> :> format(pop()) dictate
+
+    char tf <text> \ global variable
+    __main__ :> {0} constant {0}
+    __main__ :: peforth.projectk.{0}=v('{0}') 
+    </text> :> format(pop()) dictate
+
+    1. char foobar module ( module ) 
+    2. py: setattr(sys.modules['foobar'].projectk,'foobar',v('foobar')) \ add to peforth
+
+    1. import numpy constant np // ( -- numpy ) module object, method #1
+       py> sys.modules['numpy'] constant np // ( -- numpy ) method #2
+       __main__ :> np constant np // ( -- numpy ) method #3
+    2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
+       np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
+    3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
+
+
+    
