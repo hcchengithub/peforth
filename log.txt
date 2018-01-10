@@ -1937,8 +1937,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            but being able to access them at a peforth breakpoint is necessary.
            
         tensor_shape is imported in C:\Users\hcche\AppData\Local\Programs\Python\Python36\Lib\site-packages\tensorflow\python\keras\_impl\keras\layers\wrappers.py
-                                                        
-        
     
     char input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
@@ -1960,5 +1958,44 @@ peforth.main() # 從 python interpreter 切換進入 peforth
        np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
     3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
 
+    char child_input_shape <text> \ local variable
+    locals :> ['{0}'] constant {0}
+    __main__ :: peforth.projectk.{0}=v('{0}') 
+    </text> :> format(pop()) dictate
+    
+    char input_shape <text> \ local variable
+    locals :> ['{0}'] constant {0}
+    __main__ :: peforth.projectk.{0}=v('{0}') 
+    </text> :> format(pop()) dictate
 
+    char tensor_shape <text> \ local variable
+    locals :> ['{0}'] constant {0}
+    __main__ :: peforth.projectk.{0}=v('{0}') 
+    </text> :> format(pop()) dictate
+
+    char selfLayer <text> \ local variable
+    locals :> ['{0}'] constant {0}
+    __main__ :: peforth.projectk.{0}=v('{0}') 
+    </text> :> format(pop()) dictate
+
+    import peforth # [ ] _debug_
+    peforth.ok(cmd='''
+      0 value Count 
+      none value child_output_shape
+      exit
+      ''')
+    
+    try: 
+        child_output_shape = child_output_shape.as_list()
+    except Exception as err:
+        peforth.ok('33> ',loc={**locals(),**{'tensor_shape':tensor_shape,'self.layer':self.layer,'err':err}})
+    
+    locals :: pop('peforth') locals inport 
+    tensor_shape :> TensorShape(v('input_shape')).as_list() constant input_shape2
+    tensor_shape :> TensorShape([v('input_shape2')[0]]+v('input_shape2')[2:]) 
+        constant child_input_shape 
+    self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> (?, 2048) (<class 'tensorflow.python.framework.tensor_shape.TensorShape'>)
+    self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> (?, 2048) (<class 'tensorflow.python.framework.tensor_shape.TensorShape'>)
+    self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
+    self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
     
