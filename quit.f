@@ -163,7 +163,7 @@
 
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
-        py> sys.argv[0].endswith('.py') [if] 
+        py> sys.argv[0].endswith(('.py','.ipy','.ipynb')) [if] 
             \ ignore if running in jupyter notebook or the likes is suspected
             drop
         [else]
