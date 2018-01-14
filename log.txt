@@ -1796,6 +1796,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     
     : break-include ( -- ) // Break including .f file
         py: vm.ntib=len(tib) ;
+    stop 就是 reset()
+    exit 在 comiling 時是 EXIT==RET; 否則就是 vm.exit=True 而已，把 ok() 停下來。
 
 [x] peforth 可以用來幫 .py import modules
         py> os.getcwd() constant working-directory // ( -- "path" ) Tutorial home directory saved copy
