@@ -1964,6 +1964,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     locals :> ['{0}'] constant {0}
     __main__ :: peforth.projectk.{0}=v('{0}') 
     </text> :> format(pop()) dictate
+
+    \ make librosa a global in peforth
+    char librosa py> tick(tos()) execute py: globals()[pop()]=pop() 
+
+    \ even simpler way 
+    import librosa constant librosa char librosa librosa py: globals()[pop()]=pop()          
     
     char input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
@@ -2001,3 +2007,34 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
     
+[x] jupyter notebook 裡無法 exit , 每次 exit 都會留下一個東西在 stack 裡，出不去。
+    load>   exit
+    load> .s
+          0: <IPython.core.autocall.ZMQExitAutocall object at 0x0000020577BF5EF0> (<class 'IPython.core.autocall.ZMQExitAutocall'>)
+    load> 
+    --> 用 .py 比較看看 --> 沒這問題。
+    --> 直接進去，直接出來看看 --> 馬上卡住了。
+    --> 簡化 the peforth cell, 比較結果 ... 在 locals inport 之後多出一個 exit 
+        看起來還是原來的 exit 但多出來就是不對，而且 --- marker clean up 之後好了！
+        充分證明就是它。
+    --> 怎麼發生的？--> ipython case 下，當時的 locals() 就是有 exit quit 等一堆東西
+        正好 exit 撞上了，而 locals :> ['exit'] . cr --> <IPython.core.autocall.ZMQExitAutocall object at 0x000001DBB24B5EF0>
+        正是那個怪東西。 
+        RI
+        
+[ ] 最好 inport 能用挑的。程序如下：
+
+    load2> locals keys . cr
+        dict_keys(['__name__', '__doc__', '__package__', '__loader__', '__spec__', '__builtin__', '__builtins__', '_ih', '_oh', '_dh', 'In', 'Out', 'get_ipython', 'exit', 'quit', '_', '__', '___', '_i', '_ii', '_iii', '_i1', 'tf', '_i2', 'tflearn', '_i3', 'speech_data', '_i4', 'time', 'peforth', 'epoch_count', 'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 'classes', '_i5', 'batch', 'word_batch', '_i6', 'net', 'model', 'x', '_i7'])
+    \ 從裡面挑要用的東西 
+        <py> ['get_ipython', 'tflearn', 'speech_data', 'time', 'epoch_count', 
+         'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 
+         'classes', 'batch', 'word_batch', 'net', 'model', 'x']
+        </pyV> ( [挑過的keys] )
+    \ 從 locals 裡面挑這些東西出來
+        <py> dict([(k,v) for k,v in v('locals').items() if k in tos()])
+        </pyV> nip ( {挑過的locals} )
+    \ 可以放心地 inport 成 peforth words 了    
+        inport 
+            
+        
