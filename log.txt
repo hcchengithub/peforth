@@ -1714,6 +1714,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         __init__.py  __main__.py  projectk.py
     Solutions I found on Stackoverflow are bad, do it manually is fine.
     [x] A wiki page discusses this. done.
+    [ ] 有機會解掉了。Search my Ynote: "2018/01/17 16:39 插曲，意外發現查出 python 
+        的東西都放哪裡的方法了！peforth 在 Ubuntu 上跑可能有救了。_peforth_ 
+        _ubuntu_"
+        [ ] Study this : 
+        c:\Users\hcche\Documents\GitHub\DeepSpeech>py -m site
+        sys.path = [
+            'c:\\Users\\hcche\\Documents\\GitHub\\DeepSpeech',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\python36.zip',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\DLLs',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\win32',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\win32\\lib',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\Pythonwin',
+        ]
+        USER_BASE: 'C:\\Users\\hcche\\AppData\\Roaming\\Python' (doesn't exist)
+        USER_SITE: 'C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages' (doesn't exist)
+        ENABLE_USER_SITE: True
+        c:\Users\hcche\Documents\GitHub\DeepSpeech>        
     
 [ ] 從 c:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tf17_dropout\full_code-2.py 
     裡，開發 harry_port() 的經驗看來，有了這麼強大的工具之後，用它臨時定義出來的 
