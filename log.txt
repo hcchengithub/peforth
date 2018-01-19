@@ -2056,5 +2056,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         </pyV> nip ( {挑過的locals} )
     \ 可以放心地 inport 成 peforth words 了    
         inport 
-            
+           
+[ ] python virtualenv http://docs.python-guide.org/en/latest/dev/virtualenvs/  
+    解決的問題也是 FORTH 的問題，參考人家怎麼解的，可以想想怎麼沿用。
         
