@@ -2059,7 +2059,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            
 [ ] python virtualenv http://docs.python-guide.org/en/latest/dev/virtualenvs/  
     解決的問題也是 FORTH 的問題，參考人家怎麼解的，可以想想怎麼沿用，看如何只 include 必要的東西。
-[ ] Ubuntu 的問題好像有解了, 
+[x] Ubuntu 的問題好像有解了, 
 	--> Ubuntu 之下
 	OK site :> USER_BASE . cr  不存在！ 
 	/home/hcchen5600/.local    
@@ -2125,22 +2125,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	-- windows --
 	OK os :> name . cr
 	nt
+	[ ] 有了這個 solution 連 jupyter peforth kernel 的 install 都可以自動化了。
 [ ] Ubuntu 的問題應該已經解決了，要推廣 peforth 必須趕快 release
 	Tests before a Release  v1.14
     [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [ ] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
             ' <selftest> :: enabled=False
             Run setup.bat 做出取消 selftest 的 wheel 
-        [ ] pip uninstall peforth
-        [ ] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [ ] 1. python -i -m peforth [ ] no-selftest .s words exit 
-        [ ] 2. python -i -m peforth version drop
-        [ ] 3. python import peforth 
-               [ ] selftest peforth.ok() .s words <--- no parent
-               [ ] 1234 bye check echo %errorlevel% 
-        [ ] 4. jupyter notebook --> .s cd help bye .s cd help exit 
-        [ ] 考慮 README.rst 改良
-            [ ] 若有改過 README.rst 則 wheel 就要重做 
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit 
+        [x] 2. python -i -m peforth version drop
+        [x] 3. python import peforth 
+               [x] selftest peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel% 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [x] 5. repeat 以上 in ubuntu
+			   --> copy the wheel to WSL ubuntu 
+			   --> use virtualenv is fine
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做 
                 --> quit.f selftest=False --> 重來
     [ ] 所有 run 法帶 selftest：
         [ ] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
@@ -2155,5 +2159,20 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [ ] 考慮 README.rst 改良 
             [ ] 若有改過 README.rst 則 wheel 就要重做 
                 --> quit.f selftest=False --> 重來
-    [ ] version 改成 1.14  (必須跳過 1.10 會變成 1.1）  
+    [x] version 改成 1.15  (必須跳過 1.10 會變成 1.1）  
+	[ ] 直接用測過的 wheel update Pypi 
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+
+[x] WSL Ubuntu virtualenv weired experience
+	when pip install peforth in a virtualenv --> permission denied 
+	--> so I use sudo and this will success but peforth will be installed
+		to global instead of the virtualenv! see https://stackoverflow.com/questions/14665330/pip-requirement-already-satisfied
+	--> The reason why permission denied was peforth-1.14-py3-none-any.whl which
+		was copied by windows and it needs chmod 777 
+		\ see the correct example below:
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$ chmod 777 peforth-1.14-py3-none-any.whl
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$ pip install peforth-1.14-py3-none-any.whl
+		Processing ./peforth-1.14-py3-none-any.whl
+		Installing collected packages: peforth
+		Successfully installed peforth-1.14
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$	
