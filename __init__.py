@@ -1,5 +1,4 @@
-import sys
-import pdb
+import sys,os,site,pdb
 
 if __package__:
     # peforth is imported as a package
@@ -53,14 +52,25 @@ vm.writeTextFile = writeTextFile
 #   'peforth\\__main__.py' when run by "python peforth" from ..\peforth
 #   'C:\\...\\peforth\\__main__.py' when double click __main__.py or python -m peforth
 #   'C:\\...\\peforth\\__init__.py' when double click __init__.py or import peforth
-if __file__.find('__init__.py')==-1:
-    # __main__.py
-    path = __file__.split('__main__.py')[0]
-    path = (path and [path] or ['.\\'])[0]
+# if __file__.find('__init__.py')==-1:
+#     # __main__.py
+#     path = __file__.split('__main__.py')[0]
+#     path = (path and [path] or ['.\\'])[0]
+# else:
+#     # __init__.py
+#     path = __file__.split('__init__.py')[0]
+#     path = (path and [path] or ['.\\'])[0]
+path = site.PREFIXES[0]  # [0] or [1] are of the same as I see
+if path == '/usr':
+	# Linux global (not virtualenv)
+	path += '/local/lib/site-packages/peforth/'
 else:
-    # __init__.py
-    path = __file__.split('__init__.py')[0]
-    path = (path and [path] or ['.\\'])[0]
+	if os.name == 'nt':
+		# Windows
+		path += '\\lib\\site-packages\\peforth\\'
+	else:
+		# Linux virtualenv
+		path += '/lib/site-packages/peforth/'
 vm.path = path
 
 # Get version code from peforth/version.txt for whl package

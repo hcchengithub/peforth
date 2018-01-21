@@ -1039,8 +1039,12 @@ code t>
     /// 2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
     ///    np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
     /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
+
+: module ( 'name' -- module ) // Get the module object from sys.modules
+    py> sys.modules[pop()] ;
+    /// __main__ :> foo char foo module = \ may be false
     
-: modules ( <pattern> -- ) // List modules in memory
+: modules ( <pattern> -- ) // Get modules that are in memory
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
     if py>~ [i for i in sys.modules.keys() if i.find(tos())!=-1]
     nip else  py>~ [i for i in sys.modules.keys()]
@@ -1049,7 +1053,7 @@ code t>
     /// Use import <module name> to get the module object
     /// Ex: import foobar constant foobar // ( -- obj ) The 'foobar' module
     /// To avoid overkill of importing, instead with:
-    ///   1. char foobar py> sys.modules[pop()] ( module ) 
+    ///   1. char foobar module ( module ) 
     ///   2. py: setattr(sys.modules['foobar'].projectk,'foobar',v('foobar')) \ add to peforth
 
     <selftest>

@@ -147,9 +147,7 @@
     : cd            ( <path> -- ) // Mimic DOS cd command
                 CR word ?dup if py: os.chdir(pop())
                 else py> os.getcwd() . cr then ;
-                /// Use 'dos' command can do the same thing.
-                /// Ex. 'dos dir', 'dos cd', and all other dos commands.
-                /// But 'dos cd ..' does not work while 'cd ..' works fine.
+                /// Use 'dos' command can NOT do chdir, different shell.
                 /// See also: os.chdir('path'); path=os.getcwd()
 
                 
@@ -159,7 +157,7 @@
 
 \ Do selftest or run command-line
     
-    ' <selftest> :: enabled=True \ Master switch of selftest, True:on or False:off
+    ' <selftest> :: enabled=False \ Master switch of selftest, True:on or False:off
 
     py> vm.commandline trim ( commandLine ) 
     ?dup [if] 
