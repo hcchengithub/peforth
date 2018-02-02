@@ -2181,3 +2181,34 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 		Installing collected packages: peforth
 		Successfully installed peforth-1.14
 		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$	
+[ ] v1.14 on Ubuntu ipython still failed, message:
+        143         except error as e:
+        144             if mod_name not in sys.modules:
+
+    /usr/lib/python3.6/runpy.py in _get_module_details(mod_name, error)
+        107         # Try importing the parent to avoid catching initialization errors
+        108         try:
+    --> 109             __import__(pkg_name)
+        110         except ImportError as e:
+        111             # If the parent or higher ancestor package is missing, let the
+
+    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in <module>()
+         76 # Get version code from peforth/version.txt for whl package
+         77 # to see the single source of version code.
+    ---> 78 exec(readTextFile(path + "version.txt"),{},locals())
+         79 vm.version = __version__
+         80 def greeting():
+
+    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
+         33
+         34 def readTextFile(pathname):
+    ---> 35     f = open(pathname,'r',encoding='utf-8')
+         36     # for line in f:
+         37     s = f.read()
+
+    FileNotFoundError: [Errno 2] No such file or directory: '/usr/local/lib/site-packages/peforth/version.txt'
+    /usr/local/lib/python3.6/dist-packages/IPython/core/interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
+      warn('Unknown failure executing module: <%s>' % mod_name)
+
+    In [1]:        
+    
