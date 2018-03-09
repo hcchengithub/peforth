@@ -2211,4 +2211,36 @@ peforth.main() # 從 python interpreter 切換進入 peforth
       warn('Unknown failure executing module: <%s>' % mod_name)
 
     In [1]:        
-    
+[ ] README.md needs to improve the installation guide for jupyter notebook support
+    Install peforth kernel for Jupyter Notebook
+
+    If you have ipython and jupyter installed, do following steps to add peforth 
+    as a kernel of Jupyter Notebook,
+
+
+    Install peforth kernel for Jupyter Notebook
+
+    1. install peforth
+
+    pip install peforth
+
+    2. 
+    copy 
+    c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\kernel.json 
+    到 
+    c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+    如果上面的 target 目錄 kernels\ 或 peforth\ 不存在，則請手動建立這些目錄
+
+    3.
+    編輯剛才這個檔案
+    c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+    照您的電腦實際情況，訂正其中的這個 path 
+    c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py 
+    以上是我的電腦的範例
+
+
+    Read this: Linux Users.
+
+    @rem This is for Windows 10 
+    copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json 
+    %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
