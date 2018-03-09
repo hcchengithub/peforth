@@ -2211,6 +2211,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
       warn('Unknown failure executing module: <%s>' % mod_name)
 
     In [1]:        
+
+    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
+        sudo pip3 install ipython
+        灌起來的 ipython, 是這個原因嗎？
+
 [ ] README.md needs to improve the installation guide for jupyter notebook support
     Install peforth kernel for Jupyter Notebook
 
