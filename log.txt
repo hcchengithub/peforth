@@ -1715,6 +1715,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         __init__.py  __main__.py  projectk.py
     Solutions I found on Stackoverflow are bad, do it manually is fine.
     [x] A wiki page discusses this. done.
+    [ ] 有機會解掉了。Search my Ynote: "2018/01/17 16:39 插曲，意外發現查出 python 
+        的東西都放哪裡的方法了！peforth 在 Ubuntu 上跑可能有救了。_peforth_ 
+        _ubuntu_"
+        [ ] Study this : 
+        c:\Users\hcche\Documents\GitHub\DeepSpeech>py -m site
+        sys.path = [
+            'c:\\Users\\hcche\\Documents\\GitHub\\DeepSpeech',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\python36.zip',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\DLLs',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\win32',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\win32\\lib',
+            'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\Pythonwin',
+        ]
+        USER_BASE: 'C:\\Users\\hcche\\AppData\\Roaming\\Python' (doesn't exist)
+        USER_SITE: 'C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages' (doesn't exist)
+        ENABLE_USER_SITE: True
+        c:\Users\hcche\Documents\GitHub\DeepSpeech>        
     
 [ ] 從 c:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tf17_dropout\full_code-2.py 
     裡，開發 harry_port() 的經驗看來，有了這麼強大的工具之後，用它臨時定義出來的 
@@ -1840,7 +1860,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     (Pdb) sys.argv[0]
     'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py'
     (Pdb) sys.argv[0].endswith('ipykernel_launcher.py') --> True , the key to know about the case
-
+	
+	跑 jupyter notebook 又發生 Error! -f unknown. 的問題。先前是因為
+	jupyter notebook 下 import peforth 會有 unexpected command line 如上。
+	這不是改好了嗎？ --> 光排除 py> sys.argv[0].endswith('.py') 不夠
+	py> sys.argv[0].endswith(('.py','.ipy','.ipynb'))
+	
 [x] itchat 執行中，常有這個問題發生：
     Traceback (most recent call last):
       File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
@@ -1929,7 +1954,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         https://github.com/jupyter/jupyter/wiki/Jupyter-kernels
 
 
-[ ] Like harry_port that brings all wanted variables to peforth and to projectk
+[ ] Like harry_port that brings all wanted variables to projectk
     How to make it easier? 
     [ ] Study when deep in a certain module, how peforth find and bring in
         specified variables? 
@@ -1951,20 +1976,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     __main__ :: peforth.projectk.{0}=v('{0}') 
     </text> :> format(pop()) dictate
 
-    1. char foobar module ( module ) 
+  * 1. char foobar module ( module ) 
     2. py: setattr(sys.modules['foobar'].projectk,'foobar',v('foobar')) \ add to peforth
 
-    1. import numpy constant np // ( -- numpy ) module object, method #1
+  * 1. import numpy constant np // ( -- numpy ) module object, method #1
        py> sys.modules['numpy'] constant np // ( -- numpy ) method #2
        __main__ :> np constant np // ( -- numpy ) method #3
     2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
        np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
-    3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
+  * 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
 
     char child_input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
     __main__ :: peforth.projectk.{0}=v('{0}') 
     </text> :> format(pop()) dictate
+
+    \ make librosa a global in peforth
+    char librosa py> tick(tos()) execute py: globals()[pop()]=pop() 
+
+    \ even simpler way 
+    import librosa constant librosa char librosa librosa py: globals()[pop()]=pop()          
     
     char input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
@@ -2001,5 +2032,222 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> (?, 2048) (<class 'tensorflow.python.framework.tensor_shape.TensorShape'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
-[ ] 14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
     
+[x] jupyter notebook 裡無法 exit , 每次 exit 都會留下一個東西在 stack 裡，出不去。
+    load>   exit
+    load> .s
+          0: <IPython.core.autocall.ZMQExitAutocall object at 0x0000020577BF5EF0> (<class 'IPython.core.autocall.ZMQExitAutocall'>)
+    load> 
+    --> 用 .py 比較看看 --> 沒這問題。
+    --> 直接進去，直接出來看看 --> 馬上卡住了。
+    --> 簡化 the peforth cell, 比較結果 ... 在 locals inport 之後多出一個 exit 
+        看起來還是原來的 exit 但多出來就是不對，而且 --- marker clean up 之後好了！
+        充分證明就是它。
+    --> 怎麼發生的？--> ipython case 下，當時的 locals() 就是有 exit quit 等一堆東西
+        正好 exit 撞上了，而 locals :> ['exit'] . cr --> <IPython.core.autocall.ZMQExitAutocall object at 0x000001DBB24B5EF0>
+        正是那個怪東西。 
+        RI
+        
+[ ] 最好 inport 能用挑的。程序如下：
+
+    load2> locals keys . cr
+        dict_keys(['__name__', '__doc__', '__package__', '__loader__', '__spec__', '__builtin__', '__builtins__', '_ih', '_oh', '_dh', 'In', 'Out', 'get_ipython', 'exit', 'quit', '_', '__', '___', '_i', '_ii', '_iii', '_i1', 'tf', '_i2', 'tflearn', '_i3', 'speech_data', '_i4', 'time', 'peforth', 'epoch_count', 'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 'classes', '_i5', 'batch', 'word_batch', '_i6', 'net', 'model', 'x', '_i7'])
+    \ 從上表裡面挑要用的東西 
+        <py> ['get_ipython', 'tflearn', 'speech_data', 'time', 'epoch_count', 
+         'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 
+         'classes', 'batch', 'word_batch', 'net', 'model', 'x']
+        </pyV> ( [挑過的keys] )
+    \ 從 locals 裡面挑這些東西出來
+        <py> dict([(k,v) for k,v in v('locals').items() if k in tos()])
+        </pyV> nip ( {挑過的locals} )
+    \ 可以放心地 inport 成 peforth words 了    
+        inport 
+           
+[ ] python virtualenv http://docs.python-guide.org/en/latest/dev/virtualenvs/  
+    解決的問題也是 FORTH 的問題，參考人家怎麼解的，可以想想怎麼沿用，看如何只 include 必要的東西。
+[x] Ubuntu 的問題好像有解了, 
+	--> Ubuntu 之下
+	OK site :> USER_BASE . cr  不存在！ 
+	/home/hcchen5600/.local    
+	OK site :> USER_SITE . cr  不存在！
+	/home/hcchen5600/.local/lib/python3.6/site-packages
+	OK site :> PREFIXES . cr
+	['/usr', '/usr']
+	實際東西放在 
+	site.PREFIXES[0] + /local/lib/site-packages/peforth/	
+
+	--> windows 
+	OK site :> USER_BASE . cr  不存在！
+	C:\Users\hcche\AppData\Roaming\Python
+	OK site :> USER_SITE . cr  不存在！
+	C:\Users\hcche\AppData\Roaming\Python\Python36\site-packages
+	OK site :> PREFIXES . cr
+	['C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36', 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36']
+	實際東西放在 
+	site.PREFIXES[0] + /lib/site-packages/peforth/	
+
+	--> Ubuntu virtualenv 
+	>>> import site
+	>>> site.PREFIXES
+	['/home/hcchen5600/GitHub/DeepSpeech', '/home/hcchen5600/GitHub/DeepSpeech']
+	>>> site.USER_BASE
+	'/home/hcchen5600/.local'
+	>>> site.USER_SITE
+	'/home/hcchen5600/.local/lib/python3.6/site-packages'
+	實際東西放在
+	site.PREFIXES[0] + /lib/site-packages/peforth/
+	也就是
+	\rootfs\home\hcchen5600\GitHub\DeepSpeech\lib\site-packages\peforth\.. 
+
+	\ Windows 下可 normalize the path
+	照上面實施， windows 下變成
+	OK py> path . cr
+	C:\Users\hcche\AppData\Local\Programs\Python\Python36/lib/site-packages/peforth/
+	\ 這可以用 ntpath.normpath() 解決
+	OK import ntpath
+	OK constant ntpath
+	OK ntpath dir . cr
+	['__all__', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__spec__', '_get_bothseps', '_getfinalpathname', '_getfullpathname', '_getvolumepathname', 'abspath', 'altsep', 'basename', 'commonpath', 'commonprefix', 'curdir', 'defpath', 'devnull', 'dirname', 'exists', 'expanduser', 'expandvars', 'extsep', 'genericpath', 'getatime', 'getctime', 'getmtime', 'getsize', 'isabs', 'isdir', 'isfile', 'islink', 'ismount', 'join', 'lexists', 'normcase', 'normpath', 'os', 'pardir', 'pathsep', 'realpath', 'relpath', 'samefile', 'sameopenfile', 'samestat', 'sep', 'split', 'splitdrive', 'splitext', 'splitunc', 'stat', 'supports_unicode_filenames', 'sys']
+	OK ntpath :> normpath . cr
+	<function normpath at 0x000001C511337E18>
+	OK ntpath :> normpath py: help(pop())
+	Help on function normpath in module ntpath:
+
+	normpath(path)
+		Normalize path, eliminating double slashes, etc.
+
+	OK py> path ntpath :> normpath(pop()) . cr
+	C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth
+	OK	
+	\ 或者檢查看是否 Windows
+	In [8]: sys.modules.get('nt') <--- None 就是沒有，就不是 windows
+	In [9]: sys.modules.get('sys')
+	Out[9]: <module 'sys' (built-in)>
+	In [10]:
+	\ 更好的方法, yeah! this is it.
+	-- ubuntu --
+	In [12]: os.name
+	Out[12]: 'posix'
+	-- windows --
+	OK os :> name . cr
+	nt
+	[ ] 有了這個 solution 連 jupyter peforth kernel 的 install 都可以自動化了。
+[ ] Ubuntu 的問題應該已經解決了，要推廣 peforth 必須趕快 release
+	Tests before a Release  v1.14
+    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=False
+            Run setup.bat 做出取消 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit 
+        [x] 2. python -i -m peforth version drop
+        [x] 3. python import peforth 
+               [x] selftest peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel% 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [x] 5. repeat 以上 in ubuntu
+			   --> copy the wheel to WSL ubuntu 
+			   --> use virtualenv is fine
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+    [ ] 所有 run 法帶 selftest：
+        [ ] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=True
+            Run setup.bat 更新本地版本以供測試
+        [ ] 1. python -i -m peforth [ ] with-selftest .s words exit bye
+        [ ] 2. ipython -i -m peforth .' Hello World!!' cr bye
+        [ ] 3. ipython import peforth .s words 
+               [ ] selftest peforth.ok() .s words <--- w/parent
+               [ ] 1234 bye check echo %errorlevel% 
+        [ ] 4. jupyter notebook --> .s cd help bye .s cd help exit 
+        [ ] 考慮 README.rst 改良 
+            [ ] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+    [x] version 改成 1.15  (必須跳過 1.10 會變成 1.1）  
+	[ ] 直接用測過的 wheel update Pypi 
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+
+[x] WSL Ubuntu virtualenv weired experience
+	when pip install peforth in a virtualenv --> permission denied 
+	--> so I use sudo and this will success but peforth will be installed
+		to global instead of the virtualenv! see https://stackoverflow.com/questions/14665330/pip-requirement-already-satisfied
+	--> The reason why permission denied was peforth-1.14-py3-none-any.whl which
+		was copied by windows and it needs chmod 777 
+		\ see the correct example below:
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$ chmod 777 peforth-1.14-py3-none-any.whl
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$ pip install peforth-1.14-py3-none-any.whl
+		Processing ./peforth-1.14-py3-none-any.whl
+		Installing collected packages: peforth
+		Successfully installed peforth-1.14
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$	
+[ ] v1.14 on Ubuntu ipython still failed, message:
+        143         except error as e:
+        144             if mod_name not in sys.modules:
+
+    /usr/lib/python3.6/runpy.py in _get_module_details(mod_name, error)
+        107         # Try importing the parent to avoid catching initialization errors
+        108         try:
+    --> 109             __import__(pkg_name)
+        110         except ImportError as e:
+        111             # If the parent or higher ancestor package is missing, let the
+
+    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in <module>()
+         76 # Get version code from peforth/version.txt for whl package
+         77 # to see the single source of version code.
+    ---> 78 exec(readTextFile(path + "version.txt"),{},locals())
+         79 vm.version = __version__
+         80 def greeting():
+
+    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
+         33
+         34 def readTextFile(pathname):
+    ---> 35     f = open(pathname,'r',encoding='utf-8')
+         36     # for line in f:
+         37     s = f.read()
+
+    FileNotFoundError: [Errno 2] No such file or directory: '/usr/local/lib/site-packages/peforth/version.txt'
+    /usr/local/lib/python3.6/dist-packages/IPython/core/interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
+      warn('Unknown failure executing module: <%s>' % mod_name)
+
+    In [1]:        
+
+    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
+        sudo pip3 install ipython
+        灌起來的 ipython, 是這個原因嗎？
+
+[ ] README.md needs to improve the installation guide for jupyter notebook support
+    Install peforth kernel for Jupyter Notebook
+
+    If you have ipython and jupyter installed, do following steps to add peforth 
+    as a kernel of Jupyter Notebook,
+
+
+    Install peforth kernel for Jupyter Notebook
+
+    1. install peforth
+
+    pip install peforth
+
+    2. 
+    copy 
+    c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\kernel.json 
+    到 
+    c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+    如果上面的 target 目錄 kernels\ 或 peforth\ 不存在，則請手動建立這些目錄
+
+    3.
+    編輯剛才這個檔案
+    c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+    照您的電腦實際情況，訂正其中的這個 path 
+    c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py 
+    以上是我的電腦的範例
+
+
+    Read this: Linux Users.
+
+    @rem This is for Windows 10 
+    copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json 
+    %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
+[ ] 14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade

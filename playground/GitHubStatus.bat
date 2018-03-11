@@ -23,9 +23,14 @@
             dos git status
             drop cd ..
             cr cr
-            \ .( Enter to continue ) accept drop
         py> len(tos()) not [until] drop
-
+		os :> getenv('USERPROFILE')+'\\Documents\\GitHub\\jeforth\\jeforth.3we'
+		os :: chdir(pop())
+		cd
+		dos git status
+		drop 
+        os :> getenv('USERPROFILE')+'\\Documents\\GitHub' os :: chdir(pop())
+		cr cr
 
     \ The end
 
