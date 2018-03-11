@@ -1,7 +1,7 @@
 __author__ = 'hcchen'
 
-from ipykernel.kernelbase import Kernel
 import peforth
+from ipykernel.kernelbase import Kernel
 
 class peforthKernel(Kernel):
     implementation = 'peforth'

@@ -153,4 +153,22 @@ tib         = vm.tib
 tos         = vm.tos
 words       = vm.words
     
+
+##### Setup peforth magic command %f ##### 
+from IPython.core.magic import register_line_cell_magic
+
+# Define peforth magic command, %f.
+@register_line_cell_magic
+def f(line, cell=None):
+    if cell is None:
+        vm.dictate(line)
+    else:
+        vm.dictate(cell)
+        
+# Register auto '%load_ext peforth' at an ipython session
+def load_ipython_extension(ipython):
+    ipython.register_magic_function(f, 'line_cell')  
+    # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
+
 ##### End of peforth __init__.py ###############
+
