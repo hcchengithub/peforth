@@ -557,5 +557,6 @@ def push(data=None, index=None):
         stack.append(data); 
     else:
         stack.insert(len(stack)-1-index,data);
+    return(vm) # support function cascade
 
 # ---- end of projectk.py ----

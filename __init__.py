@@ -132,7 +132,25 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
             vm.exit = False # Avoid exit immediately when called again
             break
     return(vm) # support function cascade
-            
-vm.ok = ok
+vm.ok = ok  # invoke REPL from within REPL, I don't know if we need this.
 
+# Aliases that make it easier to access project-k methods and properties
+# So we can use peforth.dictate(), peforth.execute(), and peforth.push() directly
+# instead of peforth.vm.dictate(), peforth.vm.execute(), and peforth.vm.push().
+dictate     = vm.dictate
+execute     = vm.execute
+push        = vm.push    
+debug       = vm.debug
+dictionary  = vm.dictionary
+ntib        = vm.ntib
+pop         = vm.pop
+reset       = vm.reset
+rpop        = vm.rpop
+rstack      = vm.rstack
+rtos        = vm.rtos
+stack       = vm.stack
+tib         = vm.tib
+tos         = vm.tos
+words       = vm.words
+    
 ##### End of peforth __init__.py ###############

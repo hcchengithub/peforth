@@ -2250,4 +2250,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     @rem This is for Windows 10 
     copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json 
     %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-[ ] 14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
+[x] peforth.vm.things 的 peforth.things alias
+    14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
+    19:22 2018/03/11 除了以上，連 stack, push, words, ... etc 都加上去了。
+    
