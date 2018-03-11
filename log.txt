@@ -1187,7 +1187,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         2. 現成的 tool, forth 可以記住很多命令, 複雜的 command 可以臨時組合而成
                 
 [x] peforth 既然可以是個 python debug 學習工具，拿 peforth 來當 breakpoint 就要盡量簡單。
-    --> peforth.main() renamed to peforth.ok()
+    --> The REPL, peforth.main(), renamed to peforth.ok()
+        REPL, or Read-Eval-Print-Loop.
     --> peforth.ok(prompt='OK ',loc={}) for user to specify the prompt and giving the locals
         at the moment.
     --> at the point ok() started, TOS is the tuple with information from the caller.
@@ -2000,4 +2001,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> (?, 2048) (<class 'tensorflow.python.framework.tensor_shape.TensorShape'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
+[ ] 14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
     

@@ -121,6 +121,8 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
         if vm.exit:
             vm.exit = False # Avoid exit immediately when called again
             break
+    return(vm) # support function cascade
+            
 vm.ok = ok
 
 ##### End of peforth __init__.py ###############

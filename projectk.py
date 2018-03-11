@@ -9,11 +9,12 @@ import re    # import whatever we want, don't rely on parent module
 import pdb
 import os
 import sys
-import inspect
-import dis   # dis.dis(func) 
+import inspect  # print (inspect.getsource(func))
+import dis      # dis.dis(func) 
 import json
 
 name = "peforth"
+vm = __import__(__name__)
 major_version = 1;  # major version, peforth.py kernel version, integer.
 ip = 0;
 stack = [] ;
@@ -278,6 +279,7 @@ def execute(entry):
             panic("Error! please use inner("+w+") instead of execute("+w+").\n","severe");
         else:
             phaseB(w); 
+            return(vm) # support function cascade
     else:
         panic(entry + " unknown!")
 
@@ -495,6 +497,7 @@ def dictate(input):
     tib = tibwas;
     ntib = ntibwas;
     ip = ipwas;
+    return(vm) # support function cascade
 # -------------------- end of main() -----------------------------------------
 
 # Top of Stack access easier. ( tos(2) tos(1) tos(void|0) -- ditto )
