@@ -2182,40 +2182,116 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 		Installing collected packages: peforth
 		Successfully installed peforth-1.14
 		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$	
-[ ] v1.14 on Ubuntu ipython still failed, message:
-        143         except error as e:
-        144             if mod_name not in sys.modules:
+[x] peforth.vm.things 的 peforth.things alias
+    14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
+    19:22 2018/03/11 除了以上，連 stack, push, words, ... etc 都加上去了。
+[x] %f magic command 暫無 auto-load, 必須 import peforth 才有 --> 解決了，雖然這樣也好。
+    "c:\Users\hcche\OneDrive\文件\Jupyter Notebooks\Creating an IPython extension with custom magic commands.ipynb" 
+    討論複製過來如下:
+    [x] 如上述加上 c.InteractiveShellApp.extensions = ["c:\\Users\\hcche\\Downloads\\csvmagic.py"] 之後，無效。參考 [stackoverflow](https://stackoverflow.com/questions/27483637/auto-reload-extension-not-reloading-on-change) 學到用 '%load_ext c:\\Users\\hcche\\Downloads\\csvmagic.py' 在 jupyter notebook 或 ipython 中試試看 . . . 果然是 path 寫法的問題。照以上範例, csvmagic.py 位在 current directory 直接 '%load_ext csvmagic' 就可以了。如果不在 crrent directory 那就是要 importable 則手動放到 site-packages 去亦可，討論如下。
+    [x] 又或者必須是個 -m 搆得著的 module? 對了！上述的 importable 就是這個意思。--> 手動放進 site-packages (檔名改成 __init__.py) 就 importable 了，試試看 --> 成功！但是必須跑過 '%load_ext csvmagic' 之後才有 %%csv 不會自動 load。
+        [x] 而且 import csvmagic 也無效；然而經過以下正確安排之後 import peforth 有效，不知何故？
+    [x] 如何自動 load 應該跟 peforth 的 install 方式類似，這表示 csvmagic.py 所做的工作要由 `GitHub\peforth\peforthkernel.py` 來完成 (錯！要由 peforth 的 `__init__.py` 來負責)。其中 peforth %f 具有 line magic 與 cell magic 雙重腳色，該怎麼寫？看這裡：http://ipython.readthedocs.io/en/stable/config/custommagics.html
+        # from IPython.core.magic import (register_line_magic, register_cell_magic)
+        # @register_line_magic
+        # def f(line):
+        #     peforth.vm.dictate(line)   
+        # 
+        # @register_cell_magic
+        # def f(line, cell):
+        #     peforth.vm.dictate(cell)
+            
+        from IPython.core.magic import register_line_cell_magic
+        @register_line_cell_magic
+        def f(line, cell=None):
+            if cell is None:
+                peforth.vm.dictate(line)
+            else:
+                peforth.vm.dictate(cell)
 
-    /usr/lib/python3.6/runpy.py in _get_module_details(mod_name, error)
-        107         # Try importing the parent to avoid catching initialization errors
-        108         try:
-    --> 109             __import__(pkg_name)
-        110         except ImportError as e:
-        111             # If the parent or higher ancestor package is missing, let the
+        def load_ipython_extension(ipython):
+            ipython.register_magic_function(f, 'line_cell')  
+            # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
-    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in <module>()
-         76 # Get version code from peforth/version.txt for whl package
-         77 # to see the single source of version code.
-    ---> 78 exec(readTextFile(path + "version.txt"),{},locals())
-         79 vm.version = __version__
-         80 def greeting():
-
+    [x] (錯!) 放進 GitHub\peforth\peforthkernel.py
+    [x] (錯!) copy 到 c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json 所指到的位置："c:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\Lib\\site-packages\\peforth\\peforthkernel.py"
+    [x] 重新啟動 jupyter notebook --> 結果無效, 這表示上面這段 code 沒有被執行到。可能放在 GitHub\peforth\peforthkernel.py 不對(確定不對)，也可能另有某個 .json 要指對地方。看 document 吧! --> 已知！c.InteractiveShellApp.extensions = ['peforth'] 就這行，所以上面這段要放在 peforth 的 __init__.py 才對 (對了)--> 再試試看 ... 還是無效，必須 import peforth 才行。目前這樣可以滿意了。
+    [x] 我猜是 c.InteractiveShellApp.extensions = ['csvmagic','peforth'] 所在的 
+        profile_default\ipython_config.py 整個都無效之故。先前嘗試 "28 Jupyter 
+        Notebook tips, tricks and shortcuts" 該檔的另一個設定也是無效。從 path 裡
+        有個 /test/ 看來，可能不是正確的檔案。--> 由 %f get_ipython :> ().ipython_dir 
+        . cr 得知正確的位置是：`C:\Users\hcche\.ipython` 才對，也就是 
+        `C:\Users\hcche\.ipython\profile_default\ipython_config.py` --> 試試看，
+        有沒有自動 load_ext . . . 有了！剛改好 `profile_default\ipython_config.py` 
+        就馬上對新開的 jupyter notebook 有效。
+[x] ipython 的 magic initialization in __init__.py 要防呆，避免從 python (none ipython)
+    執行時出問題。判斷有沒有 ipython 的方法要看在哪裡判斷的， peforth __init__.py 裡
+    好像太早，結果這兩個方法都 always false 而無效，不能自動 load_ext ：
+        if 'get_ipython' in globals():
+        if '__IPYTHON__' in dir(__builtins__):
+    我看就算了，需要先 import peforth 有它的好處，例如 greeting 會出現在 import 的時候。
+    [x] 從 jupyter notebook 裡面 debug peforth 的 __init__.py 很方便！用 pdb.set_trace()
+        設個斷點在 ipython 判斷式前，查看以上兩個式子 --> 在當時都是 false !! 但我找到
+        這個可以：
+        '__IPYTHON__' in __builtins__.keys()
+        B i n g o ! ! 果然成功了，我發現 __builtins__ 的定義再那之後會變，而
+        __builtin__ 在那時甚至都還不存在。
+        
+[ ] Tests before a Release  v1.15
+    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=False
+            Run setup.bat 做出取消 selftest 的 wheel 
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit 
+        [x] 2. python -i -m peforth version 12345 bye --> check errorlevel
+        [x] 3. python import peforth 
+               [x] selftest peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel% 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
+               %f %%f magic command
+        [x] 5. repeat 以上 in ubuntu
+			   --> pip3 install (/mnt/...the wheel) to WSL ubuntu
+			   --> use virtualenv is fine
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+    [x] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+            ' <selftest> :: enabled=True
+            Run setup.bat 更新本地版本以供測試
+        [x] 1. python -i -m peforth [x] with-selftest .s words exit bye
+        [x] 2. ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3. ipython import peforth .s words 
+               [x] selftest peforth.ok() .s words <--- w/parent
+               [x] 1234 bye check echo %errorlevel% 
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
+        [/] 考慮 README.rst 改良 
+            [/] 若有改過 README.rst 則 wheel 就要重做 
+                --> quit.f selftest=False --> 重來
+	[x] 直接用測過的 wheel update Pypi 
+    [x] version 改成 1.16  (必須跳過 1.10 會變成 1.1）  
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv
+    ipython still failed, message:
+    ...snip...
     ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
          33
          34 def readTextFile(pathname):
     ---> 35     f = open(pathname,'r',encoding='utf-8')
          36     # for line in f:
          37     s = f.read()
-
-    FileNotFoundError: [Errno 2] No such file or directory: '/usr/local/lib/site-packages/peforth/version.txt'
-    /usr/local/lib/python3.6/dist-packages/IPython/core/interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
-      warn('Unknown failure executing module: <%s>' % mod_name)
-
-    In [1]:        
-
+    FileNotFoundError: [Errno 2] No such file or directory: 
+    '/usr/local/lib/site-packages/peforth/version.txt'
+    ...snip...
+      
     --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
         sudo pip3 install ipython
         灌起來的 ipython, 是這個原因嗎？
+        19:07 2018-03-12 剛才為了 release 1.15 版在 T550 WSL ubuntu 上複製到了以上現象，
+        找不到 version.txt. 但是 python -m peforth 沒問題，只有 ipython 進去後
+        import peforth 才有這個問題。
 
 [ ] README.md needs to improve the installation guide for jupyter notebook support
     Install peforth kernel for Jupyter Notebook
@@ -2250,43 +2326,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     @rem This is for Windows 10 
     copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json 
     %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-[x] peforth.vm.things 的 peforth.things alias
-    14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
-    19:22 2018/03/11 除了以上，連 stack, push, words, ... etc 都加上去了。
-[ ] %f magic command 暫無 auto-load, 必須 import peforth 才有，暫時滿意了。
-    "c:\Users\hcche\OneDrive\文件\Jupyter Notebooks\Creating an IPython extension with custom magic commands.ipynb" 
-    討論複製過來如下:
-    [x] 如上述加上 c.InteractiveShellApp.extensions = ["c:\\Users\\hcche\\Downloads\\csvmagic.py"] 之後，無效。參考 [stackoverflow](https://stackoverflow.com/questions/27483637/auto-reload-extension-not-reloading-on-change) 學到用 '%load_ext c:\\Users\\hcche\\Downloads\\csvmagic.py' 在 jupyter notebook 或 ipython 中試試看 . . . 果然是 path 寫法的問題。照以上範例, csvmagic.py 位在 current directory 直接 '%load_ext csvmagic' 就可以了。如果不在 crrent directory 那就是要 importable 則手動放到 site-packages 去亦可，討論如下。
-    [x] 又或者必須是個 -m 搆得著的 module? 對了！上述的 importable 就是這個意思。--> 手動放進 site-packages (檔名改成 __init__.py) 就 importable 了，試試看 --> 成功！但是必須跑過 '%load_ext csvmagic' 之後才有 %%csv 不會自動 load。[ ] 而且 import csvmagic 也無效；然而經過以下正確安排之後 import peforth 卻有效，不知何故？
-    [x] 如何自動 load 應該跟 peforth 的 install 方式類似，這表示 csvmagic.py 所做的工作要由 `GitHub\peforth\peforthkernel.py` 來完成 (錯！要由 peforth 的 `__init__.py` 來負責)。其中 peforth %f 具有 line magic 與 cell magic 雙重腳色，該怎麼寫？看這裡：http://ipython.readthedocs.io/en/stable/config/custommagics.html
-        # from IPython.core.magic import (register_line_magic, register_cell_magic)
-        # @register_line_magic
-        # def f(line):
-        #     peforth.vm.dictate(line)   
-        # 
-        # @register_cell_magic
-        # def f(line, cell):
-        #     peforth.vm.dictate(cell)
-            
-        from IPython.core.magic import register_line_cell_magic
-        @register_line_cell_magic
-        def f(line, cell=None):
-            if cell is None:
-                peforth.vm.dictate(line)
-            else:
-                peforth.vm.dictate(cell)
-
-        def load_ipython_extension(ipython):
-            ipython.register_magic_function(f, 'line_cell')  
-            # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
-
-    [x] (錯!) 放進 GitHub\peforth\peforthkernel.py
-    [x] (錯!) copy 到 c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json 所指到的位置："c:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\Lib\\site-packages\\peforth\\peforthkernel.py"
-    [x] 重新啟動 jupyter notebook --> 結果無效, 這表示上面這段 code 沒有被執行到。可能放在 GitHub\peforth\peforthkernel.py 不對(確定不對)，也可能另有某個 .json 要指對地方。看 document 吧! --> 已知！c.InteractiveShellApp.extensions = ['peforth'] 就這行，所以上面這段要放在 peforth 的 __init__.py 才對 (對了)--> 再試試看 ... 還是無效，必須 import peforth 才行。目前這樣可以滿意了。
-    [ ] 我猜是 c.InteractiveShellApp.extensions = ['csvmagic','peforth'] 
-        所在的 profile_default\ipython_config.py 整個都無效之故。
-        (我的 Windows 10 在這裡 c:\ Users\ hcche\ AppData\ Local\ Programs\ Python\ Python36\ Lib\ site-packages\ jupyter_core\ tests\ dotipython\ profile_default\ ipython_config.py)        
-        先前嘗試 "28 Jupyter Notebook tips, tricks and shortcuts" 該檔的另一個設定也是無效。
-        從 path 裡有個 /test/ 看來，可能不是正確的檔案。    
-
-      
+[ ] setup.bat update 上 Pypi 成功之後，有個 error :batch not found 之類。
+    upload v1.15 時發現的。應該是因為把 bye comment 掉了，往下看到 batch 的東西了。
+    

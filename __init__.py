@@ -154,21 +154,26 @@ tos         = vm.tos
 words       = vm.words
     
 
-##### Setup peforth magic command %f ##### 
-from IPython.core.magic import register_line_cell_magic
+##### Setup peforth magic command %f and %%f for ipython and jupyter notebook ##### 
 
-# Define peforth magic command, %f.
-@register_line_cell_magic
-def f(line, cell=None):
-    if cell is None:
-        vm.dictate(line)
-    else:
-        vm.dictate(cell)
-        
-# Register auto '%load_ext peforth' at an ipython session
-def load_ipython_extension(ipython):
-    ipython.register_magic_function(f, 'line_cell')  
-    # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
+# pdb.set_trace() works fine here even when run from jupyter notebook
+# if 'get_ipython' in globals():  <--- always false 
+# if '__IPYTHON__' in dir(__builtins__):  <--- always false 
+if '__IPYTHON__' in __builtins__.keys():
+    from IPython.core.magic import register_line_cell_magic
+
+    # Define peforth magic command, %f.
+    @register_line_cell_magic
+    def f(line, cell=None):
+        if cell is None:
+            vm.dictate(line)
+        else:
+            vm.dictate(cell)
+            
+    # Register auto '%load_ext peforth' at an ipython session
+    def load_ipython_extension(ipython):
+        ipython.register_magic_function(f, 'line_cell')  
+        # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
 ##### End of peforth __init__.py ###############
 
