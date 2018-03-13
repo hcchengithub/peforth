@@ -2272,7 +2272,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 --> quit.f selftest=False --> 重來
 	[x] 直接用測過的 wheel update Pypi 
     [x] version 改成 1.16  (必須跳過 1.10 會變成 1.1）  
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [ ] v1.14 v1.15 on WSL Ubuntu, virtualenv
     ipython still failed, message:
     ...snip...
