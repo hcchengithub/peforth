@@ -2328,4 +2328,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
 [ ] setup.bat update 上 Pypi 成功之後，有個 error :batch not found 之類。
     upload v1.15 時發現的。應該是因為把 bye comment 掉了，往下看到 batch 的東西了。
+[ ] v1.15 %f 也發生了 comment 之後如果沒有 whitespace 會被下一行看到的問題
+    %f __main__ :> census_train['age'].head(2) . cr \ 奇怪，它怎知這 dtype 是 int64?
     
