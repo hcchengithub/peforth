@@ -2288,10 +2288,34 @@ peforth.main() # 從 python interpreter 切換進入 peforth
       
     --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
         sudo pip3 install ipython
-        灌起來的 ipython, 是這個原因嗎？
+        灌起來的 ipython, 是這個原因嗎？ <-- 是， RI: virtualenv 的 path 又不一樣了。
         19:07 2018-03-12 剛才為了 release 1.15 版在 T550 WSL ubuntu 上複製到了以上現象，
         找不到 version.txt. 但是 python -m peforth 沒問題，只有 ipython 進去後
         import peforth 才有這個問題。
+    --> 實際位置：
+            c:\Users\hcche\AppData\Local\Packages\CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc
+            \LocalState\rootfs\home\hcchen5600\tmp\deepspeech-venv\lib\site-packages\peforth\version.txt 
+        Ubuntu virtualenv 下以為的位置：
+            > /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py(35)readTextFile()
+                 33
+                 34 def readTextFile(pathname):
+            ---> 35     f = open(pathname,'r',encoding='utf-8')
+                 36     # for line in f:
+                 37     s = f.read()
+            ipdb> p path
+            '/usr/local/lib/site-packages/peforth/'
+    [ ] 答案找到了
+        In [3]: import site
+        ipdb> dir(site)
+        ['ENABLE_USER_SITE', 'PREFIXES', 'USER_BASE', 'USER_SITE', '__builtins__', 
+        ipdb> site.PREFIXES
+        ['/usr', '/usr']
+        ipdb> site.USER_BASE
+        '/home/hcchen5600/.local'
+        ipdb> site.USER_SITE
+        '/home/hcchen5600/.local/lib/python3.6/site-packages'
+        ipdb> site.ENABLE_USER_SITE
+        True
 
 [ ] README.md needs to improve the installation guide for jupyter notebook support
     Install peforth kernel for Jupyter Notebook
