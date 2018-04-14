@@ -1,0 +1,9 @@
+用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt 
+
+ /usr/local/lib/site-packages/peforth              
+     version.txt                                   
+ /usr/local/lib/python3.6/dist-packages/peforth    
+     version.txt                                   
+                                                   
+                                                   
+                                                   
