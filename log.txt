@@ -2273,49 +2273,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	[x] 直接用測過的 wheel update Pypi 
     [x] version 改成 1.16  (必須跳過 1.10 會變成 1.1）  
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv
-    ipython still failed, message:
-    ...snip...
-    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
-         33
-         34 def readTextFile(pathname):
-    ---> 35     f = open(pathname,'r',encoding='utf-8')
-         36     # for line in f:
-         37     s = f.read()
-    FileNotFoundError: [Errno 2] No such file or directory: 
-    '/usr/local/lib/site-packages/peforth/version.txt'
-    ...snip...
-      
-    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
-        sudo pip3 install ipython
-        灌起來的 ipython, 是這個原因嗎？ <-- 是， RI: virtualenv 的 path 又不一樣了。
-        19:07 2018-03-12 剛才為了 release 1.15 版在 T550 WSL ubuntu 上複製到了以上現象，
-        找不到 version.txt. 但是 python -m peforth 沒問題，只有 ipython 進去後
-        import peforth 才有這個問題。
-    --> 實際位置：
-            c:\Users\hcche\AppData\Local\Packages\CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc
-            \LocalState\rootfs\home\hcchen5600\tmp\deepspeech-venv\lib\site-packages\peforth\version.txt 
-        Ubuntu virtualenv 下以為的位置：
-            > /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py(35)readTextFile()
-                 33
-                 34 def readTextFile(pathname):
-            ---> 35     f = open(pathname,'r',encoding='utf-8')
-                 36     # for line in f:
-                 37     s = f.read()
-            ipdb> p path
-            '/usr/local/lib/site-packages/peforth/'
-    [ ] 答案找到了
-        In [3]: import site
-        ipdb> dir(site)
-        ['ENABLE_USER_SITE', 'PREFIXES', 'USER_BASE', 'USER_SITE', '__builtins__', 
-        ipdb> site.PREFIXES
-        ['/usr', '/usr']
-        ipdb> site.USER_BASE
-        '/home/hcchen5600/.local'
-        ipdb> site.USER_SITE
-        '/home/hcchen5600/.local/lib/python3.6/site-packages'
-        ipdb> site.ENABLE_USER_SITE
-        True
 
 [ ] README.md needs to improve the installation guide for jupyter notebook support
     Install peforth kernel for Jupyter Notebook
@@ -2354,4 +2311,166 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     upload v1.15 時發現的。應該是因為把 bye comment 掉了，往下看到 batch 的東西了。
 [ ] v1.15 %f 也發生了 comment 之後如果沒有 whitespace 會被下一行看到的問題
     %f __main__ :> census_train['age'].head(2) . cr \ 奇怪，它怎知這 dtype 是 int64?
-    
+[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv
+    ipython still failed, message:
+    ...snip...
+    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
+         33
+         34 def readTextFile(pathname):
+    ---> 35     f = open(pathname,'r',encoding='utf-8')
+         36     # for line in f:
+         37     s = f.read()
+    FileNotFoundError: [Errno 2] No such file or directory: 
+    '/usr/local/lib/site-packages/peforth/version.txt'
+    ...snip...
+      
+    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
+        sudo pip3 install ipython
+        灌起來的 ipython, 是這個原因嗎？ <-- 是， RI: virtualenv 的 path 又不一樣了。
+        19:07 2018-03-12 剛才為了 release 1.15 版在 T550 WSL ubuntu 上複製到了以上現象，
+        找不到 version.txt. 但是 python -m peforth 沒問題，只有 ipython 進去後
+        import peforth 才有這個問題。
+    --> 實際位置：
+            c:\Users\hcche\AppData\Local\Packages\CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc
+            \LocalState\rootfs\home\hcchen5600\tmp\deepspeech-venv\lib\site-packages\peforth\version.txt 
+        Ubuntu virtualenv 下以為的位置：
+            > /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py(35)readTextFile()
+                 33
+                 34 def readTextFile(pathname):
+            ---> 35     f = open(pathname,'r',encoding='utf-8')
+                 36     # for line in f:
+                 37     s = f.read()
+            ipdb> p path
+            '/usr/local/lib/site-packages/peforth/'
+    [x] 答案找到了 <== 錯！ site module 不是答案。site 看到的是 root or global 的 path, 看不到 virtualenv （per user）的。
+        \ 這應該是 ipython virtualenv
+        In [3]: import site
+        ipdb> dir(site)
+        ['ENABLE_USER_SITE', 'PREFIXES', 'USER_BASE', 'USER_SITE', '__builtins__', 
+        ipdb> site.PREFIXES
+        ['/usr', '/usr']
+        ipdb> site.USER_BASE
+        '/home/hcchen5600/.local'
+        ipdb> site.USER_SITE
+        '/home/hcchen5600/.local/lib/python3.6/site-packages'
+        ipdb> site.ENABLE_USER_SITE
+        True
+        
+        \ Windows ipython
+        OK __main__ :> site constant site // ( -- module )
+        OK site . cr
+        <module 'site' from 'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site.py'>
+        OK site :> PREFIXES . cr
+        ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36', 'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36']
+        OK site :> USER_BASE . cr
+        C:\Users\hcche\AppData\Roaming\Python
+        OK site :> USER_SITE . cr
+        C:\Users\hcche\AppData\Roaming\Python\Python36\site-packages
+        OK site :> ENABLE_USER_SITE . cr
+        True
+        
+        \ WSL ubuntu normal 
+        OK __main__ :> site constant site // ( -- module )
+        OK site :> PREFIXES . cr
+        ['/usr', '/usr']
+        OK site :> USER_BASE . cr
+        /home/hcchen5600/.local
+        OK site :> USER_SITE . cr
+        /home/hcchen5600/.local/lib/python3.6/site-packages
+        OK site :> ENABLE_USER_SITE . cr
+        True
+        
+        \ WSL ubuntu in virtualevn
+        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ ipython
+        /usr/local/lib/python3.6/dist-packages/IPython/core/interactiveshell.py:728: UserWarning: Attempting to work in a virtualenv. If you encounter problems, please install IPython inside the virtualenv.
+          warn("Attempting to work in a virtualenv. If you encounter problems, please "
+        Python 3.6.4 (default, Dec 19 2017, 17:29:45)
+        Type 'copyright', 'credits' or 'license' for more information
+        IPython 6.2.1 -- An enhanced Interactive Python. Type '?' for help.
+
+        In [1]: import site
+
+        In [2]: site.ENABLE_USER_SITE
+        Out[2]: True
+
+        In [3]: site.USER_SITE
+        Out[3]: '/home/hcchen5600/.local/lib/python3.6/site-packages'
+
+        In [4]: site.USER_BASE
+        Out[4]: '/home/hcchen5600/.local'
+
+        In [5]: site.PREFIXES
+        Out[5]: ['/usr', '/usr']
+        
+        \ site 看到的是 root or global 的 path, 看不到 virtualenv 的
+        In [1]: import site; print(site.getsitepackages())
+        ['/usr/lib/python3.6/site-packages', '/usr/local/lib/python3.6/dist-packages', '/usr/lib/python3/dist-packages', '/usr/lib/python3.6/dist-packages']
+        
+
+    [ ] https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
+     1. pip show command > Location 
+        
+        \ Windows 
+        Microsoft Windows [Version 10.0.16299.309]
+        (c) 2017 Microsoft Corporation. All rights reserved.
+
+        C:\Users\hcche>pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages
+        Requires:
+
+        \ WSL Ubuntu root 
+        hcchen5600@WKS-4AEN0404:~$ pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: /usr/local/lib/python3.6/dist-packages
+        Requires:
+        hcchen5600@WKS-4AEN0404:~$
+
+        \ WSL Ubuntu virtualenv
+        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages
+        Requires:
+        
+        \ 這個也一樣結果
+        python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+     2. 總算有一個可行的辦法了：
+        In [3]: import sys
+        In [4]: [f for f in sys.path if f.endswith('site-packages')]
+             or [f for f in sys.path if f.endswith('packages')]
+        Out[4]: ['/home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages']
+
+        但是這個只是 .py 程式檔的位置，peforth 的資料檔在：
+        ['/home/hcchen5600/tmp/deepspeech-venv/lib/site-packages']
+        
+        \ 實驗成功
+        char /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth/version.txt 
+        readTextFile . cr
+
+        \ Windows 10 之下，也可以 --> 以下第一個不對，第二個對了！
+        In [2]: import sys
+        In [3]: [f for f in sys.path if f.endswith('site-packages')]
+        Out[3]:
+        ['C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages',
+         'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages']
+        所以是 lib > site-packages 處
+        
+        
