@@ -2568,6 +2568,18 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 __main__.py
                 peforthkernel.py
                 projectk.py            
-            
+    [ ] 終於發現這個了 --> 查出 實際 path 的方法，peforth 能不能參考？
+        DOS command line> jupyter --paths    
+        結果：
+        config:
+            C:\Users\hcche\.jupyter
+            c:\users\hcche\appdata\local\programs\python\python36\etc\jupyter
+            C:\ProgramData\jupyter
+        data:
+            C:\Users\hcche\AppData\Roaming\jupyter
+            c:\users\hcche\appdata\local\programs\python\python36\share\jupyter
+            C:\ProgramData\jupyter
+        runtime:
+            C:\Users\hcche\AppData\Roaming\jupyter\runtime
             
             
