@@ -1364,15 +1364,32 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     copy -y peforth.f   %pythonlib%\site-packages\peforth
     copy -y quit.f      %pythonlib%\site-packages\peforth
     ------ ------ ------ ------ ------
+    
     [ ] 發現 pip help install 列出了 pip install 的種種用法。
         update.bat 直接從 project directly update peforth package 到
         lib\site-packages\peforth 的方式太暴力了。
+        --> Try this example from pip help install : 
+                pip install [options] [-e] <local project path> ...
+        [ ] 有待研究 14:33 18/05/21 v1.16 試用結果,失敗：    
+        c:\Users\hcche\Documents\GitHub>pip install -e peforth
+        Obtaining file:///C:/Users/hcche/Documents/GitHub/peforth
+          Missing build time requirements in pyproject.toml for file:///C:/Users/hcche/Documents/GitHub/peforth: 'setuptools' and 'wheel'.
+          This version of pip does not implement PEP 517 so it cannot build a wheel without 'setuptools' and 'wheel'.
+          Installing build dependencies ... done
+            Complete output from command python setup.py egg_info:
+            Traceback (most recent call last):
+              File "<string>", line 1, in <module>
+              File "C:\Users\hcche\Documents\GitHub\peforth\setup.py", line 9, in <module>
+                with open("peforth/version.txt") as fp:
+            FileNotFoundError: [Errno 2] No such file or directory: 'peforth/version.txt'
+            ----------------------------------------
+        Command "python setup.py egg_info" failed with error code 1 in C:\Users\hcche\Documents\GitHub\peforth\
+        c:\Users\hcche\Documents\GitHub>
+                
     [ ] Upgrade from Pypi.org
         pip install --upgrade peforth  <--- project folder is github/peforth, 從 github/ 執行
         github:\>pip install peforth
         Requirement already satisfied: peforth in c:\...\python\python36\lib\site-packages
-
-
 
 [ ] 螢幕編輯器
     os.get_terminal_size(...)
@@ -2582,4 +2599,14 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         runtime:
             C:\Users\hcche\AppData\Roaming\jupyter\runtime
             
+[x] 不認得的 words 自動到 __main__ 裡去找找看 <-- 成功了! v1.16
+    不認得的 words 自動到 locals 裡去找找看            
+    不認得的 words 自動到 globals 裡去找找看
+    似乎 project-k 或看怎麼外掛一個序列 methods 用來處理 unknown workds
+    --> 執行一個 word 就叫做 unknown ( 'token' -- objWord ) 
+        傳回 True 就表示處理過了，轉回 False 就表示沒處理 (default) 然則顯示
+        unknown 訊息。
+    --> 先做 __main__ 的比較簡單
+        %f : unknown __main__ py> getattr(pop(),pop(),False) ?dup bool ; 
+        // ( token -- thing Y|N) 到 __main__ 下找找看
             

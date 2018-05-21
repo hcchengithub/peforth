@@ -153,19 +153,20 @@ code </selftest>
     </selftest>
 
 code bye 
-            if len(stack) and type(tos())==int: 
-                os._exit(pop()) 
-            else:
-                os._exit(0)
-            end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
+    if len(stack) and type(tos())==int: 
+        os._exit(pop()) 
+    else:
+        os._exit(0)
+    end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
 code /// 
-            ss = nexttoken('\n|\r');
-            ss = "\t" + ss   # Add leading \t to each line.
-            ss = ss.rstrip()+'\n' # trim tailing white spaces
-            last().comment = getattr(last(), 'comment', "") + ss;
-            end-code
-            // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
-
+    ss = nexttoken('\n|\r');
+    ss = "\t" + ss   # Add leading \t to each line.
+    ss = ss.rstrip()+'\n' # trim tailing white spaces
+    last().comment = getattr(last(), 'comment', "") + ss;
+    end-code
+    // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
+code unknown pop();push(False) end-code // ( token -- false ) Default unknown command does nothing. 
+    /// Redefine is welcome. e.g. to get __main__ :> words when in a jupyter notebook
 code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code compyle 
