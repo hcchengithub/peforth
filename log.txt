@@ -2603,10 +2603,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     不認得的 words 自動到 locals 裡去找找看            
     不認得的 words 自動到 globals 裡去找找看
     似乎 project-k 或看怎麼外掛一個序列 methods 用來處理 unknown workds
-    --> 執行一個 word 就叫做 unknown ( 'token' -- objWord ) 
+    --> 執行一個 word 就叫做 unknown ( 'token' -- thing Y|n) 
         傳回 True 就表示處理過了，轉回 False 就表示沒處理 (default) 然則顯示
         unknown 訊息。
     --> 先做 __main__ 的比較簡單
-        %f : unknown __main__ py> getattr(pop(),pop(),False) ?dup bool ; 
-        // ( token -- thing Y|N) 到 __main__ 下找找看
-            
+        : unknown py> getattr(sys.modules['__main__'],pop(),"unknown") 
+          py> tos()=='unknown' if drop false else true then ; 
+          // ( token -- thing Y|N) 到 __main__ 下找找看
