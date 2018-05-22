@@ -2655,6 +2655,23 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 
 [ ] mybinder.org 跑不起來, peforth/version.txt file not found
     See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
+    --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
+        folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
+        peforth/version.txt 而直接在 version.txt 才對。 v1.16 先直接修改
+            Desktop\peforth-master\setup.py 
+        做一版 wheel 在 local 看成不成功, 若成功就證明研究生的檔案結構多一個 peforth
+        是沒必要的了，改掉就有機會了。
+    --> 真的做成了, 把 peforth/ 裡的東西都移上來, setup.py 改掉,不要 peforth/, 
+        如下從 working directory 執行, 成功了！
+        c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist .
+        Processing c:\users\hcche\desktop\peforth-master
+        Building wheels for collected packages: peforth
+          Running setup.py bdist_wheel for peforth ... done
+          Stored in directory: c:\users\hcche\desktop\peforth-master\dist
+        Successfully built peforth
+        c:\Users\hcche\Desktop\peforth-master>    
+    --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
+        了 --> [ ] 改寫 setup.bat 看看
 
 [ ] Tests before releasing v1.16
     [ ] 所有 run 法帶 selftest：
@@ -2687,23 +2704,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
         [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
-        [ ] Run setup.bat 做出取消 selftest 的 wheel
-        [ ] pip uninstall peforth
-        [ ] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [ ] 1. python -i -m peforth [x] no-selftest .s words exit
-        [ ] 2. python -i -m peforth version 12345 bye --> check errorlevel
-        [ ] 3. python import peforth
+        [x] Run setup.bat 做出取消 selftest 的 wheel
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
+        [x] 2. python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [x] 3. python import peforth
                [x] selftest peforth.ok() .s words <--- no parent
                [x] 1234 bye check echo %errorlevel%
-        [ ] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [x] 4. jupyter notebook --> .s cd help exit
                %f %%f magic command
-        [ ] 5. repeat 以上 in ubuntu
+        [/] 5. repeat 以上 in ubuntu
 	 	   --> pip3 install (/mnt/...the wheel) to WSL ubuntu
 	 	   --> use virtualenv is fine
-        [ ] 考慮 README.rst 改良
-            [ ] 若有改過 README.rst 則 wheel 就要重做
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-	[ ] 直接用測過的 wheel update Pypi
-    [ ] version 改成 1.16  (必須跳過 1.10 會變成 1.1）
+	[x] 直接用測過的 wheel update Pypi
+        twine upload dist/*
+        ID, password search my Ynote with pypi _account_
+    [x] version 改成 1.17  (必須跳過 1.10 會變成 1.1）
+    [ ] test mybinder.org to view peforth > notebook > *.ipynb
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
           
