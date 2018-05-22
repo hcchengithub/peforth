@@ -11,17 +11,17 @@ peforth
 
 	The technique of returning a function from another function is known as currying:
 	https://stackoverflow.com/questions/14261474/how-do-i-write-a-function-that-returns-another-function
-	
+
 	Python annoymous function lambda
 	http://blog.csdn.net/majianfei1023/article/details/45269343
 	https://www.zhihu.com/question/20125256
-	
-[x] review project-k , should project-k support python too? 
-    which will be peforth.py 	
+
+[x] review project-k , should project-k support python too?
+    which will be peforth.py
 
 [x] 直接問 pyforth 的原作者的版權條件 ---> 用不著了.
 [x] 實驗用 exec() 生成一個 function
-		s = ''' 
+		s = '''
 		def show(s):
 			print(s)
 		'''
@@ -29,7 +29,7 @@ peforth
 	>>> show('abc')
 	abc
 	>>> 成功了!
-	
+
 [x]	Try to define an python object
 	s = '''
 	class a():
@@ -43,35 +43,35 @@ peforth
 	'''
 	exec(s)
 [x] peforth 可以引用的讀檔範例
-    # average5 .py 
-    def main() : 
-        fileName = input ("What file are the numbers in? " ) 
-        infile = open (fileName, ' r ') 
-        sum = 0 
-        count = 0 
+    # average5 .py
+    def main() :
+        fileName = input ("What file are the numbers in? " )
+        infile = open (fileName, ' r ')
+        sum = 0
+        count = 0
         for line in infile:
-            sum = sum + eval (line) 
-            count = count + 1 
-        print ("\nThe average Of the numbers is", sum / count) 
-    main ( ) 
+            sum = sum + eval (line)
+            count = count + 1
+        print ("\nThe average Of the numbers is", sum / count)
+    main ( )
 
-    # average6.py 
-    def main() : 
-    fileName = input ("What file are the numbers in? " ) 
-    infile = open ( fileName 
-    sum = 0.0 
-    count = 0 
+    # average6.py
+    def main() :
+    fileName = input ("What file are the numbers in? " )
+    infile = open ( fileName
+    sum = 0.0
+    count = 0
     line = infile.readline()
-    while line != "" 
-        sum = sum + eval(line) 
-        count = count + 1 
+    while line != ""
+        sum = sum + eval(line)
+        count = count + 1
         line = infile.readline()
-    print("\nThe average Of the numbers is", sum / count) 
+    print("\nThe average Of the numbers is", sum / count)
     main()
 
 [x] module 的用法搞懂了，很簡單。 peforth.py 就是 peforth VM.
-    不需要像 javascript 用一個 function 把整個 vm 包起來, see 
-    GitHub\peforth\projectile.py 
+    不需要像 javascript 用一個 function 把整個 vm 包起來, see
+    GitHub\peforth\projectile.py
     python can redefine functions and methods. Function and methods are
     variables too.
     python objects, like javascript, can add properties and methods
@@ -84,16 +84,16 @@ peforth
         >>> show.y = 11
         >>> show.p = 22
         >>> dir(show)    # check it out
-        ['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', 
-        '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', 
-        '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', 
-        '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', 
-        '__str__', '__subclasshook__', '__weakref__', 'getHere', 'getX', 'getY', 'p', 
+        ['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__',
+        '__format__', '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__',
+        '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__',
+        '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__',
+        '__str__', '__subclasshook__', '__weakref__', 'getHere', 'getX', 'getY', 'p',
         'update', 'x', 'xpos', 'xvel', 'y', 'ypos', 'yvel']
         >>>
 [x] python 也可以 see function 的 source code
     https://stackoverflow.com/questions/427453/how-can-i-get-the-source-code-of-a-python-function
-    
+
     def foo(a):
     x = 2 # how about a comment?
     return x + a
@@ -107,12 +107,12 @@ peforth
     ==> 結果完全成功, 連 comment 也被顯示出來。
     ==> 但是 py> py: 組合出來的 function 不行
             py> tick('test').cfa ==> 1
-            py> dictionary[1:] ==> [.s, <function <lambda> at 0x0000024CE15810D0>, 
+            py> dictionary[1:] ==> [.s, <function <lambda> at 0x0000024CE15810D0>,
             .s, <function <lambda> at 0x0000024CE1581158>, .s, None, None]
             OK py> inspect.getsource(dictionary[2]) .
             could not get source code  <------------------- error message
             Debug? [y/N]
-    
+
     同一篇 stackoverflow 介紹的 dis module 也真的可行!
     >>> import dis
     >>> def func(x):
@@ -129,8 +129,8 @@ peforth
                  10 POP_TOP
                  12 LOAD_CONST               0 (None)
                  14 RETURN_VALUE
-    >>>    哇! 顯示出 function 的機械碼, 太正點了!! 
-    
+    >>>    哇! 顯示出 function 的機械碼, 太正點了!!
+
 [x] Python equivalent of:
     Word.prototype.toString = function(){return this.name + " " + this.help}; // every word introduces itself
     --> 有了, 就是去定義 __str__ prototype of the class
@@ -159,14 +159,14 @@ peforth
     a __repr__         # 應該讓它執行該 word
     >>> print(d)  # <---- obj 本身的傳回值是 __str__() 的傳回值
     a __str__
-    >>>    
-    
-[x] 進一步刺探未來的 peforth.py kernel module 的特性   
-    Ynote: 搞懂 python 的 module files globals() locals().note   
+    >>>
+
+[x] 進一步刺探未來的 peforth.py kernel module 的特性
+    Ynote: 搞懂 python 的 module files globals() locals().note
 
 [x] docode() 要組裝 function 需參考 anonymous function 的定義方法:
     https://stackoverflow.com/questions/6629876/how-to-make-an-anonymous-function-in-python-without-christening-it
-    Study built-in function exec() https://docs.python.org/3/library/functions.html#exec    
+    Study built-in function exec() https://docs.python.org/3/library/functions.html#exec
     Study build-in function compile() https://docs.python.org/3/library/functions.html#compile
     [x] genxt() 成功了
 [x] IDLE path working directory working folder
@@ -177,18 +177,18 @@ peforth
     --> 應該是 docode 裡面, 結構不太好, 萬一 reDef 或 genxt() 失敗了會怎樣?
         很多都會半途結束, 留下 compiling == 'code' 的問題。 --> all tested, behavior acceptable now
 [x] "import re" in peforth.py kernel is not a good choice.
-    Simply letting the main program to do that. The main program is eforth.3py 
+    Simply letting the main program to do that. The main program is eforth.3py
     --> Yeah! it works.
         c:\Users\hcche\Documents\GitHub\peforth>python eforth.3py
         hello eforth!!
     --> 錯了, 每個 .py 檔都自己 import re, import pdb 反而是對的, see:
         https://stackoverflow.com/questions/8957859/python-child-cannot-use-a-module-the-parent-imported
-        ... Generally if you're doing simple obvious things like importing a standard module, 
+        ... Generally if you're doing simple obvious things like importing a standard module,
         you should do it the simple and obvious way......
 [x] reproduce the problem:
         import peforth as vm
         vm.dictate('code test end-code') # Try this first
-        vm.words['forth']    
+        vm.words['forth']
     這樣是成功的,但是進入 forth command line 之後, 同樣的工作... 還是成功的。
     --> 改試 vm.dictate('code test3 print("hello test3!!") end-code')
         >>> vm.execute('test3') --> hello test3!!  很成功
@@ -207,7 +207,7 @@ peforth
         SyntaxError: invalid syntax
         >>>
         的確是這樣!!! now I've got the SRP
-    --> 似乎是 w.xt(w) 執行 end-code 時出問題, 檢查此時的 end-code 
+    --> 似乎是 w.xt(w) 執行 end-code 時出問題, 檢查此時的 end-code
         RI, outer() 裡面分辨 token 是否 [int, float] 用 eval(token) 會有 exception
         必須要用 try - except 處理才行。 --> Fixed !!!
 [x] why after OK type 'words' no response <--- should be : Error! words unknown.
@@ -217,9 +217,9 @@ peforth
         (Pdb) eval('stack') ==> [{'forth': [0, code, end-code, //, stop, *debug*]}, {'forth': [0, code, end-code, //, stop, *debug*]}, {'forth': [0, code, end-code, //, stop, *debug*]}, <class 'peforth.Word'>, <function phaseA at 0x00000178A534A0D0>, <function phaseB at 0x00000178A534A158>]
         所以, outer() 還要再改良。
     --> eval() 的結果 + 0 就可以保證他是 number 了
-[x] kernel project-k.py instead of peforth.py         
+[x] kernel project-k.py instead of peforth.py
 [ ] code word's help, not easy, keep the record.
-    # stack diagram    
+    # stack diagram
     ntibwas, s = ntib, nextstring("\\(")
     if s['flag']:  # stack diagram is existing
         pdb.set_trace()
@@ -235,8 +235,8 @@ peforth
     code \ last().help += nexttoken('\n|\r'); end-code immediate
          // ( <comment> -- ) Give help message to the new word.
     code ( last().help = '( ' + nexttoken('\\)') + nexttoken() + ' ' end-code immediate
-         // ( -- ) Get stack diagram to the last's help. 
-        
+         // ( -- ) Get stack diagram to the last's help.
+
 [x] In jeforth, window.colonxt is dynamicly created by definition of ':'.
     Can peforth.f do that too in python? Yes!!!
         >>> def test():
@@ -250,18 +250,18 @@ peforth
         >>> cc
         123
         >>>
-[ ] : test ; 
+[ ] : test ;
     'module' object does not support item assignment
     Debug? [y/N] y
     RI: last().xt = xt # also vm['colonxt'] <------ [ ] easy, deal with this later
 [x] After the above error probably, after colon definition the compiling is still True!!!
     --> because forgot declare it a global.
     B i n g o ! ! colon definition works now
-[x] literal needs to use closure 
+[x] literal needs to use closure
     def gen(n): # function generator
         def f(): # literal run time function
             print(n)
-        f.description = "{} {}".format(type(n),n)    
+        f.description = "{} {}".format(type(n),n)
         return f
     f = gen([11,22,33])
     f()
@@ -272,15 +272,15 @@ peforth
     #     return f.description
     # def repr(self):   # execute xt and return help message
     #     return f.description
-    # str.desc = "I am str"    
-    # repr.desc = "I am repr"    
-    # f.__str__  = str    
+    # str.desc = "I am str"
+    # repr.desc = "I am repr"
+    # f.__str__  = str
     # f.__repr__ = repr
-[x] py> py: 都應該改用 compile(code,"")    
+[x] py> py: 都應該改用 compile(code,"")
     compile CN http://www.th7.cn/Program/Python/201608/923063.shtml
     用到 lambda 就不能用來【賦值】, 安全理由. 故 py: 不能用 lambda. 要的話就必須用 compile 的。
     https://stackoverflow.com/questions/20695745/why-use-lambdas-vs-1-line-function-declarations
-    --> [x] 已經發現 py: tick('//').immediate=True 行不通了!!! 
+    --> [x] 已經發現 py: tick('//').immediate=True 行不通了!!!
             --> 用 <py> </py> </pyV> 分別改寫了 py: py> , ok now
     [x] pyExec pyEval 是多餘的 --> 去除
 [x] (Pdb) execute("sdfsdf")
@@ -288,10 +288,10 @@ peforth
     沒半點錯誤訊息, 有問題看不出來!!
     --> fixed, now it's a panic.
 [x] compiling 未定義怎麼不觸發 unknown?
-    --> outer() 用 eval(token) 想判斷 token 是否 number 不行, 
-        當 token='compiling' 時不會觸發 exception 反而傳回其值 True or False !! 
-    --> 改用 complex(token) 很完美! 
-[x] t> >t t@ 
+    --> outer() 用 eval(token) 想判斷 token 是否 number 不行,
+        當 token='compiling' 時不會觸發 exception 反而傳回其值 True or False !!
+    --> 改用 complex(token) 很完美!
+[x] t> >t t@
     >>> line = 'Cats are smarter than dogs\n\\ 1234\n\\ 2233'
     >>> matchObj = re.search( r'\n\\ (\d*)$', line)
     >>> matchObj.group()
@@ -302,11 +302,11 @@ peforth
     7
     >>> line[:-7]
     'Cats are smarter than dogs\n\\ 1234'
-    >>>    
+    >>>
 [x] [/py] [/pyV] 只分別取得 exec-code 與 eval-code 不執行, 可以用 execute 執行嗎?
     [x] execute 也要能執行 exec-code 或 eval-code ---> done
     [x] 這兩個都不要，應該是個 compyle ( 'source' -- code object ) \ python compiler 指令
-[x] 讓 execute() 認得 code object 
+[x] 讓 execute() 認得 code object
     --> OK ' compyle .
         compyle ( "source" -- exec-code ) Python compile source to exec-code object __str__ OK
         OK char print('hi') compyle
@@ -316,15 +316,15 @@ peforth
 [x] colon definition 裡看能不能用 comma 塞入一個 code object ?
     --> : test char print('hi') compyle execute ;  成功
         : test2 [ char print('hi') compyle , ] ; 也成功
-        : cfa ' py> dictionary[pop().cfa:] . cr ; 
+        : cfa ' py> dictionary[pop().cfa:] . cr ;
         OK cfa test2
         [ /* test2 */ <code object <module> at 0x0000019B24E1F8A0, file "", line 1>, None,
           /* cfa */ ', <function xt.<locals>.<lambda> at 0x0000019B24E29C80>, ., cr, None,
         None]
         OK
-[x] 有了 compyle 要不要改寫 <py> </py> </pyV> 等? 
+[x] 有了 compyle 要不要改寫 <py> </py> </pyV> 等?
     --> 只簡化了 </py> 一點點
-[x] debug :: --> root cause 又是 branch 裡 assignment to ip 忘了加 vm.ip 
+[x] debug :: --> root cause 又是 branch 裡 assignment to ip 忘了加 vm.ip
     OK 11 22 ' + :: xt() .s ==> [33] OK 表示 :: interpret mode 功能 ok
     OK : test :: xt() ;
     --Return--
@@ -335,12 +335,12 @@ peforth
     OK 22 33 ' + test
     OK .s
     [55]
-    OK    
+    OK
 [x] constant 要用到 vm.forth['varname'] 複習一下 python 語法
     constant 要做的事 --> 'push(vm["forth"]["x"])'
     一開始 word-list 都沒有自己的空間
         (Pdb) vm['forth']
-        *** TypeError: 'module' object is not subscriptable  
+        *** TypeError: 'module' object is not subscriptable
         (Pdb) vm.forth
         *** AttributeError: module 'projectk' has no attribute 'forth'
     不能這樣 init :
@@ -356,7 +356,7 @@ peforth
         {}
         (Pdb) getattr(vm,'forth')
         {}
-        (Pdb)    
+        (Pdb)
 [x] colon definition 失敗還是會佔一個位置
     OK 123 constant x
     OK 345 to x
@@ -380,7 +380,7 @@ peforth
     OK
     --> jeforth 也一樣, 算了, 有警告就可以了。
     --> (forget) 一下可以把它消除掉
-    
+
 [x] tib 平時有被 corrupted
     OK char $ . rewind
     OK 11 22 33 *debug*  # <---- 最簡單的
@@ -406,10 +406,10 @@ peforth
     : <text>.interpret ( <multi-lines> -- "string" ) // get multi-lines string from ternimal
         CR word ( s )
         begin
-            accept if ( s line )  
+            accept if ( s line )
                 \ get string to s, leave </text> and the rests in tib by adjusting ntib
                 py> re.search("(.*)</text>(.*)",tos()) ( s line re )
-                py> bool(tos()) if  \ line has </text> ? 
+                py> bool(tos()) if  \ line has </text> ?
                     ( s line re )
                     py: vm.tib="</text>"+tos().group(2);vm.ntib=0;
                     \ s += re.group(1)
@@ -417,7 +417,7 @@ peforth
                     exit
                 else  ( s line re )
                     \ s += line
-                    drop + ( s ) 
+                    drop + ( s )
             else ( s )
                 \ s += '\n'
                 py> pop()+'\n'
@@ -430,14 +430,14 @@ peforth
     [x] 實驗後綴法是否有簡化功效? 使 group(1) 成為共同的結果
         \ regular expression 實例
         OK <py> re.search("(.*?)</text>(.*)","aa </text>bb</text>")</pyV> ( re ) constant re
-        OK re bool . cr                                   ^^^^^^ 故意加上後綴讓 re.search 總是成功   
+        OK re bool . cr                                   ^^^^^^ 故意加上後綴讓 re.search 總是成功
         True <--- 總是成功
         OK re :> group() . cr
         aa </text>bb</text>
         OK re :> group(1) . cr
-        aa <----------------------------- group(1) 為所求 
+        aa <----------------------------- group(1) 為所求
         OK re :> group(2) . cr
-        bb</text>  <-------------------- group(2) 去掉後綴之後還給 tib 
+        bb</text>  <-------------------- group(2) 去掉後綴之後還給 tib
         OK <py> re.search("(.*?)</text>(.*)","aa bb</text>")</pyV> ( re ) constant re
         OK re bool . cr
         True
@@ -451,13 +451,13 @@ peforth
         OK re :> group(2) bool .
         False OK
     [x] 多行輸入公用 routine
-        : accepts ( "deli" <multiple lines> -- "string" ) // Get multiple lines from tib up to delimiter 
+        : accepts ( "deli" <multiple lines> -- "string" ) // Get multiple lines from tib up to delimiter
             ( deli )
             begin
-                accept if ( s line )  
+                accept if ( s line )
                     \ get string to s, leave </text> and the rests in tib by adjusting ntib
                     py> re.search("(.*)</text>(.*)",tos()) ( s line re )
-                    py> bool(tos()) if  \ line has </text> ? 
+                    py> bool(tos()) if  \ line has </text> ?
                         ( s line re )
                         py: vm.tib="</text>"+tos().group(2);vm.ntib=0;
                         \ s += re.group(1)
@@ -465,7 +465,7 @@ peforth
                         exit
                     else  ( s line re )
                         \ s += line
-                        drop + ( s ) 
+                        drop + ( s )
                 else ( s )
                     \ s += '\n'
                     py> pop()+'\n'
@@ -477,7 +477,7 @@ peforth
             while not chr(4) in s:
                 result += s
                 s = input()
-            result += s.replace(chr(4),'\n')  # all ^D become \n 
+            result += s.replace(chr(4),'\n')  # all ^D become \n
             push(result)
             push(True)
             end-code // ( -- str T|F ) Read a line from terminal.
@@ -486,7 +486,7 @@ peforth
     OK py> ord(tos()[0]) . cr
     4
     OK
-    示範 <accept> ... </accept> 的用法 
+    示範 <accept> ... </accept> 的用法
         ------- clipboard ---------
         dropall
         <accept>
@@ -525,33 +525,33 @@ peforth
               2:          77          4Dh (<class 'int'>)
               3:          88          58h (<class 'int'>)
               4:          99          63h (<class 'int'>)
-        OK    
-    
+        OK
+
 [x] .s in trouble when cell is False, None ... etc
-[x] peforth.py 可以直接執行 : python peforth.py 
+[x] peforth.py 可以直接執行 : python peforth.py
     也可以由 python interpreter 執行: >>> peforth.main() 此時 exit 回到 python interpreter
     bye 則會傳回 errorlevel 回到 DOS.
 
     # 從 python interpreter 就可以看到 peforth.py module 裡的 globals
     >>> dir(peforth)
-    ['__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', 
-    '__package__', '__spec__', 'greeting', 'main', 'panic', 'readTextFile', 
+    ['__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__',
+    '__package__', '__spec__', 'greeting', 'main', 'panic', 'readTextFile',
     'vm', 'writeTextFile']
 
     # 從 python interpreter 更可以看到 project-k vm 裡的 globals
     >>> dir(peforth.vm)
-    ['EXIT', 'RET', 'Word', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', 
-    '__name__', '__package__', '__spec__', 'code', 'colonxt', 'comma', 'compiling', 'context', 
-    'context_word_list', 'current', 'current_word_list', 'debug', 'dictate', 'dictionary', 
-    'dis', 'docode', 'doendcode', 'endcode', 'execute', 'forth', 'genxt', 'greeting', 
-    'here', 'inner', 'inspect', 'ip', 'isReDef', 'json', 'last', 'major_version', 'multiple', 
-    'name', 'newhelp', 'newname', 'newxt', 'nextstring', 'nexttoken', 'ntib', 'order', 'os', 
-    'outer', 'panic', 'pdb', 'phaseA', 'phaseB', 'pop', 'push', 're', 'readTextFile', 'reset', 
-    'rstack', 'rtos', 'stack', 'stop', 'tib', 'tick', 'tos', 'version', 'vm', 'vocs', 'wordhash', 
+    ['EXIT', 'RET', 'Word', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__',
+    '__name__', '__package__', '__spec__', 'code', 'colonxt', 'comma', 'compiling', 'context',
+    'context_word_list', 'current', 'current_word_list', 'debug', 'dictate', 'dictionary',
+    'dis', 'docode', 'doendcode', 'endcode', 'execute', 'forth', 'genxt', 'greeting',
+    'here', 'inner', 'inspect', 'ip', 'isReDef', 'json', 'last', 'major_version', 'multiple',
+    'name', 'newhelp', 'newname', 'newxt', 'nextstring', 'nexttoken', 'ntib', 'order', 'os',
+    'outer', 'panic', 'pdb', 'phaseA', 'phaseB', 'pop', 'push', 're', 'readTextFile', 'reset',
+    'rstack', 'rtos', 'stack', 'stop', 'tib', 'tick', 'tos', 'version', 'vm', 'vocs', 'wordhash',
     'words', 'writeTextFile']
-    
-    # 從 python interpreter 也可以執行 peforth 
-    >>> peforth.vm.dictate 
+
+    # 從 python interpreter 也可以執行 peforth
+    >>> peforth.vm.dictate
     <function dictate at 0x000001D1368E2510>
     >>> peforth.vm.dictate('version')
     p e f o r t h    v1.01
@@ -574,9 +574,9 @@ peforth
     # json 需要先給它 obj2dict() function 才能處理我們的 object
     OK py> json.dumps(tick('+'),indent=4) .
     Failed to run <Word '</pyV>'>: Object of type 'Word' is not JSON serializable
-    Continue, Debug, or Abort? [C/d/a] a          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
+    Continue, Debug, or Abort? [C/d/a] a          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    # 從 peforth 裡面定義轉換 function 
+    # 從 peforth 裡面定義轉換 function
     <py>
     def object2dict(obj):
         #convert object to a dict
@@ -592,7 +592,7 @@ peforth
           0: <function object2dict at 0x000001D136934510> (<class 'function'>)
     OK constant obj2dict
     OK exit
-    
+
     # 有了轉換 function 就可以讓 json 完成工作
     >>> import json
     >>> print(json.dumps(peforth.vm.tick('+'),default=peforth.vm.forth['obj2dict'],indent=4))
@@ -614,22 +614,22 @@ peforth
         "type": "code"
     }
     >>>
-    
+
 [x] code object 希望能帶 source code 以供 see
     OK 45 @ dir .
-    ['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__', 
-    '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__', 
-    '__le__', '__lt__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', 
-    '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'co_argcount', 'co_cellvars', 
-    'co_code', 'co_consts', 'co_filename', 'co_firstlineno', 'co_flags', 'co_freevars', 
-    'co_kwonlyargcount', 'co_lnotab', 'co_name', 'co_names', 'co_nlocals', 'co_stacksize', 
+    ['__class__', '__delattr__', '__dir__', '__doc__', '__eq__', '__format__',
+    '__ge__', '__getattribute__', '__gt__', '__hash__', '__init__', '__init_subclass__',
+    '__le__', '__lt__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__',
+    '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'co_argcount', 'co_cellvars',
+    'co_code', 'co_consts', 'co_filename', 'co_firstlineno', 'co_flags', 'co_freevars',
+    'co_kwonlyargcount', 'co_lnotab', 'co_name', 'co_names', 'co_nlocals', 'co_stacksize',
     'co_varnames'] OK
     OK    --> 不行, code object 裡面不能新增 attribute 也不能改裡面的
-    
+
     若不行, 只好模仿 Word 弄成一個 class 來裝 code object 就可以帶上 source code
     或用 closure , 也就是 genxt() 的方法也是現成已經成功的辦法。也不見得比 compyle 差。
-    或用 dis.dis(func) 也好, 更具視覺效果 
-    [x] 想到給 code object 加上 source code 顯示的辦法了, 引進 class Comment, 類似 class Word 
+    或用 dis.dis(func) 也好, 更具視覺效果
+    [x] 想到給 code object 加上 source code 顯示的辦法了, 引進 class Comment, 類似 class Word
         但是 do nothing (由 phaseA phaseB 實現) 只帶著 comment comma(Comment('lalalal')) 進
         dictionary 裡去躺著,等 see command 來利用。
 
@@ -637,24 +637,24 @@ peforth
         OK here
         OK .
         637 OK 636 @ .
-        lalala OK 636 @ type . --> <class 'projectk.Comment'> 
+        lalala OK 636 @ type . --> <class 'projectk.Comment'>
         OK 636 @ .
-        lalala 
+        lalala
         OK 636 @ execute -->
             Failed to run <Word 'execute'>: must be str, not Comment
             Continue, Debug, or Abort? [C/d/a] a
     [x] modify phaseA phaseB to support Comment class
         --> done!
     [x] modify ::, :>, </py>, and </pyV> to add comment
-    [x] 目前 literal 仍被當一般 function 用 dis.dis() 顯示 --> 改成顯示 literal 
+    [x] 目前 literal 仍被當一般 function 用 dis.dis() 顯示 --> 改成顯示 literal
         OK 339 @ .  # 已知 339 處是個 literal function
         <function xt.<locals>.f.<locals>.literal at 0x000001ED9B6579D8> OK 339 @ :> __name__ .
         OK 339 @ :> str . # 印出 readable 的方法
         Literal: pop(). <class 'str'> OK
         --> 可以修改 toString 了
     ==> see 終於完成了!!!
-[x] 其實 __doc__ attribute 就是用來放說明文字的 . . . 
-    --> 錯! 
+[x] 其實 __doc__ attribute 就是用來放說明文字的 . . .
+    --> 錯!
         Failed to run <Word '</py>'>: 'code' object attribute '__doc__' is read-only
         Continue, Debug, or Abort? [C/d/a]
     可是我試過了呀!? 如下:
@@ -672,57 +672,57 @@ peforth
         OK 39 @ .
         <function xt.<locals>.<lambda> at 0x0000017E8D269598> OK
         OK 39 @ dir .
-        ['__annotations__', '__call__', '__class__', '__closure__', 
-        '__code__', '__defaults__', '__delattr__', '__dict__', 
-        '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__get__', 
-        ...snip...] 
+        ['__annotations__', '__call__', '__class__', '__closure__',
+        '__code__', '__defaults__', '__delattr__', '__dict__',
+        '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__get__',
+        ...snip...]
         OK 39 @ :> __doc__ .
-        None 
+        None
         OK 39 @ :: __doc__="abc"
         OK 39 @ :> __doc__ .
-        abc OK    
+        abc OK
     這是 : version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
     compile() 出來的 eval_code, exec_code 的 __doc__ 都是 read-only, 但是
     包過一層 lambda 之後就可以編寫了。  <------ 真相大白！！
     --> </py> 直接 comma(exec_code) 實在沒有好處, 犧牲了 __doc__ 又
         迫使 phaseB 無謂地變得複雜。
-    --> [x] 改掉!     
-[x] these lines are strange, 
+    --> [x] 改掉!
+[x] these lines are strange,
         "" value description     ( private ) // ( -- "text" ) description of a selftest section
         [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
         [] value expected_stack  ( private ) // ( -- [..] ) an array to compare data stack in selftest
-        0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d] 
+        0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d]
         [] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
-    the "( private )" become prefix of their word.help ! 
-    --> value command gets stack diagram ? 
+    the "( private )" become prefix of their word.help !
+    --> value command gets stack diagram ?
     --> ( command 看到 last 沒有 help 就把後續的 (...) comment 加進去了! 應該限制
         compiling state 才這麼做。
-[x] *** debugging, OK now. RI: constant and value were in trouble due to that I 
-    changed the Comment word and the way to compile code objects. 
+[x] *** debugging, OK now. RI: constant and value were in trouble due to that I
+    changed the Comment word and the way to compile code objects.
 [x] python shell and eforth 互相參考手上的資料
     >>> peforth.main()
     OK 0 constant shell  # peforth 定義的變量
     OK exit
-    
+
     # 從外面把 globals() 給它
     >>> getattr(peforth.vm,'forth')['shell']=globals()
     >>> peforth.vm.forth
-    {'obj2dict': <function obj2dict at 0x000002C8D8F5B1E0>, 
-    'description': '', 'expected_rstack': [], 'expected_stack': [], 
-    'test-result': 0, '[all-pass]': [], 
-    'shell': {'__name__': '__main__', '__doc__': None, '__package__': None, 
-    '__loader__': <class '_frozen_importlib.BuiltinImporter'>, 
-    '__spec__': None, '__annotations__': {}, '__builtins__': <module 'builtins' (built-in)>, 
+    {'obj2dict': <function obj2dict at 0x000002C8D8F5B1E0>,
+    'description': '', 'expected_rstack': [], 'expected_stack': [],
+    'test-result': 0, '[all-pass]': [],
+    'shell': {'__name__': '__main__', '__doc__': None, '__package__': None,
+    '__loader__': <class '_frozen_importlib.BuiltinImporter'>,
+    '__spec__': None, '__annotations__': {}, '__builtins__': <module 'builtins' (built-in)>,
     'peforth': <module 'peforth' from 'c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforth.py'>}}
-    
+
     >>> peforth.main()
     OK shell .
-    {'__name__': '__main__', '__doc__': None, '__package__': None, 
-    '__loader__': <class '_frozen_importlib.BuiltinImporter'>, 
-    '__spec__': None, '__annotations__': {}, 
-    '__builtins__': <module 'builtins' (built-in)>, 
-    'peforth': <module 'peforth' from 'c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforth.py'>} 
-    OK    
+    {'__name__': '__main__', '__doc__': None, '__package__': None,
+    '__loader__': <class '_frozen_importlib.BuiltinImporter'>,
+    '__spec__': None, '__annotations__': {},
+    '__builtins__': <module 'builtins' (built-in)>,
+    'peforth': <module 'peforth' from 'c:\\Users\\hcche\\Documents\\GitHub\\peforth\\peforth.py'>}
+    OK
 
     # 從外面 DOS copy-paste 進來，一氣呵成 (不要 indent, 用 block mode)
     python
@@ -731,24 +731,24 @@ peforth.vm.dictate('0 constant shell')
 peforth.vm.dictate('// ( -- dict ) 最外層 python interpreter 的 globals()')
 getattr(peforth.vm,'forth')['shell']=globals()
 peforth.main() # 從 python interpreter 切換進入 peforth
-    \ 進入了 peforth interpret state 
-    <accept> \ 從 terminal 收取跨行 input lines 
+    \ 進入了 peforth interpret state
+    <accept> \ 從 terminal 收取跨行 input lines
     <py>
     import sys
-    push(sys)</py> constant sys 
+    push(sys)</py> constant sys
     // ( -- sys ) The sys module. Try: sys py: help(pop())
-    </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string 
+    </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string
     [if] tib.insert help sys [then]
 [x] examples tools utilities goodies 範例 栗子 例子
     \ 列出所有的 code words
         <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
     \ 列出所有的 selftest passed words
-        <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr        
-    \ 列出所有 immediate words 
+        <py> [w.name for w in words['forth'][1:] if 'pass'==getattr(w,'selftest',False)] </pyV> . cr
+    \ 列出所有 immediate words
         <py> [w.name for w in words['forth'] if getattr(w,'immediate',False) ] </pyV> . cr
-    \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array) 
+    \ 把尾巴 2 個 TOS 切出來成為單獨的 list (array)
         ( -2 ) >r py: t,vm.stack=stack[rtos(1):],stack[:rpop(1)];push(t)
-        --> slice 
+        --> slice
     \ Execute DOS command
         OK <py> exec('import os',globals(),globals())</py>  # import the os module
         OK py: os.system('dir')
@@ -762,7 +762,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             2017-08-25  13:03    <DIR>          __pycache__
                         10 File(s)        178,951 bytes
                         3 Dir(s)  264,579,960,832 bytes free
-            OK    
+            OK
         # But after <py> os.system(r"cd c:\Users\hcche\Documents\GitHub\ML\WH300")</py>
           the peforth working directory is not changed. It changes only the temperary shell.
     \ copy 以下 comment (用 np++ column mode) 從 DOS box Ctrl-V 一路跑起來
@@ -773,18 +773,18 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         peforth.vm.dictate('// ( -- dict ) 最外層 python interpreter 的 globals()')
         getattr(peforth.vm,'forth')['shell']=globals()
         peforth.main() # 從 python interpreter 切換進入 peforth
-        \ 進入了 peforth interpret state 
-        <accept> \ 從 terminal 收取跨行 input lines 
+        \ 進入了 peforth interpret state
+        <accept> \ 從 terminal 收取跨行 input lines
         <py>
         import sys
-        push(sys)</py> constant sys 
+        push(sys)</py> constant sys
         // ( -- sys ) The sys module. Try: sys py: help(pop())
-        </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string 
+        </accept> \ ( -- string T|f ) 從 terminal copy-paste 進來的 string
         [if] tib.insert help sys [then]
         </comment>
     \ DOS command line one-liner to print the path environment variable
-        c:\Users\hcche\Desktop>python -m peforth s' push(os.get_exec_path())' compyle execute (see) bye    
-    
+        c:\Users\hcche\Desktop>python -m peforth s' push(os.get_exec_path())' compyle execute (see) bye
+
 [x] <accept> <py> does not work when unless putting <py> to next line <---- problem
     --> rest of the line after <accept> should be the first line of the multiple lines
 [x] OK include c:\Users\hcche\Documents\GitHub\ML\WH300\wh300.f
@@ -793,7 +793,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     Failed to run <Word 'sinclude'>: pop from empty list
     Continue, Debug, or Abort? [C/d/a] a
     OK
-    --> possibly because rstack are to be used to return while reset() ( stop command ) 
+    --> possibly because rstack are to be used to return while reset() ( stop command )
         clears the rstack. --> 應該是猜對了。 stop command 只能中斷 outer loop 不能把 rstack 清掉!!
 [x] let <accept> <text> auto indent. Use spaces before </accept> </text> as the common strip.
     --> study <text> </text> 直接用 BL word 把 </text> 之前的 spaces 都忽略掉了, 這裡要改一下。
@@ -805,16 +805,16 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         1. 切成 lines in an array
             </text> :> splitlines() ( [lines] )
         2. 算出每行的前導 spaces 個數
-            len - lstrip 
+            len - lstrip
             OK s"     abc" py> len(pop()) tib.
             s"     abc" py> len(pop()) \ ==> 7 (<class 'int'>)
             OK s"     abc" :> lstrip() py> len(pop()) tib.
             s"     abc" :> lstrip() py> len(pop()) \ ==> 3 (<class 'int'>)
-            OK            
+            OK
         3. 取最小值,
             OK py> min([1,2,3]) tib.
             py> min([1,2,3]) \ ==> 1 (<class 'int'>)
-            OK        
+            OK
         4. 每行都去除這麼多前導 spaces
             [ e for e in m]
         cls dropall <accept>
@@ -825,10 +825,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 line4
                 line5
         </text> constant lines
-        </accept> 
+        </accept>
         drop tib.insert
-        lines :> splitlines() constant [lines] 
-        <py> map(lambda x:len(x)-len(x.lstrip()),vm.forth['[lines]'])</pyV> 
+        lines :> splitlines() constant [lines]
+        <py> map(lambda x:len(x)-len(x.lstrip()),vm.forth['[lines]'])</pyV>
         constant leading-spaces // ( -- map ) 只能用一次!
         \ 檢查 leading-spaces 有兩種方法,後者才漂亮
         \ <py> [i for i in vm.forth['leading-spaces']]</pyV> tib. \ check leading-spaces
@@ -836,7 +836,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             \ OK leading-spaces py> list(pop()) . # 如果 map 不大這個可以考慮
             \ [12, 16, 16, 16, 16, 8] OK
             \ OK leading-spaces py> list(pop()) . # map 之類的 iterator 都不能 rewind/reset
-            \ [] OK        
+            \ [] OK
         leading-spaces py> min(pop()) constant common-indent
         [lines] common-indent <py> [i[tos():] for i in pop(1)]</pyV> nip constant [result]
         result py> "\n".join(pop()) constant result // ( -- string ) the cooked multi-lines string
@@ -847,29 +847,29 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         py> min(pop()) ( [lines] indent )
         <py> [i[tos():] for i in pop(1)]</pyV> nip ( [result] )
         py> "\n".join(pop()) ;
-        
-    code -indent    
+
+    code -indent
         lines = pop()
-        array = lines.splitlines() # [lines] 
+        array = lines.splitlines() # [lines]
         spaces = map(lambda x:len(x)-len(x.lstrip()),array) # [spaces]
-        indent = min(spaces) # number of common indent 
-        cut = [i[indent:] for i in array]  # [cuted lines] 
+        indent = min(spaces) # number of common indent
+        cut = [i[indent:] for i in array]  # [cuted lines]
         push("\n".join(cut)) end-code
         // ( multi-lines -- cooked ) Remove common indent of the string
-        
+
     bingo! it works!
     [x] don't need to use map in -indent, use [f(i) for i in lines.splitlines()]
         should be enough --> Yes! The following two lines are equivalent:
         spaces = map(lambda x:len(x)-len(x.lstrip()),array) # iterator
-        spaces = [len(x)-len(x.lstrip()) for x in array] # list 
-[x] Start to use peforth for the wh300 project . . . 
-    用 peforth 來實現 wh300 
+        spaces = [len(x)-len(x.lstrip()) for x in array] # list
+[x] Start to use peforth for the wh300 project . . .
+    用 peforth 來實現 wh300
     第一個好消息就是 import module 變成 forth word 成功了!!
     <py>
     import numpy as np
     push(np)
     </py> constant np // ( -- numpy ) The numpy module
-    OK np . 
+    OK np .
     <module 'numpy' from 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages\\numpy\\__init__.py'> OK
     OK
     --> import to globals() is the best way. The above method is interesting but not the best.
@@ -886,37 +886,37 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ) OK 123 constant x
         Failed to run <function xt.<locals>.<lambda> at 0x000001C0C39B61E0>: unexpected indent (<string>, line 2)
         Continue, Debug, or Abort? [C/d/a] a
-        OK    
-    --> 對照 ok of 'see constant' 可見得上面問題版的 lambda source code 裡有多的 indent 
+        OK
+    --> 對照 ok of 'see constant' 可見得上面問題版的 lambda source code 裡有多的 indent
         ------------ Definition in dictionary ------------
         00456: lambda:exec(
         source = '\tpush(getattr(vm,"{}")["{}"])'.format(current, last().name)
         last().xt = genxt('constant',source)
         if not getattr(vm,current,False): setattr(vm,current,{})
         exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
-        )        
+        )
     --> 先用醜版面過關取得完整功能, 再來對付它。
-    --> interpret state ok, try compile --> ok too --> so what's the problem..it's clear 
+    --> interpret state ok, try compile --> ok too --> so what's the problem..it's clear
         當 <py> 之後跟著兩個 space 時其實這個實驗就已經複製到問題了, 厲害的是要到 test 的
         runtime 才會執行 lambda 從而觸發到 unexpected indent ... 難怪這麼難抓!!
-            : test   
-            <py>  
+            : test
+            <py>
             a=1
             b=2
             c=3
             </py> ;
     --> breakpoint 在 -indent 當 last==constant 時
-            code -indent    
+            code -indent
                 if debug and last().name=='constant': pdb.set_trace() <--- 斷到了
                 ...snip....
     --> constant 改到有問題的 <py>..</py> 版本 --> 看看這時 -indent 收到啥
         |(Pdb) p lines
         |' \n    source = \'\\tpush(getattr(vm,"{}")["{}"])...snip...
-          ^---- 這個 space 就是問題所在了 ！！！！ 真難找。  
-    --> Root cause: in constant source code, after the <py> an extra space was there! 
+          ^---- 這個 space 就是問題所在了 ！！！！ 真難找。
+    --> Root cause: in constant source code, after the <py> an extra space was there!
     --> See Ynote : "peforth -indent command indent 問題探討-- 成功了！ 扫描_20170828180311 _peforth_"
-        
-[ ] reset() 能不能強一點? panic() 好幾次很煩....也許有意義?      
+
+[ ] reset() 能不能強一點? panic() 好幾次很煩....也許有意義?
 [x] compyle 裡用到 lambda 來產生 function 有問題！
     # 這個可以!
         >>> s = '''
@@ -927,10 +927,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ... '''
         >>> exec(s)  # <----------- 直接執行 exec() 很好,沒問題
         {'a': 123, 'b': 456}
-        [123, 456] 
+        [123, 456]
         --
     # 經過 lambda 之後 local name space 就有怪現象了
-    # 如下不行了, 這是經過 lambda 之後產生的結果。 compyle command 不要用 lambda . . . . 
+    # 如下不行了, 這是經過 lambda 之後產生的結果。 compyle command 不要用 lambda . . . .
         ... s = '''
         ... dd = {'a':123,'b':456}
         ... print(dd)
@@ -942,17 +942,17 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         {'a': 123, 'b': 456}
         NameError: name 'dd' is not defined
         >>>
-    --> compyle 裡改用 genfunc(source) 來產生 function 
-    
+    --> compyle 裡改用 genfunc(source) 來產生 function
+
     ----- this snippet works fine ------------
-    <py>    
-    # python does not support annoymous function. But it supports closure, 
-    # so we can recover it. genfunc("body","args") returns a function which 
+    <py>
+    # python does not support annoymous function. But it supports closure,
+    # so we can recover it. genfunc("body","args") returns a function which
     # is composed by the given source code and arguments.
     def genfunc(body,args):
         local = {}
         source = "def func({}):".format(args)
-        # args is something like "", or 'x, y=123,z=None' 
+        # args is something like "", or 'x, y=123,z=None'
         if body.strip()=="":
             source = source+"\n    pass\n";
         else:
@@ -963,12 +963,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             panic("Failed in genfunc(body,{}): {}\nBody:\n{}".format(args,err,body))
         local['func'].__doc__ = source
         return local['func']
-    push(genfunc)    
+    push(genfunc)
     </py> constant genfunc // ( -- func ) function generater genfunc(body,args)
     genfunc <py> pop()('    print("hi")',"")</pyV> :: ()
     \ ==> hi
     ( arguments ) s" x,y"
-    ( body ) <text> 
+    ( body ) <text>
         result = x**2 + y**2
         print(result)
     </text> -indent
@@ -981,25 +981,25 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         hi  <--- 正確,正確
         25
         Multiple-line mode is on, Ctrl-D switches it off.
-        OK    
+        OK
     --- genfunc() 進了 project-k kernel -----------
     ( name ) s" lalala"
     ( arguments ) s" x,y"
-    ( body ) <text> 
+    ( body ) <text>
         result = x**3 + y**3
         print(result)
     </text> -indent
     py> genfunc(pop(),pop(),pop()) constant f f :: (3,4)
     # it works fine !!
-    
+
     --- 有問題要到 runtime 才會發現, 故 selftest 很重要 -----------
     ( name ) s" lalala"
     ( arguments ) s" x,y"
-    ( body ) <text> 
+    ( body ) <text>
         result = x*y
         print(resultttttttt)
     </text> -indent
-    py> genfunc(pop(),pop(),pop()) constant f 
+    py> genfunc(pop(),pop(),pop()) constant f
     \ 到這裡都沒問題, 以下執行了才發現問題，而且 error message 線索差很遠
     OK f :: (1,2)
     Failed in </py> command: name 'resultttttttt' is not defined
@@ -1017,22 +1017,22 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         v = [dd[i] for i in dd] # 取得所有的 value of a dict
         print(v)
         </py>
-        results: 
+        results:
         {'a': 123, 'b': 456}
         [123, 456]  <---------------- Pass!!
-    
-[x] code compyle 
-        execute('-indent');execute('indent') 
-    若用 dictate('-indent indent') 則無效, 何故? 
+
+[x] code compyle
+        execute('-indent');execute('indent')
+    若用 dictate('-indent indent') 則無效, 何故?
     --> 以下實驗卻又都 ok !
-    --> RI: 因為當時在 compiling state !! 用 dictate() 的結果是把兩個 words 
+    --> RI: 因為當時在 compiling state !! 用 dictate() 的結果是把兩個 words
         compile 進去了，既沒效果又出別的問題。
     ==> 用 dictate() 問題比較多，不能放心亂用。
-    
+
     這兩行 debug trick 技巧留作紀念：
         if tos().find('vm.greeting')!=-1: pdb.set_trace()
         dictate('-indent indent')  # 奇怪, dictate 就不行???
-   
+
 [x] (forget) in trouble now
     OK (forget)
     Failed to run <function compyle_anonymous at 0x0000018230B22400>: 'Word' object has no attribute 'cfa'
@@ -1043,12 +1043,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     >>> import peforth
     OK py> sys.argv .
     [''] <----------------- run from python interpreter, need more help messages
-[x] 整理 try - exception in peforth.f     
-    # 從 python interpreter 裡用 genfunc() 產生 function 
+[x] 整理 try - exception in peforth.f
+    # 從 python interpreter 裡用 genfunc() 產生 function
         >>> f = peforth.vm.genfunc(" 1/0",'','test2')
         >>> f
         <function test2 at 0x000001B42DB13E18>
-        
+
         # 測試看看，確實會出錯
         >>> f()
         Traceback (most recent call last):
@@ -1057,7 +1057,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ZeroDivisionError: division by zero
         >>> f
         <function test2 at 0x000001B42DB13E18>
-        
+
         # 直接 compile 進 peforth 的字典
         >>> peforth.vm.comma(f)
 
@@ -1069,22 +1069,22 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         pop()()
         Continue, Debug, or Abort? [C/d/a] a
 
-    # 檢查看看，他確實是 test2 
-        OK here 1- @ :> __doc__ .  
+    # 檢查看看，他確實是 test2
+        OK here 1- @ :> __doc__ .
         def test2():
          1/0 OK
 
     --> 探討原因，似乎「誰執行的，error message 就打給誰」，這樣應該資訊比較充分。
         :: 裡面 interpret state 是 </py>, compiling state 則是 compyle --> 試試看
-        
-        OK here 1- @ constant f \ 取得 test2 function 
+
+        OK here 1- @ constant f \ 取得 test2 function
         OK : test f :: () ;  \ 故意讓 :: 的 compiling state 表演
         OK test \ 一執行，報錯的變成 phaseB()
         Callable in phaseB <function compyle_anonymous at 0x000001CC3771D1E0>: division by zero
         Body:
-        def compyle_anonymous():  
-            pop()()   
-        Continue, Debug, or Abort? [C/d/a] a     
+        def compyle_anonymous():
+            pop()()
+        Continue, Debug, or Abort? [C/d/a] a
         --> ^^^^^^^--- 這個 Body information 似乎沒啥用，好像錯了？其實沒錯。
         --> 如下，這是 f :: () 這種寫法的結果，沒錯，它的 Body 當然顯示不出 f 的 source code
             ------------ Definition in dictionary ------------
@@ -1106,7 +1106,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             OK test2
             Callable in phaseB <function test2 at 0x000001CC35113E18>: division by zero
             Body:
-            def test2():   <------------------ 果然顯示出了 除0 的 source code 
+            def test2():   <------------------ 果然顯示出了 除0 的 source code
              1/0
             Continue, Debug, or Abort? [C/d/a] a
 
@@ -1136,9 +1136,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         Continue, Debug, or Abort? [C/d/a]
     --> try: exception: 以後繼續改進。。。。。。
 [x] multiple lines of tib. are not showing correctly.
-    --> try test.f 
-        111 tib. 
-        222 tib. 
+    --> try test.f
+        111 tib.
+        222 tib.
         333 tib.
     --> I've got it. From clipboard is ok, from accept2 is not.
         OK ^D
@@ -1149,31 +1149,31 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         111 \ ==> 111 (<class 'int'>)
         111 \ ==> 222 (<class 'int'>)
         111 \ ==> 333 (<class 'int'>)
-        OK    
-    --> fixed 
+        OK
+    --> fixed
 [x] RET at end of dictionary is expected but missing <--- problem!!
     --> improve (dump) d dump --> ok now
 [x] Oh, my God! peforth can be a debugger or 內視鏡 of python:
     <py>
-    any python code; peforth is available e.g. push() 
+    any python code; peforth is available e.g. push()
     push(123);import peforth;peforth.main() # enter peforth break point, wonderful !!
     </py>
     --> The way to enter peforth interpreter is not very good, though it's clear.
-    --> ok now, the breakpoint usage is : 
+    --> ok now, the breakpoint usage is :
             push(locals());ok('111>>')
     ==> python -i 本來就可以回到 phthon interpreter 以便進行靜態分析執行結果。
         寫就 endo.py ( see my ynote) 當作 pdb 的另一選擇，在斷點上查看程式當時狀態。
 [x] 手動 install peforth 的方法 see my ynote
-    [x] peforth package 裡面 __init__.py 就是 peforth.py 也就是 __main__.py 
+    [x] peforth package 裡面 __init__.py 就是 peforth.py 也就是 __main__.py
     [x] 這時候要解決的是 peforth.f , quit.f 的 path , 用 __path__[0] 即可。
     [x] import projectk.py as vm 要改成 from . import projectk.py as vm 把 path 指定清楚
     [x] projectk.py 裡面用 vm = __import__(__name__) 在 package 裡不適用
         改由 __init__.py 來填 vm.vm = vm 即可。
-    ==> 成功了 ！        
+    ==> 成功了 ！
         手動安裝
         ========
         1. 把本 project 的四個檔案 projectk.py quit.f peforth.f __main__.py 全部 copy 到如下新創建的 folder: c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth
-        2. 把其中 __main__.py 多 copy 一份成 __init__.py 即可。            
+        2. 把其中 __main__.py 多 copy 一份成 __init__.py 即可。
 
         執行 peforth 有四個方式
         =======================
@@ -1185,7 +1185,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] why peforth? why endo.py? 一個 object 用來保存被觀察的 locals 不就好了？
         1. indent 自由
         2. 現成的 tool, forth 可以記住很多命令, 複雜的 command 可以臨時組合而成
-                
+
 [x] peforth 既然可以是個 python debug 學習工具，拿 peforth 來當 breakpoint 就要盡量簡單。
     --> The REPL, peforth.main(), renamed to peforth.ok()
         REPL, or Read-Eval-Print-Loop.
@@ -1194,49 +1194,49 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> at the point ok() started, TOS is the tuple with information from the caller.
         The data stack was supposed to be empty, here after it won't be.
     --> The TOS provides the prompt, the locals
-[x] debug command 不要了, 會跟 py> debug which is vm.debug 撞名,沒必要增加這個問題。    
+[x] debug command 不要了, 會跟 py> debug which is vm.debug 撞名,沒必要增加這個問題。
 
-[ ] I found a python problem!!    
+[ ] I found a python problem!!
     False==0 is True, False<=0 is True, False<=0.1 is True
-    False<0.0001 is True, False<-0.1 is False 
+    False<0.0001 is True, False<-0.1 is False
     這是在引用 debug 來篩選哪些 breakpoint 做不做用時遇到的問題。debug 初值為 False 結果
-    debug<=33 竟然是成立的!    
+    debug<=33 竟然是成立的!
 [x] ." a" prints an extra space <--- problem
     RI: dot . command 早期為了 debug 好看，有多印一個 space 可以不要了。
 [x] peforth.path to indicates the home directory where peforth.f is
 [x] IDLE generates keyboardinterrupts
-    try-except can fix it http://effbot.org/zone/stupid-exceptions-keyboardinterrupt.htm 
+    try-except can fix it http://effbot.org/zone/stupid-exceptions-keyboardinterrupt.htm
     --> 改寫 accept 加上了 try-except 檢查避免被 IDLE resize window 時的 KeyboardInterrupt
         意外甩出。
     --> resize window 的 KeyboardInterrupt 好了，但是 Ctrl-D 不能用，要輸入 multi-lines 可
         改用 <accept> ... </accept> tib.insert 代替。
 [x] peforth 的 version 在 whl 打包時要如何統一定義來源？
-    本文 "Single sourcing the version" 提供多種選擇。 
+    本文 "Single sourcing the version" 提供多種選擇。
     https://packaging.python.org/guides/single-sourcing-package-version/#single-sourcing-the-version
     我選用了 version.txt 檔案的方法，好像與 jeforth.3we 類似。
     peforth/version.txt 只有一行 python statement 讓相關的單位都來參考它。
     [ ] 因此今後 projectk.major_version 就留在 projectk.py 裡沒有直接用到了。
 
         __version__ = "1.02"
-    
+
     試出適合 setup.py 使用的 experiments 如下:
-    
-        dropall cls    
-        <accept>    
+
+        dropall cls
+        <accept>
         <py>
         loc = {} # locals
         with open(v('package-directory')+"peforth\\"+"version.txt") as fp:
             exec(fp.read(),{},loc )
             # later on we use: loc['__version__']
-        push(loc)    
+        push(loc)
         print('loc[\'__version__\'] is ',loc['__version__'])
         </py>
-        </accept> 
+        </accept>
         tib.insert
         .s
-    
+
     實際在 setup.py 裡的程式：
-    
+
         loc = {} # locals
         with open("peforth/version.txt") as fp:
             exec(fp.read(),{},loc ) # later on we use: loc['__version__']
@@ -1244,13 +1244,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         version=loc['__version__'] # Refered in setup(...) as an argument
 
     在 peforth/__main__.py 裡的程式：
-    
+
         # Get version code from peforth/version.txt for whl package
         # to see the single source of version code.
         exec(readTextFile(path + "version.txt"),{},locals())
-        vm.version = __version__ 
-    
-[x] Improve (see) to see source code from project-k    
+        vm.version = __version__
+
+[x] Improve (see) to see source code from project-k
     OK py> reset (see) <--- no good so far
         {
             "__class__": "function",
@@ -1264,18 +1264,18 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] 決心用 3hta 寫一個 pykb.f 專門用來給 peforth 當 keyboard input to support multiple lines
     find the process ID of peforth for sendkey
     s" where name like '%python%'" see-process
-    --> 已經完成 include pykb.f 之後，用 {F7} 把 inputbox 下給 python  
+    --> 已經完成 include pykb.f 之後，用 {F7} 把 inputbox 下給 python
     [x] T550 上 activate-shell 無效，sendkeys 還好。但是 git.f 卻又好好的。
         --> 似乎從 __main__.py 直接執行的 python 是切不過去的，經由 DOS Box 跑起來的才可以。
             > include git.f \ 對照看看為何人家可以？
             > s" where name like '%python%'" list-them
-            python.exe:8212 \ 查出 python (直接 double click __main__.py 起來的) 
+            python.exe:8212 \ 查出 python (直接 double click __main__.py 起來的)
             > WshShell :: appActivate(8212)
             > launch-git-shell
-            > shellId . ==>  1608 \ 查出 git shell 
+            > shellId . ==>  1608 \ 查出 git shell
             > WshShell :: appActivate(1608)  \ 這個可以切過去
             > WshShell :: appActivate(8212)  \ 這個就不行
-        --> 如果退出 python 則該 DOS Box 能 activate 嗎？ 
+        --> 如果退出 python 則該 DOS Box 能 activate 嗎？
             > s" where name like '%cmd%'" list-them
                 TOTALCMD64.EXE:20780
                 cmd.exe:22848
@@ -1290,42 +1290,42 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 string   CommandLine;                C:\WINDOWS\system32\cmd.exe /d /c "C:\Users\hcche\AppData\Local\youdao\Dict\Application\stable\text_extractor_host.exe" chrome-extension://aohddidmgooofkgohkbkaohadkolgejj/ --parent-window=0 < \\.\pipe\chrome.nativeMessaging.in.53dc641bdd08e0c9 > \\.\pipe\chrome.nativeMessaging.out.53dc641bdd08e0c9
                 string   CreationClassName;          Win32_Process
         --> 所以切不到某些 process 是有的，何解？
-            進一步研究發現，這個 python 是從 Anaconda3 run 起來的 
+            進一步研究發現，這個 python 是從 Anaconda3 run 起來的
             > s" where name like '%python%'" list-them
                 python.exe:20092
             > WshShell :: appActivate(20092)
                 string   Name;                       python.exe
                 uint32   ProcessId;                  20092
-                string   CommandLine;                C:\ProgramData\Anaconda3\python.exe "C:\Users\hcche\Documents\GitHub\peforth\__main__.py" 
+                string   CommandLine;                C:\ProgramData\Anaconda3\python.exe "C:\Users\hcche\Documents\GitHub\peforth\__main__.py"
             --> Not root cause. 即使 Anaconda 的 python 也能切過去，只要。。。
-        --> 把 Title 改成 peforth 吧！看看是否改得到所在的 cmd or powershell 
+        --> 把 Title 改成 peforth 吧！看看是否改得到所在的 cmd or powershell
             DOS command c:\> title titlename can change the doxbox title but it's not
             a process attribute so it doen't help.
         --> 所以答案是： 直接跑 __main__.py 或經過 dosbox 都可能行或不行，
             process ID 可以用 nnnn to processid 指定的，就算了吧！
         --> 多印些 info 讓 user 自己手動設 processid, Done!
-        
+
 [x] improve .members --> __class__ attribute can easily be circularly deep and long
     m py> inspect.getmembers(pop()) py> str(pop()) tib.
-    [x] try to str(obj) then json.loads(string) and then json.dumps 
+    [x] try to str(obj) then json.loads(string) and then json.dumps
         --> str() generates non-json 不行！
-    --> 暫時放棄了 
-    
+    --> 暫時放棄了
+
 [x] C:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tensorflow6_session.f
-    如何一口氣把所有的 python section variables 都變成 forth values? 
+    如何一口氣把所有的 python section variables 都變成 forth values?
     l :> keys() tib. \ ==> dict_keys(
         ['result2', 'result', 'sess', 'product', 'matrix2', 'matrix1', 'tf']
     ) (<class 'dict_keys'>)
-    
+
     --> 要能 programmatically 產生 constant --> 改寫 constant 得 (constant)
         : (constant)  ( n "name" -- ) // Create a constnat
-            (create) <py>   
+            (create) <py>
             source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
             last().xt = genxt('constant',source)
             if not getattr(vm,current,False): setattr(vm,current,{})
-            exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
-            </py> 
-            reveal ; 
+            exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name))
+            </py>
+            reveal ;
         OK 123 char x (constant)
         OK x . ==> 123 OK
         --> 一把就成功了！ 能不能用在 colon definition 裡面？
@@ -1333,11 +1333,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         test
         y . ==> 234 成功！
     --> 有了 (constant) 應該就可以自動產生所有的 locals() 了
-    ==> ok now! vm.outport(loc) defined in quit.f 
-    
-[x] a command to update the peforth module 
-    @ c:\Users\...\Python36\Lib\site-packages\peforth\.. 
-    Get the path 
+    ==> ok now! vm.outport(loc) defined in quit.f
+
+[x] a command to update the peforth module
+    @ c:\Users\...\Python36\Lib\site-packages\peforth\..
+    Get the path
         import os.path as ospath
         # py> pdb :> __file__ tib. \ ==> C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\pdb.py (<class 'str'>)
         # py> ospath.dirname(pdb.__file__) tib. \ ==> C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib (<class 'str'>)
@@ -1352,10 +1352,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         key, default and the result are str.
     getenv compare with py> ospath.dirname(pdb.__file__)
     if same then proceed the patch program to copy all files
-    if not then warning and stop 
+    if not then warning and stop
     算了，直接 copy 就好了
-        
-    ------ update.bat ------ 
+
+    ------ update.bat ------
     set pythonlib=C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib
     copy -y version.txt %pythonlib%\site-packages\peforth
     copy -y projectk.py %pythonlib%\site-packages\peforth
@@ -1363,21 +1363,38 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     copy -y __init__.py %pythonlib%\site-packages\peforth
     copy -y peforth.f   %pythonlib%\site-packages\peforth
     copy -y quit.f      %pythonlib%\site-packages\peforth
-    ------ ------ ------ ------ ------ 
+    ------ ------ ------ ------ ------
+    
     [ ] 發現 pip help install 列出了 pip install 的種種用法。
         update.bat 直接從 project directly update peforth package 到
         lib\site-packages\peforth 的方式太暴力了。
-    [ ] Upgrade from Pypi.org 
+        --> Try this example from pip help install : 
+                pip install [options] [-e] <local project path> ...
+        [ ] 有待研究 14:33 18/05/21 v1.16 試用結果,失敗：    
+        c:\Users\hcche\Documents\GitHub>pip install -e peforth
+        Obtaining file:///C:/Users/hcche/Documents/GitHub/peforth
+          Missing build time requirements in pyproject.toml for file:///C:/Users/hcche/Documents/GitHub/peforth: 'setuptools' and 'wheel'.
+          This version of pip does not implement PEP 517 so it cannot build a wheel without 'setuptools' and 'wheel'.
+          Installing build dependencies ... done
+            Complete output from command python setup.py egg_info:
+            Traceback (most recent call last):
+              File "<string>", line 1, in <module>
+              File "C:\Users\hcche\Documents\GitHub\peforth\setup.py", line 9, in <module>
+                with open("peforth/version.txt") as fp:
+            FileNotFoundError: [Errno 2] No such file or directory: 'peforth/version.txt'
+            ----------------------------------------
+        Command "python setup.py egg_info" failed with error code 1 in C:\Users\hcche\Documents\GitHub\peforth\
+        c:\Users\hcche\Documents\GitHub>
+                
+    [ ] Upgrade from Pypi.org
         pip install --upgrade peforth  <--- project folder is github/peforth, 從 github/ 執行
         github:\>pip install peforth
         Requirement already satisfied: peforth in c:\...\python\python36\lib\site-packages
 
-
-        
-[ ] 螢幕編輯器    
+[ ] 螢幕編輯器
     os.get_terminal_size(...)
-            Return the size of the terminal window as (columns, lines).    
-[x] (forget) 有 error 
+            Return the size of the terminal window as (columns, lines).
+[x] (forget) 有 error
     'Word' object has no attribute 'cfa' <-- 用 getattr(obj,name,None) 即可。
 
 [x] peforth 1.3 uploaded to pypi. 準備來寫 wiki 介紹怎麼
@@ -1387,13 +1404,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] 繼續完成 peforth.f 的 selftest 元件
     --> string 轉譯成 array [d ... d] [r ... r] 要用到
     : test2 char 123,456 s" [{}]" :> format(pop()) py> eval(pop()) ;
-    --> String.indexOf 改成 String.find 
+    --> String.indexOf 改成 String.find
 
     \ Selftest 要 redirect print() 方便取得並檢查螢幕輸出的內容。
     \ 這是個 redirect print() 的有效範例
- 
+
     \ Selftest 要 redirect print() 方便取得並檢查螢幕輸出的內容。
-    \ 改寫成輸出到 buffer. See http://www.cnblogs.com/turtle-fly/p/3280519.html 
+    \ 改寫成輸出到 buffer. See http://www.cnblogs.com/turtle-fly/p/3280519.html
         <accept>
         py> [""] value screen-buffer // ( -- 'string' ) Selftest screen buffer
         <py>
@@ -1401,29 +1418,29 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             def __init__(self,buf):
                 self.stdoutwas=sys.stdout
                 self.buffer=buf
-                
+
             def write(self, output_stream):
                 self.buffer[0] += output_stream
-                
+
             def view(self):
                 self.stdoutwas.write(self.buffer[0])
-            
+
             def reset(self):
                 sys.stdout=self.stdoutwas
         vm.Screenbuffer=Screenbuffer
 
         # redirection
         sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
-        
+
         # print to screen buffer
         sys.stdout.stdoutwas.write("-------1111-----\n")
         print( 'hello')
         print( 'world')
         sys.stdout.stdoutwas.write("-------2222-----\n")
-        
+
         # view screen buffer
         sys.stdout.view()
-        
+
         # reset
         sys.stdout.reset()
         outport(locals())
@@ -1432,7 +1449,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         tib.insert
 [x] 探討，整理，討論幾種產生 function 或執行 inline python code 的方法
     1. projectk.py genxt() 有 __doc__ 專為 code word xt 硬性 _me argument
-    2. projectk.py genfunc() 有 __doc__ 一般用途 name args body 
+    2. projectk.py genfunc() 有 __doc__ 一般用途 name args body
     3. peforth.f compyle 產生一般用途的 annonymous function 沒有 args
     4. <py>...</py> 前後都是 immediate 正常使用沒問題。但若想先組合好 source code 再讓
        </py> or </pyV> 去執行，就有變化了。以下 try, try2 兩個都是有意義的、可以的
@@ -1446,11 +1463,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            OK : try3 char 123 </pyV> ;
        其結果也是莫名其妙的：
            Error! try3 unknown.
-           OK 
+           OK
     5. 直接用 exec(), eval() 執行臨時組合出來的 string, e.g. [r [d [p 的定義。
     6. 直接用 compile(), genfunc() 可能不會有，吧？
- 
-[x] 有很嚴重的 bug 
+
+[x] 有很嚴重的 bug
     OK : test <py> 123 </pyV> ;
     OK see test
     ...snip...
@@ -1474,46 +1491,46 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 順序倒過來怎樣？ 先試 : test py> "abc" ;
         --> OK 一切正常
         --> 再一個空的東西 : nothing ; --> 也正常！
-        --> 就是不能有 inline python? : test2 py> 1234 ; 
+        --> 就是不能有 inline python? : test2 py> 1234 ;
             --> OK 一切正常
     --> 整個重來，那這樣呢？
-        : test <py> 123 </pyV> ; : test2 py> "abc" ; 
+        : test <py> 123 </pyV> ; : test2 py> "abc" ;
         --> 都 OK, 算了，不了了之。可能是寫 selftest 捅出來的哈哈題。
 
 
-[x] python or javascript can't access by address then how to 
-    access by reference instead of access by value? (call by name call by address call by reference)         
+[x] python or javascript can't access by address then how to
+    access by reference instead of access by value? (call by name call by address call by reference)
     昨天寫 selftest 為了取得 screenbuffer 就是得定義成
         py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
     而非
         py> "" value screen-buffer // ( -- 'string' ) Selftest screen buffer
-    否則會 access 不到這個特定的 string. 
-        
+    否則會 access 不到這個特定的 string.
+
 [x] 照著 MetaMoji 2017-9-17 15:15 的討論, 研究把 <selftest> sections 都 dump 出來的辦法。
     --> 從 quit.f 裡一查即知, 應該是一行解決：
-        py> tick('<selftest>').buffer char peforth-selftest.f writeTextFile stop 
-    --> 成功！    
+        py> tick('<selftest>').buffer char peforth-selftest.f writeTextFile stop
+    --> 成功！
     --> 此後就是改寫 peforth-selftest.f 而已。
 [x] (constant) 遇到 reDef writeTextFile 會議常中止 --> 不能用 panic 警告，用 print 即可。
 [x] About to release peforth v1.4
     1. py:~ py>~ ::~ :>~ are so good to have.
     2. selftest not completed yet but nice to have some
     Release steps see Ynote: "Pack peforth to peforth.whl" > 打包步驟。
-    
-[x] v1.4 released, from now on v1.5     
+
+[x] v1.4 released, from now on v1.5
 
 [x] 有了 argv 就不要有 greeting 也不要 reDef warnings.
     --> 所以要提早取得 command line, quit.f 太晚了。
     --> Done!
-[x] PyPI README.rst 有辦法了 可查看 rst2html 也可以 convert from markdown 
+[x] PyPI README.rst 有辦法了 可查看 rst2html 也可以 convert from markdown
     https://stackoverflow.com/questions/26737222/pypi-description-markdown-doesnt-work
     --> 先用 pypandoc module 用轉的看看
         py:~ import pypandoc; push(pypandoc)
-        constant pypandoc // ( -- module ) 
+        constant pypandoc // ( -- module )
         pypandoc :: convert('README.md','rst')
-        Failed in </py> (compiling=False): No pandoc was found: 
-        either install pandoc and add it to your PATH or or call 
-        pypandoc.download_pandoc(...) or install pypandoc wheels 
+        Failed in </py> (compiling=False): No pandoc was found:
+        either install pandoc and add it to your PATH or or call
+        pypandoc.download_pandoc(...) or install pypandoc wheels
         with included pandoc.
     --> OK pypandoc :> download_pandoc py: help(pop())
         Help on function download_pandoc in module pypandoc.pandoc_download:
@@ -1538,40 +1555,40 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         --> download 半天下不來。。。很煩
     --> http://pandoc.org/ 有 online converter , 分小段手動把 README.md 轉成 README.rst 吧！
         pandoc.org 專門做各種文檔格式轉換。
-    --> Online reStructuredText editor http://rst.ninjs.org/ 
+    --> Online reStructuredText editor http://rst.ninjs.org/
     --> Yes!!
-[x] Release v1.5    
+[x] Release v1.5
 [x] 把 update.bat setup.bat setup.py 等等統一起來
-    --> 抄 3we 的 setup.bat 
+    --> 抄 3we 的 setup.bat
     --> done!
 [x] Example in comment of the "words" command needs improvement
     --> 整個改良了，如今可以接受 pattern
 [x] alias 要繼承原來的 help & comment 嗎？ 整個檢查看看。。。
     --> 要，但是 // 改成只有現有的 help 是 "(...)" 才用尾綴的，否則都用取代的。
 [x] Bug: (see) unexpectedly leaves the given tos on the data stack if it's not a Word.
-[x] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f 
-[x] 錄 elearning 介紹 peforth 
+[x] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f
+[x] 錄 elearning 介紹 peforth
 [ ] wiki 介紹 py: help(genxt) py> genxt .source ' + . members 等好用的東西
     --> 唉，當時的層次真是，不好說啊！好是好，推薦自己的好東西，沒有照
         顧 user 的需求。
 [ ] 把網頁或至少 3hta 變成 peforth 的 input box, 解決 multiple line input 的問題。
-    --> 從 peforth 去 launch 3hta include pykb.f 
+    --> 從 peforth 去 launch 3hta include pykb.f
     --> python 能不能知道自己是誰 run 的？如果知道，就可以解決 Wsh.sendkey() 不知往哪 send
         的問題。
 [x] peforth.f selftest almost done, still many to go:
-    <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr    
-[x] 最進新發現的 bug 特別要加進 selftest 
+    <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV> cr . cr
+[x] 最進新發現的 bug 特別要加進 selftest
     --> (see) none Word 之後 stack 沒清乾淨 --> 有兩條路的 words 都可疑！
     --> 甚至，例如 words 最後有多印一個 print() 也是測試的重點。
 [/] readTextFile, writeTextFile 好像都還不能用 -- haha bug 被 inport 取代掉的
 [x] display-off 之後 on 不回來，突然發生，很奇怪。沒了 display 不好 debug.
     display-off 之內如果是 ." hello world" 就沒問題。
-    是 words help 才有問題,而且是卡在 words 裡面了 <== 因為 words 出錯，導致 display-on 
+    是 words help 才有問題,而且是卡在 words 裡面了 <== 因為 words 出錯，導致 display-on
     沒 run 到。只要在 words 後面加上 e 就好了。表示是 nexttoken() 又出問題了，從
     檔案裡執行（而非console command line）時它會繞過 CRLF 往下抓到下一個 token 因此
     程式都亂了，特別是被他抓走的正好就是 display-on 螢幕都沒了，所以難搞。
     這類 nexttoken 可有可無的命令在 selftest 時都可能有問題。
-    應該都會被挑出來。 
+    應該都會被挑出來。
     [x] review 所有用到 word 以及 nexttoken() 的地方。。。
 [x] python -i -m peforth version
     exit 之後會有 error ---> 不見了！可能是 WshShell win32 package
@@ -1590,9 +1607,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
           File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\_sitebuiltins.py", line 26, in __call__
             raise SystemExit(code)
         SystemExit: None
-        >>>    
+        >>>
     --> can repro? python -i __main__.py and bye ... Yes, repro'ed
-    --> OK py: exit() <--- can repro 
+    --> OK py: exit() <--- can repro
         OK py: exit(0) <--- repro too!!!
     --> can it repro on a simplified ~.py instead of peforth?
         --> Yes!! as simple as only one statement in test.py :
@@ -1607,20 +1624,20 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 raise SystemExit(code)
             SystemExit: None
             >>> exit()
-            c:\Users\hcche\Downloads>        
+            c:\Users\hcche\Downloads>
     --> It's not a problem. -i switch in command line normal behavior.
     --> bye to use os._exit(0) instead of exit() can fix the problem.
-    
+
 [x] exit command to set vm.exit=True to stop the ok() in __main__.py
 [/] add bp('prompt') in addition to ok() to avoid the unnecesary awkward
-    breakpoint instruction 
+    breakpoint instruction
     --> Listen to users, don't assume. ok(prompt,loc,cmd) arguments are
         all very useful.
 [x] how to get vm's parent? so as to show greeting message differently
     for different situations. i.e. ok() or peforth.ok() to enter peforth
     interpreter
     --> 本來的目的不知能不能達到，有 parent 的 data 總是好的。
-    
+
 [x] Bug found
     c:\Users\hcche\Documents\GitHub\peforth>python -i -m peforth exit
     OK
@@ -1633,80 +1650,80 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] 因應新檔案配置，setup.bat 的自動化晚點再做 --> Done
 [x] Tests before a Release  v1.07
     [x] 所有 run 法帶 selftest 跑一遍
-        [x] Run setup.bat 做出有 selftest 的 wheel 
+        [x] Run setup.bat 做出有 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth  <==== 啊！不行，會上網抓。
-            pip install 剛做好的 wheel 
-        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+            pip install 剛做好的 wheel
+        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye
         [x] 2. python __main__.py version drop [ ] .s words [ ] exit [ ] bye
-        [x] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+        [x] 3. python -i __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye
         [x] 4. python -i __main__.py version drop [ ] .s [ ] exit [ ] bye
-        [x] 5. python -i -m peforth [ ] selftest .s words exit 
+        [x] 5. python -i -m peforth [ ] selftest .s words exit
         [x] 6. python -i -m peforth version drop
-        [x] 7. python import peforth 
+        [x] 7. python import peforth
                 [ ] selftest peforth.ok() .s words <--- no parent
-                [ ] 1234 bye check echo %errorlevel% 
+                [ ] 1234 bye check echo %errorlevel%
     [x] 所有 run 不帶 selftest 再跑一遍
-        [x] Run setup.bat 做出取消 selftest 的 wheel 
+        [x] Run setup.bat 做出取消 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth  <==== 啊！不行，會上網抓。
-            pip install 剛做好的 wheel 
-        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye 
+            pip install 剛做好的 wheel
+        [x] 1. __main__.py [ ] selfttest [ ] greeting [ ] exit [ ] bye
         [x] 2. python -i -m peforth [ ] selftest .s words exit bye
         [x] 3. python -i -m peforth .' Hello World!!' cr bye
-        [x] 4. python import peforth 
+        [x] 4. python import peforth
         [x] 考慮 README.rst 改良
-            --> GitHub 版的先弄好 
+            --> GitHub 版的先弄好
                 [x] hello world
                     Ynote: 草稿 peforth wiki article hello world  _wiki_
                 [x] README.md --> README.rst by http://rst.ninjs.org
 [x] These words should be moved into selftest section
-        'description', 'expected_rstack', 'expected_stack', 'test-result', 
+        'description', 'expected_rstack', 'expected_stack', 'test-result',
         '[all-pass]', '***', 'all-pass', '[r', 'r]', '[d', 'd]']
-    [x] while display-off dispaly-on should be moved out!    
-[x] a new word to include python file directly -- pyclude 
-    supports commands after #__peforth__ comment by simply removing 
+    [x] while display-off dispaly-on should be moved out!
+[x] a new word to include python file directly -- pyclude
+    supports commands after #__peforth__ comment by simply removing
     all #__peforth__
     Also comment out "from __future__ import print_function" lines
-    
+
     1. read the file
     2. find all #__peforth__ replace with null
     3. find "from __future__ import print_function" comment it out.
-    4. -indent indent 
+    4. -indent indent
     5. add <py> and </py>
-    6. tib.insert the string 
+    6. tib.insert the string
 
     : pyclude ( <pathname.py> -- ... ) // Run the .py file in a <PY>..</PY> space
-        CR word readTextFile py> re.sub("#__peforth__","",pop()) 
-        py> re.sub(r"(from\s+__future__\s+import\s+print_function)",r"#\1",pop()) 
+        CR word readTextFile py> re.sub("#__peforth__","",pop())
+        py> re.sub(r"(from\s+__future__\s+import\s+print_function)",r"#\1",pop())
         -indent indent <py> "    <p" + "y>\n" + pop() + "\n    </p" + "y>\n" </pyV>
         tib.insert ;
         /// Auto-remove all #__peforth__ marks so we can add debug
         /// statements what are only visible when debugging.
-        /// Auto comment out "from __future__ import print_function" 
+        /// Auto comment out "from __future__ import print_function"
         /// that is not allowed when in a <PY>..</PY> space.
 [x] tib.insert is dictate now, an alias.
 [x] Tests before a Release  v1.08
     [x] 所有 run 法帶 selftest 跑一遍
-        [x] Run setup.bat 做出有 selftest 的 wheel 
+        [x] Run setup.bat 做出有 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth  <==== 啊！不行，會上網抓。
-            pip install 剛做好的 wheel 
-        [x] 1. python -i -m peforth [ ] selftest .s words exit 
+            pip install 剛做好的 wheel
+        [x] 1. python -i -m peforth [ ] selftest .s words exit
         [x] 2. python -i -m peforth version drop
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
                 [x] selftest peforth.ok() .s words <--- no parent
-                [x] 1234 bye check echo %errorlevel% 
+                [x] 1234 bye check echo %errorlevel%
     [x] 所有 run 不帶 selftest 再跑一遍
         [x] Run setup.bat 做出取消 selftest 的 wheel <-- 注意！改的是 site-packages\peforth
         [x] pip uninstall peforth
         [x] pip install peforth  <==== 啊！不行，會上網抓。
-            pip install 剛做好的 wheel 
+            pip install 剛做好的 wheel
         [x] 1. python -i -m peforth [ ] selftest .s words exit bye
         [x] 2. python -i -m peforth .' Hello World!!' cr bye
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
         [x] 考慮 README.rst 改良
-[x] version.txt advanced to v1.09 
+[x] version.txt advanced to v1.09
 [x] the way I get the path is not good, data files are in a separated folder
     in ubuntu. I have to manually copy data files to lib/python3.5
     Copy : none .py files are in ~/.local/lib/site-packages/peforth
@@ -1715,10 +1732,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         __init__.py  __main__.py  projectk.py
     Solutions I found on Stackoverflow are bad, do it manually is fine.
     [x] A wiki page discusses this. done.
-    [ ] 有機會解掉了。Search my Ynote: "2018/01/17 16:39 插曲，意外發現查出 python 
-        的東西都放哪裡的方法了！peforth 在 Ubuntu 上跑可能有救了。_peforth_ 
+    [ ] 有機會解掉了。Search my Ynote: "2018/01/17 16:39 插曲，意外發現查出 python
+        的東西都放哪裡的方法了！peforth 在 Ubuntu 上跑可能有救了。_peforth_
         _ubuntu_"
-        [ ] Study this : 
+        [ ] Study this :
         c:\Users\hcche\Documents\GitHub\DeepSpeech>py -m site
         sys.path = [
             'c:\\Users\\hcche\\Documents\\GitHub\\DeepSpeech',
@@ -1734,10 +1751,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         USER_BASE: 'C:\\Users\\hcche\\AppData\\Roaming\\Python' (doesn't exist)
         USER_SITE: 'C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages' (doesn't exist)
         ENABLE_USER_SITE: True
-        c:\Users\hcche\Documents\GitHub\DeepSpeech>        
-    
-[ ] 從 c:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tf17_dropout\full_code-2.py 
-    裡，開發 harry_port() 的經驗看來，有了這麼強大的工具之後，用它臨時定義出來的 
+        c:\Users\hcche\Documents\GitHub\DeepSpeech>
+
+[ ] 從 c:\Users\hcche\Documents\GitHub\Morvan\tutorials\tensorflowTUT\tf17_dropout\full_code-2.py
+    裡，開發 harry_port() 的經驗看來，有了這麼強大的工具之後，用它臨時定義出來的
     words 不希望隨著 breakpoint 結束而被 --- marker --- 清除。怎麼辦？
     1.  要保留的東西放到 tutorial 的前面，或先 include 另一個 tool kit
         --> 這個好！
@@ -1755,41 +1772,41 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     Failed in </py> (compiling=False): pop from empty list
     Body:
     push(pop().data[pop()])
-    OK    
+    OK
     ==> 問題可能是出在 digit 裡面用到 <text>...</text> dictate 的 macro 形式
         證實了，因為不用該 macro 就好了
 
 [ ] harry_port() 的使用技巧，要寫進 help 裡！像這個例子，不能用 <py>...</py> block
     因為它會先 compile 而這個應用不能先被 compile :
-    
-    OK <text> locals().update(harry_port()); 
-    batch_X, batch_Y = mnist.train.next_batch(100); outport(locals()) </text> 
+
+    OK <text> locals().update(harry_port());
+    batch_X, batch_Y = mnist.train.next_batch(100); outport(locals()) </text>
     py: exec(pop())
-    
+
 [x] exit 不夠力，會往下做。要再補個 stop 才行。
     code stop reset() end-code // ( -- ) Stop the TIB loop
-    code exit 
-        if compiling: comma(EXIT) 
-        else: vm.exit=True ; reset() <---- 補 reset() 即 stop 
+    code exit
+        if compiling: comma(EXIT)
+        else: vm.exit=True ; reset() <---- 補 reset() 即 stop
         end-code immediate
         // ( -- ) Exit this colon word.
     靠！意外發現這個 bug !! 其實早就看到 exit 之後會暴衝，沒太在意。
-[x] <accept> nop </accept> 同一行不行，要改良嗎？ ---> Done! 
+[x] <accept> nop </accept> 同一行不行，要改良嗎？ ---> Done!
 [ ] 開發中，不要動到 site-packages 出錯很麻煩，所以還是要從 working folder 執行
     不要每次都得先 setup.bat 改入 site-packages
-    --> 一時搞不定， site-package 裡的 __main__.py 總是要 import peforth 
+    --> 一時搞不定， site-package 裡的 __main__.py 總是要 import peforth
         因此一定不是用 project directory 版。
-    
+
 [x] Tests before a Release  v1.09
     [x] 所有 run 法帶 selftest 跑一遍
-        [x] Run setup.bat 做出有 selftest 的 wheel 
+        [x] Run setup.bat 做出有 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [ ] selftest .s words exit 
+        [x] 1. python -i -m peforth [ ] selftest .s words exit
         [x] 2. python -i -m peforth version drop
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
                 [x] selftest peforth.ok() .s words <--- no parent
-                [x] 1234 bye check echo %errorlevel% 
+                [x] 1234 bye check echo %errorlevel%
     [x] 所有 run 不帶 selftest 再跑一遍
         [x] 注意！改的是 site-packages\peforth\quit.f 所以要
             在 setup.bat 做 wheel 以前插入這個動作！！！！！
@@ -1798,23 +1815,23 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
         [x] 1. python -i -m peforth [x] selftest .s words exit bye
         [x] 2. python -i -m peforth .' Hello World!!' cr bye
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
         [x] 考慮 README.rst 改良
-    [x] version 改成 1.11  (必須跳過 1.10 會變成 1.1）  
+    [x] version 改成 1.11  (必須跳過 1.10 會變成 1.1）
 [ ] -indent 可以更聰明一點，目的讓 <text>...</text> 內部更自由。
     當 </text> 所在行是 blank line 時，就用它的長度當作 -indent 的最小值，這
     麼一來 <text> 之後就可以接著放東西。那它的 space 數比 </text> 之前小，就
     會被「加長」到「最小值」。這樣更自由。
-    
-[x] exit stop 之外，還需要一個中止 including 的方法。或者是仔細定義 stop, exit 
-    的差別或者合併。vm.exit 是給 ok() 看的，很明顯它用來回到 python interpreter 
-    這已經有點頭痛了，因為 exit 同時也是給 inner loop 看的 instruction 跟 RET 
+
+[x] exit stop 之外，還需要一個中止 including 的方法。或者是仔細定義 stop, exit
+    的差別或者合併。vm.exit 是給 ok() 看的，很明顯它用來回到 python interpreter
+    這已經有點頭痛了，因為 exit 同時也是給 inner loop 看的 instruction 跟 RET
     等效。意思是，如果 exit 再有別的意思，恐怕連我自己都糊塗了。那只剩 stop 了，
     stop 用來打斷 outer loop 也很明確。所以，需要新的 word ... break-include
     因為 sinclude 是用 dictate 來處理 .f file 的，可能把 ntib 改一下就有 break-include
     的效果了，試試看，把斷點斷在 xray.f 裡查看半路的 tib 含不含 tutrial 。。。
-    ---> Bingo!! 
-    
+    ---> Bingo!!
+
     : break-include ( -- ) // Break including .f file
         py: vm.ntib=len(tib) ;
     stop 就是 reset()
@@ -1827,10 +1844,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         py:~ from tensorflow.examples.tutorials.mnist import input_data as mnist_data; push(mnist_data)
         parent :: ['mnist_data']=pop(1) \ pop(1) 很傷腦筋， in-line 要還原成 python 才看得懂。
 
-[x] *debug* 改寫, 不要用 pdb.set_trace() 了    
-    不用 import 就使用 pdb 的方法 
+[x] *debug* 改寫, 不要用 pdb.set_trace() 了
+    不用 import 就使用 pdb 的方法
     py: sys.modules['pdb'].set_trace()
-    : *debug* ( <prompt> -- ... ) // FORTH breakpoint 
+    : *debug* ( <prompt> -- ... ) // FORTH breakpoint
         BL word ( prompt ) py: ok(pop(),cmd="cr") ;
         /// How to invoke pdb:
         /// py: sys.modules['pdb'].set_trace()
@@ -1840,15 +1857,15 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     because the following prompt needs to read tib immediatedly
 [x] Bug found,
         OK help a
-        Word in phaseB <Word 'help'>: 'int' object has no attribute 'help'        
-    help improved    
-[x] new word "import" works fine        
+        Word in phaseB <Word 'help'>: 'int' object has no attribute 'help'
+    help improved
+[x] new word "import" works fine
 [x] new word __main__ works fine
     s" dos title " __main__ :> __file__ + CRLF + dictate drop
     Note! 如果沒有 CRLF 則 dos 會抓到 dictate 之後去，連 drop 都當成 command line 的一部份
-[x] release 1.11 
+[x] release 1.11
     new words import, __main__, break_include, and improved *debug* and help
-    
+
 [ ] ( ... ) comment nested
 [x] CRLF leaves '\r\n' on TOS
 [ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
@@ -1860,19 +1877,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     (Pdb) sys.argv[0]
     'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages\\ipykernel_launcher.py'
     (Pdb) sys.argv[0].endswith('ipykernel_launcher.py') --> True , the key to know about the case
-	
+
 	跑 jupyter notebook 又發生 Error! -f unknown. 的問題。先前是因為
 	jupyter notebook 下 import peforth 會有 unexpected command line 如上。
 	這不是改好了嗎？ --> 光排除 py> sys.argv[0].endswith('.py') 不夠
 	py> sys.argv[0].endswith(('.py','.ipy','.ipynb'))
-	
+
 [x] itchat 執行中，常有這個問題發生：
     Traceback (most recent call last):
       File "C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\projectk.py", line 342, in outerExecute
         f = float(token) # triggers exception if token is malformed
     ValueError: could not convert string to float: '<mmreader><category'
     為何 try: exception: 攔不住它？
-    
+
     Reproducing steps (at home on my desktop) :
         c:\Users\hcche\Documents\GitHub\ibrainfuck\bfinterpreter>python  v1.12 at home
         >>> import peforth
@@ -1884,25 +1901,25 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ValueError: could not convert string to float: 'sys'
     終於找到複製方法了。。。。
     --> 改寫 projectk.py > outer() 之後好了。
-    
+
 [x] study how to run brainfuck interpreter
-    c:\Users\hcche\Documents\GitHub\ibrainfuck 
-    --> See Ynote __brainfuck_ 
+    c:\Users\hcche\Documents\GitHub\ibrainfuck
+    --> See Ynote __brainfuck_
 [x] 因 bug 發現 harry_port() 的更佳用法  （quit.f updated）
     \ Study 三寶
-    \ 1. DOS Box title 
+    \ 1. DOS Box title
         import peforth; peforth.ok(loc=locals(),cmd="include xray.f")
     \ 2. Breakpoint
         peforth.ok('11> ',cmd="parent inport")
     \ 3. Lab of copy-paste
-        <accept> <text> 
+        <accept> <text>
         # ---------------------------------------------------------------------------
-        all locals() can use 
+        all locals() can use
         # ---------------------------------------------------------------------------
         </text> -indent py: exec(pop(),harry_port()) # If only globals is given, locals defaults to it.
-        </accept> dictate 
+        </accept> dictate
 
-[ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help 
+[ ] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help
     --> 唉，試了就知道，很醜！
 [x] msg is a forth value and also a peforth global.
     blabla bla something wrong.
@@ -1913,70 +1930,70 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     http://nbviewer.jupyter.org/
     How to install Ipeforth kernel for jupyter notebook :
     Copy kernel.json to here:
-        %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-        c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-    manually create the directory if 
+        %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json
+        c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json
+    manually create the directory if
         %USERPROFILE%\AppData\Roaming\jupyter\kernels\
     is not existing.
-    
+
 [x] Tests before a Release  v1.13
     [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
-            Run setup.bat 做出取消 selftest 的 wheel 
+            Run setup.bat 做出取消 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [ ] no-selftest .s words exit 
+        [x] 1. python -i -m peforth [ ] no-selftest .s words exit
         [x] 2. python -i -m peforth version drop
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
                [x] selftest peforth.ok() .s words <--- no parent
-               [x] 1234 bye check echo %errorlevel% 
-        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
         [x] 考慮 README.rst 改良
-            [x] 若有改過 README.rst 則 wheel 就要重做 
+            [x] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
     [x] 所有 run 法帶 selftest：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
             Run setup.bat 更新本地版本以供測試
         [x] 1. python -i -m peforth [ ] with-selftest .s words exit bye
         [x] 2. ipython -i -m peforth .' Hello World!!' cr bye
-        [x] 3. ipython import peforth .s words 
+        [x] 3. ipython import peforth .s words
                [x] selftest peforth.ok() .s words <--- w/parent
-               [x] 1234 bye check echo %errorlevel% 
-        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
-        [x] 考慮 README.rst 改良 
-            [x] 若有改過 README.rst 則 wheel 就要重做 
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [x] 考慮 README.rst 改良
+            [x] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [x] version 改成 1.14  (必須跳過 1.10 會變成 1.1）  
+    [x] version 改成 1.14  (必須跳過 1.10 會變成 1.1）
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] 讓 jupyter feature peforth --> 已經加進 jupyter 的 kernel list:
         https://github.com/jupyter/jupyter/wiki/Jupyter-kernels
 
 
 [ ] Like harry_port that brings all wanted variables to projectk
-    How to make it easier? 
+    How to make it easier?
     [ ] Study when deep in a certain module, how peforth find and bring in
-        specified variables? 
-        1. debug the toy.. keras exercise, breakpoint deep in a keras module 
+        specified variables?
+        1. debug the toy.. keras exercise, breakpoint deep in a keras module
         2. instead of using the trick of loc={**locals(),**{'foo':foo,'bar':bar}}
            try to find foo,bar actual parent
         3. access volatile variables out of their scope may not be a good idea
            but being able to access them at a peforth breakpoint is necessary.
-           
+
         tensor_shape is imported in C:\Users\hcche\AppData\Local\Programs\Python\Python36\Lib\site-packages\tensorflow\python\keras\_impl\keras\layers\wrappers.py
-    
+
     char input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
-    __main__ :: peforth.projectk.{0}=v('{0}') 
+    __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
     char tf <text> \ global variable
     __main__ :> {0} constant {0}
-    __main__ :: peforth.projectk.{0}=v('{0}') 
+    __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
-  * 1. char foobar module ( module ) 
+  * 1. char foobar module ( module )
     2. py: setattr(sys.modules['foobar'].projectk,'foobar',v('foobar')) \ add to peforth
 
   * 1. import numpy constant np // ( -- numpy ) module object, method #1
@@ -1988,105 +2005,105 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 
     char child_input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
-    __main__ :: peforth.projectk.{0}=v('{0}') 
+    __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
     \ make librosa a global in peforth
-    char librosa py> tick(tos()) execute py: globals()[pop()]=pop() 
+    char librosa py> tick(tos()) execute py: globals()[pop()]=pop()
 
-    \ even simpler way 
-    import librosa constant librosa char librosa librosa py: globals()[pop()]=pop()          
-    
+    \ even simpler way
+    import librosa constant librosa char librosa librosa py: globals()[pop()]=pop()
+
     char input_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
-    __main__ :: peforth.projectk.{0}=v('{0}') 
+    __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
     char tensor_shape <text> \ local variable
     locals :> ['{0}'] constant {0}
-    __main__ :: peforth.projectk.{0}=v('{0}') 
+    __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
     char selfLayer <text> \ local variable
     locals :> ['{0}'] constant {0}
-    __main__ :: peforth.projectk.{0}=v('{0}') 
+    __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
     import peforth # [ ] _debug_
     peforth.ok(cmd='''
-      0 value Count 
+      0 value Count
       none value child_output_shape
       exit
       ''')
-    
-    try: 
+
+    try:
         child_output_shape = child_output_shape.as_list()
     except Exception as err:
         peforth.ok('33> ',loc={**locals(),**{'tensor_shape':tensor_shape,'self.layer':self.layer,'err':err}})
-    
-    locals :: pop('peforth') locals inport 
+
+    locals :: pop('peforth') locals inport
     tensor_shape :> TensorShape(v('input_shape')).as_list() constant input_shape2
-    tensor_shape :> TensorShape([v('input_shape2')[0]]+v('input_shape2')[2:]) 
-        constant child_input_shape 
+    tensor_shape :> TensorShape([v('input_shape2')[0]]+v('input_shape2')[2:])
+        constant child_input_shape
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> (?, 2048) (<class 'tensorflow.python.framework.tensor_shape.TensorShape'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> (?, 2048) (<class 'tensorflow.python.framework.tensor_shape.TensorShape'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
     self.layer :> _compute_output_shape(v('child_input_shape')) tib. \ ==> None (<class 'NoneType'>)
-    
+
 [x] jupyter notebook 裡無法 exit , 每次 exit 都會留下一個東西在 stack 裡，出不去。
     load>   exit
     load> .s
           0: <IPython.core.autocall.ZMQExitAutocall object at 0x0000020577BF5EF0> (<class 'IPython.core.autocall.ZMQExitAutocall'>)
-    load> 
+    load>
     --> 用 .py 比較看看 --> 沒這問題。
     --> 直接進去，直接出來看看 --> 馬上卡住了。
-    --> 簡化 the peforth cell, 比較結果 ... 在 locals inport 之後多出一個 exit 
+    --> 簡化 the peforth cell, 比較結果 ... 在 locals inport 之後多出一個 exit
         看起來還是原來的 exit 但多出來就是不對，而且 --- marker clean up 之後好了！
         充分證明就是它。
     --> 怎麼發生的？--> ipython case 下，當時的 locals() 就是有 exit quit 等一堆東西
         正好 exit 撞上了，而 locals :> ['exit'] . cr --> <IPython.core.autocall.ZMQExitAutocall object at 0x000001DBB24B5EF0>
-        正是那個怪東西。 
+        正是那個怪東西。
         RI
-        
+
 [ ] 最好 inport 能用挑的。程序如下：
 
     load2> locals keys . cr
         dict_keys(['__name__', '__doc__', '__package__', '__loader__', '__spec__', '__builtin__', '__builtins__', '_ih', '_oh', '_dh', 'In', 'Out', 'get_ipython', 'exit', 'quit', '_', '__', '___', '_i', '_ii', '_iii', '_i1', 'tf', '_i2', 'tflearn', '_i3', 'speech_data', '_i4', 'time', 'peforth', 'epoch_count', 'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 'classes', '_i5', 'batch', 'word_batch', '_i6', 'net', 'model', 'x', '_i7'])
-    \ 從上表裡面挑要用的東西 
-        <py> ['get_ipython', 'tflearn', 'speech_data', 'time', 'epoch_count', 
-         'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 
+    \ 從上表裡面挑要用的東西
+        <py> ['get_ipython', 'tflearn', 'speech_data', 'time', 'epoch_count',
+         'learning_rate', 'training_iters', 'batch_size', 'width', 'height',
          'classes', 'batch', 'word_batch', 'net', 'model', 'x']
         </pyV> ( [挑過的keys] )
     \ 從 locals 裡面挑這些東西出來
         <py> dict([(k,v) for k,v in v('locals').items() if k in tos()])
         </pyV> nip ( {挑過的locals} )
-    \ 可以放心地 inport 成 peforth words 了    
-        inport 
-           
-[ ] python virtualenv http://docs.python-guide.org/en/latest/dev/virtualenvs/  
+    \ 可以放心地 inport 成 peforth words 了
+        inport
+
+[ ] python virtualenv http://docs.python-guide.org/en/latest/dev/virtualenvs/
     解決的問題也是 FORTH 的問題，參考人家怎麼解的，可以想想怎麼沿用，看如何只 include 必要的東西。
-[x] Ubuntu 的問題好像有解了, 
+[x] Ubuntu 的問題好像有解了,
 	--> Ubuntu 之下
-	OK site :> USER_BASE . cr  不存在！ 
-	/home/hcchen5600/.local    
+	OK site :> USER_BASE . cr  不存在！
+	/home/hcchen5600/.local
 	OK site :> USER_SITE . cr  不存在！
 	/home/hcchen5600/.local/lib/python3.6/site-packages
 	OK site :> PREFIXES . cr
 	['/usr', '/usr']
-	實際東西放在 
-	site.PREFIXES[0] + /local/lib/site-packages/peforth/	
+	實際東西放在
+	site.PREFIXES[0] + /local/lib/site-packages/peforth/
 
-	--> windows 
+	--> windows
 	OK site :> USER_BASE . cr  不存在！
 	C:\Users\hcche\AppData\Roaming\Python
 	OK site :> USER_SITE . cr  不存在！
 	C:\Users\hcche\AppData\Roaming\Python\Python36\site-packages
 	OK site :> PREFIXES . cr
 	['C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36', 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36']
-	實際東西放在 
-	site.PREFIXES[0] + /lib/site-packages/peforth/	
+	實際東西放在
+	site.PREFIXES[0] + /lib/site-packages/peforth/
 
-	--> Ubuntu virtualenv 
+	--> Ubuntu virtualenv
 	>>> import site
 	>>> site.PREFIXES
 	['/home/hcchen5600/GitHub/DeepSpeech', '/home/hcchen5600/GitHub/DeepSpeech']
@@ -2097,7 +2114,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	實際東西放在
 	site.PREFIXES[0] + /lib/site-packages/peforth/
 	也就是
-	\rootfs\home\hcchen5600\GitHub\DeepSpeech\lib\site-packages\peforth\.. 
+	\rootfs\home\hcchen5600\GitHub\DeepSpeech\lib\site-packages\peforth\..
 
 	\ Windows 下可 normalize the path
 	照上面實施， windows 下變成
@@ -2118,7 +2135,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 
 	OK py> path ntpath :> normpath(pop()) . cr
 	C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth
-	OK	
+	OK
 	\ 或者檢查看是否 Windows
 	In [8]: sys.modules.get('nt') <--- None 就是沒有，就不是 windows
 	In [9]: sys.modules.get('sys')
@@ -2135,58 +2152,58 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] Ubuntu 的問題應該已經解決了，要推廣 peforth 必須趕快 release
 	Tests before a Release  v1.14
     [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
-            Run setup.bat 做出取消 selftest 的 wheel 
+            Run setup.bat 做出取消 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [x] no-selftest .s words exit 
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
         [x] 2. python -i -m peforth version drop
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
                [x] selftest peforth.ok() .s words <--- no parent
-               [x] 1234 bye check echo %errorlevel% 
+               [x] 1234 bye check echo %errorlevel%
         [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
         [x] 5. repeat 以上 in ubuntu
-			   --> copy the wheel to WSL ubuntu 
+			   --> copy the wheel to WSL ubuntu
 			   --> use virtualenv is fine
         [/] 考慮 README.rst 改良
-            [/] 若有改過 README.rst 則 wheel 就要重做 
+            [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
     [ ] 所有 run 法帶 selftest：
-        [ ] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+        [ ] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
             Run setup.bat 更新本地版本以供測試
         [ ] 1. python -i -m peforth [ ] with-selftest .s words exit bye
         [ ] 2. ipython -i -m peforth .' Hello World!!' cr bye
-        [ ] 3. ipython import peforth .s words 
+        [ ] 3. ipython import peforth .s words
                [ ] selftest peforth.ok() .s words <--- w/parent
-               [ ] 1234 bye check echo %errorlevel% 
-        [ ] 4. jupyter notebook --> .s cd help bye .s cd help exit 
-        [ ] 考慮 README.rst 改良 
-            [ ] 若有改過 README.rst 則 wheel 就要重做 
+               [ ] 1234 bye check echo %errorlevel%
+        [ ] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [ ] 考慮 README.rst 改良
+            [ ] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [x] version 改成 1.15  (必須跳過 1.10 會變成 1.1）  
-	[ ] 直接用測過的 wheel update Pypi 
+    [x] version 改成 1.15  (必須跳過 1.10 會變成 1.1）
+	[ ] 直接用測過的 wheel update Pypi
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 
 [x] WSL Ubuntu virtualenv weired experience
-	when pip install peforth in a virtualenv --> permission denied 
+	when pip install peforth in a virtualenv --> permission denied
 	--> so I use sudo and this will success but peforth will be installed
 		to global instead of the virtualenv! see https://stackoverflow.com/questions/14665330/pip-requirement-already-satisfied
 	--> The reason why permission denied was peforth-1.14-py3-none-any.whl which
-		was copied by windows and it needs chmod 777 
+		was copied by windows and it needs chmod 777
 		\ see the correct example below:
 		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$ chmod 777 peforth-1.14-py3-none-any.whl
 		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$ pip install peforth-1.14-py3-none-any.whl
 		Processing ./peforth-1.14-py3-none-any.whl
 		Installing collected packages: peforth
 		Successfully installed peforth-1.14
-		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$	
+		(DeepSpeech) hcchen5600@31ENB667:~/GitHub/DeepSpeech$
 [x] peforth.vm.things 的 peforth.things alias
     14:59 2018/03/11 讓 vm.execute() vm.dictate() peforth.ok() 都傳回 vm 以便 support function cascade
     19:22 2018/03/11 除了以上，連 stack, push, words, ... etc 都加上去了。
 [x] %f magic command 暫無 auto-load, 必須 import peforth 才有 --> 解決了，雖然這樣也好。
-    "c:\Users\hcche\OneDrive\文件\Jupyter Notebooks\Creating an IPython extension with custom magic commands.ipynb" 
+    "c:\Users\hcche\OneDrive\文件\Jupyter Notebooks\Creating an IPython extension with custom magic commands.ipynb"
     討論複製過來如下:
     [x] 如上述加上 c.InteractiveShellApp.extensions = ["c:\\Users\\hcche\\Downloads\\csvmagic.py"] 之後，無效。參考 [stackoverflow](https://stackoverflow.com/questions/27483637/auto-reload-extension-not-reloading-on-change) 學到用 '%load_ext c:\\Users\\hcche\\Downloads\\csvmagic.py' 在 jupyter notebook 或 ipython 中試試看 . . . 果然是 path 寫法的問題。照以上範例, csvmagic.py 位在 current directory 直接 '%load_ext csvmagic' 就可以了。如果不在 crrent directory 那就是要 importable 則手動放到 site-packages 去亦可，討論如下。
     [x] 又或者必須是個 -m 搆得著的 module? 對了！上述的 importable 就是這個意思。--> 手動放進 site-packages (檔名改成 __init__.py) 就 importable 了，試試看 --> 成功！但是必須跑過 '%load_ext csvmagic' 之後才有 %%csv 不會自動 load。
@@ -2195,12 +2212,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         # from IPython.core.magic import (register_line_magic, register_cell_magic)
         # @register_line_magic
         # def f(line):
-        #     peforth.vm.dictate(line)   
-        # 
+        #     peforth.vm.dictate(line)
+        #
         # @register_cell_magic
         # def f(line, cell):
         #     peforth.vm.dictate(cell)
-            
+
         from IPython.core.magic import register_line_cell_magic
         @register_line_cell_magic
         def f(line, cell=None):
@@ -2210,19 +2227,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 peforth.vm.dictate(cell)
 
         def load_ipython_extension(ipython):
-            ipython.register_magic_function(f, 'line_cell')  
+            ipython.register_magic_function(f, 'line_cell')
             # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
     [x] (錯!) 放進 GitHub\peforth\peforthkernel.py
     [x] (錯!) copy 到 c:\Users\hcche\AppData\Roaming\jupyter\kernels\peforth\kernel.json 所指到的位置："c:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\Lib\\site-packages\\peforth\\peforthkernel.py"
     [x] 重新啟動 jupyter notebook --> 結果無效, 這表示上面這段 code 沒有被執行到。可能放在 GitHub\peforth\peforthkernel.py 不對(確定不對)，也可能另有某個 .json 要指對地方。看 document 吧! --> 已知！c.InteractiveShellApp.extensions = ['peforth'] 就這行，所以上面這段要放在 peforth 的 __init__.py 才對 (對了)--> 再試試看 ... 還是無效，必須 import peforth 才行。目前這樣可以滿意了。
-    [x] 我猜是 c.InteractiveShellApp.extensions = ['csvmagic','peforth'] 所在的 
-        profile_default\ipython_config.py 整個都無效之故。先前嘗試 "28 Jupyter 
+    [x] 我猜是 c.InteractiveShellApp.extensions = ['csvmagic','peforth'] 所在的
+        profile_default\ipython_config.py 整個都無效之故。先前嘗試 "28 Jupyter
         Notebook tips, tricks and shortcuts" 該檔的另一個設定也是無效。從 path 裡
-        有個 /test/ 看來，可能不是正確的檔案。--> 由 %f get_ipython :> ().ipython_dir 
-        . cr 得知正確的位置是：`C:\Users\hcche\.ipython` 才對，也就是 
+        有個 /test/ 看來，可能不是正確的檔案。--> 由 %f get_ipython :> ().ipython_dir
+        . cr 得知正確的位置是：`C:\Users\hcche\.ipython` 才對，也就是
         `C:\Users\hcche\.ipython\profile_default\ipython_config.py` --> 試試看，
-        有沒有自動 load_ext . . . 有了！剛改好 `profile_default\ipython_config.py` 
+        有沒有自動 load_ext . . . 有了！剛改好 `profile_default\ipython_config.py`
         就馬上對新開的 jupyter notebook 有效。
 [x] ipython 的 magic initialization in __init__.py 要防呆，避免從 python (none ipython)
     執行時出問題。判斷有沒有 ipython 的方法要看在哪裡判斷的， peforth __init__.py 裡
@@ -2236,44 +2253,72 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         '__IPYTHON__' in __builtins__.keys()
         B i n g o ! ! 果然成功了，我發現 __builtins__ 的定義再那之後會變，而
         __builtin__ 在那時甚至都還不存在。
-        
-[ ] Tests before a Release  v1.15
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+
+[x] Tests before a Release  v1.15
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
-            Run setup.bat 做出取消 selftest 的 wheel 
+            Run setup.bat 做出取消 selftest 的 wheel
         [x] pip uninstall peforth
         [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [x] no-selftest .s words exit 
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
         [x] 2. python -i -m peforth version 12345 bye --> check errorlevel
-        [x] 3. python import peforth 
+        [x] 3. python import peforth
                [x] selftest peforth.ok() .s words <--- no parent
-               [x] 1234 bye check echo %errorlevel% 
+               [x] 1234 bye check echo %errorlevel%
         [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
                %f %%f magic command
         [x] 5. repeat 以上 in ubuntu
 			   --> pip3 install (/mnt/...the wheel) to WSL ubuntu
 			   --> use virtualenv is fine
         [/] 考慮 README.rst 改良
-            [/] 若有改過 README.rst 則 wheel 就要重做 
+            [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
     [x] 所有 run 法帶 selftest：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f 
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
             Run setup.bat 更新本地版本以供測試
         [x] 1. python -i -m peforth [x] with-selftest .s words exit bye
         [x] 2. ipython -i -m peforth .' Hello World!!' cr bye
-        [x] 3. ipython import peforth .s words 
+        [x] 3. ipython import peforth .s words
                [x] selftest peforth.ok() .s words <--- w/parent
-               [x] 1234 bye check echo %errorlevel% 
-        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit 
-        [/] 考慮 README.rst 改良 
-            [/] 若有改過 README.rst 則 wheel 就要重做 
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-	[x] 直接用測過的 wheel update Pypi 
-    [x] version 改成 1.16  (必須跳過 1.10 會變成 1.1）  
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv
+	[x] 直接用測過的 wheel update Pypi
+    [x] version 改成 1.16  (必須跳過 1.10 會變成 1.1）
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+
+[x] README.md needs to improve the installation guide for jupyter notebook support
+    Install peforth kernel for Jupyter Notebook
+
+    If you have ipython and jupyter installed, do following steps to add peforth
+    as a kernel of Jupyter Notebook,
+    Install peforth kernel for Jupyter Notebook
+    1. install peforth
+        pip install peforth
+    2. copy
+          c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\kernel.json
+       到
+          c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json
+       如果上面的 target 目錄 kernels\ 或 peforth\ 不存在，則請手動建立這些目錄
+
+    3. 編輯剛才這個檔案
+          c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json
+       照您的電腦實際情況，訂正其中的這個 path
+          c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py
+       以上是我的電腦的範例
+
+[x] setup.bat update 上 Pypi 成功之後，有個 error :batch not found 之類。
+    upload v1.15 時發現的。應該是因為把 bye comment 掉了，往下看到 batch 的東西了。
+    
+[ ] v1.15 %f 也發生了 comment 之後如果沒有 whitespace 會被下一行看到的問題
+    %f __main__ :> census_train['age'].head(2) . cr \ 奇怪，它怎知這 dtype 是 int64?
+    13:34 18/05/22 複製不出來, 上面這法都忘了怎來的了。
+    
+[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv , _the_path_issue_
     ipython still failed, message:
     ...snip...
     ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
@@ -2282,50 +2327,405 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     ---> 35     f = open(pathname,'r',encoding='utf-8')
          36     # for line in f:
          37     s = f.read()
-    FileNotFoundError: [Errno 2] No such file or directory: 
+    FileNotFoundError: [Errno 2] No such file or directory:
     '/usr/local/lib/site-packages/peforth/version.txt'
     ...snip...
-      
-    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接 
+
+    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接
         sudo pip3 install ipython
-        灌起來的 ipython, 是這個原因嗎？
+        灌起來的 ipython, 是這個原因嗎？ <-- 是， RI: virtualenv 的 path 又不一樣了。
         19:07 2018-03-12 剛才為了 release 1.15 版在 T550 WSL ubuntu 上複製到了以上現象，
         找不到 version.txt. 但是 python -m peforth 沒問題，只有 ipython 進去後
         import peforth 才有這個問題。
+    --> 實際位置：
+            c:\Users\hcche\AppData\Local\Packages\CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc
+            \LocalState\rootfs\home\hcchen5600\tmp\deepspeech-venv\lib\site-packages\peforth\version.txt
+        Ubuntu virtualenv 下以為的位置：
+            > /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py(35)readTextFile()
+                 33
+                 34 def readTextFile(pathname):
+            ---> 35     f = open(pathname,'r',encoding='utf-8')
+                 36     # for line in f:
+                 37     s = f.read()
+            ipdb> p path
+            '/usr/local/lib/site-packages/peforth/'
+    [x] 答案找到了 <== 錯！ site module 不是答案。site 看到的是 root or global 的 path, 看不到 virtualenv （per user）的。
+        \ 這應該是 ipython virtualenv
+        In [3]: import site
+        ipdb> dir(site)
+        ['ENABLE_USER_SITE', 'PREFIXES', 'USER_BASE', 'USER_SITE', '__builtins__',
+        ipdb> site.PREFIXES
+        ['/usr', '/usr']
+        ipdb> site.USER_BASE
+        '/home/hcchen5600/.local'
+        ipdb> site.USER_SITE
+        '/home/hcchen5600/.local/lib/python3.6/site-packages'
+        ipdb> site.ENABLE_USER_SITE
+        True
 
-[ ] README.md needs to improve the installation guide for jupyter notebook support
-    Install peforth kernel for Jupyter Notebook
+        \ Windows ipython
+        OK __main__ :> site constant site // ( -- module )
+        OK site . cr
+        <module 'site' from 'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site.py'>
+        OK site :> PREFIXES . cr
+        ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36', 'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36']
+        OK site :> USER_BASE . cr
+        C:\Users\hcche\AppData\Roaming\Python
+        OK site :> USER_SITE . cr
+        C:\Users\hcche\AppData\Roaming\Python\Python36\site-packages
+        OK site :> ENABLE_USER_SITE . cr
+        True
 
-    If you have ipython and jupyter installed, do following steps to add peforth 
-    as a kernel of Jupyter Notebook,
+        \ WSL ubuntu normal
+        OK __main__ :> site constant site // ( -- module )
+        OK site :> PREFIXES . cr
+        ['/usr', '/usr']
+        OK site :> USER_BASE . cr
+        /home/hcchen5600/.local
+        OK site :> USER_SITE . cr
+        /home/hcchen5600/.local/lib/python3.6/site-packages
+        OK site :> ENABLE_USER_SITE . cr
+        True
+
+        \ WSL ubuntu in virtualevn
+        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ ipython
+        /usr/local/lib/python3.6/dist-packages/IPython/core/interactiveshell.py:728: UserWarning: Attempting to work in a virtualenv. If you encounter problems, please install IPython inside the virtualenv.
+          warn("Attempting to work in a virtualenv. If you encounter problems, please "
+        Python 3.6.4 (default, Dec 19 2017, 17:29:45)
+        Type 'copyright', 'credits' or 'license' for more information
+        IPython 6.2.1 -- An enhanced Interactive Python. Type '?' for help.
+
+        In [1]: import site
+
+        In [2]: site.ENABLE_USER_SITE
+        Out[2]: True
+
+        In [3]: site.USER_SITE
+        Out[3]: '/home/hcchen5600/.local/lib/python3.6/site-packages'
+
+        In [4]: site.USER_BASE
+        Out[4]: '/home/hcchen5600/.local'
+
+        In [5]: site.PREFIXES
+        Out[5]: ['/usr', '/usr']
+
+        \ site 看到的是 root or global 的 path, 看不到 virtualenv 的
+        In [1]: import site; print(site.getsitepackages())
+        ['/usr/lib/python3.6/site-packages', '/usr/local/lib/python3.6/dist-packages', '/usr/lib/python3/dist-packages', '/usr/lib/python3.6/dist-packages']
 
 
-    Install peforth kernel for Jupyter Notebook
+    [ ] https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
+     1. pip show command > Location
 
-    1. install peforth
+        \ Windows
+        Microsoft Windows [Version 10.0.16299.309]
+        (c) 2017 Microsoft Corporation. All rights reserved.
 
-    pip install peforth
+        C:\Users\hcche>pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages
+        Requires:
 
-    2. 
-    copy 
-    c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\kernel.json 
-    到 
-    c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-    如果上面的 target 目錄 kernels\ 或 peforth\ 不存在，則請手動建立這些目錄
+        \ WSL Ubuntu root
+        hcchen5600@WKS-4AEN0404:~$ pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: /usr/local/lib/python3.6/dist-packages
+        Requires:
+        hcchen5600@WKS-4AEN0404:~$
 
-    3.
-    編輯剛才這個檔案
-    c:\Users\yourname\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-    照您的電腦實際情況，訂正其中的這個 path 
-    c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py 
-    以上是我的電腦的範例
+        \ WSL Ubuntu virtualenv
+        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages
+        Requires:
+
+        \ 這個也一樣結果
+        python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+     2. 總算有一個可行的辦法了：
+        In [3]: import sys
+        In [4]: [f for f in sys.path if f.endswith('site-packages')]
+             or [f for f in sys.path if f.endswith('packages')]
+        Out[4]: ['/home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages']
+
+        但是這個只是 .py 程式檔的位置，peforth 的資料檔在：
+        ['/home/hcchen5600/tmp/deepspeech-venv/lib/site-packages']
+
+        \ 實驗成功
+        char /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth/version.txt
+        readTextFile . cr
+
+        \ Windows 10 之下，也可以 --> 以下第一個不對，第二個對了！
+        In [2]: import sys
+        In [3]: [f for f in sys.path if f.endswith('site-packages')]
+        Out[3]:
+        ['C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages',
+         'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages']
+        所以是 lib > site-packages 處
+
+    [ ] On LRV2 31ENB667 （w/o virtualenv）
+
+        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
+
+         /usr/local/lib/site-packages/peforth
+             version.txt
+         /usr/local/lib/python3.6/dist-packages/peforth
+             version.txt
+
+        [ ] 繼續先前的研究， 改好
+        [ ] 上 issue 說明 workaround --> 應該就是從 某 folder 把東西全都 copy 到某 folder
 
 
-    Read this: Linux Users.
+        同上， search projectk.py
 
-    @rem This is for Windows 10 
-    copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json 
-    %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-[ ] setup.bat update 上 Pypi 成功之後，有個 error :batch not found 之類。
-    upload v1.15 時發現的。應該是因為把 bye comment 掉了，往下看到 batch 的東西了。
+         /usr/local/lib/python3.6/dist-packages/peforth
+             projectk.py
+
+        我覺得奇怪，應該是個 site-packages 才對呀！？ 如果單查 site-packages
+
+         /usr/local/lib
+             site-packages    # <----- 想必是 python3.6 的
+         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv27/lib/python2.7
+             site-packages
+         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv34/lib/python3.4
+             site-packages
+
+        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
+
+            /usr/local/lib/site-packages/peforth
+                kernel.json
+                peforth.f
+                peforth.selftest
+                peforthkernel.py
+                quit.f
+                version.txt
+
+        [ ] 回公司看看 ipython 與 virtualenv ipython 的是怎樣？
+
+    [ ] On T550 4AEN0404 (有 virtualevn) 重做以上
+
+        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
+
+         /usr/local/lib/site-packages/peforth
+             version.txt
+         /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth
+             version.txt
+
+         第一個與 LRV2 相同，看得出，第二個 與 LRV2 不同了！
+
+
+        同上， search projectk.py
+
+        /usr/local/lib/python3.6/dist-packages/peforth
+             projectk.py
+         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth
+             projectk.py
+
+         第一個與 LRV2 相同，第二個是（有 virtualenv）多出來的。
+
+
+        單查 site-packages
+
+         /home/hcchen5600/tmp/deepspeech-venv/lib
+             site-packages     # w/virtualenv 多出來的，裡面只有 peforth
+         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6
+             site-packages     # w/virtualenv 多出來的，裡面沒有 peforth 
+         /usr/local/lib
+             site-packages     # 與 LRV2 相同
+         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv27/lib/python2.7
+             site-packages     # 與 LRV2 相同  
+         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv34/lib/python3.4
+             site-packages     # 與 LRV2 相同
+
+
+        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
+        
+            /usr/local/lib/site-packages/peforth
+                kernel.json
+                peforth.f
+                peforth.selftest
+                peforthkernel.py
+                quit.f
+                version.txt
+                
+            /home/hcchen5600/tmp/deepspeech-venv/lib
+               同上
+
+        Executables 在這裡 （T550 w/virtualenv）
+        
+            \usr\local\lib\python3.6\dist-packages\peforth\.. 
+                __init__.py
+                __main__.py
+                peforthkernel.py
+                projectk.py            
+    [ ] 終於發現這個了 --> 查出 實際 path 的方法，peforth 能不能參考？
+        DOS command line> jupyter --paths    
+        結果：
+        config:
+            C:\Users\hcche\.jupyter
+            c:\users\hcche\appdata\local\programs\python\python36\etc\jupyter
+            C:\ProgramData\jupyter
+        data:
+            C:\Users\hcche\AppData\Roaming\jupyter
+            c:\users\hcche\appdata\local\programs\python\python36\share\jupyter
+            C:\ProgramData\jupyter
+        runtime:
+            C:\Users\hcche\AppData\Roaming\jupyter\runtime
+            
+[x] 不認得的 words 自動到 __main__ 裡去找找看 <-- 成功了! v1.16
+    不認得的 words 自動到 locals 裡去找找看            
+    不認得的 words 自動到 globals 裡去找找看
+    似乎 project-k 或看怎麼外掛一個序列 methods 用來處理 unknown workds
+    --> 執行一個 word 就叫做 unknown ( 'token' -- thing Y|n) 
+        傳回 True 就表示處理過了，轉回 False 就表示沒處理 (default) 然則顯示
+        unknown 訊息。
+    --> 先做 __main__ 的比較簡單
+        : unknown py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
+          py> str(tos())=='Ûnknôwn' if drop false else true then ; 
+          // ( token -- thing Y|N) Try to find the unknown in __main__
+
+[ ] 開始 support jupyter magics 之後冒出問題，直接跑 ipython -m peforth 出 error 如下。
+    先進 ipython 之後再 import peforth 就沒問題。
     
+    c:\Users\hcche\Documents\GitHub>ipython -i -m peforth
+    Python 3.6.0 (v3.6.0:41df79263a11, Dec 23 2016, 08:06:12) [MSC v.1900 64 bit (AMD64)]
+    Type 'copyright', 'credits' or 'license' for more information
+    IPython 6.2.1 -- An enhanced Interactive Python. Type '?' for help.
+    p e f o r t h    v1.16
+    source code http://github.com/hcchengithub/peforth
+    Type 'peforth.ok()' to enter forth interpreter, 'exit' to come back.
+
+    ---------------------------------------------------------------------------
+    NameError                                 Traceback (most recent call last)
+    c:\users\hcche\appdata\local\programs\python\python36\lib\runpy.py in run_module(mod_name, init_globals, run_name, alter_sys)
+        199        Returns the resulting top level namespace dictionary
+        200     """
+    --> 201     mod_name, mod_spec, code = _get_module_details(mod_name)
+        202     if run_name is None:
+        203         run_name = mod_name
+
+    c:\users\hcche\appdata\local\programs\python\python36\lib\runpy.py in _get_module_details(mod_name, error)
+        140         try:
+        141             pkg_main_name = mod_name + ".__main__"
+    --> 142             return _get_module_details(pkg_main_name, error)
+        143         except error as e:
+        144             if mod_name not in sys.modules:
+
+    c:\users\hcche\appdata\local\programs\python\python36\lib\runpy.py in _get_module_details(mod_name, error)
+        107         # Try importing the parent to avoid catching initialization errors
+        108         try:
+    --> 109             __import__(pkg_name)
+        110         except ImportError as e:
+        111             # If the parent or higher ancestor package is missing, let the
+
+    c:\Users\hcche\Documents\GitHub\peforth\__init__.py in <module>()
+        166     # Define peforth magic command, %f.
+        167     @register_line_cell_magic
+    --> 168     def f(line, cell=None):
+        169         if cell is None:
+        170             vm.dictate(line)
+
+    c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\magic.py in magic_deco(arg)
+        227                 break
+        228         else:
+    --> 229             raise NameError('Decorator can only run in context where '
+        230                             '`get_ipython` exists')
+        231
+
+    NameError: Decorator can only run in context where `get_ipython` exists
+    c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
+      warn('Unknown failure executing module: <%s>' % mod_name)
+
+[ ] mybinder.org 跑不起來, peforth/version.txt file not found
+    See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
+    --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
+        folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
+        peforth/version.txt 而直接在 version.txt 才對。 v1.16 先直接修改
+            Desktop\peforth-master\setup.py 
+        做一版 wheel 在 local 看成不成功, 若成功就證明研究生的檔案結構多一個 peforth
+        是沒必要的了，改掉就有機會了。
+    --> 真的做成了, 把 peforth/ 裡的東西都移上來, setup.py 改掉,不要 peforth/, 
+        如下從 working directory 執行, 成功了！
+        c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist .
+        Processing c:\users\hcche\desktop\peforth-master
+        Building wheels for collected packages: peforth
+          Running setup.py bdist_wheel for peforth ... done
+          Stored in directory: c:\users\hcche\desktop\peforth-master\dist
+        Successfully built peforth
+        c:\Users\hcche\Desktop\peforth-master>    
+    --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
+        了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
+    --> peforth/version.txt file not found 應該還是 _the_path_issue_
+
+[ ] Tests before releasing v1.16
+    [x] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+            [x] 直接從 GitHub folder 執行 python peforth --> .s cd help exit
+        [x] Run setup.bat 更新本地 pip installed 版本以供測試
+        [x] 1. python -i -m peforth [x] with-selftest .s words exit bye
+        [/] 2. ipython -i -m peforth .' Hello World!!' cr bye --> 目前有問題
+        [x] 3. ipython import peforth .s words
+               [x] selftest peforth.ok() .s words <--- w/parent
+               [x] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [x] 4. jupyter notebook 
+               import peforth
+               %f ." Hello FORTH!"
+               %%f  Now we redefine the 'unknown' command that was doing nothing
+                    : unknown ( token -- thing Y|N) // Try to find the unknown token in __main__
+                      py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
+                      py> str(tos())=="Ûnknôwn" if drop false else true then ;
+                        
+                    \ here after, when FORTH come accross an unknown token, instead of an error 
+                    \ message, it try to find the token in python __main__ module name space.
+                    y = 'abc'
+                    %f y . cr
+                    %f yy . cr
+        [x] 考慮 README.rst 改良
+            [x] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
+        [x] Run setup.bat 做出取消 selftest 的 wheel
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
+        [x] 2. python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [x] 3. python import peforth
+               [x] selftest peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> .s cd help exit
+               %f %%f magic command
+        [/] 5. repeat 以上 in ubuntu
+	 	   --> pip3 install (/mnt/...the wheel) to WSL ubuntu
+	 	   --> use virtualenv is fine
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+	[x] 直接用測過的 wheel update Pypi
+        twine upload dist/*
+        ID, password search my Ynote with pypi _account_
+    [x] version 改成 1.17  (必須跳過 1.10 會變成 1.1）
+    [x] test mybinder.org to view peforth > notebook > *.ipynb
+        不行, 猜測還是 _the_path_issue_ 的問題。
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+          

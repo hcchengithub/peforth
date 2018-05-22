@@ -93,15 +93,16 @@ if not vm.tick('version'):
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
 
-
-# Invoke the peforth interpreter.
-# Put an peforth.ok(prompt='OK ', loc={}, glo={}, cmd="") anywhere in python 
-# code as a breakpoint. The prompt indicates which breakpoint it is if there 
-# are many. The loc (locals) and glo (globals) arguments passes the caller's 
-# information packed as a tuple i.e. (locals,globlas,prompt) down on TOS of the 
-# FORTH vm. So peforth can investigate with that context. ok() returns when 
-# vm.exit==True 
 def ok(prompt='OK ', loc={}, glo={}, cmd=""):
+    '''
+    Invoke the peforth interpreter.
+    Put an peforth.ok(prompt='OK ', loc={}, glo={}, cmd="") anywhere in python 
+    code as a breakpoint. The prompt indicates which breakpoint it is if there 
+    are many. The loc (locals) and glo (globals) arguments passes the caller's 
+    information packed as a tuple (loc,glo,prompt) down on TOS of the FORTH vm. 
+    So we can investigate with the given context. Returns by 'exit' command that 
+    makes vm.exit==True.
+    '''
     if loc or glo: vm.push((loc,glo,prompt))  # parent's data
     while True:
         if cmd == "":                                    #

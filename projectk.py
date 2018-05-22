@@ -366,9 +366,11 @@ def outer(entry=None):
                     elif token[:2] in ["0b","0B"]:
                         n = int(token,base=2)
                     else:
-                        panic_unknown()
+                        if not push(token).execute("unknown").pop():
+                            panic_unknown()
                 except Exception as err:
-                    panic_unknown()
+                        if not push(token).execute("unknown").pop():
+                            panic_unknown()
             if n != None :
                 push(n)
                 if (compiling):

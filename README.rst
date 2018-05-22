@@ -26,17 +26,7 @@ Install peforth
 
     pip install peforth 
 
-**Option**, you have ipython and jupyter installed already and you want peforth to support 
-`Jupyter Notebook`_.
-You do only a copy as shown below. If any target directory ``..\kernels\ or ..\peforth\``  is not existing you manually create them. Read this: `Linux Users`_.
-
-::
-
-    @rem This is for Windows 10 
-    copy %USERPROFILE%\Documents\GitHub\peforth\kernel.json %USERPROFILE%\AppData\Roaming\jupyter\kernels\peforth\kernel.json 
-
-
-and then edit the above ``...\jupyter\kernels\peforth\kernel.json`` text file to correct the path which is supposed to be  ``%USERPROFILE%\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py`` for example on my Windows 10 computer. 
+For Jupyter Notebook users, we can use FORTH language to investigate python objects through peforth magics `%f` and `%%f`. For tutorials, please find and read jupyter notebooks in the 'notebook' directory of this project on GitHub.
 
 
 Run peforth:
@@ -55,7 +45,7 @@ Print "Hello World!"
     c:\Users\your-working-folder>
 
     
-so your peforth has been working fine. 
+so your peforth is working fine. 
 To your application, ``import peforth`` as usual to bring in the debugger:
 
 ::
@@ -296,3 +286,4 @@ Edited by: `rst online editor`_
 .. _rst online editor: http://rst.ninjs.org
 .. _Jupyter Notebook: http://nbviewer.jupyter.org/
 .. _Linux Users: http://robl.co/brainfuck-ipython/
+

@@ -1,0 +1,36 @@
+用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
+
+ /usr/local/lib/site-packages/peforth
+     version.txt
+ /usr/local/lib/python3.6/dist-packages/peforth
+     version.txt
+
+[ ] 繼續先前的研究， 改好
+[ ] 上 issue 說明 workaround --> 應該就是從 某 folder 把東西全都 copy 到某 folder 
+
+
+同上， search projectk.py
+
+ /usr/local/lib/python3.6/dist-packages/peforth
+     projectk.py
+
+我覺得奇怪，應該是個 site-packages 才對呀！？ 如果單查 site-packages
+
+ /usr/local/lib
+     site-packages    # <----- 想必是 python3.6 的
+ /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv27/lib/python2.7
+     site-packages
+ /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv34/lib/python3.4
+     site-packages
+
+查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
+
+    /usr/local/lib/site-packages/peforth
+        kernel.json
+        peforth.f
+        peforth.selftest
+        peforthkernel.py
+        quit.f
+        version.txt
+
+[ ] 回公司看看 ipython 與 virtualenv ipython 的是怎樣？
