@@ -2318,7 +2318,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     %f __main__ :> census_train['age'].head(2) . cr \ 奇怪，它怎知這 dtype 是 int64?
     13:34 18/05/22 複製不出來, 上面這法都忘了怎來的了。
     
-[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv
+[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv , _the_path_issue_
     ipython still failed, message:
     ...snip...
     ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
@@ -2671,10 +2671,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         Successfully built peforth
         c:\Users\hcche\Desktop\peforth-master>    
     --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
-        了 --> [ ] 改寫 setup.bat 看看
+        了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
+    --> peforth/version.txt file not found 應該還是 _the_path_issue_
 
 [ ] Tests before releasing v1.16
-    [ ] 所有 run 法帶 selftest：
+    [x] 所有 run 法帶 selftest：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
             [x] 直接從 GitHub folder 執行 python peforth --> .s cd help exit
@@ -2700,7 +2701,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] 考慮 README.rst 改良
             [x] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
         [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
@@ -2724,6 +2725,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         twine upload dist/*
         ID, password search my Ynote with pypi _account_
     [x] version 改成 1.17  (必須跳過 1.10 會變成 1.1）
-    [ ] test mybinder.org to view peforth > notebook > *.ipynb
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+    [x] test mybinder.org to view peforth > notebook > *.ipynb
+        不行, 猜測還是 _the_path_issue_ 的問題。
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
           
