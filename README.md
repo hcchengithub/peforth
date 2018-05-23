@@ -68,7 +68,7 @@ Print "Hello World!"
 
     c:\Users\your-working-folder>
 
-so your peforth has been working fine. 
+so your peforth is working fine. 
 To your application, ``` import peforth ``` as usual to bring in the debugger:
 
     c:\Users\your-working-folder>python
