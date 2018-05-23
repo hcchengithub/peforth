@@ -43,7 +43,7 @@ to have 'peforth' in the list as shown above.
 
 ### Add peforth as a native language kernel to Jupyter Notebook
 
-This is to make Jupyter Notebook totally runing FORTH instead of python. 
+This is to make a notebook to run FORTH instead of python. 
 That means when you 'New' a notebook, "peforth" appears in the list among "Python 2" and "Python 3".
 Do these steps to make this happen:
 
