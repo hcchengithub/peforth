@@ -107,8 +107,16 @@
                 
     : OK ;      // ( -- ) Do nothing, ignore it when copy-paste the display
     
-    : dir       ( x -- dir ) // get dir list of anything x                
+    : _dir_     ( x -- dir ) // get complete dir list
                 py> dir(pop()) ;
+                /// see also 'dir'
+                
+    code dir 
+        x = dir(pop())
+        push([i for i in x if (i[0]!='_' and i[-1]!='_')]) 
+        end-code
+        // ( x -- dir ) get dir list w/o __things__
+        /// see also '_dir_' that gets complete dir list
                 
     : keys      ( x -- keys ) // get keys of the dict
                 py> pop().keys() ;

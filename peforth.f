@@ -166,7 +166,13 @@ code ///
     end-code
     // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
 code unknown pop();push(False) end-code // ( token -- false ) Default unknown command does nothing. 
-    /// Redefine is welcome. e.g. to get __main__ :> words when in a jupyter notebook
+    /// %%f  Now we redefine the 'unknown' command that was doing nothing
+    ///      : unknown ( token -- thing y|n) // Try to find the unknown token in __main__
+    ///        py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
+    ///        py> str(tos())=="Ûnknôwn" if drop false else true then ;
+    /// \ Here after, when FORTH come accross an unknown token, instead of printing 
+    /// \ an error message, it try to find the token in __main__ module name space.
+    
 code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
 code stop reset() end-code // ( -- ) Stop the TIB loop
 code compyle 
