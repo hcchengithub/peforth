@@ -96,12 +96,13 @@ if not vm.tick('version'):
 def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     '''
     Invoke the peforth interpreter.
-    Put an peforth.ok(prompt='OK ', loc={}, glo={}, cmd="") anywhere in python 
-    code as a breakpoint. The prompt indicates which breakpoint it is if there 
-    are many. The loc (locals) and glo (globals) arguments passes the caller's 
-    information packed as a tuple (loc,glo,prompt) down on TOS of the FORTH vm. 
-    So we can investigate with the given context. Returns by 'exit' command that 
-    makes vm.exit==True.
+    An statement: peforth.ok(prompt='OK ', loc=locals(), glo=globals(), cmd="") 
+    is like a breakpoint. The prompt indicates which breakpoint it is if there are 
+    many. Arguments loc (locals) and glo (globals) along with the prompt are the 
+    debuggee's informations that is packed as a tuple (loc,glo,prompt) left on TOS 
+    of the FORTH vm when the breakpoint is called. Replace the loc=locals() with
+    loc=dict(locals()) to get a snapshot copy instead of a reference, as well as 
+    the glo. 'exit' command to stop debugging.
     '''
     if loc or glo: vm.push((loc,glo,prompt))  # parent's data
     while True:
