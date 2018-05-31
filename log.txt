@@ -2728,4 +2728,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] test mybinder.org to view peforth > notebook > *.ipynb
         不行, 猜測還是 _the_path_issue_ 的問題。
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-[ ] v1.16 released           
+[x] v1.16 released           
+
+[ ] (create) in peforth.f 認為當有 command line 時就不要有 reDef 警告，讓畫面清爽
+    且 reDef 是常態。但是到了 jupyter notebook 底下, 他一定有 command line 
+
+        jupyter notebook 下 
+        %f py> commandline.strip() tib. ==> -f C:\Users\hcche\AppData\Roaming\jupyter\runtime\kernel-17e1c697-6363-49d3-b3af-81708a468835.json (<class 'str'>)
+    
+    因此 reDef 警告就都消失了也不對。因為 jupyter notebook 之下 command line 完全
+    無用，因此原來的判斷方法可以保持，但是要排除 jupyter notebook 的場合。
+
+[ ] ipython -m peforth 會出問題，可能是因為 get_ipython 當時還沒有 ready 
+    NameError: Decorator can only run in context where `get_ipython` exists
+    c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
+      warn('Unknown failure executing module: <%s>' % mod_name)
+
+    只要進了 ipython command prompt or jupyter notebook 都沒問題  
+        In [2]: 'get_ipython' in globals()
+        Out[2]: True    
+        
+    
+ 
+ 
