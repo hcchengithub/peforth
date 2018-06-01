@@ -344,8 +344,9 @@ code (create)
     global newname
     newname = pop()
     if not newname: panic("(create) what?") 
-    if not commandline.strip() and isReDef(newname): # non-selftest 才檢查 reDef
-        print("reDef " + newname); # 不能用 tick(newname) 檢查
+    if isReDef(newname) and ('jupyter' in str(sys.modules) or not commandline.strip()): 
+        # w/ command line is free run mode that doesn't care reDef
+        print("reDef " + newname); # can't use tick(newname) but use isReDef()
     current_word_list().append(Word(newname,None));
     last().vid = current; # vocabulary ID
     last().wid = len(current_word_list())-1; # word ID

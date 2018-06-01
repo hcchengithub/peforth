@@ -2730,7 +2730,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] v1.16 released           
 
-[ ] (create) in peforth.f 認為當有 command line 時就不要有 reDef 警告，讓畫面清爽
+[x] (create) in peforth.f 認為當有 command line 時就不要有 reDef 警告，讓畫面清爽
     且 reDef 是常態。但是到了 jupyter notebook 底下, 他一定有 command line 
 
         jupyter notebook 下 
@@ -2738,16 +2738,27 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     
     因此 reDef 警告就都消失了也不對。因為 jupyter notebook 之下 command line 完全
     無用，因此原來的判斷方法可以保持，但是要排除 jupyter notebook 的場合。
+    
+    結論是 --> ('jupyter' in str(sys.modules) or not commandline.strip())
 
-[ ] ipython -m peforth 會出問題，可能是因為 get_ipython 當時還沒有 ready 
+[x] ipython -m peforth 會出問題，可能是因為 get_ipython 當時還沒有 ready <-- 對
     NameError: Decorator can only run in context where `get_ipython` exists
     c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
       warn('Unknown failure executing module: <%s>' % mod_name)
-
     只要進了 ipython command prompt or jupyter notebook 都沒問題  
         In [2]: 'get_ipython' in globals()
         Out[2]: True    
-        
+    --> 用對的方法檢查 ipython magic 存不存在即可，以上 error message 提供了線索
+        查看 python token 是否 defined 必須用 try-except:
+        try:
+            flag = "InteractiveShell" in str(get_ipython)
+        except:
+            flag = False
+
+        if flag:
+            from IPython.core.magic import register_line_cell_magic
+            ... snip ....
+            
     
  
  

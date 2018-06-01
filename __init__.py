@@ -158,10 +158,18 @@ words       = vm.words
 
 ##### Setup peforth magic command %f and %%f for ipython and jupyter notebook ##### 
 
-# pdb.set_trace() works fine here even when run from jupyter notebook
-# if 'get_ipython' in globals():  <--- always false 
-# if '__IPYTHON__' in dir(__builtins__):  <--- always false 
-if '__IPYTHON__' in __builtins__.keys():
+# How to tell if ipython magic is available? 
+#     pdb.set_trace() works fine here even when run from jupyter notebook
+#     if 'get_ipython' in globals():  <--- always false 
+#     if '__IPYTHON__' in dir(__builtins__):  <--- always false 
+#     if '__IPYTHON__' in __builtins__.keys(): <--- previous way, not suitable for ipython -m peforth
+#     if 'IPython' in sys.modules.keys(): <--- a candidate never tried
+try:
+    flag = "InteractiveShell" in str(get_ipython)
+except:
+    flag = False
+
+if flag:
     from IPython.core.magic import register_line_cell_magic
 
     # Define peforth magic command, %f.
