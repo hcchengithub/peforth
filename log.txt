@@ -2601,7 +2601,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
           py> str(tos())=='Ûnknôwn' if drop false else true then ; 
           // ( token -- thing Y|N) Try to find the unknown in __main__
 
-[ ] 開始 support jupyter magics 之後冒出問題，直接跑 ipython -m peforth 出 error 如下。
+[x] 開始 support jupyter magics 之後冒出問題，直接跑 ipython -m peforth 出 error 如下。
     先進 ipython 之後再 import peforth 就沒問題。
     
     c:\Users\hcche\Documents\GitHub>ipython -i -m peforth
@@ -2674,7 +2674,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
     --> peforth/version.txt file not found 應該還是 _the_path_issue_
 
-[ ] Tests before releasing v1.16
+[x] Tests before releasing v1.16
     [x] 所有 run 法帶 selftest：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
