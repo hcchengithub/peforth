@@ -2310,6 +2310,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
        照您的電腦實際情況，訂正其中的這個 path
           c:\Users\yourname\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py
        以上是我的電腦的範例
+    [ ] 希望這個 installation 能自動化
+        refer to Ynote : "怎麼加 javascript kernel 進 jupyter notebook" _ijavascript_
 
 [x] setup.bat update 上 Pypi 成功之後，有個 error :batch not found 之類。
     upload v1.15 時發現的。應該是因為把 bye comment 掉了，往下看到 batch 的東西了。
@@ -2317,277 +2319,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] v1.15 %f 也發生了 comment 之後如果沒有 whitespace 會被下一行看到的問題
     %f __main__ :> census_train['age'].head(2) . cr \ 奇怪，它怎知這 dtype 是 int64?
     13:34 18/05/22 複製不出來, 上面這法都忘了怎來的了。
-    
-[ ] v1.14 v1.15 on WSL Ubuntu, virtualenv , _the_path_issue_
-    ipython still failed, message:
-    ...snip...
-    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
-         33
-         34 def readTextFile(pathname):
-    ---> 35     f = open(pathname,'r',encoding='utf-8')
-         36     # for line in f:
-         37     s = f.read()
-    FileNotFoundError: [Errno 2] No such file or directory:
-    '/usr/local/lib/site-packages/peforth/version.txt'
-    ...snip...
-
-    --> 11:27 2018-02-14 我用 31ENB667 這台試，沒問題！沒有用 virtualenv 直接
-        sudo pip3 install ipython
-        灌起來的 ipython, 是這個原因嗎？ <-- 是， RI: virtualenv 的 path 又不一樣了。
-        19:07 2018-03-12 剛才為了 release 1.15 版在 T550 WSL ubuntu 上複製到了以上現象，
-        找不到 version.txt. 但是 python -m peforth 沒問題，只有 ipython 進去後
-        import peforth 才有這個問題。
-    --> 實際位置：
-            c:\Users\hcche\AppData\Local\Packages\CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc
-            \LocalState\rootfs\home\hcchen5600\tmp\deepspeech-venv\lib\site-packages\peforth\version.txt
-        Ubuntu virtualenv 下以為的位置：
-            > /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py(35)readTextFile()
-                 33
-                 34 def readTextFile(pathname):
-            ---> 35     f = open(pathname,'r',encoding='utf-8')
-                 36     # for line in f:
-                 37     s = f.read()
-            ipdb> p path
-            '/usr/local/lib/site-packages/peforth/'
-    [x] 答案找到了 <== 錯！ site module 不是答案。site 看到的是 root or global 的 path, 看不到 virtualenv （per user）的。
-        \ 這應該是 ipython virtualenv
-        In [3]: import site
-        ipdb> dir(site)
-        ['ENABLE_USER_SITE', 'PREFIXES', 'USER_BASE', 'USER_SITE', '__builtins__',
-        ipdb> site.PREFIXES
-        ['/usr', '/usr']
-        ipdb> site.USER_BASE
-        '/home/hcchen5600/.local'
-        ipdb> site.USER_SITE
-        '/home/hcchen5600/.local/lib/python3.6/site-packages'
-        ipdb> site.ENABLE_USER_SITE
-        True
-
-        \ Windows ipython
-        OK __main__ :> site constant site // ( -- module )
-        OK site . cr
-        <module 'site' from 'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site.py'>
-        OK site :> PREFIXES . cr
-        ['c:\\users\\hcche\\appdata\\local\\programs\\python\\python36', 'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36']
-        OK site :> USER_BASE . cr
-        C:\Users\hcche\AppData\Roaming\Python
-        OK site :> USER_SITE . cr
-        C:\Users\hcche\AppData\Roaming\Python\Python36\site-packages
-        OK site :> ENABLE_USER_SITE . cr
-        True
-
-        \ WSL ubuntu normal
-        OK __main__ :> site constant site // ( -- module )
-        OK site :> PREFIXES . cr
-        ['/usr', '/usr']
-        OK site :> USER_BASE . cr
-        /home/hcchen5600/.local
-        OK site :> USER_SITE . cr
-        /home/hcchen5600/.local/lib/python3.6/site-packages
-        OK site :> ENABLE_USER_SITE . cr
-        True
-
-        \ WSL ubuntu in virtualevn
-        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ ipython
-        /usr/local/lib/python3.6/dist-packages/IPython/core/interactiveshell.py:728: UserWarning: Attempting to work in a virtualenv. If you encounter problems, please install IPython inside the virtualenv.
-          warn("Attempting to work in a virtualenv. If you encounter problems, please "
-        Python 3.6.4 (default, Dec 19 2017, 17:29:45)
-        Type 'copyright', 'credits' or 'license' for more information
-        IPython 6.2.1 -- An enhanced Interactive Python. Type '?' for help.
-
-        In [1]: import site
-
-        In [2]: site.ENABLE_USER_SITE
-        Out[2]: True
-
-        In [3]: site.USER_SITE
-        Out[3]: '/home/hcchen5600/.local/lib/python3.6/site-packages'
-
-        In [4]: site.USER_BASE
-        Out[4]: '/home/hcchen5600/.local'
-
-        In [5]: site.PREFIXES
-        Out[5]: ['/usr', '/usr']
-
-        \ site 看到的是 root or global 的 path, 看不到 virtualenv 的
-        In [1]: import site; print(site.getsitepackages())
-        ['/usr/lib/python3.6/site-packages', '/usr/local/lib/python3.6/dist-packages', '/usr/lib/python3/dist-packages', '/usr/lib/python3.6/dist-packages']
-
-
-    [ ] https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
-     1. pip show command > Location
-
-        \ Windows
-        Microsoft Windows [Version 10.0.16299.309]
-        (c) 2017 Microsoft Corporation. All rights reserved.
-
-        C:\Users\hcche>pip show peforth
-        Name: peforth
-        Version: 1.15
-        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-        Home-page: https://github.com/hcchengithub/peforth
-        Author: H.C. Chen
-        Author-email: hcchen5600@gmail.com
-        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
-        Location: c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages
-        Requires:
-
-        \ WSL Ubuntu root
-        hcchen5600@WKS-4AEN0404:~$ pip show peforth
-        Name: peforth
-        Version: 1.15
-        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-        Home-page: https://github.com/hcchengithub/peforth
-        Author: H.C. Chen
-        Author-email: hcchen5600@gmail.com
-        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
-        Location: /usr/local/lib/python3.6/dist-packages
-        Requires:
-        hcchen5600@WKS-4AEN0404:~$
-
-        \ WSL Ubuntu virtualenv
-        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ pip show peforth
-        Name: peforth
-        Version: 1.15
-        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-        Home-page: https://github.com/hcchengithub/peforth
-        Author: H.C. Chen
-        Author-email: hcchen5600@gmail.com
-        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
-        Location: /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages
-        Requires:
-
-        \ 這個也一樣結果
-        python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
-     2. 總算有一個可行的辦法了：
-        In [3]: import sys
-        In [4]: [f for f in sys.path if f.endswith('site-packages')]
-             or [f for f in sys.path if f.endswith('packages')]
-        Out[4]: ['/home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages']
-
-        但是這個只是 .py 程式檔的位置，peforth 的資料檔在：
-        ['/home/hcchen5600/tmp/deepspeech-venv/lib/site-packages']
-
-        \ 實驗成功
-        char /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth/version.txt
-        readTextFile . cr
-
-        \ Windows 10 之下，也可以 --> 以下第一個不對，第二個對了！
-        In [2]: import sys
-        In [3]: [f for f in sys.path if f.endswith('site-packages')]
-        Out[3]:
-        ['C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages',
-         'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages']
-        所以是 lib > site-packages 處
-
-    [ ] On LRV2 31ENB667 （w/o virtualenv）
-
-        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
-
-         /usr/local/lib/site-packages/peforth
-             version.txt
-         /usr/local/lib/python3.6/dist-packages/peforth
-             version.txt
-
-        [ ] 繼續先前的研究， 改好
-        [ ] 上 issue 說明 workaround --> 應該就是從 某 folder 把東西全都 copy 到某 folder
-
-
-        同上， search projectk.py
-
-         /usr/local/lib/python3.6/dist-packages/peforth
-             projectk.py
-
-        我覺得奇怪，應該是個 site-packages 才對呀！？ 如果單查 site-packages
-
-         /usr/local/lib
-             site-packages    # <----- 想必是 python3.6 的
-         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv27/lib/python2.7
-             site-packages
-         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv34/lib/python3.4
-             site-packages
-
-        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
-
-            /usr/local/lib/site-packages/peforth
-                kernel.json
-                peforth.f
-                peforth.selftest
-                peforthkernel.py
-                quit.f
-                version.txt
-
-        [ ] 回公司看看 ipython 與 virtualenv ipython 的是怎樣？
-
-    [ ] On T550 4AEN0404 (有 virtualevn) 重做以上
-
-        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
-
-         /usr/local/lib/site-packages/peforth
-             version.txt
-         /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth
-             version.txt
-
-         第一個與 LRV2 相同，看得出，第二個 與 LRV2 不同了！
-
-
-        同上， search projectk.py
-
-        /usr/local/lib/python3.6/dist-packages/peforth
-             projectk.py
-         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth
-             projectk.py
-
-         第一個與 LRV2 相同，第二個是（有 virtualenv）多出來的。
-
-
-        單查 site-packages
-
-         /home/hcchen5600/tmp/deepspeech-venv/lib
-             site-packages     # w/virtualenv 多出來的，裡面只有 peforth
-         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6
-             site-packages     # w/virtualenv 多出來的，裡面沒有 peforth 
-         /usr/local/lib
-             site-packages     # 與 LRV2 相同
-         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv27/lib/python2.7
-             site-packages     # 與 LRV2 相同  
-         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv34/lib/python3.4
-             site-packages     # 與 LRV2 相同
-
-
-        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
-        
-            /usr/local/lib/site-packages/peforth
-                kernel.json
-                peforth.f
-                peforth.selftest
-                peforthkernel.py
-                quit.f
-                version.txt
-                
-            /home/hcchen5600/tmp/deepspeech-venv/lib
-               同上
-
-        Executables 在這裡 （T550 w/virtualenv）
-        
-            \usr\local\lib\python3.6\dist-packages\peforth\.. 
-                __init__.py
-                __main__.py
-                peforthkernel.py
-                projectk.py            
-    [ ] 終於發現這個了 --> 查出 實際 path 的方法，peforth 能不能參考？
-        DOS command line> jupyter --paths    
-        結果：
-        config:
-            C:\Users\hcche\.jupyter
-            c:\users\hcche\appdata\local\programs\python\python36\etc\jupyter
-            C:\ProgramData\jupyter
-        data:
-            C:\Users\hcche\AppData\Roaming\jupyter
-            c:\users\hcche\appdata\local\programs\python\python36\share\jupyter
-            C:\ProgramData\jupyter
-        runtime:
-            C:\Users\hcche\AppData\Roaming\jupyter\runtime
             
 [x] 不認得的 words 自動到 __main__ 裡去找找看 <-- 成功了! v1.16
     不認得的 words 自動到 locals 裡去找找看            
@@ -2653,27 +2384,31 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
       warn('Unknown failure executing module: <%s>' % mod_name)
 
-[ ] mybinder.org 跑不起來, peforth/version.txt file not found
-    See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
-    --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
-        folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
-        peforth/version.txt 而直接在 version.txt 才對。 v1.16 先直接修改
-            Desktop\peforth-master\setup.py 
-        做一版 wheel 在 local 看成不成功, 若成功就證明研究生的檔案結構多一個 peforth
-        是沒必要的了，改掉就有機會了。
-    --> 真的做成了, 把 peforth/ 裡的東西都移上來, setup.py 改掉,不要 peforth/, 
-        如下從 working directory 執行, 成功了！
-        c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist .
-        Processing c:\users\hcche\desktop\peforth-master
-        Building wheels for collected packages: peforth
-          Running setup.py bdist_wheel for peforth ... done
-          Stored in directory: c:\users\hcche\desktop\peforth-master\dist
-        Successfully built peforth
-        c:\Users\hcche\Desktop\peforth-master>    
-    --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
-        了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
-    --> peforth/version.txt file not found 應該還是 _the_path_issue_
+    [x] ipython -m peforth 會出問題，可能是因為 get_ipython 當時還沒有 ready <-- 對
+        NameError: Decorator can only run in context where `get_ipython` exists
+        c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
+          warn('Unknown failure executing module: <%s>' % mod_name)
+        只要進了 ipython command prompt or jupyter notebook 都沒問題  
+            In [2]: 'get_ipython' in globals()
+            Out[2]: True    
+        --> 用對的方法檢查 ipython magic 存不存在即可，以上 error message 提供了線索
+            查看 python token 是否 defined 必須用 try-except:
+            try:
+                flag = "InteractiveShell" in str(get_ipython)
+            except:
+                flag = False
 
+            if flag:
+                from IPython.core.magic import register_line_cell_magic
+                ... snip ....
+                
+        注意, 解掉問題之後，如今：
+            1. jupyter notebook 完全沒問題。
+            2. 用 ipython -i -m peforth 跑起來的，exit 到 ipython 不認得 magic commands:
+                In [1]: %f
+                UsageError: Line magic function `%f` not found.        
+            3. 先進 ipython 然後 import peforth 的才認得 magic commands.
+        
 [x] Tests before releasing v1.16
     [x] 所有 run 法帶 selftest：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
@@ -2741,24 +2476,316 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     
     結論是 --> ('jupyter' in str(sys.modules) or not commandline.strip())
 
-[x] ipython -m peforth 會出問題，可能是因為 get_ipython 當時還沒有 ready <-- 對
-    NameError: Decorator can only run in context where `get_ipython` exists
-    c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\IPython\core\interactiveshell.py:2598: UserWarning: Unknown failure executing module: <peforth>
-      warn('Unknown failure executing module: <%s>' % mod_name)
-    只要進了 ipython command prompt or jupyter notebook 都沒問題  
-        In [2]: 'get_ipython' in globals()
-        Out[2]: True    
-    --> 用對的方法檢查 ipython magic 存不存在即可，以上 error message 提供了線索
-        查看 python token 是否 defined 必須用 try-except:
-        try:
-            flag = "InteractiveShell" in str(get_ipython)
-        except:
-            flag = False
+[ ] v1.14 v1.15 v1.16 on WSL Ubuntu, virtualenv , _the_path_issue_
+    ipython still failed, message:
+    ...snip...
+    ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
+         33
+         34 def readTextFile(pathname):
+    ---> 35     f = open(pathname,'r',encoding='utf-8')
+         36     # for line in f:
+         37     s = f.read()
+    FileNotFoundError: [Errno 2] No such file or directory:
+    '/usr/local/lib/site-packages/peforth/version.txt'  <--- 因為 .py 與其他 files 被分開放了
+    ...snip...
 
-        if flag:
-            from IPython.core.magic import register_line_cell_magic
-            ... snip ....
-            
+    --> 想找出 data files 的努力，這個很接近
+        In [1]: import site
+
+        In [2]: site.ENABLE_USER_SITE
+        Out[2]: True
+
+        In [3]: site.USER_SITE
+        Out[3]: '/home/hcchen5600/.local/lib/python3.6/site-packages'
+
+        In [4]: site.USER_BASE
+        Out[4]: '/home/hcchen5600/.local'
+
+        In [5]: site.PREFIXES
+        Out[5]: ['/usr', '/usr']
+
+        In [1]: import site; print(site.getsitepackages())
+        ['/usr/lib/python3.6/site-packages',  <--------- 這個好像就對了，只要把 lib 與 site-packages 中間的剃掉就對了，吧？
+         '/usr/lib/python3.6/dist-packages']
+         '/usr/local/lib/python3.6/dist-packages', 
+         '/usr/lib/python3/dist-packages', 
+
+    [x] https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
+     1. pip show command > Location
+
+        \ Windows
+        Microsoft Windows [Version 10.0.16299.309]
+        (c) 2017 Microsoft Corporation. All rights reserved.
+
+        C:\Users\hcche>pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages
+        Requires:
+
+        \ WSL Ubuntu root
+        hcchen5600@WKS-4AEN0404:~$ pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: /usr/local/lib/python3.6/dist-packages
+        Requires:
+        hcchen5600@WKS-4AEN0404:~$
+
+        \ WSL Ubuntu virtualenv
+        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ pip show peforth
+        Name: peforth
+        Version: 1.15
+        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
+        Home-page: https://github.com/hcchengithub/peforth
+        Author: H.C. Chen
+        Author-email: hcchen5600@gmail.com
+        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
+        Location: /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages
+        Requires:
+
+        \ 這個也一樣結果
+        python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+     2. 總算有一個可行的辦法了：
+        In [3]: import sys
+        In [4]: [f for f in sys.path if f.endswith('site-packages')]
+             or [f for f in sys.path if f.endswith('packages')]
+        Out[4]: ['/home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages']
+
+        但是這個只是 .py 程式檔的位置，peforth 的資料檔在： <--- 同上，把 lib 與 site-packages 中間的剃掉就對了，吧？
+        ['/home/hcchen5600/tmp/deepspeech-venv/lib/site-packages']
+
+        \ 實驗成功
+        char /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth/version.txt
+        readTextFile . cr
+
+        \ Windows 10 之下，也可以 --> 以下第一個不對，第二個對了！
+        In [2]: import sys
+        In [3]: [f for f in sys.path if f.endswith('site-packages')]
+        Out[3]:
+        ['C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages',
+         'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages']
+        所以是 lib > site-packages 處
+
+    [x] On LRV2 31ENB667 （w/o virtualenv）
+
+        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
+
+         /usr/local/lib/site-packages/peforth
+             version.txt
+         /usr/local/lib/python3.6/dist-packages/peforth
+             version.txt
+
+        同上， search projectk.py
+
+         /usr/local/lib/python3.6/dist-packages/peforth
+             projectk.py
+
+        我覺得奇怪，應該是個 site-packages 才對呀！？ 如果單查 site-packages
+
+         /usr/local/lib
+             site-packages    # <----- 想必是 python3.6 的
+         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv27/lib/python2.7
+             site-packages
+         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv34/lib/python3.4
+             site-packages
+
+        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
+
+            /usr/local/lib/site-packages/peforth
+                kernel.json
+                peforth.f
+                peforth.selftest
+                peforthkernel.py
+                quit.f
+                version.txt
+
+    [x] On T550 4AEN0404 (有 virtualevn) 重做以上
+
+        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
+
+         /usr/local/lib/site-packages/peforth
+             version.txt
+         /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth
+             version.txt
+
+         第一個與 LRV2 相同，看得出，第二個 與 LRV2 不同了！
+
+
+        同上， search projectk.py
+
+        /usr/local/lib/python3.6/dist-packages/peforth
+             projectk.py
+         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth
+             projectk.py
+
+         第一個與 LRV2 相同，第二個是（有 virtualenv）多出來的。
+
+
+        單查 site-packages
+
+         /home/hcchen5600/tmp/deepspeech-venv/lib
+             site-packages     # w/virtualenv 多出來的，裡面只有 peforth
+         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6
+             site-packages     # w/virtualenv 多出來的，裡面沒有 peforth 
+         /usr/local/lib
+             site-packages     # 與 LRV2 相同
+         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv27/lib/python2.7
+             site-packages     # 與 LRV2 相同  
+         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv34/lib/python3.4
+             site-packages     # 與 LRV2 相同
+
+
+        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
+        
+            /usr/local/lib/site-packages/peforth
+                kernel.json
+                peforth.f
+                peforth.selftest
+                peforthkernel.py
+                quit.f
+                version.txt
+                
+            /home/hcchen5600/tmp/deepspeech-venv/lib
+               同上
+
+        Executables 在這裡 （T550 w/virtualenv）
+        
+            \usr\local\lib\python3.6\dist-packages\peforth\.. 
+                __init__.py
+                __main__.py
+                peforthkernel.py
+                projectk.py            
+    [x] 終於發現這個了 --> 查出 實際 path 的方法，peforth 能不能參考？ <-- 不能
+        DOS command line> jupyter --paths    
+        結果：
+        config:
+            C:\Users\hcche\.jupyter
+            c:\users\hcche\appdata\local\programs\python\python36\etc\jupyter
+            C:\ProgramData\jupyter
+        data:
+            C:\Users\hcche\AppData\Roaming\jupyter
+            c:\users\hcche\appdata\local\programs\python\python36\share\jupyter
+            C:\ProgramData\jupyter
+        runtime:
+            C:\Users\hcche\AppData\Roaming\jupyter\runtime
+    [ ] mybinder.org 跑不起來, peforth/version.txt file not found
+        See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
+        --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
+            folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
+            peforth/version.txt 而直接在 version.txt 才對。 v1.16 先直接修改
+                Desktop\peforth-master\setup.py 
+            做一版 wheel 在 local 看成不成功, 若成功就證明研究生的檔案結構多一個 peforth
+            是沒必要的了，改掉就有機會了。
+        --> 真的做成了, 把 peforth/ 裡的東西都移上來, setup.py 改掉,不要 peforth/, 
+            如下從 working directory 執行, 成功了！
+            c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist .
+            Processing c:\users\hcche\desktop\peforth-master
+            Building wheels for collected packages: peforth
+              Running setup.py bdist_wheel for peforth ... done
+              Stored in directory: c:\users\hcche\desktop\peforth-master\dist
+            Successfully built peforth
+            c:\Users\hcche\Desktop\peforth-master>    
+        --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
+            了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
+        --> peforth/version.txt file not found 應該還是 _the_path_issue_
+    [x] 綜合以上，最終解答還是用 site.getsitepackages() 加上一點暴力    
+        deli = '\\' if os.name == 'nt' else '/'
+        path = "something wrong peforth path not found"
+        for p in (pp for pp in site.getsitepackages() if pp.endswith("site-packages")):
+            dirs = p.split(deli)
+            if dirs[-2] != 'lib':  # expecting 'lib'
+                dirs = dirs[:-2] + [dirs[-1]];  # if -2 is not 'lib' then remove it (pythonM.N or the likes)
+            if 'lib' in dirs:  # extra check, may not be necessary
+                path = deli.join(dirs) + deli + "peforth" + deli
+    [ ] 做成 1.17 release 以便查看 mybinder.org 解了沒?            
+    see also : Ynote : "研究 peforth 的 path 到底正確該如何"
     
- 
- 
+[ ] Tests before releasing v1.17
+    [ ] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+            [x] 直接從 GitHub folder 執行 python peforth --> .s cd help exit
+        [x] Run setup.bat 更新本地 pip installed 版本以供測試
+        [x] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [x] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3.  ipython import peforth .s words
+                [x] selftest peforth.ok() .s words <--- w/parent
+                [x] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [x] 4.  jupyter notebook 
+                kernel > restart and clear outputs 
+                import peforth
+                    %%f 擴充、修訂一下 peforth 的行為模式，讓它認得 jupyter notebook 下的 globals. Dot . 也改寫了，適合 jupyter notebook 學習環境使用。
+                    : unknown ( token -- thing Y|N) // Try to find the unknown token in __main__
+                    py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
+                    py> str(tos())=="Ûnknôwn" if drop false else true then ;
+                    /// here after, when FORTH come accross an unknown token, instead of alerting 
+                    /// it try to find the token in python __main__ module name space.
+                    : . tib. ; // ( tos -- ) A better dot that also prints the entire command line
+                    /// For experiments that need to show both question and result.
+                    /// "" . prints the command line only, w/o the TOS.
+                    : path-to-find-modules ( <path> -- ) // Add path to sys.path so "import module-name" can find the module
+                        CR word trim ( "path" ) py: sys.path.append(pop()) ;
+                    code \ print(nexttoken('\n')) end-code // Redefine \ command to print the comment line 
+                x = 123
+                %f x .     
+                x . \ ==> 123 (<class 'int'>)
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
+        [x] Run setup.bat 做出取消 selftest 的 wheel
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
+        [x] 2. python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [x] 3. python import peforth
+               [x] no selftest, peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> *debug* ok> .s cd help exit
+               %f %%f magic command
+        [x] 5. repeat 以上 in ubuntu
+                [x] pip uninstall peforth
+                [x] pip install (/mnt/...the wheel) to WSL ubuntu
+                [x] ipython -m peforth
+                [x] ipython , import peforth , magic commands 
+	[x] 直接用測過的 wheel update Pypi
+        繼續剛才的 setup.bat 即可，必要時： twine upload dist/*
+        ID, password search my Ynote with pypi _account_
+        --> 出錯! GFW?
+            HTTPError: 403 Client Error: Invalid or non-existent authentication information. for url: https://upload.pypi.org/legacy/
+        --> retry 看看 ... 這次就成功了!
+            c:\Users\hcche\Desktop\peforth-master>twine upload dist/*
+            Uploading distributions to https://upload.pypi.org/legacy/
+            Enter your username: hcchen5600
+            Enter your password:
+            Uploading peforth-1.17-py3-none-any.whl
+             12%|...snip....
+            c:\Users\hcche\Desktop\peforth-master>
+        --> 很奇怪，pypi.org 網頁上已經 upgraded 到 1.17 版了, WSL Ubuntu 下試過
+            pip uninstall peforth -> pip install peforth 也到 1.17 版了，就是 
+            Windows DOS 下怎麼試都還是 1.16 ! 不管了，晚點再看 --> 真的過幾分鐘就好了!!
+    [x] version 改成 1.18  (必須跳過 1.10 會變成 1.1）
+    [ ] test mybinder.org 
+        [http://github.com/hcchengithub/peforth][master][notebook]
+        不行, 看來是 setup.py 的問題 --> see Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
+        這個失敗了! 可能跟 pypi release 無關，有機會光用 GitHub checkout 即可解決, 用 develop brahch
+        實驗看看 . .  
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+[ ] v1.17 released       
+[ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
+    改介紹 ipython 的 magic command 比較好。
+    
+    

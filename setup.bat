@@ -246,7 +246,8 @@
     \ The end
 
         cr ." ----------- All Done --------------" cr 
-        \ bye <-- don't we may need to see the error messages
+        \ bye <-- don't we may need to see the error messages.
+        *debug* Done>
         
 \ ---------------- end peforth code -----------------------
 

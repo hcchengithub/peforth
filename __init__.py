@@ -45,32 +45,21 @@ def writeTextFile(pathname, string):
     f.close
 vm.writeTextFile = writeTextFile
 
-# Get peforth home path
-# On python 3.6 __file__ is either path\\__init__.py or path\\__main__.py
-# Cases are:
-#   '__main__.py' or '__init__.py' when run by "python __main__.py" or the other
-#   'peforth\\__main__.py' when run by "python peforth" from ..\peforth
-#   'C:\\...\\peforth\\__main__.py' when double click __main__.py or python -m peforth
-#   'C:\\...\\peforth\\__init__.py' when double click __init__.py or import peforth
-# if __file__.find('__init__.py')==-1:
-#     # __main__.py
-#     path = __file__.split('__main__.py')[0]
-#     path = (path and [path] or ['.\\'])[0]
-# else:
-#     # __init__.py
-#     path = __file__.split('__init__.py')[0]
-#     path = (path and [path] or ['.\\'])[0]
-path = site.PREFIXES[0]  # [0] or [1] are of the same as I see
-if path == '/usr':
-	# Linux global (not virtualenv)
-	path += '/local/lib/site-packages/peforth/'
-else:
-	if os.name == 'nt':
-		# Windows
-		path += '\\lib\\site-packages\\peforth\\'
-	else:
-		# Linux virtualenv
-		path += '/lib/site-packages/peforth/'
+# Get the path of data files is really frustrating because I am not 
+# familiar with Linux and virtualenv environments. When in Ubuntu, peforth's .py
+# files are at : /home/username/miniconda/lib/python3.6/site-packages/peforth
+# but other files are at : /home/username/miniconda/lib/site-packages/peforth
+# that is the boss barrier to me. The below method is the only ugly way I have 
+# so far:
+
+deli = '\\' if os.name == 'nt' else '/'
+path = "something wrong peforth path not found"
+for p in (pp for pp in site.getsitepackages() if pp.endswith("site-packages")):
+    dirs = p.split(deli)
+    if dirs[-2] != 'lib':  # expecting 'lib'
+        dirs = dirs[:-2] + [dirs[-1]];  # if -2 is not 'lib' then remove it (pythonM.N or the likes)
+    if 'lib' in dirs:  # extra check, may not be necessary
+        path = deli.join(dirs) + deli + "peforth" + deli
 vm.path = path
 
 # Get version code from peforth/version.txt for whl package
