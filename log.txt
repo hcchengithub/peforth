@@ -2707,8 +2707,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 dirs = dirs[:-2] + [dirs[-1]];  # if -2 is not 'lib' then remove it (pythonM.N or the likes)
             if 'lib' in dirs:  # extra check, may not be necessary
                 path = deli.join(dirs) + deli + "peforth" + deli
-    [ ] 做成 1.17 release 以便查看 mybinder.org 解了沒?            
-    see also : Ynote : "研究 peforth 的 path 到底正確該如何"
+    [x] 做成 1.17 release 以便查看 mybinder.org 解了沒? --> failed !!
+        see also : Ynote : "研究 peforth 的 path 到底正確該如何"
+    [ ] setup.py 是研究生為了做出 peforth 的 whl 而設。既然 mybinder.org 也要來
+        看，就一定要更講究一點，我想就是這個原因....
     
 [ ] Tests before releasing v1.17
     [ ] 所有 run 法帶 selftest：
