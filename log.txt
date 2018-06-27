@@ -2792,5 +2792,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         --> anywhere>pip wheel --wheel-dir=dist c:\Users\hcche\Desktop\peforth-master 
             c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist peforth
             以上都可以 build 出 peforthxxxxx.whl 
-        --> peforth/setup.py 被 mybinder.org 看到了才出的問題, 把它改名看看...
+        --> peforth/setup.py 被 mybinder.org 看到了才出的問題, 把它改名成 setup.py.disabled 看看...
         
+            
