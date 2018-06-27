@@ -2475,7 +2475,83 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     無用，因此原來的判斷方法可以保持，但是要排除 jupyter notebook 的場合。
     
     結論是 --> ('jupyter' in str(sys.modules) or not commandline.strip())
-
+    
+[ ] Tests before releasing v1.17
+    [ ] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+            [x] 直接從 GitHub folder 執行 python peforth --> .s cd help exit
+        [x] Run setup.bat 更新本地 pip installed 版本以供測試
+        [x] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [x] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3.  ipython import peforth .s words
+                [x] selftest peforth.ok() .s words <--- w/parent
+                [x] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [x] 4.  jupyter notebook 
+                kernel > restart and clear outputs 
+                import peforth
+                    %%f 擴充、修訂一下 peforth 的行為模式，讓它認得 jupyter notebook 下的 globals. Dot . 也改寫了，適合 jupyter notebook 學習環境使用。
+                    : unknown ( token -- thing Y|N) // Try to find the unknown token in __main__
+                    py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
+                    py> str(tos())=="Ûnknôwn" if drop false else true then ;
+                    /// here after, when FORTH come accross an unknown token, instead of alerting 
+                    /// it try to find the token in python __main__ module name space.
+                    : . tib. ; // ( tos -- ) A better dot that also prints the entire command line
+                    /// For experiments that need to show both question and result.
+                    /// "" . prints the command line only, w/o the TOS.
+                    : path-to-find-modules ( <path> -- ) // Add path to sys.path so "import module-name" can find the module
+                        CR word trim ( "path" ) py: sys.path.append(pop()) ;
+                    code \ print(nexttoken('\n')) end-code // Redefine \ command to print the comment line 
+                x = 123
+                %f x .     
+                x . \ ==> 123 (<class 'int'>)
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
+        [x] Run setup.bat 做出取消 selftest 的 wheel
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
+        [x] 2. python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [x] 3. python import peforth
+               [x] no selftest, peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> *debug* ok> .s cd help exit
+               %f %%f magic command
+        [x] 5. repeat 以上 in ubuntu
+                [x] pip uninstall peforth
+                [x] pip install (/mnt/...the wheel) to WSL ubuntu
+                [x] ipython -m peforth
+                [x] ipython , import peforth , magic commands 
+	[x] 直接用測過的 wheel update Pypi
+        繼續剛才的 setup.bat 即可，必要時： twine upload dist/*
+        ID, password search my Ynote with pypi _account_
+        --> 出錯! GFW?
+            HTTPError: 403 Client Error: Invalid or non-existent authentication information. for url: https://upload.pypi.org/legacy/
+        --> retry 看看 ... 這次就成功了!
+            c:\Users\hcche\Desktop\peforth-master>twine upload dist/*
+            Uploading distributions to https://upload.pypi.org/legacy/
+            Enter your username: hcchen5600
+            Enter your password:
+            Uploading peforth-1.17-py3-none-any.whl
+             12%|...snip....
+            c:\Users\hcche\Desktop\peforth-master>
+        --> 很奇怪，pypi.org 網頁上已經 upgraded 到 1.17 版了, WSL Ubuntu 下試過
+            pip uninstall peforth -> pip install peforth 也到 1.17 版了，就是 
+            Windows DOS 下怎麼試都還是 1.16 ! 不管了，晚點再看 --> 真的過幾分鐘就好了!!
+    [x] version 改成 1.18  (必須跳過 1.10 會變成 1.1）
+    [ ] test mybinder.org 
+        [http://github.com/hcchengithub/peforth][master][notebook]
+        不行, 看來是 setup.py 的問題 --> see Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+[x] v1.17 released       
+[ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
+    改介紹 ipython 的 magic command 比較好。
+    
 [ ] v1.14 v1.15 v1.16 on WSL Ubuntu, virtualenv , _the_path_issue_
     ipython still failed, message:
     ...snip...
@@ -2711,83 +2787,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         see also : Ynote : "研究 peforth 的 path 到底正確該如何"
     [ ] setup.py 是研究生為了做出 peforth 的 whl 而設。既然 mybinder.org 也要來
         看，就一定要更講究一點，我想就是這個原因....
-    
-[ ] Tests before releasing v1.17
-    [ ] 所有 run 法帶 selftest：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
-            ' <selftest> :: enabled=True
-            [x] 直接從 GitHub folder 執行 python peforth --> .s cd help exit
-        [x] Run setup.bat 更新本地 pip installed 版本以供測試
-        [x] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
-        [x] 2.  ipython -i -m peforth .' Hello World!!' cr bye
-        [x] 3.  ipython import peforth .s words
-                [x] selftest peforth.ok() .s words <--- w/parent
-                [x] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
-        [x] 4.  jupyter notebook 
-                kernel > restart and clear outputs 
-                import peforth
-                    %%f 擴充、修訂一下 peforth 的行為模式，讓它認得 jupyter notebook 下的 globals. Dot . 也改寫了，適合 jupyter notebook 學習環境使用。
-                    : unknown ( token -- thing Y|N) // Try to find the unknown token in __main__
-                    py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
-                    py> str(tos())=="Ûnknôwn" if drop false else true then ;
-                    /// here after, when FORTH come accross an unknown token, instead of alerting 
-                    /// it try to find the token in python __main__ module name space.
-                    : . tib. ; // ( tos -- ) A better dot that also prints the entire command line
-                    /// For experiments that need to show both question and result.
-                    /// "" . prints the command line only, w/o the TOS.
-                    : path-to-find-modules ( <path> -- ) // Add path to sys.path so "import module-name" can find the module
-                        CR word trim ( "path" ) py: sys.path.append(pop()) ;
-                    code \ print(nexttoken('\n')) end-code // Redefine \ command to print the comment line 
-                x = 123
-                %f x .     
-                x . \ ==> 123 (<class 'int'>)
-        [/] 考慮 README.rst 改良
-            [/] 若有改過 README.rst 則 wheel 就要重做
-                --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
-            ' <selftest> :: enabled=False
-        [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
-        [x] Run setup.bat 做出取消 selftest 的 wheel
-        [x] pip uninstall peforth
-        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [x] 1. python -i -m peforth [x] no-selftest .s words exit
-        [x] 2. python -i -m peforth version 12345 bye --> echo %errorlevel%
-        [x] 3. python import peforth
-               [x] no selftest, peforth.ok() .s words <--- no parent
-               [x] 1234 bye check echo %errorlevel%
-        [x] 4. jupyter notebook --> *debug* ok> .s cd help exit
-               %f %%f magic command
-        [x] 5. repeat 以上 in ubuntu
-                [x] pip uninstall peforth
-                [x] pip install (/mnt/...the wheel) to WSL ubuntu
-                [x] ipython -m peforth
-                [x] ipython , import peforth , magic commands 
-	[x] 直接用測過的 wheel update Pypi
-        繼續剛才的 setup.bat 即可，必要時： twine upload dist/*
-        ID, password search my Ynote with pypi _account_
-        --> 出錯! GFW?
-            HTTPError: 403 Client Error: Invalid or non-existent authentication information. for url: https://upload.pypi.org/legacy/
-        --> retry 看看 ... 這次就成功了!
-            c:\Users\hcche\Desktop\peforth-master>twine upload dist/*
-            Uploading distributions to https://upload.pypi.org/legacy/
-            Enter your username: hcchen5600
-            Enter your password:
-            Uploading peforth-1.17-py3-none-any.whl
-             12%|...snip....
-            c:\Users\hcche\Desktop\peforth-master>
-        --> 很奇怪，pypi.org 網頁上已經 upgraded 到 1.17 版了, WSL Ubuntu 下試過
-            pip uninstall peforth -> pip install peforth 也到 1.17 版了，就是 
-            Windows DOS 下怎麼試都還是 1.16 ! 不管了，晚點再看 --> 真的過幾分鐘就好了!!
-    [x] version 改成 1.18  (必須跳過 1.10 會變成 1.1）
-    [ ] test mybinder.org 
-        [http://github.com/hcchengithub/peforth][master][notebook]
-        不行, 看來是 setup.py 的問題 --> see Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
-        這個失敗了! 可能跟 pypi release 無關，有機會光用 GitHub checkout 即可解決, 用 develop brahch
-        實驗看看 . .  
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-[ ] v1.17 released       
-[ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
-    改介紹 ipython 的 magic command 比較好。
-    
-    
+        --> 可能要兩個 setup.py, 一個 at peforth folder, the other is for building .whl.
+            when building .whl, the setup.py is at parent folder and is that a must ?
+        --> anywhere>pip wheel --wheel-dir=dist c:\Users\hcche\Desktop\peforth-master 
+            c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist peforth
+            以上都可以 build 出 peforthxxxxx.whl 
+        --> peforth/setup.py 被 mybinder.org 看到了才出的問題, 把它改名看看...
+        
