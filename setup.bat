@@ -149,8 +149,9 @@
                 </py>
                 
                 \ 還有 building wheel 特別要用的檔案
+
                 s" copy /y setup.py.whl {}" :> format(v('peforth-master')+"setup.py")
-                *debug* 112233>
+                
                 py: os.system(pop())
                 s" copy /y README.rst {}" :> format(v('peforth-master'))
                 py: os.system(pop())

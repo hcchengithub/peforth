@@ -76,12 +76,6 @@ vm.greeting = greeting
 # Master switch to break ok() and return to python interpreter
 vm.exit = False
 
-# Run once
-if not vm.tick('version'):
-    vm.dictate(readTextFile(path+'peforth.f'))
-    vm.dictate(readTextFile(path+'peforth.selftest'))
-    vm.dictate(readTextFile(path+'quit.f'))
-
 def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     '''
     Invoke the peforth interpreter.
@@ -143,7 +137,6 @@ stack       = vm.stack
 tib         = vm.tib
 tos         = vm.tos
 words       = vm.words
-    
 
 ##### Setup peforth magic command %f and %%f for ipython and jupyter notebook ##### 
 
@@ -174,5 +167,11 @@ if flag:
         ipython.register_magic_function(f, 'line_cell')  
         # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
-##### End of peforth __init__.py ###############
+# Run once
+if not vm.tick('version'):  # defined in peforth.f 
+    vm.dictate(readTextFile(path+'peforth.f'))
+    vm.dictate(readTextFile(path+'peforth.selftest'))
+    vm.dictate(readTextFile(path+'quit.f'))
+
+##### End of peforth __init__.py #####
 

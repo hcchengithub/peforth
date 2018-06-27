@@ -2149,9 +2149,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	OK os :> name . cr
 	nt
 	[ ] 有了這個 solution 連 jupyter peforth kernel 的 install 都可以自動化了。
-[ ] Ubuntu 的問題應該已經解決了，要推廣 peforth 必須趕快 release
+[x] Ubuntu 的問題應該已經解決了，要推廣 peforth 必須趕快 release
 	Tests before a Release  v1.14
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
             Run setup.bat 做出取消 selftest 的 wheel
@@ -2169,22 +2169,22 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [/] 考慮 README.rst 改良
             [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法帶 selftest：
-        [ ] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
+    [x] 所有 run 法帶 selftest：
+        [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
             Run setup.bat 更新本地版本以供測試
-        [ ] 1. python -i -m peforth [ ] with-selftest .s words exit bye
-        [ ] 2. ipython -i -m peforth .' Hello World!!' cr bye
-        [ ] 3. ipython import peforth .s words
-               [ ] selftest peforth.ok() .s words <--- w/parent
-               [ ] 1234 bye check echo %errorlevel%
-        [ ] 4. jupyter notebook --> .s cd help bye .s cd help exit
-        [ ] 考慮 README.rst 改良
-            [ ] 若有改過 README.rst 則 wheel 就要重做
+        [x] 1. python -i -m peforth [x] with-selftest .s words exit bye
+        [x] 2. ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3. ipython import peforth .s words
+               [x] selftest peforth.ok() .s words <--- w/parent
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> .s cd help bye .s cd help exit
+        [x] 考慮 README.rst 改良
+            [x] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
     [x] version 改成 1.15  (必須跳過 1.10 會變成 1.1）
-	[ ] 直接用測過的 wheel update Pypi
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+	[x] 直接用測過的 wheel update Pypi
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 
 [x] WSL Ubuntu virtualenv weired experience
 	when pip install peforth in a virtualenv --> permission denied
@@ -2476,13 +2476,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     
     結論是 --> ('jupyter' in str(sys.modules) or not commandline.strip())
     
-[ ] Tests before releasing v1.17
-    [ ] 所有 run 法帶 selftest：
+[x] Tests before releasing v1.17
+    [x] 所有 run 法帶 selftest：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
             [x] 直接從 GitHub folder 執行 python peforth --> .s cd help exit
         [x] Run setup.bat 更新本地 pip installed 版本以供測試
-        [x] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [x] 1.  python -i -m peforth [x] with-selftest .s words exit bye
         [x] 2.  ipython -i -m peforth .' Hello World!!' cr bye
         [x] 3.  ipython import peforth .s words
                 [x] selftest peforth.ok() .s words <--- w/parent
@@ -2508,7 +2508,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [/] 考慮 README.rst 改良
             [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
         [x] Run setup.bat 直接從 GitHub folder 執行 python peforth 先確定一把 --> .s cd help exit
@@ -2549,11 +2549,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         不行, 看來是 setup.py 的問題 --> see Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
         --> RI: 不是 bug, setup.py 改名不要讓 mybinder.org 看到即可。
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-[x] v1.17 released       
+[x] v1.17 released --> verion.txt 跳成 v1.18 
 [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
     改介紹 ipython 的 magic command 比較好。
     
-[ ] v1.14 v1.15 v1.16 on WSL Ubuntu, virtualenv , _the_path_issue_
+[x] v1.14 v1.15 v1.16 on WSL Ubuntu, virtualenv , _the_path_issue_
     ipython still failed, message:
     ...snip...
     ~/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth/__init__.py in readTextFile(pathname)
@@ -2797,4 +2797,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             RI: 把 setup.py 名字改掉就好了!!! 不要讓 mybinder.org 看到 setup.py 即可。
         --> 如前述，我們的 setup.py 是用來做 .whl 的，要給 pip 看的，不是要給 mybinder.org
             看的。
-            
+[x] 意外發現 python -m peforth include 1.f 時, 1.f 裡面不認得 ok() vm.ok()             
+    RI: the recent __init__.py "run once" section that runs quit.f that runs command line
+        arguments is *before* the definition of ok()! --> I move it down to the bottom
+        then problem is gone. This solution will be released with v1.18.
+[ ]
+
