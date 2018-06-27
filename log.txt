@@ -2461,7 +2461,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ID, password search my Ynote with pypi _account_
     [x] version 改成 1.17  (必須跳過 1.10 會變成 1.1）
     [x] test mybinder.org to view peforth > notebook > *.ipynb
-        不行, 猜測還是 _the_path_issue_ 的問題。
+        不行, 猜測還是 _the_path_issue_ 的問題 <--- no, setup.py issue, see below.
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] v1.16 released           
 
@@ -2544,10 +2544,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             pip uninstall peforth -> pip install peforth 也到 1.17 版了，就是 
             Windows DOS 下怎麼試都還是 1.16 ! 不管了，晚點再看 --> 真的過幾分鐘就好了!!
     [x] version 改成 1.18  (必須跳過 1.10 會變成 1.1）
-    [ ] test mybinder.org 
+    [x] test mybinder.org 
         [http://github.com/hcchengithub/peforth][master][notebook]
         不行, 看來是 setup.py 的問題 --> see Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+        --> RI: 不是 bug, setup.py 改名不要讓 mybinder.org 看到即可。
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] v1.17 released       
 [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
     改介紹 ipython 的 magic command 比較好。
@@ -2754,7 +2755,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             C:\ProgramData\jupyter
         runtime:
             C:\Users\hcche\AppData\Roaming\jupyter\runtime
-    [ ] mybinder.org 跑不起來, peforth/version.txt file not found
+    [x] mybinder.org 跑不起來, peforth/version.txt file not found <--- RI: setup.py 改名就好了
         See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
         --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
             folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
@@ -2785,7 +2786,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 path = deli.join(dirs) + deli + "peforth" + deli
     [x] 做成 1.17 release 以便查看 mybinder.org 解了沒? --> failed !!
         see also : Ynote : "研究 peforth 的 path 到底正確該如何"
-    [ ] setup.py 是研究生為了做出 peforth 的 whl 而設。既然 mybinder.org 也要來
+    [x] setup.py 是研究生為了做出 peforth 的 whl 而設。既然 mybinder.org 也要來
         看，就一定要更講究一點，我想就是這個原因....
         --> 可能要兩個 setup.py, 一個 at peforth folder, the other is for building .whl.
             when building .whl, the setup.py is at parent folder and is that a must ?
@@ -2793,5 +2794,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist peforth
             以上都可以 build 出 peforthxxxxx.whl 
         --> peforth/setup.py 被 mybinder.org 看到了才出的問題, 把它改名成 setup.py.disabled 看看...
-        
+            RI: 把 setup.py 名字改掉就好了!!! 不要讓 mybinder.org 看到 setup.py 即可。
+        --> 如前述，我們的 setup.py 是用來做 .whl 的，要給 pip 看的，不是要給 mybinder.org
+            看的。
             

@@ -108,7 +108,7 @@
         py> input()=="continue" [if] [else] ." Action aborted by user." cr bye [then] 
             
         cr 
-        ." o  Check ~\GitHub\peforth\setup.py and ~\GitHub\peforth\setup.bat" cr
+        ." o  Check ~\GitHub\peforth\setup.py.whl and ~\GitHub\peforth\setup.bat" cr
         ."    files to make sure no new files are missing." cr cr
         ." o  Check the package quit.f to make sure selftest is Disabled before a release." cr cr
         ." Press Enter to stop it or 'continue' to proceed. "
@@ -149,7 +149,8 @@
                 </py>
                 
                 \ 還有 building wheel 特別要用的檔案
-                s" copy /y setup.py {}" :> format(v('peforth-master'))
+                s" copy /y setup.py.whl {}" :> format(v('peforth-master')+"setup.py")
+                *debug* 112233>
                 py: os.system(pop())
                 s" copy /y README.rst {}" :> format(v('peforth-master'))
                 py: os.system(pop())
@@ -218,7 +219,7 @@
             py> v('peforth-master')+"dist" . cr cr
         
         \ 打包步驟
-        \ 1. 檢查 ~\GitHub\peforth\setup.py ＆ ～\GitHub\peforth\pack.f 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+        \ 1. 檢查 ~\GitHub\peforth\setup.py.whl ＆ ～\GitHub\peforth\pack.f 看有沒有漏掉新檔案，有沒有要去掉的檔案。
         \ 2. ～\Desktop\peforth-master 裡面清空，只留空的 peforth folder 在裡面。
         \ 3. 跑 ~\GitHub\peforth\update.bat , 試驗 python -m peforth 以及 ～\GitHub\peforth\__main__.py 都能跑。
         \ 4. 用 administrator mode 跑 pack.bat 得到 peforth.whl in ~\Desktop\peforth-master\dist 
