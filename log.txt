@@ -2797,9 +2797,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             RI: 把 setup.py 名字改掉就好了!!! 不要讓 mybinder.org 看到 setup.py 即可。
         --> 如前述，我們的 setup.py 是用來做 .whl 的，要給 pip 看的，不是要給 mybinder.org
             看的。
+    [x] Merge 到 master 但可以不必急著 release, 純粹是 setup.py 的問題，跟程式無關。
+        只要讓 mybinder.org 能跑，改 github 上的 setup.py 成 setup.py.whl 即可。
+            
 [x] 意外發現 python -m peforth include 1.f 時, 1.f 裡面不認得 ok() vm.ok()             
     RI: the recent __init__.py "run once" section that runs quit.f that runs command line
         arguments is *before* the definition of ok()! --> I move it down to the bottom
         then problem is gone. This solution will be released with v1.18.
-[ ]
 
