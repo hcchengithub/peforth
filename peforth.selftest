@@ -167,13 +167,13 @@
         2 1 > \ True
         1 2 < \ True
         1 1 < \ False
-        2 1 < \ fasle
+        2 1 < \ False
         1 2 >= \ False
         1 1 >= \ True
         2 1 >= \ True
         1 2 <= \ True
         1 1 <= \ True
-        2 1 <= \ fasle
+        2 1 <= \ False
         1 1 <> \ False
         0 1 <> \ True
         [d False,False,True,True,False,False,False,True,True,True,True,False,False,True d]
