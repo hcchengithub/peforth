@@ -2744,10 +2744,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ID, password search my Ynote with pypi _account_
     [x] test mybinder.org @ [http://github.com/hcchengithub/peforth][develop][notebook]
         這個跟 pypi.org 無關，只要 github 有 push 上去馬上生效。
-    [ ] pypi.org 網頁上已經 upgraded 到 1.18 版了, WSL Ubuntu 下試過
+    [x] pypi.org 網頁上已經 upgraded 到 1.18 版了, WSL Ubuntu 下試過
             pip uninstall peforth -> pip install peforth 也到 1.17 版了，就是 
             Windows DOS 下怎麼試都還是 1.16 ! 不管了，晚點再看 --> 真的過幾分鐘就好了!!
-    [ ] test colab    
+    [x] WSL Ubuntu w/o virtualenv --> python -m peforth ... ok        
+    [x] WSL Ubuntu with virtualenv --> python -m peforth ... ok        
+    [ ] test colab --> v1.18 還是 failed 還是 path 的問題 :-( 
     [ ] version 改成 1.19  (必須跳過 1.10 會變成 1.1）
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
         
