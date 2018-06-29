@@ -54,7 +54,7 @@ vm.writeTextFile = writeTextFile
 
 deli = '\\' if os.name == 'nt' else '/'
 path = "something wrong peforth path not found"
-for p in (pp for pp in site.getsitepackages() if pp.endswith("site-packages")):
+for p in (pp for pp in sys.path if pp.endswith("site-packages")):
     dirs = p.split(deli)
     if dirs[-2] != 'lib':  # expecting 'lib'
         dirs = dirs[:-2] + [dirs[-1]];  # if -2 is not 'lib' then remove it (pythonM.N or the likes)

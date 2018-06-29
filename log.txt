@@ -2566,216 +2566,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     '/usr/local/lib/site-packages/peforth/version.txt'  <--- 因為 .py 與其他 files 被分開放了
     ...snip...
 
-    --> 想找出 data files 的努力，這個很接近
-        In [1]: import site
-
-        In [2]: site.ENABLE_USER_SITE
-        Out[2]: True
-
-        In [3]: site.USER_SITE
-        Out[3]: '/home/hcchen5600/.local/lib/python3.6/site-packages'
-
-        In [4]: site.USER_BASE
-        Out[4]: '/home/hcchen5600/.local'
-
-        In [5]: site.PREFIXES
-        Out[5]: ['/usr', '/usr']
-
-        In [1]: import site; print(site.getsitepackages())
-        ['/usr/lib/python3.6/site-packages',  <--------- 這個好像就對了，只要把 lib 與 site-packages 中間的剃掉就對了，吧？
-         '/usr/lib/python3.6/dist-packages']
-         '/usr/local/lib/python3.6/dist-packages', 
-         '/usr/lib/python3/dist-packages', 
-
     [x] https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
-     1. pip show command > Location
-
-        \ Windows
-        Microsoft Windows [Version 10.0.16299.309]
-        (c) 2017 Microsoft Corporation. All rights reserved.
-
-        C:\Users\hcche>pip show peforth
-        Name: peforth
-        Version: 1.15
-        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-        Home-page: https://github.com/hcchengithub/peforth
-        Author: H.C. Chen
-        Author-email: hcchen5600@gmail.com
-        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
-        Location: c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages
-        Requires:
-
-        \ WSL Ubuntu root
-        hcchen5600@WKS-4AEN0404:~$ pip show peforth
-        Name: peforth
-        Version: 1.15
-        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-        Home-page: https://github.com/hcchengithub/peforth
-        Author: H.C. Chen
-        Author-email: hcchen5600@gmail.com
-        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
-        Location: /usr/local/lib/python3.6/dist-packages
-        Requires:
-        hcchen5600@WKS-4AEN0404:~$
-
-        \ WSL Ubuntu virtualenv
-        (deepspeech-venv) hcchen5600@WKS-4AEN0404:~/tmp/deepspeech-venv/bin$ pip show peforth
-        Name: peforth
-        Version: 1.15
-        Summary: A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.
-        Home-page: https://github.com/hcchengithub/peforth
-        Author: H.C. Chen
-        Author-email: hcchen5600@gmail.com
-        License: The MIT License (MIT) Copyright © 2017 H.C. Chen
-        Location: /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages
-        Requires:
-
-        \ 這個也一樣結果
-        python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
-     2. 總算有一個可行的辦法了：
-        In [3]: import sys
-        In [4]: [f for f in sys.path if f.endswith('site-packages')]
-             or [f for f in sys.path if f.endswith('packages')]
-        Out[4]: ['/home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages']
-
-        但是這個只是 .py 程式檔的位置，peforth 的資料檔在： <--- 同上，把 lib 與 site-packages 中間的剃掉就對了，吧？
-        ['/home/hcchen5600/tmp/deepspeech-venv/lib/site-packages']
-
-        \ 實驗成功
-        char /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth/version.txt
-        readTextFile . cr
-
-        \ Windows 10 之下，也可以 --> 以下第一個不對，第二個對了！
-        In [2]: import sys
-        In [3]: [f for f in sys.path if f.endswith('site-packages')]
-        Out[3]:
-        ['C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages',
-         'c:\\users\\hcche\\appdata\\local\\programs\\python\\python36\\lib\\site-packages']
-        所以是 lib > site-packages 處
-
-    [x] On LRV2 31ENB667 （w/o virtualenv）
-
-        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
-
-         /usr/local/lib/site-packages/peforth
-             version.txt
-         /usr/local/lib/python3.6/dist-packages/peforth
-             version.txt
-
-        同上， search projectk.py
-
-         /usr/local/lib/python3.6/dist-packages/peforth
-             projectk.py
-
-        我覺得奇怪，應該是個 site-packages 才對呀！？ 如果單查 site-packages
-
-         /usr/local/lib
-             site-packages    # <----- 想必是 python3.6 的
-         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv27/lib/python2.7
-             site-packages
-         /usr/local/lib/python3.6/dist-packages/te~valuate/sample_venvs/venv34/lib/python3.4
-             site-packages
-
-        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
-
-            /usr/local/lib/site-packages/peforth
-                kernel.json
-                peforth.f
-                peforth.selftest
-                peforthkernel.py
-                quit.f
-                version.txt
-
-    [x] On T550 4AEN0404 (有 virtualevn) 重做以上
-
-        用 mc 的 search （Esc ?, ignore /mnt） 找到兩個 peforth/version.txt
-
-         /usr/local/lib/site-packages/peforth
-             version.txt
-         /home/hcchen5600/tmp/deepspeech-venv/lib/site-packages/peforth
-             version.txt
-
-         第一個與 LRV2 相同，看得出，第二個 與 LRV2 不同了！
-
-
-        同上， search projectk.py
-
-        /usr/local/lib/python3.6/dist-packages/peforth
-             projectk.py
-         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6/site-packages/peforth
-             projectk.py
-
-         第一個與 LRV2 相同，第二個是（有 virtualenv）多出來的。
-
-
-        單查 site-packages
-
-         /home/hcchen5600/tmp/deepspeech-venv/lib
-             site-packages     # w/virtualenv 多出來的，裡面只有 peforth
-         /home/hcchen5600/tmp/deepspeech-venv/lib/python3.6
-             site-packages     # w/virtualenv 多出來的，裡面沒有 peforth 
-         /usr/local/lib
-             site-packages     # 與 LRV2 相同
-         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv27/lib/python2.7
-             site-packages     # 與 LRV2 相同  
-         /usr/local/lib/python3.6/dist-packages/tes~evaluate/sample_venvs/venv34/lib/python3.4
-             site-packages     # 與 LRV2 相同
-
-
-        查看 site-packages/peforth 的內容，發現裡面放的是 data files 而 w/o executables
-        
-            /usr/local/lib/site-packages/peforth
-                kernel.json
-                peforth.f
-                peforth.selftest
-                peforthkernel.py
-                quit.f
-                version.txt
-                
-            /home/hcchen5600/tmp/deepspeech-venv/lib
-               同上
-
-        Executables 在這裡 （T550 w/virtualenv）
-        
-            \usr\local\lib\python3.6\dist-packages\peforth\.. 
-                __init__.py
-                __main__.py
-                peforthkernel.py
-                projectk.py            
-    [x] 終於發現這個了 --> 查出 實際 path 的方法，peforth 能不能參考？ <-- 不能
-        DOS command line> jupyter --paths    
-        結果：
-        config:
-            C:\Users\hcche\.jupyter
-            c:\users\hcche\appdata\local\programs\python\python36\etc\jupyter
-            C:\ProgramData\jupyter
-        data:
-            C:\Users\hcche\AppData\Roaming\jupyter
-            c:\users\hcche\appdata\local\programs\python\python36\share\jupyter
-            C:\ProgramData\jupyter
-        runtime:
-            C:\Users\hcche\AppData\Roaming\jupyter\runtime
-    [x] mybinder.org 跑不起來, peforth/version.txt file not found <--- RI: setup.py 改名就好了
-        See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
-        --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
-            folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
-            peforth/version.txt 而直接在 version.txt 才對。 v1.16 先直接修改
-                Desktop\peforth-master\setup.py 
-            做一版 wheel 在 local 看成不成功, 若成功就證明研究生的檔案結構多一個 peforth
-            是沒必要的了，改掉就有機會了。
-        --> 真的做成了, 把 peforth/ 裡的東西都移上來, setup.py 改掉,不要 peforth/, 
-            如下從 working directory 執行, 成功了！
-            c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist .
-            Processing c:\users\hcche\desktop\peforth-master
-            Building wheels for collected packages: peforth
-              Running setup.py bdist_wheel for peforth ... done
-              Stored in directory: c:\users\hcche\desktop\peforth-master\dist
-            Successfully built peforth
-            c:\Users\hcche\Desktop\peforth-master>    
-        --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
-            了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
-        --> peforth/version.txt file not found 應該還是 _the_path_issue_
-    [x] 綜合以上，最終解答還是用 site.getsitepackages() 加上一點暴力    
+    [x] v1.17 還是用 site.getsitepackages() 加上一點暴力    
         deli = '\\' if os.name == 'nt' else '/'
         path = "something wrong peforth path not found"
         for p in (pp for pp in site.getsitepackages() if pp.endswith("site-packages")):
@@ -2784,6 +2576,102 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 dirs = dirs[:-2] + [dirs[-1]];  # if -2 is not 'lib' then remove it (pythonM.N or the likes)
             if 'lib' in dirs:  # extra check, may not be necessary
                 path = deli.join(dirs) + deli + "peforth" + deli
+        [x] test with WSL Ubuntu virtualenv --> failed
+    [ ] v1.17 failed for WSL Ubuntu in both with and without virtualenv.
+        問題點：
+            When without virtualenv:
+                hcchen5600@WKS-4AEN0404:~$ python -m peforth
+                Traceback (most recent call last):
+                  ...snip...   
+                  File "/home/hcchen5600/.local/lib/python3.6/site-packages/peforth/__init__.py", line 67, in <module>
+                    exec(readTextFile(path + "version.txt"),{},locals())
+                  File "/home/hcchen5600/.local/lib/python3.6/site-packages/peforth/__init__.py", line 35, in readTextFile
+                    f = open(pathname,'r',encoding='utf-8')
+                FileNotFoundError: [Errno 2] No such file or directory: 'something wrong peforth path not foundversion.txt'    
+            When with virtualenv:
+                (playground) hcchen5600@WKS-4AEN0404:~$ python -m peforth
+                Traceback (most recent call last):
+                  ...snip...  
+                  File "/home/hcchen5600/playground/lib/python3.6/site-packages/peforth/__init__.py", line 57, in <module>
+                    for p in (pp for pp in site.getsitepackages() if pp.endswith("site-packages")):
+                AttributeError: module 'site' has no attribute 'getsitepackages'
+        答案：
+            還是這篇文章：https://stackoverflow.com/questions/122327/how-do-i-find-the-location-of-my-python-site-packages-directory
+        
+        [x] 正確答案先直接列出來
+            w/o virtualenv  /home/hcchen5600/.local/lib/site-packages/peforth/version.txt
+            with virtualenv /home/hcchen5600/playground/lib/site-packages/peforth/version.txt
+            w/o virtualenv  C:\Users\hcche\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\version.txt
+
+        [x] 方法一、 sys.path 終極答案
+            Ubuntu with virtualenv 可用(要剃除"python3.6")
+                >>> import sys
+                >>> [f for f in sys.path if f.endswith('site-packages')]
+                ['/home/hcchen5600/playground/lib/python3.6/site-packages']
+            Ubuntu w/o virtualenv 可用(要剃除"python3.6")
+                >>> import sys
+                >>> [f for f in sys.path if f.endswith('site-packages')]
+                ['/home/hcchen5600/.local/lib/python3.6/site-packages']
+            Windows w/o virtualenv 正確
+                >>> [f for f in sys.path if f.endswith('site-packages')]
+                ['C:\\Users\\hcche\\AppData\\Roaming\\Python\\Python36\\site-packages', 
+                 'C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages']
+            --> 用這個方法只要把 v1.17 的 __init__.py 原來 "site.getsitepackages()" 
+                改成 "sys.path" 即可，真是的！ 
+        [x] 方法二、 site.getsitepackages() <--- v1.16 失敗，三個中最差的，我的媽！
+            python -c "import site; print([f for f in site.getsitepackages() if f.endswith('site-packages')])" 
+            Windows w/o virtualenv 正確
+                python -c "import site; print([f for f in site.getsitepackages() if f.endswith('site-packages')])"
+                ['C:\\Users\\hcche\\AppData\\Local\\Programs\\Python\\Python36\\lib\\site-packages']
+            Ubuntu w/o virtualenv 錯誤！
+                hcchen5600@WKS-4AEN0404:~$ python
+                Python 3.6.5 (default, May  3 2018, 10:08:28)
+                [GCC 5.4.0 20160609] on linux
+                Type "help", "copyright", "credits" or "license" for more information.
+                >>> import site
+                >>> site.getsitepackages()
+                ['/usr/local/lib/python3.6/dist-packages', '/usr/lib/python3/dist-packages', '/usr/lib/python3.6/dist-packages']
+            Ubuntu with virtualenv 直接陣亡，根本不 support 這個命令！
+                (playground) hcchen5600@WKS-4AEN0404:~/playground/bin$ python -c "import site; print([f for f in site.getsitepackages() if f.endswith('site-packages')])"
+                Traceback (most recent call last):
+                  File "<string>", line 1, in <module>
+                AttributeError: module 'site' has no attribute 'getsitepackages'
+        [x] 方法三、 不行！ <--- python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())" 
+            Windows w/o virtualenv 正確
+                c:\Users\hcche\Downloads>python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+                C:\Users\hcche\AppData\Local\Programs\Python\Python36\Lib\site-packages
+            Ubuntu w/o virtualenv 錯誤！
+                hcchen5600@WKS-4AEN0404:~$ python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+                /usr/lib/python3/dist-packages <--- 錯了，不能用。
+            Ubuntu with virtualenv 可用(要剃除"python3.6")
+                (playground) hcchen5600@WKS-4AEN0404:~/playground/bin$ python -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())"
+                /home/hcchen5600/playground/lib/python3.6/site-packages
+            
+[x] 意外發現 python -m peforth include 1.f 時, 1.f 裡面不認得 ok() vm.ok()             
+    RI: the recent __init__.py "run once" section that runs quit.f that runs command line
+        arguments is *before* the definition of ok()! --> I move it down to the bottom
+        then problem is gone. This solution will be released with v1.18.
+
+[x] mybinder.org 跑不起來, peforth/version.txt file not found <--- RI: setup.py 改名就好了， expecting v1.18 
+    See my Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
+    --> 我猜是 setup.py 的檔案結構,在 Desktop\peforth-master\ 處多用了一個 peforth 
+        folder 如此一來, 從 project 本身的 setup.py 所在之處來看 version.txt 就不在
+        peforth/version.txt 而直接在 version.txt 才對。 v1.16 先直接修改
+            Desktop\peforth-master\setup.py 
+        做一版 wheel 在 local 看成不成功, 若成功就證明研究生的檔案結構多一個 peforth
+        是沒必要的了，改掉就有機會了。
+    --> 真的做成了, 把 peforth/ 裡的東西都移上來, setup.py 改掉,不要 peforth/, 
+        如下從 working directory 執行, 成功了！
+        c:\Users\hcche\Desktop\peforth-master>pip wheel --wheel-dir=dist .
+        Processing c:\users\hcche\desktop\peforth-master
+        Building wheels for collected packages: peforth
+          Running setup.py bdist_wheel for peforth ... done
+          Stored in directory: c:\users\hcche\desktop\peforth-master\dist
+        Successfully built peforth
+        c:\Users\hcche\Desktop\peforth-master>    
+    --> 這表示根本不必搞到 Desktop\peforth-master 直接用 local GitHub repo 就可以
+        了 --> 錯錯錯! Desktop\peforth-master\peforth folder 是必須的
+    --> peforth/version.txt file not found 應該還是 _the_path_issue_
     [x] 做成 1.17 release 以便查看 mybinder.org 解了沒? --> failed !!
         see also : Ynote : "研究 peforth 的 path 到底正確該如何"
     [x] setup.py 是研究生為了做出 peforth 的 whl 而設。既然 mybinder.org 也要來
@@ -2799,9 +2687,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             看的。
     [x] Merge 到 master 但可以不必急著 release, 純粹是 setup.py 的問題，跟程式無關。
         只要讓 mybinder.org 能跑，改 github 上的 setup.py 成 setup.py.whl 即可。
-            
-[x] 意外發現 python -m peforth include 1.f 時, 1.f 裡面不認得 ok() vm.ok()             
-    RI: the recent __init__.py "run once" section that runs quit.f that runs command line
-        arguments is *before* the definition of ok()! --> I move it down to the bottom
-        then problem is gone. This solution will be released with v1.18.
-
+        --> expecting v1.18
+        
