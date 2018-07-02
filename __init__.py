@@ -45,21 +45,14 @@ def writeTextFile(pathname, string):
     f.close
 vm.writeTextFile = writeTextFile
 
-# Get the path of data files is really frustrating because I am not 
-# familiar with Linux and virtualenv environments. When in Ubuntu, peforth's .py
-# files are at : /home/username/miniconda/lib/python3.6/site-packages/peforth
-# but other files are at : /home/username/miniconda/lib/site-packages/peforth
-# that is the boss barrier to me. The below method is the only ugly way I have 
-# so far:
-
+# Get the path of data files is really frustrating. 
+# The below method is the only ugly way I have so far:
 deli = '\\' if os.name == 'nt' else '/'
 path = "something wrong peforth path not found"
 for p in (pp for pp in sys.path if pp.endswith("site-packages")):
-    dirs = p.split(deli)
-    if dirs[-2] != 'lib':  # expecting 'lib'
-        dirs = dirs[:-2] + [dirs[-1]];  # if -2 is not 'lib' then remove it (pythonM.N or the likes)
-    if 'lib' in dirs:  # extra check, may not be necessary
-        path = deli.join(dirs) + deli + "peforth" + deli
+    if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
+        path = p + deli + 'peforth' + deli
+        break
 vm.path = path
 
 # Get version code from peforth/version.txt for whl package

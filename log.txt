@@ -2688,7 +2688,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Merge 到 master 但可以不必急著 release, 純粹是 setup.py 的問題，跟程式無關。
         只要讓 mybinder.org 能跑，改 github 上的 setup.py 成 setup.py.whl 即可。
         --> expecting v1.18
-[ ] Tests before releasing v1.18
+[x] Tests before releasing v1.18 <--- on pypi.org already
     [x] 所有 run 法帶 selftest：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
@@ -2721,7 +2721,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [/] 考慮 README.rst 改良
             [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
         [x] Run setup.bat 做出取消 selftest 的 wheel
@@ -2749,7 +2749,126 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             Windows DOS 下怎麼試都還是 1.16 ! 不管了，晚點再看 --> 真的過幾分鐘就好了!!
     [x] WSL Ubuntu w/o virtualenv --> python -m peforth ... ok        
     [x] WSL Ubuntu with virtualenv --> python -m peforth ... ok        
+    [/] test colab --> v1.18 還是 failed 還是 path 的問題 :-( 
+    [x] version 改成 1.19  (必須跳過 1.10 會變成 1.1）
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+        
+[x] test colab --> v1.18 還是 failed 還是 path 的問題 :-( 
+    v1.18 is failed on colab, the chance is that v1.16 works fine on colab.
+    [x] use v1.16 (pip install peforth==1.16 on colab) to check sys.path & site.getsitepackages()
+        ---- from collab with peforth v1.16 ----
+        import site
+            site.getsitepackages()
+                ['/usr/local/lib/python3.6/dist-packages',
+                 '/usr/lib/python3/dist-packages',
+                 '/usr/lib/python3.6/dist-packages']
+        import sys
+            sys.path
+                ['',
+                 '/env/python',
+                 '/usr/lib/python36.zip',
+                 '/usr/lib/python3.6',
+                 '/usr/lib/python3.6/lib-dynload',
+                 '/usr/local/lib/python3.6/dist-packages',
+                 '/usr/lib/python3/dist-packages',
+                 '/usr/local/lib/python3.6/dist-packages/IPython/extensions',
+                 '/content/.ipython']
+        -------- actual peforth path on Google colab ---------------         
+        !ls /usr/local/lib/python3.6/dist-packages/peforth
+            __init__.py  __main__.py  peforthkernel.py  projectk.py  __pycache__  setup.py
+        !ls /usr/local/lib/site-packages/peforth
+            kernel.json  peforthkernel.py  __pycache__  version.txt
+            peforth.f    peforth.selftest  quit.f
+    [/] So, the answer is clear here . . . try all possible directories with some 
+        guess to find /peforth/version.txt that's doable 
+    [x] can be setup.py's problem. I don't think all modules are facing the same
+        annoying problem. --> try to simplify setup.py.whl 
+        --> RTFD : https://packaging.python.org/guides/distributing-packages-using-setuptools/?highlight=data_files#data-files
+        [x] testing c:\Users\hcche\Desktop\peforth-master\setup.py.improved that uses 
+            package_data={...} instead of data_files=[...] in sety.py
+            --> 用改過的 setup.py 重作 wheel  
+                很奇怪，必須用 github\peforth\setup.bat 做否則 pip wheel 根本不 build 總之有個辦法可行做出了 v1.19
+                See Ynote: "Pack peforth to peforth.whl" > "2018/07/02 13:06" 的討論。
+            --> 直接看 ~.whl (zip檔)就知道成功了！
+    [x] v1.18 用 sys.path 的加工不對了 --> 改掉 
+        [x] path="" 只有 setup.bat 要看才出錯，真的不行嗎？ 
+            --> 真的不行，讀 version.txt 時的 os.getcwd() 真的就是當時的 working directory，這樣不行。
+            --> 所以用 sys.path 的方法還是要用 --> windows 本來就沒錯了呀! 
+        [x] 改掉 setup.py 的好處是 data files 與 .py 都在一起了，但是 path 如何取得
+            還是個問題 -- Ubuntu and colab 不能兩全 --> 用 sys.path 去 serch peforth/version.txt 
+            還是唯一的辦法 ... 不難：
+            
+                path = "something wrong peforth path not found"
+                for p in (pp for pp in sys.path if pp.endswith("site-packages")):
+                    if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
+                        path = p + deli + 'peforth' + deli
+                        break
+                vm.path = path
+                pdb.set_trace()  # *debug*
+        [x] windows (none anaconda virtualenv), WSL Ubuntu w/o virtualenv, with virtualenv
+            --> all pass!
+
+[ ] Tests before releasing v1.19
+    [x] 所有 run 法帶 selftest：
+        [x] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+        [x] Run setup.bat 更新本地 pip installed 版本以供測試
+        [x] 1.  python -i -m peforth [x] with-selftest .s words exit bye
+        [x] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [x] 3.  ipython import peforth .s words
+                [x] selftest peforth.ok() .s words <--- w/parent
+                [x] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [x] 4.  jupyter notebook 
+                kernel > restart and clear outputs 
+                import peforth
+                    %%f 擴充、修訂一下 peforth 的行為模式，讓它認得 jupyter notebook 下的 globals. Dot . 也改寫了，適合 jupyter notebook 學習環境使用。
+                    : unknown ( token -- thing Y|N) // Try to find the unknown token in __main__
+                    py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
+                    py> str(tos())=="Ûnknôwn" if drop false else true then ;
+                    /// here after, when FORTH come accross an unknown token, instead of alerting 
+                    /// it try to find the token in python __main__ module name space.
+                    : . tib. ; // ( tos -- ) A better dot that also prints the entire command line
+                    /// For experiments that need to show both question and result.
+                    /// "" . prints the command line only, w/o the TOS.
+                    : path-to-find-modules ( <path> -- ) // Add path to sys.path so "import module-name" can find the module
+                        CR word trim ( "path" ) py: sys.path.append(pop()) ;
+                    code \ print(nexttoken('\n')) end-code // Redefine \ command to print the comment line 
+                x = 123
+                %f x .     
+                x . \ ==> 123 (<class 'int'>)
+        [x] 5.  jupyter notebook --> peforth kernel --> .s words 
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [x] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [x] Run setup.bat 做出取消 selftest 的 wheel
+        [x] pip uninstall peforth
+        [x] pip install peforth-xxxx.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [x] 1. python -i -m peforth [x] no-selftest .s words exit
+        [x] 2. python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [x] 3. python import peforth
+               [x] no selftest, peforth.ok() .s words <--- no parent
+               [x] 1234 bye check echo %errorlevel%
+        [x] 4. jupyter notebook --> *debug* ok> .s cd help exit
+               %f %%f magic command
+        [x] 5. repeat 以上 in ubuntu
+                [x] pip uninstall peforth
+                [x] pip install (/mnt/...the wheel) to WSL ubuntu
+                [/] ipython -m peforth
+                [/] ipython , import peforth , magic commands 
+	[x] 直接用測過的 wheel update Pypi
+        繼續剛才的 setup.bat 即可，必要時： twine upload dist/*
+        ID, password search my Ynote with pypi _account_
+    [ ] pypi.org 網頁上已經 upgraded 到 1.19 版了, 
+        若不行，晚點再看，過幾分鐘就好。
+        [ ] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
+        [x] Windows DOS 下試
+    [ ] test mybinder.org @ [http://github.com/hcchengithub/peforth][develop][notebook]
+        這個跟 pypi.org 無關，只要 github 有 push 上去馬上生效。
+    [ ] WSL Ubuntu w/o virtualenv --> python -m peforth ... ok        
+    [ ] WSL Ubuntu with virtualenv --> python -m peforth ... ok        
     [ ] test colab --> v1.18 還是 failed 還是 path 的問題 :-( 
     [ ] version 改成 1.19  (必須跳過 1.10 會變成 1.1）
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-        

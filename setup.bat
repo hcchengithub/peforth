@@ -36,10 +36,13 @@
         \ py> path tib. \ ==> C:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\ (<class 'str'>)
 
             py> path value dest // ( -- "path" ) ~\site-packages\peforth\
+            \ 為了試驗 path="" 行不行，這裡改用直接填的
+            \ char c:\Users\hcche\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\
+            \ trim value dest // ( -- "path" ) ~\site-packages\peforth\
             
             \ 檢查 dest 以免亂寫到別地方去
             dest :> find('peforth')!=-1 dest :> find('site-packages')!=-1
-            and [if] [else] cr ." Error! unexpected destination." cr abort [then]
+            and [if] [else] cr ." Error! unexpected destination." cr *debug* Err> [then]
 
         \ 當前 working directory 一定就是 peforth project directory 因為
         \ 這是 setup.bat 唯一所在，而 @cd %~dp0 就是到這裡來。
@@ -49,7 +52,7 @@
             
             \ 檢查 source 雖然應該不會錯
             source :> find('peforth')!=-1 source :> lower().find('GitHub'.lower())!=-1
-            and [if] [else] cr ." Error! unexpected source." cr abort [then]
+            and [if] [else] cr ." Error! unexpected source." cr *debug* Err> [then]
 
         \ 直接用 DOS 的 copy /y from to 就可以了
 
@@ -105,7 +108,7 @@
         cr 
         ." Packup peforth into a wheel package" cr
         ." Press Enter to stop it or 'continue' to proceed. "
-        py> input()=="continue" [if] [else] ." Action aborted by user." cr bye [then] 
+        py> input()=="continue" [if] [else] ." Action aborted by user." cr abort [then] 
             
         cr 
         ." o  Check ~\GitHub\peforth\setup.py.whl and ~\GitHub\peforth\setup.bat" cr
@@ -131,7 +134,7 @@
             \ Create the desktop\peforth-master tree
             s" mkdir {}peforth-master\peforth" :> format(v('desktop'))
             py> os.system(pop()) \ 一下完成，這是用 dos command 的好處. 0:OK 
-            [if] ." Error! Failed to mkdir desktop\peforth-master\peforth" cr abort [then]
+            [if] ." Error! Failed to mkdir desktop\peforth-master\peforth" cr *debug* Err> [then]
             
             \ path of the wheel working directory
             desktop char peforth-master\ + constant peforth-master // ( -- "path" ) working directory to build wheel
@@ -192,7 +195,7 @@
             files py> set(pop()) =
             [if] [else] 
                 ." Error! files not correct in desktop\peforth-master\peforth " cr 
-                abort
+                *debug* Err> 
             [then]
             
             \ 檢查 peforth-master 本身
@@ -200,7 +203,7 @@
             py> ['peforth','setup.py','README.rst'] py> set(pop()) =
             [if] [else] 
                 ." Error! files not correct in desktop\peforth-master " cr 
-                abort
+                *debug* Err>
             [then]
             
         
