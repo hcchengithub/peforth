@@ -49,7 +49,7 @@ vm.writeTextFile = writeTextFile
 # The below method is the only ugly way I have so far:
 deli = '\\' if os.name == 'nt' else '/'
 path = "something wrong peforth path not found"
-for p in (pp for pp in sys.path if pp.endswith("site-packages")):
+for p in sys.path:
     if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
         path = p + deli + 'peforth' + deli
         break

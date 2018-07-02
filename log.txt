@@ -2861,14 +2861,24 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	[x] 直接用測過的 wheel update Pypi
         繼續剛才的 setup.bat 即可，必要時： twine upload dist/*
         ID, password search my Ynote with pypi _account_
-    [ ] pypi.org 網頁上已經 upgraded 到 1.19 版了, 
+    [x] pypi.org 網頁上已經 upgraded 到 1.19 版了, 
         若不行，晚點再看，過幾分鐘就好。
-        [ ] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
+        [x] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
+            [x] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
         [x] Windows DOS 下試
-    [ ] test mybinder.org @ [http://github.com/hcchengithub/peforth][develop][notebook]
+    [x] test mybinder.org @ [http://github.com/hcchengithub/peforth][develop][notebook]
         這個跟 pypi.org 無關，只要 github 有 push 上去馬上生效。
-    [ ] WSL Ubuntu w/o virtualenv --> python -m peforth ... ok        
-    [ ] WSL Ubuntu with virtualenv --> python -m peforth ... ok        
-    [ ] test colab --> v1.18 還是 failed 還是 path 的問題 :-( 
-    [ ] version 改成 1.19  (必須跳過 1.10 會變成 1.1）
+    [ ] test colab --> v1.19 --> shit, 又錯了! 不能限定要 site-packages, dist-packages 也要接受
+            deli = '\\' if os.name == 'nt' else '/'
+            path = "wrong"
+            for p in sys.path:
+                if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
+                    path = p + deli + 'peforth' + deli
+                    break
+        以上這改就對了，出 v1.21 版吧! Shit shit . . . 
+        [x] __init__.py 
+        [x] rebuild setup.bat 
+        [x] release v1.21 to pypi.org 
+        [ ] test colab ... !pip install peforth==1.21 要等一等。。。
+    [ ] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
