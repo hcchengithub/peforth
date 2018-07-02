@@ -2551,7 +2551,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] v1.17 released --> verion.txt 跳成 v1.18 
 [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
-    改介紹 ipython 的 magic command 比較好。
+    改用 colab and Azure notebook 介紹 ipython 的 magic command 比較好。
     
 [x] v1.14 v1.15 v1.16 on WSL Ubuntu, virtualenv , _the_path_issue_
     ipython still failed, message:
@@ -2577,7 +2577,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             if 'lib' in dirs:  # extra check, may not be necessary
                 path = deli.join(dirs) + deli + "peforth" + deli
         [x] test with WSL Ubuntu virtualenv --> failed
-    [ ] v1.17 failed for WSL Ubuntu in both with and without virtualenv.
+    [x] v1.17 failed for WSL Ubuntu in both with and without virtualenv. <-- v1.21 FP
         問題點：
             When without virtualenv:
                 hcchen5600@WKS-4AEN0404:~$ python -m peforth
@@ -2881,4 +2881,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] release v1.21 to pypi.org 
         [x] test colab ... !pip install peforth==1.21 要等一等。。。 v1.21 成功了！ 嗚嗚嗚
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-    [ ] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
+    [x] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
+	
