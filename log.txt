@@ -2551,7 +2551,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] v1.17 released --> verion.txt 跳成 v1.18 
 [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
-    改介紹 ipython 的 magic command 比較好。
+    改用 colab and Azure notebook 介紹 ipython 的 magic command 比較好。
     
 [x] v1.14 v1.15 v1.16 on WSL Ubuntu, virtualenv , _the_path_issue_
     ipython still failed, message:
@@ -2577,7 +2577,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             if 'lib' in dirs:  # extra check, may not be necessary
                 path = deli.join(dirs) + deli + "peforth" + deli
         [x] test with WSL Ubuntu virtualenv --> failed
-    [ ] v1.17 failed for WSL Ubuntu in both with and without virtualenv.
+    [x] v1.17 failed for WSL Ubuntu in both with and without virtualenv. <-- v1.21 FP
         問題點：
             When without virtualenv:
                 hcchen5600@WKS-4AEN0404:~$ python -m peforth
@@ -2694,7 +2694,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             ' <selftest> :: enabled=True
             [取消] 直接從 GitHub folder 執行 python peforth --> 等於是 -m peforth
         [x] Run setup.bat 更新本地 pip installed 版本以供測試
-        [x] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [x] 1.  python -i -m peforth [x] with-selftest .s words exit bye
         [x] 2.  ipython -i -m peforth .' Hello World!!' cr bye
         [x] 3.  ipython import peforth .s words
                 [x] selftest peforth.ok() .s words <--- w/parent
@@ -2808,7 +2808,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] windows (none anaconda virtualenv), WSL Ubuntu w/o virtualenv, with virtualenv
             --> all pass!
 
-[ ] Tests before releasing v1.19
+[x] Tests before releasing v1.19 --> v1.21 actually 
     [x] 所有 run 法帶 selftest：
         [x] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
@@ -2840,7 +2840,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [/] 考慮 README.rst 改良
             [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+    [x] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
         [x] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
         [x] Run setup.bat 做出取消 selftest 的 wheel
@@ -2868,7 +2868,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] Windows DOS 下試
     [x] test mybinder.org @ [http://github.com/hcchengithub/peforth][develop][notebook]
         這個跟 pypi.org 無關，只要 github 有 push 上去馬上生效。
-    [ ] test colab --> v1.19 --> shit, 又錯了! 不能限定要 site-packages, dist-packages 也要接受
+    [x] test colab --> v1.19 --> shit, 又錯了! 不能限定要 site-packages, dist-packages 也要接受
             deli = '\\' if os.name == 'nt' else '/'
             path = "wrong"
             for p in sys.path:
@@ -2879,6 +2879,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] __init__.py 
         [x] rebuild setup.bat 
         [x] release v1.21 to pypi.org 
-        [ ] test colab ... !pip install peforth==1.21 要等一等。。。
-    [ ] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+        [x] test colab ... !pip install peforth==1.21 要等一等。。。 v1.21 成功了！ 嗚嗚嗚
+    [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+    [x] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
+	
