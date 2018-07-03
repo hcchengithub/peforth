@@ -1,3 +1,31 @@
+'''
+
+peforth - an eforth ported to python 
+
+peforth provides a FORTH virtual machine alongside Python, iPython, 
+and Jupyter notebook for you to work in FORTH way. This is good for 
+debugging,  studying,  or  even  participating  to  your developing. 
+Because  FORTH  is a programming language of flexibility that makes 
+jobs easier in many ways.
+
+Call peforth.ok() to enter the interpret state and you star talking 
+interactively in FORTH, 'exit' command to return to python prompt. 
+
+peforth.dictate('command line') handles one command line.
+
+This cascaded line :
+
+    peforth.push(12).push(34).dictate('+ . cr')
+
+actually prints the sum of 12 + 34.
+
+Visit https://github.com/hcchengithub/peforth/wiki for more information.
+
+May the FORTH be with you!
+H.C. Chen @ FigTaiwan 2018.7.3 
+
+'''
+
 import sys,os,site,pdb
 
 if __package__:
@@ -150,6 +178,24 @@ if flag:
     # Define peforth magic command, %f.
     @register_line_cell_magic
     def f(line, cell=None):
+        '''
+        peforth magic command %f can be used both as a line and cell magic in
+        iPython and Jupyter notebooks.
+
+        A %f leading line is interpreted as a FORTH command line. You can even
+        use it as a python statement:
+        
+            def hi():
+                %f ." Hello World!!" cr
+        
+        give it a try then run hi() to see it works.
+            
+        A %%f leading line starts a multiple-line block in iPython or grabs 
+        the entire cell in Jupyter notebook of FORTH code. The rest of the %%f
+        line is ignored like a comment line. %%f must be the first none-white-
+        space token in the block or the cell. 
+
+        '''
         if cell is None:
             vm.dictate(line)
         else:
