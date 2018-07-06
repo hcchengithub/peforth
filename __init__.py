@@ -11,7 +11,7 @@ jobs easier in many ways.
 Call peforth.ok() to enter the interpret state and you star talking 
 interactively in FORTH, 'exit' command to return to python prompt. 
 
-peforth.dictate('command line') handles one command line.
+peforth.dictate('command string') handles FORTH command line(s).
 
 This cascaded line :
 
@@ -76,10 +76,9 @@ vm.writeTextFile = writeTextFile
 # Get the path of data files is really frustrating. 
 # The below method is the only ugly way I have so far:
 deli = '\\' if os.name == 'nt' else '/'
-path = "something wrong peforth path not found"
-for p in sys.path:
-    if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
-        path = p + deli + 'peforth' + deli
+for path in sys.path:
+    if os.path.isfile(path + deli + 'peforth' + deli + 'version.txt'):
+        path = path + deli + 'peforth' + deli
         break
 vm.path = path
 
@@ -168,11 +167,11 @@ words       = vm.words
 #     if '__IPYTHON__' in __builtins__.keys(): <--- previous way, not suitable for ipython -m peforth
 #     if 'IPython' in sys.modules.keys(): <--- a candidate never tried
 try:
-    flag = "InteractiveShell" in str(get_ipython)
+    is_ipython = "InteractiveShell" in str(get_ipython)
 except:
-    flag = False
+    is_ipython = False
 
-if flag:
+if is_ipython:
     from IPython.core.magic import register_line_cell_magic
 
     # Define peforth magic command, %f.

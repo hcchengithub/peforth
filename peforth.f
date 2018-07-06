@@ -1135,12 +1135,16 @@ code float      push(float(pop())) end-code // ( string -- float )
 : dropall       ( ... -- empty ) // Drop all cells from data stack
                 0 drops ;
 code char>ASCII push(ord(pop()[0])) end-code // ( str -- ASCII ) Get str[0]'s ASCII or whatever code
-                /// Actually it returns utf-8, big-5, or whatever numeric code.
-                \ https://stackoverflow.com/questions/227459/ascii-value-of-a-character-in-python
+                /// Actually ASCII, utf-8, big-5, or whatever code doesn't matter.
+                /// https://stackoverflow.com/questions/227459/ascii-value-of-a-character-in-python
+                /// char 中文 char>ASCII tib. \ ==> 20013 (<class 'int'>)
+                /// char 文字 char>ASCII tib. \ ==> 25991 (<class 'int'>)
+                /// https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
+                /// 20013 ASCII>char tib. \ ==> 中 (<class 'str'>)
+                /// 25991 ASCII>char tib. \ ==> 文 (<class 'str'>)                
                 
 code ASCII>char push(chr(pop())) end-code // ( ASCII -- 'c' ) ASCII or whatever code number to character
-                /// 65 ASCII>char tib. \ ==> A (string)
-                \ https://stackoverflow.com/questions/180606/how-do-i-convert-a-list-of-ascii-values-to-a-string-in-python
+                ' char>ASCII :> comment last :: comment=pop(1)
                 
 py> '\r\n' constant CRLF // ( -- '\r\n' ) leaves '\r\n' on TOS
 
