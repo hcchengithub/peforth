@@ -1224,7 +1224,7 @@ code obj>keys
                 else:
                     push(dir(pop()))
                 end-code
-                // ( obj -- [keys] ) Get all attributes of an object or all kyes of an dict
+                // ( obj -- [keys] ) Try to get all kyes of an dict first or all attributes of an object
 
     \ json.dumps() needs this function to convert a Word object to dict 
     <py>   
@@ -1239,7 +1239,7 @@ code obj>keys
         push(obj2dict)
     </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=r('obj2dict'))
 
-: stringify     ( thing -- "string" ) // JSON.stringify anything
+: stringify     ( thing -- "string" ) // Dict'fy and JSON.stringify anything  
                 py> json.dumps(pop(),default=r('obj2dict'),indent=4) ;
 
 code toString # To see a cell in dictionary
@@ -1303,7 +1303,7 @@ code toString # To see a cell in dictionary
                 py: pop().lastaddress=pop()
                 ;
                 
-: (see)         ( thing -- ) // See into the given word, object, array, ... anything.
+: (see)         ( thing -- ) // See into the given dict, array, object, word, ... anything in this order.
                 dup ( thing thing ) stringify . cr ( thing )
                 \ for colon words, dump its forth code 
                 dup type py> Word = if \ is a Word ( w ) \ the thing is a Word
@@ -1318,9 +1318,13 @@ code toString # To see a cell in dictionary
                         ." -------------------------------------" cr
                     then
                 else drop then ;
-                /// Also .members .source
+                /// Also '.members' to see an object and '.source' to see a function.
+                /// 'dir' sees an object's attributes, '.members' sees more details.
+                /// Use '(see) keys values' to see a dict. Use 'stringify' to see dict'fied
+                /// objects and dictionaries. 
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
+                ' (see) :> comment last :: comment=pop(1)
                 
 : slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
                 ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;

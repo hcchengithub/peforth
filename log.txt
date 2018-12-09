@@ -2882,4 +2882,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] test colab ... !pip install peforth==1.21 要等一等。。。 v1.21 成功了！ 嗚嗚嗚
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
     [x] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
-	
+[x] 14:48 2018-12-09 python object (attributes -> values) and hash table or 
+    dicttionary (keys --> values) are confusing me especially when JavaScript sees 
+    both the samething. The python 'dir' function lists an object's attributes and
+    JSON can stringify a hash table to a readable string. Let's make an experient:
+
+    \ o1 is a dict     
+    py> {'a':11,'b':22} constant o1
+    OK o1 tib. --> {'a': 11, 'b': 22}                \ it's a dict so it's shown as a dict
+    OK o1 :> keys() . cr --> dict_keys(['a', 'b'])   \ dict has keys
+    OK o1 :> values() . cr --> dict_values([11, 22]) \ dict has values 
+    \ it's also an ojbect
+    OK o1 dir . cr \ so it has attributes 
+    --> ['clear', 'copy', 'fromkeys', 'get', 'items', 'keys', 'pop', 'popitem', 'setdefault', 'update', 'values']
+    OK o1 stringify . cr
+    {
+        "a": 11,
+        "b": 22
+    }
+    OK 
+    這樣看來，dict 與 object 的混淆是 JavaScript user 的問題。 任何東西都是 object 而只有 dict 才有 hash table.
+    用 (see) dir .members 查看 object 的 attributes, 用 (see) keys values 查看 dict. 用 stringify 查看 dict'fy 之後的
+    任何東西。
+    --> 結論是在 help (see) 裡講清楚就好了。 來自 jeforth 的 obj>keys 與 dir 或 keys 重複所以很少用了。
