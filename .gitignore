@@ -1,6 +1,8 @@
 jeforth.js
 **/.ipynb_checkpoints/
 **/peforth.egg-info/
+**/dist/
+**/build/
 **/Untitled*.*
 **/*.pkl
 **/*.pyc

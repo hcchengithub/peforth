@@ -2912,9 +2912,46 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] Install peforth from source 
 	---- 2018.12.15 懂得用 python setup.py install 需要修改 ---- 
 	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
-	[ ] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
+	[x] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
 			C:\Users\hcche\Documents>python GitHub\peforth
 			C:\Users\hcche\DocumentsGitHub\>python peforthpython peforth 
 		變成從 peforth 目錄裡面執行，這很好哇！ 應該 1.22 版就是了。
-	[ ]	pywinio repo 裡面也是又有一個 pywinio/ folder, 將來 peforth 也是這樣。
+	[x]	pywinio repo 裡面也是又有一個 pywinio/ folder, 將來 peforth 也是這樣。
+	[x] 照研究生的目錄結構改 GitHub/peforth 
+		c:\Users\hcche\Documents\GitHub\peforth\.. 
+		Directories				Files
+		--------------------	---------------------------
+		.git\                   .gitattributes
+		.ipynb_checkpoints\     LICENCE
+		__pycache__\            admin.bat
+		notebook\               requirements.txt
+		peforth\                LICENSE
+		peforth.egg-info\       README.md
+		playground\             README.rst
+		                        setup.bat
+		                        setup.py
+		                        setup.py.whl
+		                        log.txt
+		                        .gitignore
+		c:\Users\hcche\Documents\GitHub\peforth\peforth\.. 
+		Directories				Files
+		--------------------	---------------------------
+								__main__.py
+								kernel.json
+								peforthkernel.py
+								projectk.py
+								peforth.selftest
+								version.txt
+								__init__.py
+								quit.f
+								peforth.f		
+	[x] remove existing peforth so aso to try setup.py install
+		Python on my computer at home is anaconda, so though that I have to remove it
+		by "conda uninstall" command. That was wrong. Do it by pip as usual works fine.
+		see Ynote:"研究 install peforth from source 的方法" for the log.
+	[x] now try "python setup.py install"
+		it works !!!! 
 	[ ] setup.bat 可以大簡化了。
+		
+		
+		
