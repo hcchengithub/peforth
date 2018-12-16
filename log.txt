@@ -2909,7 +2909,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     任何東西。
     --> 結論是在 help (see) 裡講清楚就好了。 來自 jeforth 的 obj>keys 與 dir 或 keys 重複所以很少用了。
 	
-[ ] Install peforth from source 
+[x] Install peforth from source 
 	---- 2018.12.15 懂得用 python setup.py install 需要修改 ---- 
 	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
 	[x] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
@@ -2951,7 +2951,16 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 		see Ynote:"研究 install peforth from source 的方法" for the log.
 	[x] now try "python setup.py install"
 		it works !!!! 
-	[ ] setup.bat 可以大簡化了。
+[x] setup.bat 可以大簡化了。
+	[V1.22之後的新版] 打包步驟  2018/12/16 11:02 
+	See my Ynote: "Pack peforth to peforth.whl"
+	1. 	檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+	2. 	跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+		得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
+	3.  執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
+		需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
+	4. 	pip uninstall peforth 然後再 pip install peforth 試驗看看。
+	5. 	完成！
 		
 		
 		
