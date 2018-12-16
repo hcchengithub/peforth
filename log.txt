@@ -1335,7 +1335,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 有了 (constant) 應該就可以自動產生所有的 locals() 了
     ==> ok now! vm.outport(loc) defined in quit.f
 
-[x] a command to update the peforth module
+[x] Install peforth from source 
+	---- 早期 (1.22 版以前) 不懂得用 python setup.py install 時的替代方法 ---- 
+	a command to update the peforth module
     @ c:\Users\...\Python36\Lib\site-packages\peforth\..
     Get the path
         import os.path as ospath
@@ -1365,7 +1367,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     copy -y quit.f      %pythonlib%\site-packages\peforth
     ------ ------ ------ ------ ------
     
-    [ ] 發現 pip help install 列出了 pip install 的種種用法。
+    [x] 發現 pip help install 列出了 pip install 的種種用法。
         update.bat 直接從 project directly update peforth package 到
         lib\site-packages\peforth 的方式太暴力了。
         --> Try this example from pip help install : 
@@ -1385,11 +1387,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             ----------------------------------------
         Command "python setup.py egg_info" failed with error code 1 in C:\Users\hcche\Documents\GitHub\peforth\
         c:\Users\hcche\Documents\GitHub>
-                
-    [ ] Upgrade from Pypi.org
-        pip install --upgrade peforth  <--- project folder is github/peforth, 從 github/ 執行
-        github:\>pip install peforth
-        Requirement already satisfied: peforth in c:\...\python\python36\lib\site-packages
+	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
+	[/] jump to 遙遠的下面 "---- 2018.12.15 懂得用 python setup.py install 需要修改 ----" 
+-
 
 [ ] 螢幕編輯器
     os.get_terminal_size(...)
@@ -2547,7 +2547,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] test mybinder.org 
         [http://github.com/hcchengithub/peforth][master][notebook]
         不行, 看來是 setup.py 的問題 --> see Ynote: "mybinder.org FileNotFoundErErrorno 2 No such file or directory"
-        --> RI: 不是 bug, setup.py 改名不要讓 mybinder.org 看到即可。
+        --> RI: 不是 bug, setup.py 改名不要讓 mybinder.org 看到即可。 
+			2018.12.15 這可能是為何名為 setup.py.whl 的原因，我正在研究 command line:
+				python setup.py install
+			也許就是 peforth 的 install from source 的正解。
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
 [x] v1.17 released --> verion.txt 跳成 v1.18 
 [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
@@ -2905,3 +2908,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     用 (see) dir .members 查看 object 的 attributes, 用 (see) keys values 查看 dict. 用 stringify 查看 dict'fy 之後的
     任何東西。
     --> 結論是在 help (see) 裡講清楚就好了。 來自 jeforth 的 obj>keys 與 dir 或 keys 重複所以很少用了。
+	
+[ ] Install peforth from source 
+	---- 2018.12.15 懂得用 python setup.py install 需要修改 ---- 
+	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
+	[ ] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
+			C:\Users\hcche\Documents>python GitHub\peforth
+			C:\Users\hcche\DocumentsGitHub\>python peforthpython peforth 
+		變成從 peforth 目錄裡面執行，這很好哇！ 應該 1.22 版就是了。
+	[ ]	pywinio repo 裡面也是又有一個 pywinio/ folder, 將來 peforth 也是這樣。
+	[ ] setup.bat 可以大簡化了。
