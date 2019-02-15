@@ -145,6 +145,7 @@
     : .source   ( function -- ) // See source code through inspect.getsource(func)
                 py> inspect.getsource(pop()) cr . cr ;
                 /// Also .members (see)
+                /// py: dis.dis(pop()) \ sees pseudo code of a function at TOS.
 
     : dos       ( <command line> -- errorlevel ) // Shell to DOS Box run rest of the line
                 CR word ( cml ) trim ( cml' )

@@ -1270,6 +1270,8 @@ code toString # To see a cell in dictionary
                     py: dis.dis(pop()) \ disassembled code
                     true
                 else 2drop false then ;
+                /// To see pseudo code of a function at TOS 
+                /// py: dis.dis(pop())
                 
 : (dump)        ( addr -- ) // dump one cell of dictionary
                 py> len(dictionary)<=tos() if drop exit then 
@@ -1319,6 +1321,7 @@ code toString # To see a cell in dictionary
                     then
                 else drop then ;
                 /// Also '.members' to see an object and '.source' to see a function.
+                /// py: dis.dis(pop()) \ sees pseudo code of a function at TOS. 
                 /// 'dir' sees an object's attributes, '.members' sees more details.
                 /// Use '(see) keys values' to see a dict. Use 'stringify' to see dict'fied
                 /// objects and dictionaries. 
