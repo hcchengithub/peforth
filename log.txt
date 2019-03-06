@@ -2962,5 +2962,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	4. 	pip uninstall peforth 然後再 pip install peforth 試驗看看。
 	5. 	完成！
 		
-		
-		
+[ ] 13:27 2019-03-06 code ... end-code 可以取 xt.__doc__ 2nd line 當作 help
+    code txt2json # ( txt -- dict ) Convert given string to dictionary
+        push(json.loads("".join([ c if c != "'" else '"' for c in pop()])))
+        end-code
+    ' txt2json :> xt :> __doc__ --> def xt(_me=None): ### txt2json ###
+        # ( txt -- dict ) Convert given string to dictionary
+           push(json.loads("".join([ c if c != "'" else '"' for c in pop()]))) (<class 'str'>)
