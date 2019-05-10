@@ -2914,7 +2914,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
 	[x] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
 			C:\Users\hcche\Documents\GitHub\>python peforth
-		變成從 peforth 目錄裡面執行，這很好哇！ 應該 1.22 版就是了。
+		變成從 peforth 目錄裡面執行，這很好哇！ [ ] v1.22 1.23 __main__.py 還是用 import peforth 的，沒意思
 	[x]	pywinio repo 裡面也是又有一個 pywinio/ folder, 將來 peforth 也是這樣。
 	[x] 照研究生的目錄結構改 GitHub/peforth 
 		c:\Users\hcche\Documents\GitHub\peforth\.. 
@@ -2950,6 +2950,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 		see Ynote:"研究 install peforth from source 的方法" for the log.
 	[x] now try "python setup.py install"
 		it works !!!! 
+        如何查看 setup.py 的 help: c:\Users\hcche\Documents\GitHub\peforth>python setup.py --help
 [x] setup.bat 可以大簡化了。
 	[V1.22之後的新版] 打包步驟  2018/12/16 11:02 
 	See my Ynote: "Pack peforth to peforth.whl"
@@ -3000,4 +3001,4 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             --> 我只能猜：setup 用 c:\Users\hcche\Documents\GitHub\peforth>python setup.py install 
                 是很嚴謹的，
 [ ] __main__.py 當初為何他媽 import peforth 有屁用？就是要跑本地版本試驗改過的東西才有意義呀！
-                
+[ ] unkown debug locals() 的說明 copy 過來                
