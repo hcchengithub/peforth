@@ -2886,7 +2886,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
     [x] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
 [x] 14:48 2018-12-09 python object (attributes -> values) and hash table or 
-    dicttionary (keys --> values) are confusing me especially when JavaScript sees 
+    dictionary (keys --> values) are confusing me especially when JavaScript sees 
     both the samething. The python 'dir' function lists an object's attributes and
     JSON can stringify a hash table to a readable string. Let's make an experient:
 
@@ -2969,3 +2969,22 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     ' txt2json :> xt :> __doc__ --> def xt(_me=None): ### txt2json ###
         # ( txt -- dict ) Convert given string to dictionary
            push(json.loads("".join([ c if c != "'" else '"' for c in pop()]))) (<class 'str'>)
+	18:04 2019-05-09 寫好了：
+		# projectk.py 裡面
+		# The basic FORTH word 'end-code's run time. 
+		def doendcode(_me=None):
+			global compiling
+			if compiling!="code":
+				panic("Error! 'end-code' a none code word.")
+			current_word_list().append(Word(newname,newxt))
+			last().vid = current;
+			last().wid = len(current_word_list())-1;
+			last().type = 'code';
+			# ---------
+			mm = re.match(r"^.*?#\s*(.*)$", last().xt.__doc__.split('\n')[1])
+			last().help = mm.groups()[0] if mm and mm.groups()[0] else ""
+			# ---------
+			wordhash[last().name] = last();
+			compiling = False; 
+	[ ] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
+		16:10 2019-05-10 --> 直接在 github working directory 嘗試
