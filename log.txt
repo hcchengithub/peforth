@@ -2913,8 +2913,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	---- 2018.12.15 懂得用 python setup.py install 需要修改 ---- 
 	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
 	[x] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
-			C:\Users\hcche\Documents>python GitHub\peforth
-			C:\Users\hcche\DocumentsGitHub\>python peforthpython peforth 
+			C:\Users\hcche\Documents\GitHub\>python peforth
 		變成從 peforth 目錄裡面執行，這很好哇！ 應該 1.22 版就是了。
 	[x]	pywinio repo 裡面也是又有一個 pywinio/ folder, 將來 peforth 也是這樣。
 	[x] 照研究生的目錄結構改 GitHub/peforth 
@@ -2962,7 +2961,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	4. 	pip uninstall peforth 然後再 pip install peforth 試驗看看。
 	5. 	完成！
 		
-[ ] 13:27 2019-03-06 code ... end-code 可以取 xt.__doc__ 2nd line 當作 help
+[x] 13:27 2019-03-06 code ... end-code 可以取 xt.__doc__ 2nd line 當作 help
     code txt2json # ( txt -- dict ) Convert given string to dictionary
         push(json.loads("".join([ c if c != "'" else '"' for c in pop()])))
         end-code
@@ -2986,5 +2985,19 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 			# ---------
 			wordhash[last().name] = last();
 			compiling = False; 
-	[ ] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
-		16:10 2019-05-10 --> 直接在 github working directory 嘗試
+	[x] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
+		16:10 2019-05-10 
+            --> 直接在 github working directory 修改
+            --> 這樣 run 到的還是 installed 到 site-packages 的版本，因為 __main__.py 其實是 import peforth 
+                    c:\Users\hcche\Documents\GitHub\peforth>python peforth 
+                要經過
+                    c:\Users\hcche\Documents\GitHub\peforth>python setup.py install
+            --> 16:48 2019-05-10 奇怪 pip list 看到的 peforth 是 1.21!! 
+                但是 python -m peforth 跑到的是 1.22，經過 pip uninstall peforth 之後
+                馬上 pip list 卻看到了 peforth 1.23 (對了) 這才總算看到正確的 doendcode() :
+                    py> doendcode .source <---- 看到對的 source code 了
+                [x] 試驗定義一個 code word 查看他的 help 果然第一行的 # foo bar 有被抓進去當 help 了。
+            --> 我只能猜：setup 用 c:\Users\hcche\Documents\GitHub\peforth>python setup.py install 
+                是很嚴謹的，
+[ ] __main__.py 當初為何他媽 import peforth 有屁用？就是要跑本地版本試驗改過的東西才有意義呀！
+                
