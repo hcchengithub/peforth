@@ -1644,9 +1644,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     OK <=== python interpreter prompte expected
     --> 因為 vm.exit 有兩個！！！！
     peforth module __init__.py __main__.py 的關係不是一個！！！
-    module 裡面的 __main__.py 專攻 -m 執行用，改寫看看。。。。
-    ==> 簡化整個執行方式，決心放棄從 project folder 執行。
+    module 裡面的 __main__.py 專供 -m 執行用，改寫看看。。。。
+    ==> 簡化整個執行方式，決心放棄從 project folder 執行。  ---> 2019-05-11 重新 study 有成
         只保留 import peforth 或 python -m peforth 兩種。
+    --> Since commit c3d7677 on Oct 8, 2017
 [x] 因應新檔案配置，setup.bat 的自動化晚點再做 --> Done
 [x] Tests before a Release  v1.07
     [x] 所有 run 法帶 selftest 跑一遍
@@ -1792,11 +1793,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         // ( -- ) Exit this colon word.
     靠！意外發現這個 bug !! 其實早就看到 exit 之後會暴衝，沒太在意。
 [x] <accept> nop </accept> 同一行不行，要改良嗎？ ---> Done!
-[ ] 開發中，不要動到 site-packages 出錯很麻煩，所以還是要從 working folder 執行
-    不要每次都得先 setup.bat 改入 site-packages
-    --> 一時搞不定， site-package 裡的 __main__.py 總是要 import peforth
-        因此一定不是用 project directory 版。
-
 [x] Tests before a Release  v1.09
     [x] 所有 run 法帶 selftest 跑一遍
         [x] Run setup.bat 做出有 selftest 的 wheel
@@ -2986,19 +2982,77 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 			# ---------
 			wordhash[last().name] = last();
 			compiling = False; 
-	[x] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
-		16:10 2019-05-10 
-            --> 直接在 github working directory 修改
-            --> 這樣 run 到的還是 installed 到 site-packages 的版本，因為 __main__.py 其實是 import peforth 
-                    c:\Users\hcche\Documents\GitHub\peforth>python peforth 
-                要經過
-                    c:\Users\hcche\Documents\GitHub\peforth>python setup.py install
-            --> 16:48 2019-05-10 奇怪 pip list 看到的 peforth 是 1.21!! 
-                但是 python -m peforth 跑到的是 1.22，經過 pip uninstall peforth 之後
-                馬上 pip list 卻看到了 peforth 1.23 (對了) 這才總算看到正確的 doendcode() :
-                    py> doendcode .source <---- 看到對的 source code 了
-                [x] 試驗定義一個 code word 查看他的 help 果然第一行的 # foo bar 有被抓進去當 help 了。
-            --> 我只能猜：setup 用 c:\Users\hcche\Documents\GitHub\peforth>python setup.py install 
-                是很嚴謹的，
-[ ] __main__.py 當初為何他媽 import peforth 有屁用？就是要跑本地版本試驗改過的東西才有意義呀！
+    --> py> doendcode .source <---- 看到對的 source code 了
+    [x] 試驗定義一個 code word 查看他的 help 果然第一行的 # foo bar 有被抓進去當 help 了。
+            
 [ ] unkown debug locals() 的說明 copy 過來                
+    older unsync'ed notes on my LRV2
+    v1.22 既然 peforth 主要都是用來配合 jupyter notebook trace code, set breakpoints, ... etc.
+    unknown and ... and # should be added into the built-in words, plus the ability to 
+    view local variables.
+    [x] I remember that I have done making 'unknown' predefined . . . no.
+        16:51 2019-01-12 I am now working on making 'unknown' to try locals. __main__ is
+        an object so global variables are accessed by getattr() however locals and globals
+        are dictionary that should be accessed by dict.get(key,default) instead.
+            see https://stackoverflow.com/questions/3089186/python-getattr-equivalent-for-dictionaries
+    [x] done an example @
+        http://localhost:8888/notebooks/OneDrive/%E6%96%87%E4%BB%B6/Jupyter%20Notebooks/Siraj%20make_a_neural_net_live_demo.ipynb
+		
+[X] 10:48 2019-05-11 older note
+    開發中，不要動到 pip'ed peforth 出錯很麻煩，所以想要從 working folder 執行
+    不要每次都得先 pip install 改入 site-packages
+    [x] __main__.py 當初為何他媽 import peforth 有屁用？就是要跑本地版本試驗改過的東西才有意義呀！
+        --> 15:48 2019-05-11 應該是 path 搞不定，簡化問題 (Since commit c3d7677 on Oct 8, 2017)。 
+            __main__.py 是用 python -m peforth 執行時的 entry，必須照顧。
+            11:26 2019-05-11 while __init.py__ is 'import peforth' entry point.
+        --> 11:24 2019-05-11 __main__.py 就是 run 
+                c:\Users\hcche\Documents\GitHub\peforth>python peforth
+                and
+                c:\Users\hcche\Documents>python -m peforth
+                時被執行的入口
+            see https://www.tuicool.com/articles/iYRfe2
+                https://stackoverflow.com/questions/44977227/how-to-configure-main-py-init-py-and-setup-py-for-a-basic-package
+    --> 11:51 2019-05-11 how about to have test.py that does what __main__.py is supposed to do when
+        running ~GitHub\peforth>python peforth? 
+        --> this is a good idea, but the path in __init__.py will be wrong, deal with it!!
+            --> 從 __init__.py 裡面處理 path 處添加可能找到 version.txt 的地方即可。 成功。
+    --> 成功了，能直接執行就好，不一定要堅持像早期一樣執行 peforth 目錄。
+        執行方法： c:\Users\hcche\Documents\GitHub\peforth\peforth>python test.py
+        __run__.py --> 最終命名為 test.py 最自然
+        # 各種方法都試過，最後還是用 exec(open().read()) 最像 include 
+        # from . import __init__
+        # from __init__ import ok
+        # import subprocess; subprocess.call("__init__.py", shell=True)
+        exec(open("__init__.py").read())  # this is like: include __init__.py 
+        ok('\n')
+    [X] __main__.py 還是要用 import peforth 的，若不然一開始 open("__init__.py") 就 file not found 了。
+        而 test.py 當然是在對的 directory 之下才能執行，所以叫做 test.py ;-D 
+    
+[x] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
+    --> 直接在 github working directory 修改
+    --> 這樣 run 到的還是 installed 到 site-packages 的版本，因為 __main__.py 其實是 import peforth 
+            c:\Users\hcche\Documents\GitHub\peforth>python peforth 
+            16:48 2019-05-11 這個早期的 run 法如今 改成 
+                c:\Users\hcche\Documents\GitHub\peforth\peforth> python test.py  
+    --> 16:48 2019-05-10 奇怪 LRV2 OA 上 pip list 看到的 peforth 是 1.21!! 
+        但是 python -m peforth 跑到的是 1.22，經過 pip uninstall peforth 之後
+        馬上 pip list 卻看到了 peforth 1.23 (對了) 
+    --> 我猜： 剛才改好程式之後用 ~\GitHub\peforth>python setup.py install 安裝進 site-package
+        的 1.23 並沒有蓋掉原來的, 因為這時裝上的是 egg, path 與用 whl 裝上的不同！
+    [X] 經過 c:\Users\hcche\Documents\GitHub\peforth>python setup.py install 
+        之後，確實會直接有類似  pip install 的效果 --> 可以 python -m peforth 執行了，但是 path 不同
+        pip install 的 c:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\version.txt 
+        setup.py 的    c:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth-1.23-py3.6.egg\peforth\version.txt 
+    [X] 用 ~\GitHub\peforth>python setup.py install 安裝進 site-package 雖然 path 不同，jupyter notebook
+        完全沒問題，馬上生效。完全符合我 「從 source 直接 install」 的期待，免去 pip install 或先前暴力 setup.bat 的麻煩。
+[ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
+    [ ] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
+    [ ] quit.f 裡的怪東西都不要了
+            inport, outport, harry_port, 
+    [ ] 把 gist 上的東西 include 進來，最主要的是有 support nesting 的 ( ) comment 
+        
+    
+    
+    
+    
+    

@@ -78,7 +78,12 @@ vm.writeTextFile = writeTextFile
 deli = '\\' if os.name == 'nt' else '/'
 for path in sys.path:
     if os.path.isfile(path + deli + 'peforth' + deli + 'version.txt'):
+        # for the pip'ed package
         path = path + deli + 'peforth' + deli
+        break
+    if os.path.isfile(path + deli + 'version.txt'):
+        # for running "python test.py" without pip install from source directory when developping 
+        path = path + deli
         break
 vm.path = path
 

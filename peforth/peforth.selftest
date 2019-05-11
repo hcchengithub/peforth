@@ -486,9 +486,9 @@
         display-on
         screen-buffer <py> pop()[0].find(":")!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find("\\")!=-1 </pyV> ( True )
-        ( 123 ) dos python -m peforth 123 bye 
+\       ( 123 ) dos python -m peforth 123 bye  \ peforth may not pip'ed
         4 5 6 -2 slice ( ... 4,[5,6] )
-        [d True,True,123,4,[5,6] d] 
+        [d True,True,4,[5,6] d] 
         [p 'dos','cd','slice' p]
 \   *** [r r]
 \       py> rstack ( save )

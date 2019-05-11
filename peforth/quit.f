@@ -111,11 +111,10 @@
                 py> dir(pop()) ;
                 /// see also 'dir'
                 
-    code dir 
+    code dir    # ( object -- dir ) get dir list w/o __things__
         x = dir(pop())
         push([i for i in x if (i[0]!='_' and i[-1]!='_')]) 
         end-code
-        // ( x -- dir ) get dir list w/o __things__
         /// see also '_dir_' that gets complete dir list
                 
     : keys      ( x -- keys ) // get keys of the dict
