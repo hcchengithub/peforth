@@ -3044,7 +3044,17 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         pip install 的 c:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth\version.txt 
         setup.py 的    c:\Users\hcche\AppData\Local\Programs\Python\Python36\lib\site-packages\peforth-1.23-py3.6.egg\peforth\version.txt 
     [X] 用 ~\GitHub\peforth>python setup.py install 安裝進 site-package 雖然 path 不同，jupyter notebook
-        完全沒問題，馬上生效。完全符合我 「從 source 直接 install」 的期待，免去 pip install 或先前暴力 setup.bat 的麻煩。
+        完全沒問題，頂多 Kernel > Restart 一下，馬上生效。完全符合我 「從 source 直接 install」 的期待，免去 pip install 
+        或先前暴力 setup.bat 的麻煩。
+    結論：
+        1. 直接修改 GitHub source code (善用 GitHub 保障各版本安全）
+        2. pip uninstall peforth  把舊的清乾淨
+        3. c:\Users\hcche\Documents\GitHub\peforth>python setup.py install 從 source code 安裝
+        4. 有兩種方式執行、測試
+           a. 用 Jupyter Notebook 試驗，只要 Kernel > Restart 新版就生效了。
+           b. 執行 c:\Users\hcche\Documents\GitHub\peforth\peforth>python test.py 
+        5. repeat 
+        
 [ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
     [ ] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
     [ ] quit.f 裡的怪東西都不要了

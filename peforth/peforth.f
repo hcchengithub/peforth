@@ -1,53 +1,24 @@
-code \ nexttoken('\n') end-code 
-code // last().help += nexttoken('\n|\r'); end-code // ( <comment> -- ) Give help message to the last word
-code <selftest> 
-    push(nexttoken("</selftest>"));
-    end-code
-    // ( <statements> -- ) Collect self-test statements. interpret-only
-code </selftest> 
-    my = tick("<selftest>");
-    my.buffer = getattr(my, "buffer", "") # initialize my.buffer
-    my.buffer += pop();
-    end-code
-    // ( "selftest" -- ) Save the self-test statements to <selftest>.buffer. interpret-only
+code \          # ( <comment> -- ) Comment out the rest of the line
+                nexttoken('\n') end-code 
+                
+code //         # ( <comment> -- ) Give help message to the last word
+                last().help += nexttoken('\n|\r'); end-code 
+                
+code <selftest> # ( <statements> -- ) Collect self-test statements.
+                push(nexttoken("</selftest>")); end-code
+                
+code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>.buffer. interpret-only
+                my = tick("<selftest>");
+                my.buffer = getattr(my, "buffer", "") # initialize my.buffer
+                my.buffer += pop();
+                end-code
 
     <selftest>
+
+    \ Self-test section will be run after all words are defined. At this point 
+    \ we only collect self-test codes so don't worry about words that are not 
+    \ defined yet ;-) 
     
-    \
-    \ 取出整個 selftest buffer 
-    \ py> tick('<self'+'test>').buffer char peforth-selftest.f writeTextFile stop 
-    \
-    \ 經過 15:34 2017-09-17 on MetaMoji 的討論，這個 selftest 的方法只適合從頭做起的
-    \ jeforth 開發階段。來到 peforth 時是從先前的 jeforth 繼承過來的，本有的 selftest
-    \ sections 順序已經不對，若還想要整理到讓它們都跟在各自 word 的 source code 旁邊
-    \ 太累，也沒必要。因此，略施小計如上，把 selftest section 整個都抓在一起，集中編
-    \ 輯比較方便。
-    \
-
-    <comment>
-
-    程式只要稍微大一點點，附上一些 self-test 讓它伺機檢查自身，隨便做做穩定性
-    就會提升。 Forth 的結構全部都是 global words， 改動之後難以一一去檢討影響
-    到了哪些 words，與其努力抓 bug 不如早點把 self-test 做進去。
- 
-    project-k kernel 裡只有 code end-code 兩個基本 forth words。只憑這兩個 words 
-    就馬上要為每個 word 都做 self-test 原本很困難。然而 peforth.f 是整個檔案一次
-    讀進來成為大大的一個 TIB 的， 所以其中已經含有全部功能。如果 self-test 安
-    排在所有 words 都 load 好以後做就不困難。利用〈selftest〉〈/selftest〉這對
-    「文字蒐集器」在任意處所「蒐集測試程式」，最後一次把它當成 TIB 執行。實用上
-    〈selftest〉〈/selftest〉出現在每個 word 定義處，裡頭可以放心自由地使用尚
-    未出生的「未來 words」, 對寫程式時的頭腦有很大的幫助。 
-
-    我嘗試了種種的 self-test 寫法。有的很醜，混在正常程式裡面有礙視線；不醜的很
-    累，佔很大 source code 篇幅。以上是發展到目前最好的方法。
-
-    Self-test 的執行時機是程式開始時，或開機時。沒有特定任務就做 self-test.
-    include 各個 modules 時，循序就做 self-test。藉由 forth 的 marker, (forget) 
-    等 self-test 用過即丟， 只花時間，不佔空間。花平時的開發時間不要緊，有特定任
-    務時就跳過 self-test 不佔執行系統時間、空間，只佔 source code 的篇幅。
-    
-    </comment>
-
     --- marker ###
     
     \ Important!
@@ -152,98 +123,103 @@ code </selftest>
         
     </selftest>
 
-code bye 
-    if len(stack) and type(tos())==int: 
-        os._exit(pop()) 
-    else:
-        os._exit(0)
-    end-code // ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
-code /// 
-    ss = nexttoken('\n|\r');
-    ss = "\t" + ss   # Add leading \t to each line.
-    ss = ss.rstrip()+'\n' # trim tailing white spaces
-    last().comment = getattr(last(), 'comment', "") + ss;
-    end-code
-    // ( <comment> -- ) Add comment to the new word, it appears in 'see'.
-code unknown pop();push(False) end-code // ( token -- false ) Default unknown command does nothing. 
-    /// %%f  Now we redefine the 'unknown' command that was doing nothing
-    ///      : unknown ( token -- thing y|n) // Try to find the unknown token in __main__
-    ///        py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") 
-    ///        py> str(tos())=="Ûnknôwn" if drop false else true then ;
-    /// \ Here after, when FORTH come accross an unknown token, instead of printing 
-    /// \ an error message, it try to find the token in __main__ module name space.
+
+code bye        # ( ERRORLEVEL -- ) Exit to shell with TOS as the ERRORLEVEL.
+                if len(stack) and type(tos())==int: 
+                    os._exit(pop()) 
+                else:
+                    os._exit(0)
+                end-code 
+
+code ///        # ( <comment> -- ) Add comment to the new word, it appears in 'see'.
+                ss = nexttoken('\n|\r');
+                ss = "\t" + ss   # Add leading \t to each line.
+                ss = ss.rstrip()+'\n' # trim tailing white spaces
+                last().comment = getattr(last(), 'comment', "") + ss;
+                end-code
+
+code unknown    # ( token -- false ) Default unknown command does nothing. 
+                pop();push(False) end-code 
+                /// Usually FORTH prints error message if token unknown.
+                /// We can redefine this word so that it try to find the token 
+                /// in __main__ module name space thus peforth knows all python 
+                /// global variables then! And even local variables too! See gist: 
+                /// https://gist.github.com/hcchengithub/6da91898d2c7604ec3bb4a06245d1e37
     
-code immediate last().immediate=True end-code // ( -- ) Make the last new word an immediate.
-code stop reset() end-code // ( -- ) Stop the TIB loop
-code compyle 
-    execute('-indent');execute('indent') 
-    source = pop()
-    try:
-        f = genfunc(source,"","compyle_anonymous")  # body,args,name
-        push(f) 
-    except Exception as err:
-        panic("Failed in compyle command : {}\nBody:\n{}".format(err, source))
-    end-code
-    // ( "source" -- function ) Compile source code to a python function
-    /// The given one line or multiple lines function body with NO argument 
-    /// will be converted to an annoymous function left on TOS. Intent problem
-    /// is moderated.
-    /// Usage: "...python code..." compyle execute 
-code trim push(pop().strip()) end-code 
-    // ( string -- string' ) Remove leading & ending white spaces
-    /// NOT every line of the multi-line string, only the begin/end of it.
+code immediate  # ( -- ) Make the last new word an immediate.
+                last().immediate=True end-code 
+
+code stop       # ( -- ) Stop the FORTH interpreter
+                reset() end-code 
+
+code compyle    # ( "source" -- function ) Compile source code to a python function
+                execute('-indent');execute('indent') 
+                source = pop()
+                try:
+                    f = genfunc(source,"","compyle_anonymous")  # body,args,name
+                    push(f) 
+                except Exception as err:
+                    panic("Failed in compyle command : {}\nBody:\n{}".format(err, source))
+                end-code
+                /// The given one line or multiple lines function body with NO argument 
+                /// will be converted to an annoymous function left on TOS. Intent problem
+                /// is moderated.
+                /// Usage: "...python code..." compyle execute 
+
+code trim       # ( string -- string' ) Remove leading & ending white spaces
+                push(pop().strip()) end-code 
+                /// NOT every line of the multi-line string, only the begin/end of it.
     
-code indent
-    array = pop().splitlines() # [lines] 
-    joined = "\n".join(["    "+s for s in array])
-    push(joined) 
-    end-code // ( string -- string' ) Indent the string    
-    /// ( text ) -indent indent \ <== to indentize the text.
+code indent     # ( string -- string' ) Indent the string    
+                array = pop().splitlines() # [lines] 
+                joined = "\n".join(["    "+s for s in array])
+                push(joined) 
+                end-code 
+                /// ( text ) -indent indent \ indentize the text.
 
-code -indent    
-    lines = pop()+"\n"+" "*100 # guarantee multiple lines
-    array = lines.splitlines() # [lines] 
-    if array[0].strip()=="": array=array[1:] # avoid invisible spaces in first line
-    for i in range(len(array)): # avoid blank lines become the shortest 
-        if len(array[i])==0:
-            array[i] += " " * 100;
-    spaces = [len(x)-len(x.lstrip()) for x in array]
-    indent = min(spaces) # number of common indent 
-    cooked = [i[indent:].rstrip() for i in array]  # [cooked lines] 
-    joined = "\n".join(cooked).rstrip() 
-    push(joined) 
-    end-code
-    // ( multi-lines -- cooked ) Remove common indent of the string
+code -indent    # ( multi-lines -- cooked ) Remove common indent of the string
+                lines = pop()+"\n"+" "*100 # guarantee multiple lines
+                array = lines.splitlines() # [lines] 
+                if array[0].strip()=="": array=array[1:] # avoid invisible spaces in first line
+                for i in range(len(array)): # avoid blank lines become the shortest 
+                    if len(array[i])==0:
+                        array[i] += " " * 100;
+                spaces = [len(x)-len(x.lstrip()) for x in array]
+                indent = min(spaces) # number of common indent 
+                cooked = [i[indent:].rstrip() for i in array]  # [cooked lines] 
+                joined = "\n".join(cooked).rstrip() 
+                push(joined) 
+                end-code
 
-code <py> 
-    push(nexttoken("</py>|</pyV>")) 
-    end-code immediate
-    // ( <python statements> -- "statements" ) Starting in-line python statements
+code <py>       # ( <python statements> -- "statements" ) Starting in-line python statements
+                push(nexttoken("</py>|</pyV>")) 
+                end-code immediate
 
-code </py>     
-    try:
-        source = tos()
-        execute('compyle')
-        if compiling:
-            comma(pop()) 
-        else:
-            pop()()
-    except Exception as err:
-        panic("Failed in </py> (compiling={}): {}\nBody:\n{}".format(compiling,err, source))
-    end-code immediate
-    // ( "statements" -- ) exec in-line python statements
+code </py>      # ( "statements" -- ) exec in-line python statements
+                try:
+                    source = tos()
+                    execute('compyle')
+                    if compiling:
+                        comma(pop()) 
+                    else:
+                        pop()()
+                except Exception as err:
+                    panic("Failed in </py> (compiling={}): {}\nBody:\n{}".format(compiling,err, source))
+                end-code immediate
 
-code </pyV>
-    push("push(" + pop() + ")")
-    execute('</py>')
-    end-code immediate
-    // ( "statements" -- value ) Eval in-line python statement
+code </pyV>     # ( "statements" -- value ) Eval in-line python statement
+                push("push(" + pop() + ")")
+                execute('</py>')
+                end-code immediate
 
     <py>
-        # Workarounds when now <PY>...</PY> is available
+        # Workarounds for <PY>...</PY> is finally available now
         tick('//').immediate=True
         tick('\\').immediate=True
-        tick('\\').help="( <comment> -- ) Comment out the rest of the line"
+        tick('<selftest>').interpretonly=True
+        tick('</selftest>').interpretonly=True
+
+        # Now we can finally define any useful python functions
         def v(name):
             '''
             # FORTH variables (value or constant) can be accessed in python code
@@ -263,165 +239,164 @@ code </pyV>
         vm.r = r
     </py>
     
-code words
-    pattern = nexttoken('\n|\r').strip() # 避免 selftest 時抓 tib 過頭，本來 nexttoken() 就可以。
-    if pattern: 
-        screened = [w.name for w in words['forth'][1:] if w.name.find(pattern)!=-1]
-    else: 
-        screened = [w.name for w in words['forth'][1:]]
-    for i in screened: 
-        print(i, end=" ")
-    print() end-code 
-    // ( <pattern> -- ) List all words, in the active vocabularies, with the pattern in their name.
-    /// Examples of listing screened words:
-    /// 1.List all code words
-    ///   <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
-    /// 2.List all words that have not passed their own selftest
-    ///   <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV>
-    /// 3.List all words named, helped, or commented with something like 'self'
-    ///   <py> eval("[w.name for w in words['forth'][1:] if w.name.find('{0}')!=-1 or w.help.find('{0}')!=-1 or w.comment.find('{0}')!=-1]".format('self'))</pyV>
+code words      # ( <pattern> -- ) List all words, in the active vocabularies, with the pattern in their name.
+                pattern = nexttoken('\n|\r').strip() # avoid selftest to read TIB too much
+                if pattern: 
+                    screened = [w.name for w in words['forth'][1:] if w.name.find(pattern)!=-1]
+                else: 
+                    screened = [w.name for w in words['forth'][1:]]
+                for i in screened: 
+                    print(i, end=" ")
+                print() end-code 
+                /// Examples of listing screened words:
+                /// 1.List all code words
+                ///   <py> [w.name for w in words['forth'][1:] if 'code' in w.type] </pyV>
+                /// 2.List all words that have not passed their own selftest
+                ///   <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)] </pyV>
     
-code . print(pop(),end="") end-code // ( x -- ) Print the TOS
-code cr print() end-code // ( -- ) print a carriage return
+code .          # ( x -- ) Print the TOS
+                print(pop(),end="") end-code 
 
-code help
-    n = nexttoken('\n|\r').strip();  # 避免 selftest 時抓 tib 過頭，本來 nexttoken() 就可以。
-    list = context_word_list()  # not wordhash
-    def print_help(i):
-        print(list[i].name, end=" ")
-        if getattr(list[i],"help",False):
-            print(list[i].help)
-        else:
-            print("( ?? ) No help, use // command to add help to the 'last' word")
-        if getattr(list[i],"comment",False):
-            print(list[i].comment)
-    if tick(n):
-        print(tick(n).help)
-        print(tick(n).comment or "") 
-    else:
-        if n :
-            for i in range(1,len(list)):
-                if n in list[i].name:
-                    print_help(i);
-        else: # list all words 
-            for i in range(1,len(list)):
-                print_help(i);
-    end-code 
-    // ( <pattern> -- ) Print word's help and comment
-    /// 1. Given pattern matches a word's name - print one word.
-    /// 2. otherwise -- print words partially matches the pattern.
-    /// 3. No given pattern -- print all words.
+code cr         # ( -- ) print a carriage return
+                print() end-code 
+
+code help       # ( <pattern> -- ) Print word's help and comment
+                n = nexttoken('\n|\r').strip();  # 避免 selftest 時抓 tib 過頭，本來 nexttoken() 就可以。
+                list = context_word_list()  # not wordhash
+                def print_help(i):
+                    print(list[i].name, end=" ")
+                    if getattr(list[i],"help",False):
+                        print(list[i].help)
+                    else:
+                        print("( ?? ) No help, use // command to add help to the 'last' word")
+                    if getattr(list[i],"comment",False):
+                        print(list[i].comment)
+                if tick(n):
+                    print(tick(n).help)
+                    print(tick(n).comment or "") 
+                else:
+                    if n :
+                        for i in range(1,len(list)):
+                            if n in list[i].name:
+                                print_help(i);
+                    else: # list all words 
+                        for i in range(1,len(list)):
+                            print_help(i);
+                end-code 
+                /// 1. Given pattern matches a word's name - print one word.
+                /// 2. otherwise -- print words partially matches the pattern.
+                /// 3. No given pattern -- print all words.
 
     
-code interpret-only
-    last().interpretonly=True;
-    end-code interpret-only
-    // ( -- ) Make the last new word an interpret-only.
-code compile-only    
-    last().compileonly=True
-    end-code interpret-only
-    // ( -- ) \ Make the last new word a compile-only.
-    
-code literal    
-    def f(n): # function generator
-        def literal(): # literal run time function
-            push(n)
-        literal.__doc__ = "Literal: {} {}".format(n,type(n))    
-        return literal
-    comma(f(pop()))
-    end-code
-    // ( n -- ) \ Compile TOS as an annonymous constant    
-    
-code reveal    
-    wordhash[last().name]=last() end-code
-    // ( -- ) Add the last word into wordhash
-    /// We don't want the last word to be seen during its colon definition.
-    /// So 'reveal' is done in ';' command.
-    
-code privacy push(False) end-code 
-    // ( -- false ) Default is false, words are nonprivate by default.
-code (create)    
-    global newname
-    newname = pop()
-    if not newname: panic("(create) what?") 
-    if isReDef(newname) and ('jupyter' in str(sys.modules) or not commandline.strip()): 
-        # w/ command line is free run mode that doesn't care reDef
-        print("reDef " + newname); # can't use tick(newname) but use isReDef()
-    current_word_list().append(Word(newname,None));
-    last().vid = current; # vocabulary ID
-    last().wid = len(current_word_list())-1; # word ID
-    last().type = "colon-create";
-    vm.execute("privacy"); # use the original execute() to avoid warning
-    last().private = bool(pop());
-    end-code
-    // ( "name" -- ) Create a code word that has a dummy xt, not added into wordhash{} yet
-    
-code :    
-    def xt(_me):
-        rstack.append(ip)
-        inner(_me.cfa)
-    global newname, tib, newhelp, compiling
-    newname = nexttoken();
-    push(newname); execute("(create)");  # 故 colon definition 裡有 last or last() 可用來取得本身。
-    compiling=True;
-    tick(':').stackwas = stack[:] # Should not be changed, ';' will check.
-    last().type = "colon";
-    last().cfa = here;
-    last().help = newhelp;
-    last().xt = vm.colonxt = xt # also vm['colonxt']
-    end-code
-    // ( <name> -- ) Begin a forth colon definition.
+code interpret-only # ( -- ) Make the last new word an interpret-only.
+                last().interpretonly=True;
+                end-code interpret-only
 
-code ;    
-    global calling, compiling
-    if tick(':').stackwas!=stack:
-        panic("Stack changed during colon definition, it must be a mistake!");
-        words[current].pop() # drop the unrevealed new word
-    else:
-        comma(RET);
-    compiling = False;
-    execute('reveal');
-    end-code immediate compile-only
-    // ( -- ) End of the colon definition.
+code compile-only   # ( -- ) \ Make the last new word a compile-only.
+                last().compileonly=True
+                end-code interpret-only
 
-code (   
-    a = nexttoken('\\)') 
-    b = nexttoken()  # the ')' 
-    if compiling and last().help=="": # skip if help alreay exists
-        last().help = '( ' + a + b + ' ' 
-    end-code immediate
-    // ( <stack diagram> -- ) Get stack diagram to the last's help.  
-    /// Nested not allowed yet.
+code literal    # ( n -- ) \ Compile TOS as an annonymous constant    
+                def f(n): # function generator
+                    def literal(): # literal run time function
+                        push(n)
+                    literal.__doc__ = "Literal: {} {}".format(n,type(n))    
+                    return literal
+                comma(f(pop()))
+                end-code
+    
+code reveal     # ( -- ) Add the last word into wordhash
+                wordhash[last().name]=last() end-code
+                /// We don't want the last word to be seen during its colon definition.
+                /// So 'reveal' is done in ';' command.
+
+code privacy    # ( -- false ) Default is false, words are nonprivate by default.
+                push(False) end-code 
+
+code (create)   # ( "name" -- ) Create a code word that has a dummy xt, not added into wordhash{} yet
+                global newname
+                newname = pop()
+                if not newname: panic("(create) what?") 
+                if isReDef(newname) and ('jupyter' in str(sys.modules) or not commandline.strip()): 
+                    # w/ command line is free run mode that doesn't care reDef
+                    print("reDef " + newname); # can't use tick(newname) but use isReDef()
+                current_word_list().append(Word(newname,None));
+                last().vid = current; # vocabulary ID
+                last().wid = len(current_word_list())-1; # word ID
+                last().type = "colon-create";
+                vm.execute("privacy"); # use the original execute() to avoid warning
+                last().private = bool(pop());
+                end-code
+
+code :          # ( <name> -- ) Begin a forth colon definition.
+                def xt(_me):
+                    rstack.append(ip)
+                    inner(_me.cfa)
+                global newname, tib, newhelp, compiling
+                newname = nexttoken();
+                push(newname); execute("(create)");  # 故 colon definition 裡有 last or last() 可用來取得本身。
+                compiling=True;
+                tick(':').stackwas = stack[:] # Should not be changed, ';' will check.
+                last().type = "colon";
+                last().cfa = here;
+                last().help = newhelp;
+                last().xt = vm.colonxt = xt # also vm['colonxt']
+                end-code
+
+code ;          # ( -- ) End of the colon definition.
+                global calling, compiling
+                if tick(':').stackwas!=stack:
+                    panic("Stack changed during colon definition, it must be a mistake!");
+                    words[current].pop() # drop the unrevealed new word
+                else:
+                    comma(RET);
+                compiling = False;
+                execute('reveal');
+                end-code immediate compile-only
+
+code (          # ( <stack diagram> -- ) Get stack diagram to the last's help.  
+                a = nexttoken('\\)') 
+                b = nexttoken()  # the ')' 
+                if compiling and last().help=="": # skip if help alreay exists
+                    last().help = '( ' + a + b + ' ' 
+                end-code immediate
+                /// Nested not allowed yet.
+
 code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
-code CR push("\\n|\\r") end-code // ( -- '\n|\r' ) RegEx new line, works with 'word' command.
-code word push(nexttoken(pop())) end-code
-    // ( "delimiter" -- "token" <delimiter> ) Get next "token" from TIB.
-    /// First character after 'word' will always be skipped first, token separator.
-    /// If delimiter is RegEx '\s' then white spaces before the "token"
-    /// will be removed. Otherwise, return TIB[ntib] up to but not include the delimiter.
-    /// If delimiter not found then return the entire remaining TIB (can be multiple lines!).
 
-code ' push(tick(nexttoken())) # use the original tick() to avoid warning
-    end-code // ( <name> -- Word ) Tick, get word name from TIB, leave the Word object on TOS.
+code CR push("\\n|\\r") end-code // ( -- '\n|\r' ) RegEx new line, works with 'word' command.
+
+code word       # ( "delimiter" -- "token" <delimiter> ) Get next "token" from TIB.
+                push(nexttoken(pop())) end-code
+                /// First character, token separator, after 'word' will always be skipped first.
+                /// If delimiter is RegEx '\s' then white spaces before the "token"
+                /// will be removed. Otherwise, return TIB[ntib] up to but not include the delimiter.
+                /// If delimiter not found then return the entire remaining TIB (can be multiple lines!).
+
+code '          # ( <name> -- Word ) Tick, get word name from TIB, leave the Word object on TOS.
+                push(tick(nexttoken())) # use the original tick() to avoid warning
+                end-code 
     
 code , comma(pop()) end-code // ( n -- ) Compile TOS to dictionary.
+
 : [compile] ' , ; immediate // ( <string> -- ) Compile the next immediate word.
-    /// 把下個 word 當成「非立即詞」進行正常 compile, 等於是把它變成正常 word 使用。
-: py: ( <statement> -- ) BL word [compile] </py> ; immediate // Inline python statement down to the next whitespace   
-: py> ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement down to the next whitespace
-: py:~ ( <statement> -- ) CR word [compile] </py> ; immediate // Inline python statement for rest of the line
+       /// In a column definition, compile the next word which is an immediate 
+       /// instead of executing it immediately. 
+: py:  ( <statement> -- ) BL word [compile] </py>  ; immediate // Inline python statement down to the next whitespace   
+: py>  ( <statement> -- ) BL word [compile] </pyV> ; immediate // Inline python statement down to the next whitespace
+: py:~ ( <statement> -- ) CR word [compile] </py>  ; immediate // Inline python statement for rest of the line
 : py>~ ( <statement> -- ) CR word [compile] </pyV> ; immediate // Inline python statement for rest of the line
     
-\ ------------ above are most basic words for developing and for debug ----------------
+\ ------------ above are most basic words for develop and debug ----------------
 
-code 0branch 
-    global ip;
-    if pop():
-        ip += 1;
-    else:
-        ip = dictionary[ip] 
-    end-code compile-only 
-    // ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則將 ip 進位 *** 20111224 sam
+code 0branch    # ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則將 ip 進位 *** 20111224 sam
+                global ip;
+                if pop():
+                    ip += 1;
+                else:
+                    ip = dictionary[ip] 
+                end-code compile-only 
+
 code here! global here; here=pop() end-code // ( a -- ) 設定系統 dictionary 編碼位址
 code here push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
 code swap push(pop(1)) end-code // ( a b -- b a ) stack operation
@@ -458,8 +433,7 @@ code compiling push(compiling) end-code // ( -- boolean ) Get system state
 code last push(last()) end-code // ( -- word ) Get the word that was last defined.
 : version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
 
-code execute execute(pop()); end-code
-    // ( Word|"name"|function -- ... ) Execute the given word.
+code execute execute(pop()); end-code // ( Word|"name"|function -- ... ) Execute the given word.
 : cls ( -- ) // DOS box clear creen 
     py: os.system("cls") ;
     \ os.system('cls')  # on windows
@@ -474,47 +448,47 @@ code execute execute(pop()); end-code
 \ ------------------ Fundamental words ------------------------------------------------------
 
 code (space) push(" ") end-code // ( -- " " ) Put a space on TOS.
-code exit 
-    if compiling: comma(EXIT) 
-    else: vm.exit=True;
-    end-code immediate
-    // ( -- ) Exit colon word when in colon definiton or raise flag to exit ok() shell loop.
-    /// exit from *debug*, which shells into ok(), and continue.
-    /// BTW, 'break-include' break including a .f file
-    /// 'exit break-include' break including a .f file and exit the ok() shell
+
+code exit       # ( -- ) Exit colon word when in colon definiton or raise flag to exit ok() shell loop.
+                if compiling: comma(EXIT) 
+                else: vm.exit=True;
+                end-code immediate
+                /// exit from *debug*, which shells into ok(), and continue.
+                /// BTW, 'break-include' break including a .f file
+                /// 'exit break-include' break including a .f file and exit the ok() shell
     
-code ret comma(RET) end-code immediate compile-only
-    // ( -- ) Mark at the end of a colon word.
-code rescan-word-hash    
-    global wordhash, context
-    # Scan given VID into wordhash{}
-    def scan_vocabulary(v,isContext):
-        for i in range(1,len(words[v])): # The [0] is 0, skip it.
-            if compiling and last()==words[v][i]: 
-                # skip the last() to avoid unexpected 'reveal'.
-                continue; 
-            if isContext or not getattr(words[v][i], 'private', False) :
-                # skip private words unless in context
-                wordhash[words[v][i].name] = words[v][i];
-    wordhash = {}; context = order[len(order)-1];
-    scan_vocabulary("forth",False); # forth always available
-    for j in range(len(order)-1): 
-        scan_vocabulary(order[j],False);  # The latter the higher priority
-    scan_vocabulary(context,True);  # The context has the highest priority
-    end-code
-    // ( -- ) \ Rescan all word-lists in the order[] to rebuild wordhash{}
-code (') push(tick(pop())) # use the original tick() to avoid warning
-    end-code // ( "name" -- Word ) name>Word like tick but the name is from TOS.
-code branch vm.ip=dictionary[ip] end-code compile-only 
-    // ( -- ) 將當前 ip 內數值當作 ip *** 20111224 sam
+code ret comma(RET) end-code immediate compile-only // ( -- ) Mark at the end of a colon word.
+code rescan-word-hash   # ( -- ) \ Rescan all word-lists in the order[] to rebuild wordhash{}
+                global wordhash, context
+                # Scan given VID into wordhash{}
+                def scan_vocabulary(v,isContext):
+                    for i in range(1,len(words[v])): # The [0] is 0, skip it.
+                        if compiling and last()==words[v][i]: 
+                            # skip the last() to avoid unexpected 'reveal'.
+                            continue; 
+                        if isContext or not getattr(words[v][i], 'private', False) :
+                            # skip private words unless in context
+                            wordhash[words[v][i].name] = words[v][i];
+                wordhash = {}; context = order[len(order)-1];
+                scan_vocabulary("forth",False); # forth always available
+                for j in range(len(order)-1): 
+                    scan_vocabulary(order[j],False);  # The latter the higher priority
+                scan_vocabulary(context,True);  # The context has the highest priority
+                end-code
+
+code (')        # ( "name" -- Word ) name>Word like tick but the name is from TOS.
+                push(tick(pop())) # use the original tick() to avoid warning
+                end-code 
+
+code branch vm.ip=dictionary[ip] end-code compile-only // ( -- ) 將當前 ip 內數值當作 ip *** 20111224 sam
 code bool push(bool(pop())) end-code // ( x -- boolean(x) ) Cast TOS to boolean.
 code and  b=pop();a=pop();push(bool(a) and bool(b)) end-code // ( a b -- a and b ) Logical and
 code or   b=pop();a=pop();push(bool(a) or bool(b)) end-code // ( a b -- a or b ) Logical or
 code not  push(not bool(pop())) end-code // ( x -- !x ) Logical not
 : (forget) ( -- ) // Forget the last word
-    py> getattr(last(),'cfa',None) if py: vm.here=last().cfa then
-    py: words[current].pop() \ drop the last word
-    rescan-word-hash ;
+                py> getattr(last(),'cfa',None) if py: vm.here=last().cfa then
+                py: words[current].pop() \ drop the last word
+                rescan-word-hash ;
 
 \ ------------------ eforth code words ----------------------------------------------------------------------
 code AND        push(pop() & pop()) end-code // ( a b -- a & b ) Bitwise AND
@@ -544,17 +518,17 @@ code <=         b=pop();push(pop()<=b) end-code // ( a b -- f ) 比較 a 是否�
 code abs push(abs(pop())) end-code // ( n -- |n| ) Absolute value or magnitude of a complex number
 code max push(max(pop(),pop())) end-code // ( a b -- max(a,b) ) The maximum.
 code min push(min(pop(),pop())) end-code // ( a b -- min(a,b) ) The minimum.
-code doVar push(ip); vm.ip = rstack.pop(); end-code compile-only private
-    // ( -- a ) 取隨後位址 a , runtime of created words
-code doNext 
-    i = rstack.pop() - 1;
-    if i>0:
-        vm.ip = dictionary[ip]; 
-        rstack.append(i);
-    else: 
-        vm.ip += 1
-    end-code compile-only
-    // ( -- ) next's runtime.
+code doVar push(ip); vm.ip = rstack.pop(); end-code compile-only private // ( -- a ) 取隨後位址 a , runtime of created words
+
+code doNext     # ( -- ) next's runtime.
+                i = rstack.pop() - 1;
+                if i>0:
+                    vm.ip = dictionary[ip]; 
+                    rstack.append(i);
+                else: 
+                    vm.ip += 1
+                end-code compile-only
+
 code depth push(len(stack)) end-code // ( -- depth ) Data stack depth
 code pick push(tos(pop())) end-code // ( nj ... n1 n0 j -- nj ... n1 n0 nj ) Get a copy
     /// Use py> tos(n) is better I think
@@ -569,38 +543,39 @@ code ] vm.compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將�
 : create ( <name> -- ) // Create a new word. The new word is a variable by default.
     BL word (create) reveal colon-word compile doVar ;
     
-code (marker)
-    # defined in peforth.f original version, supports only one vocabulary 'forth'
-    lengthwas = len(current_word_list()) # save current word list length before create the new marker word
-    execute("(create)");execute("reveal");
-    last().type = "marker";
-    last().herewas = here;
-    last().lengthwas = lengthwas; # 此 marker 在只有 forth-wordlist 時使用。有多個 word-list 之後要改寫。
-    last().help = "( -- ) I am a marker. I forget everything after me.";
-    def marker(_me):
-        vm.here = _me.herewas;
-        vm.current = vm.context = "forth"
-        vm.order = [vm.current]; # 萬一此 marker 在引入 vocabulary 之後被 call 到。
-        for vid in words:
-            if vid != "forth": 
-                del(words[vid]); # "forth" is the only one, clean up other word-lists.
-        words[current] = current_word_list()[:_me.lengthwas];
-        vm.dictionary = dictionary[:here];
-        vm.wordhash = {};
-        for i in range(1,len(current_word_list())):  
-            # 從舊到新，以新蓋舊，重建 wordhash{} hash table.
-            wordhash[current_word_list()[i].name] = current_word_list()[i];
-        # end of marker()    
-    last().xt = marker
-    end-code
-    // ( "name" -- ) \ Create marker "name". Run "name" to forget itself and all newers.
+code (marker)   # ( "name" -- ) \ Create marker "name". Run "name" to forget itself and all newers.
+                # defined in peforth.f original version, supports only one vocabulary 'forth'
+                lengthwas = len(current_word_list()) # save current word list length before create the new marker word
+                execute("(create)");execute("reveal");
+                last().type = "marker";
+                last().herewas = here;
+                last().lengthwas = lengthwas; # 此 marker 在只有 forth-wordlist 時使用。有多個 word-list 之後要改寫。
+                last().help = "( -- ) I am a marker. I forget everything after me.";
+                def marker(_me):
+                    vm.here = _me.herewas;
+                    vm.current = vm.context = "forth"
+                    vm.order = [vm.current]; # 萬一此 marker 在引入 vocabulary 之後被 call 到。
+                    for vid in words:
+                        if vid != "forth": 
+                            del(words[vid]); # "forth" is the only one, clean up other word-lists.
+                    words[current] = current_word_list()[:_me.lengthwas];
+                    vm.dictionary = dictionary[:here];
+                    vm.wordhash = {};
+                    for i in range(1,len(current_word_list())):  
+                        # 從舊到新，以新蓋舊，重建 wordhash{} hash table.
+                        wordhash[current_word_list()[i].name] = current_word_list()[i];
+                    # end of marker()    
+                last().xt = marker
+                end-code
+
 : marker ( <name> -- ) // Create marker <name>. Run <name> to forget itself and all newers.
-    BL word (marker) ;
-code next 
-    comma(vm.tick("doNext")); # use original tick() to avoid warning
-    dictionary[here], vm.here = pop(), here+1
-    end-code immediate compile-only 
-    // ( -- ) for ... next (FigTaiwan SamSuanChen)
+                BL word (marker) ;
+
+code next       # ( -- ) for ... next (FigTaiwan SamSuanChen)
+                comma(vm.tick("doNext")); # use original tick() to avoid warning
+                dictionary[here], vm.here = pop(), here+1
+                end-code immediate compile-only 
+
 code abort reset() end-code // ( -- ) Reset the forth system.
 
     \
@@ -622,19 +597,19 @@ code abort reset() end-code // ( -- ) Reset the forth system.
     </pyV> -indent ' // py: pop().xt=genxt("//",pop(1)) 
     \ 等號的右邊先 pop() 然後才輪到等號的左邊 pop()。不容易發現前面這個 pop(1) 應該這樣寫。
 
-code alias      
-    w = pop();
-    # Avoid corrupting TIB use execute("word") instead of dictate("word").
-    execute("BL"); execute("word"); execute("(create)");execute("reveal");
-    for i in [n for n in dir(w) if not n.startswith('__')]:
-        # copy from predecessor but arrays and objects are by reference
-        setattr(last(),i,getattr(w,i)) # last()[i] = getattr(w,i); 
-    last().predecessor = last().name;
-    last().name = newname;
-    last().type = "alias";
-    end-code
-    // ( Word <alias> -- ) Create a new name for an existing word
-' != alias <>   // ( a b -- f ) 比較 a 是否不等於 b, alias of !=.
+code alias      # ( Word <alias> -- ) Create a new name for an existing word
+                w = pop();
+                # Avoid corrupting TIB use execute("word") instead of dictate("word").
+                execute("BL"); execute("word"); execute("(create)");execute("reveal");
+                for i in [n for n in dir(w) if not n.startswith('__')]:
+                    # copy from predecessor but arrays and objects are by reference
+                    setattr(last(),i,getattr(w,i)) # last()[i] = getattr(w,i); 
+                last().predecessor = last().name;
+                last().name = newname;
+                last().type = "alias";
+                end-code
+
+' != alias <>   // ( a b -- f ) Compare a and b, alias of !=.
 ' nonprivate alias public // ( -- ) alias of nonprivate
 
 code nip        pop(1) end-code // ( a b -- b ) 
@@ -761,26 +736,26 @@ code nop end-code // ( -- ) no operation
     \ Also thanks to FigTaiwan 吳政昌(亞斯) for the hints.
 
 : case          ( -- 0 ) \ ( key ) case <case1> of <do case1> endof <do default> endcase 
-                0 ; immediate
+                0 ; immediate compile-only
                 /// Usage:
                 /// ( key ) case 
                 ///     char a of char AAAA endof
                 ///     char b of char BBBB endof
                 ///     char c of char CCCC endof
-                ///     \ In default case, the key must be at TOS for being eaten by endcase 
-                ///     char ???? swap 
+                ///     \ In default case, the key must be left at TOS to be eaten by endcase 
+                ///     char DDDD ( key DDDD ) swap ( DDDD key )
                 /// endcase
 
 : of            ( -- ) \ ( key ) case <case1> of <do case1> endof <do default> endcase 
-                ['] over , ['] = , [compile] if ['] drop , ; immediate
+                ['] over , ['] = , [compile] if ['] drop , ; immediate compile-only
                 /// see help case
 
 : endof         ( -- ) \ ( key ) case <case1> of <do case1> endof <do default> endcase 
-                [compile] else ; immediate
+                [compile] else ; immediate compile-only
                 /// see help case
 
 : endcase       ( -- ) \ ( key ) case <case1> of <do case1> endof <do default> endcase 
-                ['] drop , begin ?dup while [compile] then repeat ; immediate
+                ['] drop , begin ?dup while [compile] then repeat ; immediate compile-only
                 /// see help case
 
 				<selftest>
