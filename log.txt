@@ -2910,7 +2910,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	[x] Ynote: "研究 install peforth from source 的方法" 已經成功。
 	[x] 結論是： peforth/ 目錄結構要遷就研究生的安排，改變原先其實不太自然的執行方式: 
 			C:\Users\hcche\Documents\GitHub\>python peforth
-		變成從 peforth 目錄裡面執行，這很好哇！ [ ] v1.22 1.23 __main__.py 還是用 import peforth 的，沒意思
+		變成從 peforth 目錄裡面執行，這很好哇！ [X] v1.22 1.23 __main__.py 還是用 import peforth 的，沒意思 --> 有 support test.py 取代 __main__.py 供 developing debugging 用
 	[x]	pywinio repo 裡面也是又有一個 pywinio/ folder, 將來 peforth 也是這樣。
 	[x] 照研究生的目錄結構改 GitHub/peforth 
 		c:\Users\hcche\Documents\GitHub\peforth\.. 
@@ -2985,7 +2985,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> py> doendcode .source <---- 看到對的 source code 了
     [x] 試驗定義一個 code word 查看他的 help 果然第一行的 # foo bar 有被抓進去當 help 了。
             
-[ ] unkown debug locals() 的說明 copy 過來                
+[X] unkown debug locals() 的說明 copy 過來                
     older unsync'ed notes on my LRV2
     v1.22 既然 peforth 主要都是用來配合 jupyter notebook trace code, set breakpoints, ... etc.
     unknown and ... and # should be added into the built-in words, plus the ability to 
@@ -2997,7 +2997,33 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             see https://stackoverflow.com/questions/3089186/python-getattr-equivalent-for-dictionaries
     [x] done an example @
         http://localhost:8888/notebooks/OneDrive/%E6%96%87%E4%BB%B6/Jupyter%20Notebooks/Siraj%20make_a_neural_net_live_demo.ipynb
-		
+
+    Source Code 
+    ===========
+        none value _locals_ // ( -- dict ) locals passed down from ok()
+        false value debug // ( -- flag ) enable/disable the ok() breakpoint
+        : unknown ( token -- thing Y|N) // Try to find the unknown token in __main__ or _locals_
+          _locals_ if \ in a function
+            ( token ) _locals_ :> get(tos(),"Ûnknôwn") ( token, local )
+            py> str(tos())!="Ûnknôwn" ( token, local, unknown? ) 
+            if ( token, local ) nip true exit ( return local Y ) else drop ( token ) then   
+          then   
+          ( token ) py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") ( thing ) 
+          py> str(tos())=="Ûnknôwn" if ( thing ) drop false else true then ; 
+          /// Example: Set a breakpoint in python code like this: 
+          ///   if peforth.execute('debug').pop() : peforth.push(locals()).ok("bp>",cmd='to _locals_')
+          /// Example: Save locals for investigations:
+          ///   if peforth.execute('debug').pop() : peforth.push(locals()).dictate('to _locals_')
+          /// That enters peforth that knows variables in __main__ and locals at the breakpoint.
+          /// 'exit' to leave the breakpoint and forget locals.
+        : exit ( -- ) // ( -- ) Exit the breakpoint forget locals and continue the process
+          none to _locals_ py: vm.exit=True ;  
+        code # print(nexttoken('\n')+'\n') end-code // print the comment line after #  
+        : --> ( result -- ) // Print the result with the command line.
+          py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
+          s" {} {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
+          /// Good for experiments that need to show command line and the result.
+
 [X] 10:48 2019-05-11 older note
     開發中，不要動到 pip'ed peforth 出錯很麻煩，所以想要從 working folder 執行
     不要每次都得先 pip install 改入 site-packages
@@ -3027,7 +3053,29 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ok('\n')
     [X] __main__.py 還是要用 import peforth 的，若不然一開始 open("__init__.py") 就 file not found 了。
         而 test.py 當然是在對的 directory 之下才能執行，所以叫做 test.py ;-D 
-    
+    [x] 若要餵進 "python test.py foo bar" 執行 command line 則 test.py 就要用來分辨
+        是否「從 ipython, jupyternotebook 執行」 (參見 quit.f) 所以 test.py 檔名
+        就不能改了，要改連 quit.f 也要一起改。或者改進 quit.f 裡分辨 ipython 的方法。
+        \ ~~~~~~ quit.f ~~~~~~
+        \ When in ipython or jupyter notebook the command line is used by 
+        \ ipython already. In jupyter notebook, it looks like:
+        \
+        \      vm.commandline ----------------------------------------------------------------------------------.
+        \      sys.argv[0]    --------.                                                                         |
+        \                             |                                                                         |
+        \                             V                                                                         V
+        \     --------------------------------------------------------------------------------------------- --------------------------------------------------------------------------------------------------
+        \     c:\users\hcche\appdata\local\programs\python\python36\lib\site-packages\ipykernel_launcher.py -f C:\Users\hcche\AppData\Roaming\jupyter\runtime\kernel-4be53345-1ddd-47c2-bef2-5e9801688f3f.json
+        \ So peforth can't support command line statements for ipython and jupyter notebook. 
+        \ For none ipython cases, I have no better idea than to check sys.argv[0] for '.py' 
+        \ and the likes so far 2019-05-15. See the following code, the filename 'test.py' is 
+        \ fixed-coded here therefore.
+        \
+    [X] command line 也是跑 site-package 之外的 .f 檔的方法，例如：
+            c:\Users\hcche\Documents\GitHub\peforth\peforth>python test.py include ..\playground\misc.f
+            c:\Users\hcche\Documents\>python -m peforth include GitHub\peforth\playground\misc.f
+        這兩行都可以。
+
 [x] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
     --> 直接在 github working directory 修改
     --> 這樣 run 到的還是 installed 到 site-packages 的版本，因為 __main__.py 其實是 import peforth 
@@ -3055,14 +3103,65 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            b. 執行 c:\Users\hcche\Documents\GitHub\peforth\peforth>python test.py 
         5. repeat 
         
-[ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
-    [ ] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
-    [ ] quit.f 裡的怪東西都不要了
-            inport, outport, harry_port, 
-    [ ] 把 gist 上的東西 include 進來，最主要的是有 support nesting 的 ( ) comment 
+[X] 19:07 2019-05-13 這段 code 在 peforth.f 裡面本應處裡 alias 的新 // help, 但是又有問題
+        \
+        \ Redefine // to "replace" alias' help message instead of "append".
+        \
+        \ Append if last().help has stack diagram but no help message, otherewise replace. 
+        \ Stack diagram might be unexpectedly given again. That can be resolved by putting 
+        \ complete help message to the original word or use the trick of // dummy and then 
+        \ // again or simply don't give it again in the alias' help message.
+        \
+        <py> 
+        '''
+        m = re.match("(?P<before>.*?)(?P<stackdiagram>\(.*\))(?P<after>.*)", last().help)
+        if m and (m.groupdict()['before'] + m.groupdict()['after']).strip()=="":
+            last().help += nexttoken('\\n|\\r'); 
+        else:
+            last().help = nexttoken('\\n|\\r'); 
+        ''' 
+        </pyV> -indent ' // py: pop().xt=genxt("//",pop(1)) 
+
+    問題如下，有些東西 help 裡面的 stack diagram 不見了！！
+        [r Prepare an array of data to compare with rstack in selftest.
+                Example: [r 1,2,3 r] [d True d] [p 'word1','word2' p]
+                [r...r] section is optional, [d...d] section is the judge.
+    --> 點掉也沒用！ --> 13:34 2019-05-15 misc.f 裡面的新 ( comment ) 造成的。
+    --> 19:15 2019-05-15 已經乾脆放棄讓 (comment) 自動進 help 了，要 help 用 // 就好了。
+        (comment) 直接改成 nested 的，更好。  v1.23 
         
+    [X] 14:06 2019-05-15 現在覺得原來的 (comment) 沒有我 gist words4jupyter.py 的 nested (comment) 好。
+        何必搞個這麼難懂的 (comment) 就會了讓 stack diagram 進 last.help 而已，有 // 就夠了！
+
+    \ to be 
+    code (      # ( <str> -- ) // Comment down to ')' which can be nested if balanced
+        nextstring('\(|\)')['str']  # skip TIB to the next delimiter
+        cc = tib[ntib]  # cc must be delimiter '(', ')', or '\n'
+        vm.ntib+=1      # skip any of them
+        if cc=='(': 
+            execute(_me)  # recursion of (
+            execute(_me)  # recursion of ) 
+        end-code immediate 
+    \ was 
+    code ( # ( <stack diagram> -- ) Get stack diagram to the last's help.  
+        a = nexttoken('\\)') 
+        b = nexttoken()  # the ')' 
+        if compiling and last().help=="": # skip if help alreay exists
+           last().help = '( ' + a + b + ' ' 
+        end-code immediate
+        /// Nested not allowed yet.
     
+    Notepad++ ^h replace regular expression
+    Find what: "(\(\s+.*\))\s+(//)"
+    Replace with: "// \1"
     
-    
-    
-    
+[X] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
+    done! v1.23 
+[X] quit.f 裡的怪東西都不要了 --> inport, outport, harry_port  v1.23
+[X] 把 gist 上的東西 include 進來，最主要的是有 support nesting 的 (comment) v1.23
+[ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
+    [ ] 評估 misc.f unknown.f quit.f 的內容要怎麼分配
+    [ ] complete self-tests for new words , many are commented out.
+    [ ] 測試 jupyter notebook
+    [ ] 測試 ubuntu 
+    [ ] 測試 ubuntu 的 ipython 

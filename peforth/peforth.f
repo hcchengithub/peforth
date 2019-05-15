@@ -7,7 +7,7 @@ code //         # ( <comment> -- ) Give help message to the last word
 code <selftest> # ( <statements> -- ) Collect self-test statements.
                 push(nexttoken("</selftest>")); end-code
                 
-code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>.buffer. interpret-only
+code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>.buffer.
                 my = tick("<selftest>");
                 my.buffer = getattr(my, "buffer", "") # initialize my.buffer
                 my.buffer += pop();
@@ -25,17 +25,60 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
     \ private words referenced by name from out of the context will be a problem.
     \ private words called (execute) or referenced (tick) by name warning when in 
     \ selftest to find them without reducing the performance of none-selftest mode. 
-    \ : referenced-by-name-warning-on    ( -- ) // Turn on run-time warnings 
+    \ : referenced-by-name-warning-on    // ( -- ) Turn on run-time warnings 
     \                 py: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
-    \ : referenced-by-name-warning-off   ( -- ) // Turn off run-time warnings
+    \ : referenced-by-name-warning-off   // ( -- ) Turn off run-time warnings
     \                 py: tick=vm.tick;execute=vm.execute ;
+
+
+    \
+    \ Redirect print() to screen-buffer 
+    \
+
+    py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
+                                 /// Enveloped in array is for "access by reference"
+    <py>
+        class Screenbuffer:
+            def __init__(self,buf):
+                self.stdoutwas=sys.stdout
+                self.buffer=buf
+            def write(self, output_stream):
+                self.buffer[0] += output_stream
+            def view(self):
+                self.stdoutwas.write(self.buffer[0])
+            def reset(self):
+                sys.stdout=self.stdoutwas
+            def flush(self):
+                # self.buffer[0]=''
+                pass
+        vm.Screenbuffer=Screenbuffer
+    </py>
+    \ # Start redirection
+    \ sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+    \ 
+    \ # Print to screen when redirected
+    \ sys.stdout.stdoutwas.write("-------1111-----\n")
+    \ sys.stdout.stdoutwas.write("-------2222-----\n")
+    \ 
+    \ # view screen buffer
+    \ sys.stdout.view()
+    \ 
+    \ # reset
+    \ sys.stdout.reset()
+
+    : display-off // ( -- ) Redirect stdout to a empty screen-buffer
+        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
+        screen-buffer :: [0]="" ;
+
+    : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it off.
+        py: sys.stdout.reset() ;
                     
     "" value description     ( private ) // ( -- "text" ) description of a selftest section
     [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
     [] value expected_stack  ( private ) // ( -- [..] ) an array to compare data stack in selftest
     0  value test-result     ( private ) // ( -- boolean ) selftest result from [d .. d] 
     [] value [all-pass]      ( private ) // ( -- ["words"] ) array of words for all-pass in selftest
-    : ***           ( <description> -- ) // Start a selftest section
+    : ***   // ( <description> -- ) Start a selftest section
             CR word trim ( desc )
             s" *** {} ... " :> format(pop()) to description
             depth if 
@@ -46,7 +89,7 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
             /// List words that have not passed selftest 
             /// <py> [w.name for w in words['forth'][1:] if 'pass'!=getattr(w,'selftest',False)]</pyV> . cr
                     
-    code all-pass   
+    code all-pass   # ( ["name",...] -- ) Mark 'pass' to these word's selftest flag
             a = pop();
             for i in a:
                 w = tick(i)
@@ -55,40 +98,39 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
                 else: 
                     w.selftest='pass';
             end-code private
-            // ( ["name",...] -- ) Mark 'pass' to these word's selftest flag
             ' *** :> comment last :: comment=pop(1)
             
-    : [r    ( <"text"> -- ) // Prepare an array of data to compare with rstack in selftest.
+    : [r    // ( <"text"> -- ) Prepare an array of data to compare with rstack in selftest.
             char r] word s" [{}]" :> format(pop()) \ string
             py> eval(pop()) \ string to array
             to expected_rstack ;
             /// Example: [r 1,2,3 r] [d True d] [p 'word1','word2' p]
             /// [r...r] section is optional, [d...d] section is the judge.
-    : r]    ( -- boolean ) // compare rstack and expected_rstack in selftest
+    : r]    // ( -- boolean ) compare rstack and expected_rstack in selftest
             py> rstack expected_rstack = ;
             ' [r :> comment last :: comment+=pop(1)
             
-    : [d    ( <"text"> -- ) // Prepare an array to compare with data stack. End of a selftest section.
+    : [d    // ( <"text"> -- ) Prepare an array to compare with data stack. End of a selftest section.
             char d] word s" [{}]" :> format(pop()) \ string
             py> eval(pop()) \ string to array
             to expected_stack ;
             /// Data stack will be clean after check
             ' [r :> comment last :: comment+=pop(1)
             
-    : d]    ( -- boolean ) // compare data stack and expected_stack in selftest
+    : d]    // ( -- boolean ) compare data stack and expected_stack in selftest
             depth negate slice expected_stack =  to test-result 
             description . test-result if ." pass" cr
             else ." fail" cr stop then ;                
             /// Data stack will be clean after check
             ' [r :> comment last :: comment+=pop(1)
             
-    : [p    ( <"text"> -- ) // Prepare an array of words for all-pass if test-result is True
+    : [p    // ( <"text"> -- ) Prepare an array of words for all-pass if test-result is True
             char p] word s" [{}]" :> format(pop()) \ string
             py> eval(pop()) \ string to array
             to [all-pass] ; 
             ' [r :> comment last :: comment+=pop(1)
             
-    : p]    ( -- boolean ) // all-pass if test-result is True
+    : p]    // ( -- boolean ) all-pass if test-result is True
             test-result if [all-pass] all-pass then ; 
             ' [r :> comment last :: comment+=pop(1)
             
@@ -354,13 +396,23 @@ code ;          # ( -- ) End of the colon definition.
                 execute('reveal');
                 end-code immediate compile-only
 
-code (          # ( <stack diagram> -- ) Get stack diagram to the last's help.  
-                a = nexttoken('\\)') 
-                b = nexttoken()  # the ')' 
-                if compiling and last().help=="": # skip if help alreay exists
-                    last().help = '( ' + a + b + ' ' 
-                end-code immediate
-                /// Nested not allowed yet.
+\ 13:57 2019-05-15 I don't like this any more, simply use // instead. Nested (comment) is more useful 
+\ code (          # ( <stack diagram> -- ) Get stack diagram to the last's help.  
+\                 a = nexttoken('\\)') 
+\                 b = nexttoken()  # the ')' 
+\                 if compiling and last().help=="": # skip if help alreay exists
+\                     last().help = '( ' + a + b + ' ' 
+\                 end-code immediate
+\                 /// Nested not allowed yet.
+
+code (          # ( <str> -- ) Comment down to ')' which can be nested if balanced
+                nextstring('\(|\)')['str']  # skip TIB to the next delimiter
+                cc = tib[ntib]  # cc must be delimiter '(', ')', or '\n'
+                vm.ntib+=1      # skip any of them
+                if cc=='(': 
+                    execute(_me)  # recursion of (
+                    execute(_me)  # recursion of ) 
+                end-code immediate 
 
 code BL push("\\s") end-code // ( -- "\s" ) RegEx white space, works with 'word' command.
 
@@ -408,7 +460,8 @@ code ?    print(dictionary[pop()],end=" ") end-code // ( a -- ) 查看位址 a �
 code >r   rstack.append(pop()) end-code  // ( n -- ) Push n into the return stack.
 code r>   push(rstack.pop()) end-code  // ( -- n ) Pop the return stack
 code r@   push(rtos()) end-code // ( -- r0 ) Get a copy of the TOS of return stack
-code drop pop(); end-code // ( x -- ) Remove TOS.
+code drop pop(); end-code // ( x -- ) Remove the tos(0) 
+code nip  pop(1) end-code // ( a b -- b ) Remove the tos(1) 
 code dup  push(tos()) end-code // ( a -- a a ) Duplicate TOS.
 code over push(tos(1)) end-code // ( a b -- a b a ) Stack operation.
 code 0<   push(pop()<0) end-code // ( a -- f ) 比較 a 是否小於 0
@@ -420,28 +473,28 @@ code 1+   push(pop()+1) end-code // ( a -- a++ ) a += 1
 code 2+   push(pop()+2) end-code // ( a -- a+2 )
 code 1-   push(pop()-1) end-code // ( a -- a-1 ) TOS - 1
 code 2-   push(pop()-2) end-code // ( a -- a-2 ) TOS - 2
-: compile ( -- ) // Compile the next word at dictionary[ip] to dictionary[here].
+: compile // ( -- ) Compile the next word at dictionary[ip] to dictionary[here].
     r> dup @ , 1+ >r ; compile-only 
-: if ( -- a ) // if..else..then, if..then
+: if // ( -- a ) if..else..then, if..then
     compile 0branch here 0 , ; immediate compile-only
-: then  ( a -- ) // if....else..then, for aft...then next, begin..while..until..then
+: then  // ( a -- ) if....else..then, for aft...then next, begin..while..until..then
     here swap ! ; immediate compile-only
 code compiling push(compiling) end-code // ( -- boolean ) Get system state
-: char ( <str> -- str ) // Get character(s).
+: char // ( <str> -- str ) Get character(s).
     BL word compiling if literal then ; immediate
     /// "char abc" gets "abc", unlike ANS forth "char abc" gets only 'a'.
 code last push(last()) end-code // ( -- word ) Get the word that was last defined.
 : version py> vm.greeting() ; // ( -- revision ) print the greeting message and return the revision code
 
 code execute execute(pop()); end-code // ( Word|"name"|function -- ... ) Execute the given word.
-: cls ( -- ) // DOS box clear creen 
+: cls // ( -- ) DOS box clear creen 
     py: os.system("cls") ;
     \ os.system('cls')  # on windows
     \ os.system('clear')  # on linux / os x
-: private ( -- ) // Make the last word invisible when out of the context.
+: private // ( -- ) Make the last word invisible when out of the context.
     py: last().private=True ;
     /// The opposite is 'nonprivate'.
-: nonprivate ( -- ) // Make the last word non-private so it's globally visible.
+: nonprivate // ( -- ) Make the last word non-private so it's globally visible.
     py: last().private=False ;
     /// The opposite of 'private'.
 
@@ -485,7 +538,7 @@ code bool push(bool(pop())) end-code // ( x -- boolean(x) ) Cast TOS to boolean.
 code and  b=pop();a=pop();push(bool(a) and bool(b)) end-code // ( a b -- a and b ) Logical and
 code or   b=pop();a=pop();push(bool(a) or bool(b)) end-code // ( a b -- a or b ) Logical or
 code not  push(not bool(pop())) end-code // ( x -- !x ) Logical not
-: (forget) ( -- ) // Forget the last word
+: (forget) // ( -- ) Forget the last word
                 py> getattr(last(),'cfa',None) if py: vm.here=last().cfa then
                 py: words[current].pop() \ drop the last word
                 rescan-word-hash ;
@@ -537,10 +590,10 @@ code roll push(pop(pop())) end-code // ( ... n3 n2 n1 n0 3 -- ... n2 n1 n0 n3 ) 
 : space (space) . ; // ( -- ) Print a space.
 code [ vm.compiling=False end-code immediate // ( -- ) 進入直譯狀態, 輸入指令將會直接執行 *** 20111224 sam
 code ] vm.compiling=True end-code // ( -- ) 進入編譯狀態, 輸入指令將會編碼到系統 dictionary *** 20111224 sam
-: colon-word ( -- ) // Decorate the last() as a colon word.
+: colon-word // ( -- ) Decorate the last() as a colon word.
     py: last().type="colon";last().cfa=here;last().xt=vm.colonxt
     ; private
-: create ( <name> -- ) // Create a new word. The new word is a variable by default.
+: create // ( <name> -- ) Create a new word. The new word is a variable by default.
     BL word (create) reveal colon-word compile doVar ;
     
 code (marker)   # ( "name" -- ) \ Create marker "name". Run "name" to forget itself and all newers.
@@ -568,7 +621,7 @@ code (marker)   # ( "name" -- ) \ Create marker "name". Run "name" to forget its
                 last().xt = marker
                 end-code
 
-: marker ( <name> -- ) // Create marker <name>. Run <name> to forget itself and all newers.
+: marker // ( <name> -- ) Create marker <name>. Run <name> to forget itself and all newers.
                 BL word (marker) ;
 
 code next       # ( -- ) for ... next (FigTaiwan SamSuanChen)
@@ -578,24 +631,24 @@ code next       # ( -- ) for ... next (FigTaiwan SamSuanChen)
 
 code abort reset() end-code // ( -- ) Reset the forth system.
 
-    \
-    \ Redefine // to "replace" alias' help message instead of "append".
-    \
-    \ Append if last().help has stack diagram but no help message, otherewise replace. 
-    \ Stack diagram might be unexpectedly given again. That can be resolved by putting 
-    \ complete help message to the original word or use the trick of // dummy and then 
-    \ // again or simply don't give it again in the alias' help message.
-    \
-    <py> 
-    '''
-    m = re.match("(?P<before>.*?)(?P<stackdiagram>\(.*\))(?P<after>.*)", last().help)
-    if m and (m.groupdict()['before'] + m.groupdict()['after']).strip()=="":
-        last().help += nexttoken('\\n|\\r'); 
-    else:
-        last().help = nexttoken('\\n|\\r'); 
-    ''' 
-    </pyV> -indent ' // py: pop().xt=genxt("//",pop(1)) 
-    \ 等號的右邊先 pop() 然後才輪到等號的左邊 pop()。不容易發現前面這個 pop(1) 應該這樣寫。
+  \ \
+  \ \ Redefine // to "replace" alias' help message instead of "append".
+  \ \
+  \ \ Append if last().help has stack diagram but no help message, otherewise replace. 
+  \ \ Stack diagram might be unexpectedly given again. That can be resolved by putting 
+  \ \ complete help message to the original word or use the trick of // dummy and then 
+  \ \ // again or simply don't give it again in the alias' help message.
+  \ \
+  \ <py> 
+  \ '''
+  \ m = re.match("(?P<before>.*?)(?P<stackdiagram>\(.*\))(?P<after>.*)", last().help)
+  \ if m and (m.groupdict()['before'] + m.groupdict()['after']).strip()=="":
+  \     last().help += nexttoken('\\n|\\r'); 
+  \ else:
+  \     last().help = nexttoken('\\n|\\r'); 
+  \ ''' 
+  \ </pyV> -indent ' // py: pop().xt=genxt("//",pop(1)) 
+  \ \ 等號的右邊先 pop() 然後才輪到等號的左邊 pop()。不容易發現前面這個 pop(1) 應該這樣寫。
 
 code alias      # ( Word <alias> -- ) Create a new name for an existing word
                 w = pop();
@@ -612,19 +665,18 @@ code alias      # ( Word <alias> -- ) Create a new name for an existing word
 ' != alias <>   // ( a b -- f ) Compare a and b, alias of !=.
 ' nonprivate alias public // ( -- ) alias of nonprivate
 
-code nip        pop(1) end-code // ( a b -- b ) 
-code rot        push(pop(2)) end-code // ( w1 w2 w3 -- w2 w3 w1 ) 
+code rot        push(pop(2)) end-code // ( w1 w2 w3 -- w2 w3 w1 ) Stack operation.
                 /// see rot -rot roll pick
-code -rot       push(pop(),1) end-code // ( w1 w2 w3 -- w3 w1 w2 ) 
+code -rot       push(pop(),1) end-code // ( w1 w2 w3 -- w3 w1 w2 ) Stack operation.
                 /// see rot -rot roll pick
-code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
-: 2dup          ( w1 w2 -- w1 w2 w1 w2 ) over over ;
+code 2drop      vm.stack=stack[:-2] end-code // ( a b c d -- a b ) Drop two cells
+code 2dup       vm.stack+=stack[-2:] end-code // ( a b -- a b a b ) Duplicate two cells
 ' NOT alias invert // ( w -- ~w )
 : negate        -1 * ; // ( n -- -n ) Negated TOS.
 : within        ( n low high -- within? ) -rot over max -rot min = ;
-: ['] ( <name> -- Word ) // In colon definitions, compile next word object as a literal.
+: ['] // ( <name> -- Word ) In colon definitions, compile next word object as a literal.
     ' literal ; immediate compile-only
-: allot ( n -- ) // 增加 n cells 擴充 memory 區塊
+: allot // ( n -- ) 增加 n cells 擴充 memory 區塊
     \ here 一般指在下一個 available 處, 即 len(dictionary) 之值。
     \ Python 的 len(dictionary) 若小於 here 會觸發 exception.
     \ 因此 here 到 len(dictionary) 之間不夠的要先 append()。
@@ -632,7 +684,7 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
     for i in range(tos()-len(dictionary)+here): dictionary.append(0)
     </py>
     here + here! ; 
-: for ( count -- ) // for..next loop.
+: for // ( count -- ) for..next loop.
     compile >r here ; immediate compile-only
     /// for ... next (count ... 2,1) but when count <= 0 still do once!!
     /// for aft ... then next (count-1 ... 2,1) but do nothing if count <= 1.
@@ -655,74 +707,75 @@ code 2drop      vm.stack=stack[:-2] end-code // ( a b c d-- a b )
     ///   : test 10 for 10 r@ - dup . space 5 >= if r> drop 0 >r then next ; 
     ///   test ==> 0 1 2 3 4 5 
                 
-: begin ( -- a ) // begin..again, begin..until, begin..while..until..then, begin..while..repeat
+: begin // ( -- a ) begin..again, begin..until, begin..while..until..then, begin..while..repeat
     here ; immediate compile-only
-: until ( a -- ) // begin..until, begin..while..until..then,
+: until // ( a -- ) begin..until, begin..while..until..then,
     compile 0branch , ; immediate compile-only
-: again ( a -- ) // begin..again,
+: again // ( a -- ) begin..again,
     compile  branch , ; immediate compile-only
-: ahead         ( -- a ) // aft internal use
+: ahead         // ( -- a ) aft internal use
                 compile branch here 0 , ; immediate compile-only
 ' ahead alias never immediate compile-only // ( -- a ) never ... then for call-back entry inner(word.cfa+n) 
-: repeat        ( a a -- ) // begin..while..repeat
+: repeat        // ( a a -- ) begin..while..repeat
                 [compile] again here swap ! ; immediate compile-only
-: aft           ( a -- a a ) // for aft ... then next
+: aft           // ( a -- a a ) for aft ... then next
                 drop [compile] ahead [compile] begin swap ; immediate compile-only
-: else          ( a -- a ) // if..else..then
+: else          // ( a -- a ) if..else..then
                 [compile] ahead swap [compile] then ; immediate compile-only
-: while         ( a -- a a ) // begin..while..repeat, begin..while..until..then
+: while         // ( a -- a a ) begin..while..repeat, begin..while..until..then
                 [compile] if swap ; immediate compile-only
 : ?stop         if stop then ; // ( flag -- ) Stop TIB task if flag is True.
 : ?dup          dup if dup then ; // ( w -- w w | 0 ) Dup TOS if it is not 0|""|False.
-: variable      ( <string> -- ) // Create a variable.
+: variable      // ( <string> -- ) Create a variable.
                 create 0 , py: last().type='colon-variable' ;
-: +!            ( n addr -- ) // Add n into addr, addr is a variable.
+: +!            // ( n addr -- ) Add n into addr, addr is a variable.
                 swap over @ swap + swap ! ;
-: chars         ( n str -- ) // Print str n times.
+: chars         // ( n str -- ) Print str n times.
                 swap 0 max dup 0= if exit then for dup . next drop ;
 
-: spaces        ( n -- ) // print n spaces.
+: spaces        // ( n -- ) print n spaces.
                 (space) chars ;
 : .(            char \) word . BL word drop ; immediate // ( <str> -- ) Print following string down to ')' immediately.
-: ."            ( <str> -- ) // Print following string down to '"'.
+: ."            // ( <str> -- ) Print following string down to '"'.
                 char " word compiling if literal compile .
                 else . then BL word drop ; immediate
                 \ 本來是 compile-only, 改成都可以。 hcchen5600 2014/07/17 16:40:04
-: .'            ( <str> -- ) // Print following string down to "'".
+: .'            // ( <str> -- ) Print following string down to "'".
                 char ' word compiling if literal compile .
                 else . then BL word drop ; immediate
                 \ 本來是 compile-only, 改成都可以。 hcchen5600 2014/07/17 16:40:04
-: s"            ( <str> -- str ) // Get string down to the next delimiter.
+: s"            // ( <str> -- str ) Get string down to the next delimiter.
                 char " word compiling if literal then BL word drop ; immediate
-: s'            ( <str> -- str ) // Get string down to the next delimiter.
+: s'            // ( <str> -- str ) Get string down to the next delimiter.
                 char ' word compiling if literal then BL word drop ; immediate
-: s`            ( <str> -- str ) // Get string down to the next delimiter.
+: s`            // ( <str> -- str ) Get string down to the next delimiter.
                 char ` word compiling if literal then BL word drop ; immediate
-: does>         ( -- ) // redirect the last new colon word.xt to after does>
+: does>         // ( -- ) redirect the last new colon word.xt to after does>
                 [compile] ret \ dummy 'ret' mark for 'see' to know where is the end of a creat-does word
                 r> py: push(last().cfa) ! ; 
-: count         ( thing -- thing length ) // Get length of the thing if it has
+: count         // ( thing -- thing length ) Get length of the thing if it has
                 py: push(len(tos())) ;
-code accept     
-    # python v3.6 IDLE fires KeyboardInterrupt unexpectedly!
-    try:
-        s = input()
-    except KeyboardInterrupt:
-        s = ""
-    push(s)
-    end-code // ( -- str ) Read a line from terminal.
+
+code accept     # ( -- str ) Read a line from terminal.
+                # python v3.6 IDLE fires KeyboardInterrupt unexpectedly!
+                try:
+                    s = input()
+                except KeyboardInterrupt:
+                    s = ""
+                push(s)
+                end-code 
     
-code <accept>
-    result = ""
-    s = nexttoken('\n')+'\n' # rest of the line after <accept>
-    while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
-        result += s; execute('accept'); s = pop()+'\n'
-    s,vm.tib,vm.ntib = tuple(s.replace(chr(4),"</accept>").split('</accept>'))+(0,)
-    result += s 
-    if len(result): push(result); execute('-indent')
-    else: push("")
-    end-code // ( -- str ) Read multiple lines from terminal. 
-    /// Ctrl-D or </accept> appear in the last line to terminate the input. 
+code <accept>   # ( -- str ) Read multiple lines from terminal. 
+                result = ""
+                s = nexttoken('\n')+'\n' # rest of the line after <accept>
+                while (not chr(4) in s) and (not '</accept>' in s):  # py> chr(4)=='^D' --> True
+                    result += s; execute('accept'); s = pop()+'\n'
+                s,vm.tib,vm.ntib = tuple(s.replace(chr(4),"</accept>").split('</accept>'))+(0,)
+                result += s 
+                if len(result): push(result); execute('-indent')
+                else: push("")
+                end-code 
+                /// Ctrl-D or </accept> appear in the last line to terminate the input. 
 
 code nop end-code // ( -- ) no operation
     ' nop alias </accept> last py: pop().help="" 
@@ -731,9 +784,9 @@ code nop end-code // ( -- ) no operation
         // ( -- ) Ctrl-D ending mark of a multiple-line input, do nothing.
     rescan-word-hash
 
-    \ case ... endcase definition is copied from 
-    \ https://github.com/phf/forth/blob/master/x86/jonesforth.f
-    \ Also thanks to FigTaiwan 吳政昌(亞斯) for the hints.
+\ case ... endcase definition is copied from 
+\ https://github.com/phf/forth/blob/master/x86/jonesforth.f
+\ Also thanks to FigTaiwan 吳政昌(亞斯) for the hints.
 
 : case          ( -- 0 ) \ ( key ) case <case1> of <do case1> endof <do default> endcase 
                 0 ; immediate compile-only
@@ -779,10 +832,10 @@ code nop end-code // ( -- ) no operation
 					---
 				</selftest>
     
-: refill        ( -- flag ) // Reload TIB from stdin. return false means no input or EOF
+: refill        // ( -- flag ) Reload TIB from stdin. return false means no input or EOF
                 accept count if py: vm.tib=pop();vm.ntib=0 true else false then ;
 
-: [else] ( -- ) // 丟掉以下 TIB 到 "[else]" or "[then]" 為止，考慮了中間的 nested 結構。
+: [else]        // ( -- ) 丟掉以下 TIB 到 "[else]" or "[then]" 為止，考慮了中間的 nested 結構。
                 1 \ ( [if] structure nested level )
                 begin \ level
                     begin \ ( level )
@@ -811,63 +864,46 @@ code nop end-code // ( -- ) no operation
                 drop \ 把 TIB 斷尾中止後剩下的 level 丟掉。
                 ; immediate
                 
-: [if]          ( flag -- ) // Conditional compilation [if] [else] [then]
+: [if]          // ( flag -- ) Conditional compilation [if] [else] [then]
                 if else [compile] [else] then \ skip everything down to [else] or [then] when flag is not True.
                 ; immediate
                 /// [if] 用來把 iTIB 視條件跳到這個 [if] 之後或 [else] 之後。
 
-: [then]        ( -- ) // Conditional compilation [if] [else] [then]
+: [then]        // ( -- ) Conditional compilation [if] [else] [then]
                 ; immediate
                 
-: (::)          ( obj "sub-statement" -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+: (::)          // ( obj "sub-statement" -- ) Simplified form of "obj py: pop().foo.bar" w/o return value
                 <py> tos()[0]=='[' or tos()[0]=='(' </pyV> 
                 if char pop() else char pop(). then 
                 swap + compiling if compyle , 
                 else [compile] </py> then ;
                 
-: (:>)          ( obj "sub-statement" -- value ) // Simplified form of "obj py> pop().foo.bar" w/return value
+: (:>)          // ( obj "sub-statement" -- value ) Simplified form of "obj py> pop().foo.bar" w/return value
                 <py> tos()[0]=='[' or tos()[0]=='(' </pyV>
                 if char push(pop() else char push(pop(). then 
                 swap + char ) + compiling if compyle ,
                 else [compile] </py> then ;
                         
-: ::            ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+: ::            // ( obj <sub-statement> -- ) Simplified form of "obj py: pop().foo.bar" w/o return value
                 BL word (::) ; immediate   /// down to the next whitespace
-: :>            ( obj <sub-statement> -- value ) // Simplified form of "obj py> pop().foo.bar" w/return value
+: :>            // ( obj <sub-statement> -- value ) Simplified form of "obj py> pop().foo.bar" w/return value
                 BL word (:>) ; immediate   /// down to the next whitespace
-: ::~           ( obj <sub-statement> -- ) // Simplified form of "obj py: pop().foo.bar" w/o return value
+: ::~           // ( obj <sub-statement> -- ) Simplified form of "obj py: pop().foo.bar" w/o return value
                 CR word (::) ; immediate   /// for rest of the line
-: :>~           ( obj <sub-statement> -- value ) // Simplified form of "obj py> pop().foo.bar" w/return value
+: :>~           // ( obj <sub-statement> -- value ) Simplified form of "obj py> pop().foo.bar" w/return value
                 CR word (:>) ; immediate   /// for rest of the line
 
-\ 有 bug 先暫時不要這個 nested ( ) comment
-\ : (     ( <str> -- ) // Ignore the comment down to ')', can be nested but must be balanced
-\         <py> compiling and last().help</pyV> if : 
-\             \ comment out the stack diagram if help alreay exists
-\             py> nextstring(r"\(|\)")['str'] \ word 固定會吃掉第一個 character 故不適用。
-\             drop py: push(tib[ntib]);vm.ntib+=1 \ 撞到停下來的字母非 '(' 即 ')' 要不就是行尾，都可以 skip 過去
-\             char ( = if \ 剛才那個字母是啥？
-\             [ last literal ] dup \ 取得本身
-\             execute \ recurse nested level
-\             execute \ recurse 剩下來的部分
-\             then
-\         else
-\             \ add stack diagram into the word's help
-\             <py> last().help = '( ' + nexttoken('\\)') + nexttoken() + ' '</py>
-\         then ; immediate
-\         /// '(' command 用 recursion 完成, 正點! 
-
-: "msg"abort    ( "errormsg" -- ) // Panic with error message and abort the forth VM
+: "msg"abort    // ( "errormsg" -- ) Panic with error message and abort the forth VM
                 py: panic(pop()) abort ; nonprivate
 
-: abort"        ( <msg> -- ) // Through an error message and abort the forth VM
+: abort"        // ( <msg> -- ) Through an error message and abort the forth VM
                 char " word literal BL word drop compile "msg"abort ;
                 immediate compile-only
 
-: "msg"?abort   ( "errormsg" flag -- ) // Conditional panic with error message and abort the forth VM
+: "msg"?abort   // ( "errormsg" flag -- ) Conditional panic with error message and abort the forth VM
                 if "msg"abort else drop then ; nonprivate
 
-: ?abort"       ( f <errormsg> -- ) // Conditional abort with an error message.
+: ?abort"       // ( f <errormsg> -- ) Conditional abort with an error message.
                 char " word literal BL word drop
                 compile swap compile "msg"?abort ;
                 immediate compile-only
@@ -883,7 +919,7 @@ code nop end-code // ( -- ) no operation
 
 variable '<text> private
     // ( -- <text> ) Variable reference to the <text> Word object, for indirect call.
-: (<text>)      ( <text> -- "text"+"</text>" ) // Auxiliary <text>, handles nested portion
+: (<text>)      // ( <text> -- "text"+"</text>" ) Auxiliary <text>, handles nested portion
                 '<text> @ execute ( string ) \ 此時 TIB 非 </text> 即行尾
                 BL word char </text> = ( string is</text>? )
                 if \ 剛才撞上了 </text> ( string )
@@ -892,7 +928,7 @@ variable '<text> private
                 /// (<text>) is almost same as <text> but it consumes the 
                 /// next </text> in TIB and returns <text> + "</text>"
 
-: <text>        ( <text> -- "text" ) // Get multiple-line string, can be nested.
+: <text>        // ( <text> -- "text" ) Get multiple-line string, can be nested.
                 char </text>|<text> word ( string1 )
                 \ 撞到 delimiter 停下來非 <text> 即 </text> 要不就是行尾
                 BL word dup char <text> = ( string1 deli is<text>? )
@@ -911,7 +947,7 @@ variable '<text> private
                 /// Colon definition 中萬一前後不 ballance 會造成 colon definition
                 /// 不如預期結束而停留在 compiling state 裡等 closing </text> 的現象。
                 
-: </text>       ( "text" -- ... ) // Delimiter of <text>
+: </text>       // ( "text" -- ... ) Delimiter of <text>
                 compiling if literal then ; immediate
                 /// Usage: <text> word of multiple lines </text>
 
@@ -922,7 +958,7 @@ variable '<text> private
                     True  constant privacy private // ( -- True ) All words in this module are private
                 </text> ' privacy :: comment=pop(1)
 
-: <comment>     ( <comemnt> -- ) // Can be nested
+: <comment>     // ( <comemnt> -- ) Can be nested
                 \ If <comment> hits <comment> in TIB then it drops string1 
                 \ and does <comment> and does again <comment>
                 char <comment>|</comment> word drop ( empty )
@@ -931,7 +967,7 @@ variable '<text> private
                     [ last literal ] dup execute execute
                 then ; immediate
 : </comment>    ; // ( -- ) Delimiter of <comment>
-: (constant)    ( n "name" -- ) // Create a constnat
+: (constant)    // ( n "name" -- ) Create a constnat
                 (create) <py>   
                 source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
                 last().xt = genxt('constant',source)
@@ -940,11 +976,11 @@ variable '<text> private
                 last().type = 'constant'
                 </py> 
                 reveal ; 
-: constant      ( n <name> -- ) // Create a constnat
+: constant      // ( n <name> -- ) Create a constnat
                 BL word (constant) ;
-: value         ( n <name> -- ) // Create a 'value' variable.
+: value         // ( n <name> -- ) Create a 'value' variable.
                 constant last :: type='value' ; 
-: to            ( n <value> -- ) // Assign n to <value>.
+: to            // ( n <value> -- ) Assign n to <value>.
                 ' ( n word ) 
                 py> tos().type.find("value")==-1 ?abort" Error! Assigning to a none-value."
                 compiling if ( n word ) 
@@ -954,23 +990,8 @@ variable '<text> private
                 else ( n word )
                     py: getattr(vm,tos().vid)[pop().name]=pop(1)
                 then ; immediate
-\ code cut        vm.tib=tib[ntib:];vm.ntib=0 end-code
-\                 // ( -- ) // Cut off used TIB.
-\                 /// "cut ~ 10 nap rewind" repeat running the TIB.
-\                 /// See also <task>
-\ code -word 
-\                 # 加上 dummy 頭尾再 split 以統一所有狀況。丟掉 dummy 頭尾 
-\                 push(('h ' + tib[:ntib] + ' t').split()[1:-1]); end-code
-\                 // ( -- array[] ) Get TIB used tokens.
-\                 /// 跟 word 有點相反的味道，故以 -word 為名。用來找 nap。peforth 可能沒用?
-\ : rewind ( -- ) // Rewind TIB so as to repeat it. 'stop' to terminate.
-\                 py: vm.ntib=0 ;
-\                 /// "cut ~ 10 nap rewind" repeat running the TIB.
-\                 /// See also <task>
-\ : ?rewind ( boolean -- ) // Conditional rewind TIB so as to repeat it. 'stop' to terminate.
-\                 if rewind then ;
 
-: tib. ( result -- ) // Print the command line and the TOS.
+: tib.          // ( result -- ) Print the command line and the TOS.
                 py> tib[:ntib].rfind('\n') py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
                 s" {} \ ==> {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
                 /// Good for experiments that need to show command line and the result.
@@ -979,42 +1000,42 @@ variable '<text> private
 \ To TIB command line TSRs, the tib/ntib is their only private storage. So save-restore and
 \ loop back information must be using the tib. That's why we have >t t@ and t> 
 
-code >t         
+code >t         # ( int -- ) Push the integer to end of TIB
                 # \n\\ 1234$ <--- 一個數字的 pattern
                 vm.tib += "\n\\ " + str(pop());
-                end-code // ( int -- ) Push the integer to end of TIB
+                end-code 
 
-code t@         
+code t@         # ( -- int ) Get integer from end of the TIB 
                 # \n\\ 1234$ <--- 一個數字的 pattern
                 r = re.search( r'\n\\ (\d*)$', tib)
                 push(int(r.group(1))); 
-                end-code // ( -- int ) Get integer from end of the TIB 
+                end-code 
 
-code t>            
+code t>         # ( -- int ) Pop integer from end of the TIB 
                 # \n\\ 1234$ <--- 一個數字的 pattern
                 r = re.search( r'\n\\ (\d*)$', tib)
                 push(int(r.group(1))); 
                 vm.tib = tib[:-len(r.group())]
-                end-code // ( -- int ) Pop integer from end of the TIB 
+                end-code 
 
-: [begin]       ( -- ) // [begin]..[again], [begin].. flag [until]
+: [begin]       // ( -- ) [begin]..[again], [begin].. flag [until]
                 py> ntib >t ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
                 /// ex. [begin] .s py> rstack . cr 1000 nap [again]
                 
-: [again]       ( -- ) // [begin]..[again]
+: [again]       // ( -- ) [begin]..[again]
                 t@ py: vm.ntib=pop() ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
                 /// Add condition: [if] [again] [then]    
-: [until]       ( flag -- ) // [begin].. flag [until]
+: [until]       // ( flag -- ) [begin].. flag [until]
                 if  t> drop else [compile] [again] then ; interpret-only
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
                 /// ex. [begin] now t.second dup . space 5 mod not 100 nap [until]
 
-: [for]         ( count -- ) // (T -- ntib count ) [for]..[next] 
+: [for]         // ( count -- ) (T -- ntib count ) [for]..[next] 
                 [compile] [begin] >t ; interpret-only
                 /// Instead of using rstack, [for] loop uses tib tail to save-restore 
                 /// the loop back address and the count. Thus >t t> and t@ replace
@@ -1037,7 +1058,7 @@ code t>
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
 
-: [next]        ( -- ) // (T ntib count -- ntib count-1 | empty ) [for]..[next]
+: [next]        // ( -- ) (T ntib count -- ntib count-1 | empty ) [for]..[next]
                 t> 1- dup >t py> pop()>0 ( count>0 ) if 
                     \ rewind
                     t> t> py: vm.ntib=tos() >t >t 
@@ -1050,7 +1071,28 @@ code t>
 
 \ ------------------ Tools  ----------------------------------------------------------------------
 
-: __main__ ( -- module ) // Get __main__ module of this python session
+code type  push(type(pop()))  end-code // ( x -- type ) get type object of anything
+code list  push(list(pop()))  end-code // ( sth -- list ) Cast something into a list
+code dict  push(dict(pop()))  end-code // ( sth -- dict ) Cast something into a dictionary
+code str   push(str(pop()))   end-code // ( sth -- str ) Cast something into a string
+code set   push(set(pop()))   end-code // ( sth -- set ) Cast something into a set
+code tuple push(tuple(pop())) end-code // ( sth -- tuple ) Cast something into a tuple
+
+code dict>keys  # ( dict -- [keys] ) Get keys of the dict
+                push(pop().keys()) end-code
+                
+code _dir_      # ( x -- dir ) Get complete dir list (keys) of an object
+                push(dir(pop())) end-code
+                /// see also 'dir' and dict>keys
+                last alias obj>keys
+            
+code dir        # ( object -- dir ) Get complete dir list (keys) of an object w/o __things__
+                x = dir(pop())
+                push([i for i in x if (i[0]!='_' and i[-1]!='_')]) 
+                end-code
+                /// see also 'dict>keys' and '_dir_' that gets complete dir
+
+: __main__ // ( -- module ) Get __main__ module of this python session
     py> sys.modules['__main__'] ;
     /// __main__ :> __file__ \ ==> C:\Users\morvanTUT\plt6_ax_setting2.py
     /// s" dos title " __main__ :> __file__ + dictate drop \ change DOSBox title
@@ -1058,7 +1100,7 @@ code t>
     /// __main__ :: peforth.projectk.y=456 \ Define peforth global variable
     /// __main__ :> np constant np // ( -- moduel ) numpy, see 'help import'
     
-: import ( <module> -- obj ) // Import the module
+: import // ( <module> -- obj ) Import the module
     BL word ( <module> )
     s" import {}" :> format(tos()) ( <module> "import <module>" )
     py: exec(pop())
@@ -1071,11 +1113,11 @@ code t>
     ///    np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
     /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
 
-: module ( 'name' -- module ) // Get the module object from sys.modules
+: module // ( 'name' -- module ) Get the module object from sys.modules
     py> sys.modules[pop()] ;
     /// __main__ :> foo char foo module = \ may be false
     
-: modules ( <pattern> -- ) // Get modules that are in memory
+: modules // ( <pattern> -- ) Get modules that are in memory
     CR word trim ( pattern ) ?dup \  避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
     if py>~ [i for i in sys.modules.keys() if i.find(tos())!=-1]
     nip else  py>~ [i for i in sys.modules.keys()]
@@ -1103,11 +1145,11 @@ code t>
     
 code int        push(int(float(pop()))) end-code   // ( float|string -- integer )
 code float      push(float(pop())) end-code // ( string -- float ) 
-: drops         ( ... n -- ... ) // Drop n cells from data stack.
+: drops         // ( ... n -- ... ) Drop n cells from data stack.
                 py: vm.stack=stack[:-pop()] ;
                 /// We need 'drops' <py> sections in a colon definition are easily 
                 /// to have many input arguments that need to be dropped.
-: dropall       ( ... -- empty ) // Drop all cells from data stack
+: dropall       // ( ... -- empty ) Drop all cells from data stack
                 0 drops ;
 code char>ASCII push(ord(pop()[0])) end-code // ( str -- ASCII ) Get str[0]'s ASCII or whatever code
                 /// Actually ASCII, utf-8, big-5, or whatever code doesn't matter.
@@ -1123,10 +1165,10 @@ code ASCII>char push(chr(pop())) end-code // ( ASCII -- 'c' ) ASCII or whatever 
                 
 py> '\r\n' constant CRLF // ( -- '\r\n' ) leaves '\r\n' on TOS
 
-: ASCII         ( <str> -- ASCII ) // Get <str>[0]'s ASCII code.
+: ASCII         // ( <str> -- ASCII ) Get <str>[0]'s ASCII code.
                 BL word char>ASCII compiling if literal then
                 ; immediate
-code .s         
+code .s         # ( ... -- ... ) Dump the data stack.
                 for i in range(len(stack)):
                     x, typex = stack[i], type(stack[i])
                     if typex==int:
@@ -1142,20 +1184,19 @@ code .s
                 if stack==[]:
                     print("empty\n");
                 end-code
-                // ( ... -- ... ) Dump the data stack.
 
-: (*debug*)     ( "prompt" -- ... ) // FORTH breakpoint, 'exit' to continue.
+: (*debug*)     // ( "prompt" -- ... ) FORTH breakpoint, 'exit' to continue.
                 py: ok(pop(),cmd="cr") ;
                 /// How to invoke pdb when not locally imported:
                 /// py: sys.modules['pdb'].set_trace()
 
                 
-: *debug*       ( <prompt> -- ... ) // FORTH breakpoint, 'exit' to continue. 
+: *debug*       // ( <prompt> -- ... ) FORTH breakpoint, 'exit' to continue. 
                 BL word ( prompt ) compiling if literal compile (*debug*)
                 else (*debug*) then ; immediate
                 ' (*debug*) :> comment last :: comment=pop(1)
 
-code readTextFile 
+code readTextFile   # ( "pathname" -- string ) Return an utf-8 string, "" if failed
                 pathname = pop()
                 try:
                     data = vm.readTextFile(pathname); 
@@ -1163,43 +1204,32 @@ code readTextFile
                     panic("Failed reading {}: {}".format(pathname,err))
                     data = "";
                 push(data);
-                end-code // ( "pathname" -- string ) Return an utf-8 string, "" if failed
+                end-code 
 
-code writeTextFile 
+code writeTextFile  # ( string "pathname" -- ) Write utf-8 string to file
                 pathname = pop()
                 try:
                     vm.writeTextFile(pathname,pop())
                 except Exception as err:
                     panic("Failed writing {}: {}".format(pathname,err))
                     data = "";
-                end-code // ( string "pathname" -- ) Write utf-8 string to file
+                end-code 
 
-code tib.insert  
+code tib.insert # ( "string" -- ) Insert the "string" into TIB to run it.
                 before, after = tib[:ntib], tib[ntib:] 
                 vm.tib = before + " " + str(pop()) + " " + after 
                 end-code // ( "string" -- ) Insert the "string" into TIB to run it.
-                ' tib.insert alias dictate // ( "string" -- ) Insert the "string" into TIB to run it.
+                ' tib.insert alias dictate 
 
-: sinclude      ( "pathname" -- ... ) // Lodad the given forth source file.
+: sinclude      // ( "pathname" -- ... ) Lodad the given forth source file.
                 readTextFile ( file ) py: dictate(pop()) ;
 
-: include       ( <filename> -- ... ) // Load the source file
+: include       // ( <filename> -- ... ) Load the source file
                 BL word sinclude ; interpret-only
                 /// See also break-include command 
     
-: break-include ( -- ) // Break including .f file
+: break-include // ( -- ) Break including .f file
                 py: vm.ntib=len(tib) ;
-    
-: type          ( x -- type ) // get type object of anything x                
-                py> type(pop()) ;
-        
-code obj>keys      
-                if type(tos())==dict:
-                    push(pop().keys())
-                else:
-                    push(dir(pop()))
-                end-code
-                // ( obj -- [keys] ) Try to get all kyes of an dict first or all attributes of an object
 
     \ json.dumps() needs this function to convert a Word object to dict 
     <py>   
@@ -1214,10 +1244,11 @@ code obj>keys
         push(obj2dict)
     </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=r('obj2dict'))
 
-: stringify     ( thing -- "string" ) // Dict'fy and JSON.stringify anything  
+: stringify     // ( thing -- "string" ) Dict'fy and JSON.stringify anything  
                 py> json.dumps(pop(),default=r('obj2dict'),indent=4) ;
 
-code toString # To see a cell in dictionary
+code toString   # ( value -- string ) To see dictionary cell, toString() of the variable consider ret and exit
+                # To see a cell in dictionary
                 x = pop();
                 if x==None: 
                     push('RET')
@@ -1227,9 +1258,9 @@ code toString # To see a cell in dictionary
                     push(str(x))
                 else: 
                     push(str(x));
-                end-code private // ( value -- string ) To see dictionary cell, toString() of the variable consider ret and exit
+                end-code private 
 
-: .literal      ( addr -- T|f ) // Do the (dump) if addr @ is a literal
+: .literal      // ( addr -- T|f ) Do the (dump) if addr @ is a literal
                 dup @ ( addr code ) 
                 py> getattr(tos(),'__name__',False)=='literal' if 
                     \ is literal function ( addr code )
@@ -1237,7 +1268,7 @@ code toString # To see a cell in dictionary
                     true
                 else 2drop false then ;
                 
-: .function     ( addr -- T|f ) // Do the (dump) if addr @ is a literal
+: .function     // ( addr -- T|f ) Do the (dump) if addr @ is a literal
                 dup @ ( addr func ) 
                 py> callable(tos()) if  \ is function ( addr code )
                     s" {:05}: {} ({})" 
@@ -1248,7 +1279,7 @@ code toString # To see a cell in dictionary
                 /// To see pseudo code of a function at TOS 
                 /// py: dis.dis(pop())
                 
-: (dump)        ( addr -- ) // dump one cell of dictionary
+: (dump)        // ( addr -- ) dump one cell of dictionary
                 py> len(dictionary)<=tos() if drop exit then 
                 dup .literal  if drop exit then
                 dup .function if drop exit then
@@ -1257,16 +1288,16 @@ code toString # To see a cell in dictionary
                 . cr ;
 
                 
-: dump          ( addr length -- addr' ) // dump dictionary
+: dump          // ( addr length -- addr' ) dump dictionary
                 for ( addr ) dup (dump) 1+ next ;
                 
-: dump2ret      ( addr -- ) // dump dictionary until next RET
+: dump2ret      // ( addr -- ) dump dictionary until next RET
                 begin dup (dump) ( addr ) 
                 py> dictionary[tos()]==None py> len(dictionary)<=tos() or
                 if drop exit then \ it's RET, all done
                 1+ again ;
                 
-: d             ( <addr> -- ) // dump dictionary
+: d             // ( <addr> -- ) dump dictionary
                 [ last literal ]
                 CR word trim                \ (me str) 避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
                 count 0=                    \ (me str undef?) No start address?
@@ -1280,7 +1311,7 @@ code toString # To see a cell in dictionary
                 py: pop().lastaddress=pop()
                 ;
                 
-: (see)         ( thing -- ) // See into the given dict, array, object, word, ... anything in this order.
+: (see)         // ( thing -- ) See into the given dict, array, object, word, ... anything in this order.
                 dup ( thing thing ) stringify . cr ( thing )
                 \ for colon words, dump its forth code 
                 dup type py> Word = if \ is a Word ( w ) \ the thing is a Word
@@ -1303,11 +1334,6 @@ code toString # To see a cell in dictionary
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
                 ' (see) :> comment last :: comment=pop(1)
-                
-: slice         ( 1 2 3 -2 -- 1 [2,3] ) // Slice the ending -n cells to a new array 
-                ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
-                /// Group the tuple returned from a function
-    
 
     \ I/O may not be ready enough to read selftest.f at this moment, 
     \ so the below code has been moved to quit.f of each applications.

@@ -211,7 +211,7 @@ if is_ipython:
         # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
 # Run once
-if not vm.tick('version'):  # defined in peforth.f 
+if not vm.tick('version'):  # defined in peforth.f , 17:57 2019-05-15 avoid multiple import peforth I guess.
     vm.dictate(readTextFile(path+'peforth.f'))
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
