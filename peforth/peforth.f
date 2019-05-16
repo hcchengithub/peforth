@@ -1,8 +1,9 @@
 code \          # ( <comment> -- ) Comment out the rest of the line
                 nexttoken('\n') end-code 
-                
+code #          # ( <comment> -- ) Print the rest of the line. Useful in jupyter notebook
+                print(nexttoken('\n')+'\n') end-code 
 code //         # ( <comment> -- ) Give help message to the last word
-                last().help += nexttoken('\n|\r'); end-code 
+                last().help = nexttoken('\n|\r'); end-code 
                 
 code <selftest> # ( <statements> -- ) Collect self-test statements.
                 push(nexttoken("</selftest>")); end-code
@@ -18,8 +19,6 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
     \ Self-test section will be run after all words are defined. At this point 
     \ we only collect self-test codes so don't worry about words that are not 
     \ defined yet ;-) 
-    
-    --- marker ###
     
     \ Important!
     \ private words referenced by name from out of the context will be a problem.
@@ -450,12 +449,12 @@ code 0branch    # ( n -- ) 若 n!==0 就將當前 ip 內數值當作 ip, 否則�
                 end-code compile-only 
 
 code here! global here; here=pop() end-code // ( a -- ) 設定系統 dictionary 編碼位址
-code here push(here) end-code // ( -- a ) 系統 dictionary 編碼位址 a
+code here push(here) end-code // ( -- a ) Index of the FORTH dictionary
 code swap push(pop(1)) end-code // ( a b -- b a ) stack operation
 code !    dictionary[pop()]=pop(1) end-code // ( n a -- ) 將 n 存入位址 a
           \ python 是等號右邊先執行,都好了才執行等號左邊的 assignments
-code @    push(dictionary[pop()]) end-code // ( a -- n ) 從位址 a 取出 n
-code ?    print(dictionary[pop()],end=" ") end-code // ( a -- ) 查看位址 a 的值
+code @    push(dictionary[pop()]) end-code // ( a -- n ) Get n from address a 
+code ?    print(dictionary[pop()],end=" ") end-code // ( a -- ) See value at address a 
 
 code >r   rstack.append(pop()) end-code  // ( n -- ) Push n into the return stack.
 code r>   push(rstack.pop()) end-code  // ( -- n ) Pop the return stack
@@ -464,11 +463,12 @@ code drop pop(); end-code // ( x -- ) Remove the tos(0)
 code nip  pop(1) end-code // ( a b -- b ) Remove the tos(1) 
 code dup  push(tos()) end-code // ( a -- a a ) Duplicate TOS.
 code over push(tos(1)) end-code // ( a b -- a b a ) Stack operation.
-code 0<   push(pop()<0) end-code // ( a -- f ) 比較 a 是否小於 0
+code 0<   push(pop()<0) end-code // ( a -- a<0? ) Boolean, is a a<0 ? 
 code +    push(pop(1)+pop()) end-code // ( a b -- a+b) Add two numbers or concatenate two strings.
 code *    push(pop()*pop()) end-code // ( a b -- a*b ) Multiplex.
-code -    push(pop(1)-pop()) end-code // ( a b -- a-b ) a-b
-code /    push(pop(1)/pop()) end-code // ( a b -- c ) 計算 a 與 b 兩數相除的商 c
+code -    push(pop(1)-pop()) end-code // ( a b -- a-b ) a-b subtract
+code /    push(pop(1)/pop()) end-code // ( a b -- a/b ) a/b division
+code %    push(pop(1)%pop(0)) end-code // ( a b -- a%b ) Modulo operation
 code 1+   push(pop()+1) end-code // ( a -- a++ ) a += 1
 code 2+   push(pop()+2) end-code // ( a -- a+2 )
 code 1-   push(pop()-1) end-code // ( a -- a-1 ) TOS - 1
@@ -671,6 +671,10 @@ code -rot       push(pop(),1) end-code // ( w1 w2 w3 -- w3 w1 w2 ) Stack operati
                 /// see rot -rot roll pick
 code 2drop      vm.stack=stack[:-2] end-code // ( a b c d -- a b ) Drop two cells
 code 2dup       vm.stack+=stack[-2:] end-code // ( a b -- a b a b ) Duplicate two cells
+: slice         // ( 1 2 3 -2 -- 1 [2,3] ) Slice the ending -n cells to a new array 
+                ( -2 ) >r py: t,vm.stack=stack[rtos():],stack[:rpop()];push(t) ;
+                /// Group the tuple returned from a function
+
 ' NOT alias invert // ( w -- ~w )
 : negate        -1 * ; // ( n -- -n ) Negated TOS.
 : within        ( n low high -- within? ) -rot over max -rot min = ;
@@ -991,11 +995,11 @@ variable '<text> private
                     py: getattr(vm,tos().vid)[pop().name]=pop(1)
                 then ; immediate
 
-: tib.          // ( result -- ) Print the command line and the TOS.
-                py> tib[:ntib].rfind('\n') py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
-                s" {} \ ==> {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
+: -->           ( result -- ) // Print the result with the command line.
+                py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
+                s" {} {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
                 /// Good for experiments that need to show command line and the result.
-                /// "" tib. prints the command line only, w/o the TOS.
+                /// Tip: "" --> prints the command line only, w/o the TOS.
 
 \ To TIB command line TSRs, the tib/ntib is their only private storage. So save-restore and
 \ loop back information must be using the tib. That's why we have >t t@ and t> 

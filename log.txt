@@ -3132,6 +3132,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         
     [X] 14:06 2019-05-15 現在覺得原來的 (comment) 沒有我 gist words4jupyter.py 的 nested (comment) 好。
         何必搞個這麼難懂的 (comment) 就會了讓 stack diagram 進 last.help 而已，有 // 就夠了！
+    [X] 16:39 2019-05-16 本來的 // 一直想著前面有 (comment) 已經進 help 了！所以他是用 += 的，
+        難怪有這個問題，不要了，直接用 last().help = nexttoken('\n|\r'); 就好了。  v1.23
 
     \ to be 
     code (      # ( <str> -- ) // Comment down to ')' which can be nested if balanced
@@ -3159,9 +3161,18 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     done! v1.23 
 [X] quit.f 裡的怪東西都不要了 --> inport, outport, harry_port  v1.23
 [X] 把 gist 上的東西 include 進來，最主要的是有 support nesting 的 (comment) v1.23
+
 [ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
-    [ ] 評估 misc.f unknown.f quit.f 的內容要怎麼分配
+
     [ ] complete self-tests for new words , many are commented out.
+    [ ] 評估 misc.f unknown.f quit.f 的內容要怎麼分配 --> 全部放進 misc.f 加個 marker 全自動 load 進去。
+        --> 不要的人只要跑一下 marker 就可以全清掉。
+        --> 這些東西的 self-test 就要自己做，不能放 peforth.selftest 裡。
+    [ ] peforth.f source code 裡還有很多中文
+    [ ] 好像 *debug* 出不來.... 
+        --> 喔喔 是給 jupyter notebook 用的 exit 出的問題。
+        --> 趁放進 misc.f 的機會給它改名吧！
     [ ] 測試 jupyter notebook
     [ ] 測試 ubuntu 
     [ ] 測試 ubuntu 的 ipython 
+    [ ] Error! tib. unknown! --> 改成 "-->" 了

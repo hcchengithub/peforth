@@ -19,19 +19,11 @@
       /// Example: Save locals for investigations:
       ///   if peforth.execute('debug').pop() : peforth.push(locals()).dictate('to _locals_')
       /// That enters peforth that knows variables in __main__ and locals at the breakpoint.
-      /// 'exit' to leave the breakpoint and forget locals.
+      /// 'quit' to leave the breakpoint and forget locals.
+      /// 'exit' to leave the breakpoint w/o forget locals.
 
-    : exit ( -- ) // ( -- ) Exit the breakpoint forget locals and continue the process
+    : quit ( -- ) // ( -- ) Quit the breakpoint forget locals and continue the process
       none to _locals_ py: vm.exit=True ;  
-
-    code # print(nexttoken('\n')+'\n') end-code // print the comment line after #  
-
-    : --> ( result -- ) // Print the result with the command line.
-      py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
-      s" {} {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
-      /// Good for experiments that need to show command line and the result.
-
-
 
 
 

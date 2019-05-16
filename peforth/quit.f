@@ -9,8 +9,6 @@
 
 \ Do selftest or run command-line
 
-    marker --- \ Drop a fence before selftest
-
     ' <selftest> :: enabled=True \ Master switch of selftest, True:on or False:off
 
     py> vm.commandline trim ( commandLine ) ?dup [if] 
@@ -39,7 +37,9 @@
         \ No command line, show greeting and run selftest
         version drop 
         ' <selftest> :> enabled [if]
+            marker ###  // ( -- ) Marker before self-test 
             ' <selftest> :> buffer tib.insert
+            ###         \ Clean up 
         [then]
     [then] py: tick('<selftest>').buffer="" \ release the memory
 

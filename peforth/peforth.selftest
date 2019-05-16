@@ -543,8 +543,7 @@
         'test-result','(marker)','bye', 'stop','.',
         'privacy', 'private', 'nonprivate', 'ret', 'rescan-word-hash', 
         'branch', 'abort', 'public', 'never', 'aft', '?stop', 'nop', '\x04', 
-        'refill', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', 'tib.', 
-        '*debug*','tib.insert', 
-        'sinclude', 'include', p]
+        'refill', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', 
+        '*debug*','tib.insert', 'sinclude', 'include', p]
 
 </selftest>
