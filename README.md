@@ -18,9 +18,9 @@ someday, has been there for decades so many people don't need to learn about
 another new language although we are only to use some debug commands, yet easy 
 enough for new users, that's FORTH. 
 
-### The quickest way to try peforth
+### The quickest way to try peforth online, now! 
 
-An easy way to try peforth is through the [Microsoft Azure Notebooks](https://notebooks.azure.com/). Create a [Jupyter notebook page](https://notebooks.azure.com/hcchen1471/projects/peforthplayground) and install peforth on that page with this line:
+An easy way to try peforth is through the [Microsoft Azure Notebooks](https://notebooks.azure.com/). Create a [Jupyter notebook page (try mine)](https://notebooks.azure.com/hcchen1471/projects/peforthplayground) and install peforth on that page with this line:
     
     !pip install peforth
     
@@ -32,7 +32,7 @@ and then start using peforth through magics `%f` and `%%f` as shown below:
 
 ![Run peforth on Azure notebooks](http://imgsrc.baidu.com/forum/pic/item/dea32e738bd4b31ca20ded1a89d6277f9e2ff828.jpg)
 
-### Install peforth:
+### Install peforth on your local computer:
 
     pip install peforth 
 
@@ -40,36 +40,6 @@ and then start using peforth through magics `%f` and `%%f` as shown below:
 
 `import peforth` on Jupyter Notebook is the only thing you need to do to use peforth 
 `%f` and `%%f` magics.  For tutorials, please find and read jupyter notebooks in the 'notebook' directory of this project.
-
-Optionally if you want ipython and jupyter notebook to load peforth magics automatically at startup, so you don't need to `import peforth` explicitly everytime, what you need to do is to find this config file:
-
-    C:\Users\<your user name>\.ipython\profile_default\ipython_config.py (for Windows)
-    or
-    ~/.ipython/profile_default/ipython_config.py (for Linux, WSL Ubuntu in my case) 
-
-this line:
-
-    ... snip...
-    # A list of dotted module names of IPython extensions to load.
-    c.InteractiveShellApp.extensions = ['peforth']
-    ... snip...
-    
-to have 'peforth' in the list as shown above.
-
-### Add peforth as a native language kernel to Jupyter Notebook
-
-This is to make a notebook to run FORTH instead of python. 
-That means when you 'New' a notebook, "peforth" appears in the list among "Python 2" and "Python 3".
-Do these steps to make this happen:
-
-1. `pip install peforth` so you have peforth in your computer
-2. copy the file `kernel.json` from here<br>
-   `c:\Users\<your name>\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\kernel.json` <br>
-   to here <br>
-   `c:\Users\<your name>\AppData\Roaming\jupyter\kernels\peforth`<br>
-   if the above directory is not exist then you create it.
-3. Edit `c:\Users\<your name>\AppData\Roaming\jupyter\kernels\peforth\kernel.json` to correct the path of _peforthkernel.py_ which is supposed to be 
-`c:\Users\<your name>\AppData\Local\Programs\Python\Python36\Lib\site-packages\peforth\peforthkernel.py` for example on my Windows 10 computer. Your `<user name>` must be different from mine so you need to correct it.
 
 ### Run peforth:
 
