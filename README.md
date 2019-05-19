@@ -18,6 +18,20 @@ someday, has been there for decades so many people don't need to learn about
 another new language although we are only to use some debug commands, yet easy 
 enough for new users, that's FORTH. 
 
+### The quickest way to try peforth
+
+An easy way to try peforth is through the [Microsoft Azure Notebooks](https://notebooks.azure.com/). Create a [Jupyter notebook page](https://notebooks.azure.com/hcchen1471/projects/peforthplayground) and install peforth on that page with this line:
+    
+    !pip install peforth
+    
+and then you can import peforth like this:
+
+    iport peforth
+    
+and then start using peforth through magics `%f` and `%%f` as shown below: 
+
+![Run peforth on Azure notebooks](http://imgsrc.baidu.com/forum/pic/item/dea32e738bd4b31ca20ded1a89d6277f9e2ff828.jpg)
+
 ### Install peforth:
 
     pip install peforth 
