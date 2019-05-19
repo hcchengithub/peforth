@@ -1,11 +1,8 @@
 
 \ Includes
 
-    <comment>
-    \ Examples of how to include
-    py> path char ..\playground\misc.f + sinclude  \ compose the pathname
-    include foo.f \ in the current directory
-    </comment>
+    \ py> path char ..\playground\misc.f + sinclude  \ compose the pathname
+    \ include ..\foo\bar\foo.f   \ in the specified directory
 
     include misc.f    \ relative path to the current directory 
     

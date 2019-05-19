@@ -27,7 +27,6 @@
                     [d Trued] [p '(pyclude)', 'pyclude' p]
                 </selftest>
 
-
     : .members  // ( obj -- ) See the object details through inspect.getmembers(obj)
                 py> inspect.getmembers(pop()) cr (see) cr ;
                 /// Also (see) .source

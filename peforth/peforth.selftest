@@ -471,6 +471,7 @@
         display-on
         screen-buffer <py> pop()[0].find('d] ( -- boolean )')!=-1 </pyV> ( True )
         [d True,True d] [p 'words','help' p]
+
     *** dict>keys dir type
         py> words dict>keys list :> [0]=='forth' ( True )
         123 dir py> type(pop())==list ( True )
@@ -502,6 +503,7 @@
         screen-buffer <py> pop()[0].find('00799: ')!=-1 </pyV> ( True )
         [d 810,True,True,True d] [p '<accept>','</accept>','accept','d','dump',
         '(dump)','toString', '.literal', '.function' p]
+
     *** [r r]
         11 >r 22 >r [r 11, 22, 0 r] \ 檢查 rstack 最後要固定多放一個 0, [r ... r] 的結果應為 True.
         [d True d] [p '[r','r]' p]

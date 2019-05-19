@@ -3147,9 +3147,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         end-code immediate
         /// Nested not allowed yet.
     
-    Notepad++ ^h replace regular expression
-    Find what: "(\(\s+.*\))\s+(//)"
-    Replace with: "// \1"
     
 [X] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
     done! v1.23 
@@ -3157,6 +3154,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 把 gist 上的東西 include 進來，最主要的是有 support nesting 的 (comment) v1.23
 [X] 取消 colon definition 中第一個 ( ... ) 的作用，只用 // 即可留 help
     --> 唉，試了就知道，很醜！  v1.23 真的實現了
+    Notepad++ ^h replace regular expression
+    Find what: "(\(\s+.*\))\s+(//)"
+    Replace with: "// \1"
 [ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
     [X] complete self-tests for new words , many are commented out.
     [X] 評估 misc.f unknown.f quit.f 的內容要怎麼分配 --> 全部放進 misc.f 加個 marker 全自動 load 進去。
@@ -3184,8 +3184,5 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         '[all-pass]', 'xxx', 'x', 'y', 'ss'])
                              ^^^       ^^^^   有在 vm.forth 裡面 
     --> 執行 marker --> words 裡沒有 x, ss 了, 當然 --> 但是 vm.forth 裡還是存在，造成堆積！！ 
-    
-    
-    
-    
-        
+        v1.23 還是有這個問題，不知道該怎麼做。。。。
+

@@ -105,7 +105,8 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
             to expected_rstack ;
             /// Example: [r 1,2,3 r] [d True d] [p 'word1','word2' p]
             /// [r...r] section is optional, [d...d] section is the judge.
-    : r]    // ( -- boolean ) compare rstack and expected_rstack in selftest
+
+    : r]    // ( -- boolean ) compare rstack and expected_rstack in selftest. Use [d...d] to check the result.
             expected_rstack count ( exp n ) 
             py> rstack list ( exp n rstack ) :> [-pop():] = ;
             ' [r :> comment last :: comment+=pop(1)
@@ -1246,7 +1247,6 @@ code tib.insert # ( "string" -- ) Insert the "string" into TIB to run it.
                 /// 'break-include' to breaks including a .f file.
                 /// 'exit break-include' to break including a .f file and exit the ok() shell
                 
-
     \ json.dumps() needs this function to convert a Word object to dict 
     <py>   
         def obj2dict(obj):
