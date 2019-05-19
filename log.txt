@@ -3148,6 +3148,16 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         /// Nested not allowed yet.
     
     
+[ ] 經 marker 刪除的 value & constant 留在 vm[context] 裡面的 garbage
+    沒有回收! marker 還要再加強，forget 也要注意。
+    --> 123 value x char abc value ss vm.forth dict>keys --> 
+        dict_keys(['CRLF', 'obj2dict', '_locals_', 'debug', 'screen-buffer', 
+        'description', 'expected_rstack', 'expected_stack', 'test-result', 
+        '[all-pass]', 'xxx', 'x', 'y', 'ss'])
+                             ^^^       ^^^^   有在 vm.forth 裡面 
+    --> 執行 marker --> words 裡沒有 x, ss 了, 當然 --> 但是 vm.forth 裡還是存在，造成堆積！！ 
+        v1.23 還是有這個問題，不知道該怎麼做。。。。
+
 [X] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
     done! v1.23 
 [X] quit.f 裡的怪東西都不要了 --> inport, outport, harry_port  v1.23
@@ -3171,18 +3181,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [ ] 測試 ubuntu 的 ipython 
     [X] Error! tib. unknown! --> 改成 "-->" 了  1.23
     [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
-        改用 colab and Azure notebook 介紹 ipython 的 magic command 比較好。
-    [ ] jupyter notebook 用 import peforth 就很好用了, 
+        改用 Azure notebook 介紹 ipython 的 magic command 比較好。
+        [ ] 17:33 2019-05-19 改了 Github.com 上的 README.md , local 的 .rst 
+    [X] jupyter notebook 用 import peforth 就很好用了, 
         把 readme.md 裡沒有的 peforth kernel 拿掉，移進 Wiki 裡去。
+        --> 17:34 2019-05-19 done 
     [ ] 把 misc.f hello.py 等都加進 package    
 [ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
-[ ] 經 marker 刪除的 value & constant 留在 vm[context] 裡面的 garbage
-    沒有回收! marker 還要再加強，forget 也要注意。
-    --> 123 value x char abc value ss vm.forth dict>keys --> 
-        dict_keys(['CRLF', 'obj2dict', '_locals_', 'debug', 'screen-buffer', 
-        'description', 'expected_rstack', 'expected_stack', 'test-result', 
-        '[all-pass]', 'xxx', 'x', 'y', 'ss'])
-                             ^^^       ^^^^   有在 vm.forth 裡面 
-    --> 執行 marker --> words 裡沒有 x, ss 了, 當然 --> 但是 vm.forth 裡還是存在，造成堆積！！ 
-        v1.23 還是有這個問題，不知道該怎麼做。。。。
-

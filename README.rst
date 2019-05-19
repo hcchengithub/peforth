@@ -6,9 +6,8 @@ A programmable python debugger allows you to abruptly setup procedures to invest
 
 You guys know how to bebug already. We all do.
 But when it comes to Machine Learning and Tensorflow or the likes, 
-things are getting annoying. A programmable debugger is what in my mind and probably in yours too. 
-One breakpoint to investigate about everything with procedures that we
-come out at the point depend on variant needs of emerged ideas good or bad.
+things are getting annoying. A programmable debugger is what in my mind and probably in yours too. One breakpoint to investigate about everything! At this point, you can
+then test whatever you want, supported by all the power of FORTH.
 
 Debug commands in FORTH syntax
 ##############################
