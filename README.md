@@ -32,6 +32,12 @@ and then start using peforth through magics `%f` and `%%f` as shown below:
 
 ![Run peforth on Azure notebooks](http://imgsrc.baidu.com/forum/pic/item/dea32e738bd4b31ca20ded1a89d6277f9e2ff828.jpg)
 
+You can even enter the peforth interprete state to 'talk' with it:
+
+    %f *debug* foo>
+    
+don't foget to use 'exit' command to stop talking or the page will concentrate on the dialog and not to do anything else.    
+
 ### Install peforth on your local computer:
 
     pip install peforth 
