@@ -32,7 +32,7 @@ if __package__:
     # peforth is imported as a package
     from . import projectk as vm
 else:
-    # peforth is run from __main__.py
+    # peforth is run from test.py when developping 
     import projectk as vm
 
 # Let projtct-k know itself
@@ -210,8 +210,8 @@ if is_ipython:
         ipython.register_magic_function(f, 'line_cell')  
         # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
-# Run once
-if not vm.tick('version'):  # defined in peforth.f 
+# Run once when 'import peforth' 
+if not vm.tick('version'):  # defined in peforth.f , 17:57 2019-05-15 avoid multiple 'import peforth' I guess.
     vm.dictate(readTextFile(path+'peforth.f'))
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))

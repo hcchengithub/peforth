@@ -471,11 +471,11 @@
         display-on
         screen-buffer <py> pop()[0].find('d] ( -- boolean )')!=-1 </pyV> ( True )
         [d True,True d] [p 'words','help' p]
-    *** keys dir type
-        py> words keys py> type(pop())==type({}.keys()) ( True )
+    *** dict>keys dir type
+        py> words dict>keys list :> [0]=='forth' ( True )
         123 dir py> type(pop())==list ( True )
         123 type py> type(pop())==type ( True ) 
-        [d True,True,True d] [p 'keys','dir','type' p]
+        [d True,True,True d] [p 'dict>keys','dir','type' p]
     *** [if] [else] [then] [begin] [again] [until] [for] [next] 
         py:~ import time
         py> sys.modules['time'].time() int
@@ -502,33 +502,9 @@
         screen-buffer <py> pop()[0].find('00799: ')!=-1 </pyV> ( True )
         [d 810,True,True,True d] [p '<accept>','</accept>','accept','d','dump',
         '(dump)','toString', '.literal', '.function' p]
-    *** obj>keys .members .source
-        py> {'aa':11,'bb':22} obj>keys py> set(pop()) ( {'aa','bb'} ) \ cast to set for compare
-        ( True ) ' + obj>keys py>~ 'xt'  in pop()  
-        ( True ) ' + obj>keys py>~ 'vid' in pop() 
-        ( True ) ' + obj>keys py>~ 'wid' in pop() 
-        display-off
-        ' + .members
-        py> genxt .source
-        display-on
-        screen-buffer <py> pop()[0].find('"name": "+"')!=-1 </pyV> ( True )
-        screen-buffer <py> pop()[0].find('__doc__ = source')!=-1 </pyV> ( True )
-        [d {'aa','bb'},True,True,True,True,True d]
-        [p 'obj>keys','.members','.source' p]
-    *** dos cd slice
-        display-off
-        cd
-        display-on
-        screen-buffer <py> pop()[0].find(":")!=-1 </pyV> ( True )
-        screen-buffer <py> pop()[0].find("\\")!=-1 </pyV> ( True )
-\       ( 123 ) dos python -m peforth 123 bye  \ peforth may not pip'ed
-        4 5 6 -2 slice ( ... 4,[5,6] )
-        [d True,True,4,[5,6] d] 
-        [p 'dos','cd','slice' p]
-\   *** [r r]
-\       py> rstack ( save )
-\       11 >r 22 >r 
-\       [r 835,11,22,0 r] [d True d] [p '[r','r]' p]
+    *** [r r]
+        11 >r 22 >r [r 11, 22, 0 r] \ 檢查 rstack 最後要固定多放一個 0, [r ... r] 的結果應為 True.
+        [d True d] [p '[r','r]' p]
 
         <comment>
         Run the below line to list words that have not passed its selftest
@@ -543,8 +519,7 @@
         'test-result','(marker)','bye', 'stop','.',
         'privacy', 'private', 'nonprivate', 'ret', 'rescan-word-hash', 
         'branch', 'abort', 'public', 'never', 'aft', '?stop', 'nop', '\x04', 
-        'refill', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', 'tib.', 
-        '*debug*','tib.insert', 
-        'sinclude', 'include', 'OK' p]
+        'refill', '"msg"abort', 'abort"', '"msg"?abort', '?abort"', 
+        '*debug*','tib.insert', 'sinclude', 'include', p]
 
 </selftest>
