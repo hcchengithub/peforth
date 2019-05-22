@@ -3260,7 +3260,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [/] 即使上了 pypi.org 也還需要 pip (但 18.04 default 沒有), 不管了，有測過 test.py 就好了。
     [ ] 上了 pypi.org 之後，再用 Azure Notebooks 測試。
     
-[ ] Tests before releasing v1.23
+[X] Tests before releasing v1.23
     *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
         [V1.22之後的新版] 打包步驟  2018/12/16 11:02 
         See my Ynote: "Pack peforth to peforth.whl"
@@ -3329,6 +3329,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         %f version drop
         x = 12345
         %f x --> \ 查看 unknown 的效果
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-    [ ] version 改成 1.24  (必須跳過 1.20 會變成 1.2）
+    [X] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+        1. 先 commit 上 develop branch, upload 上網上 Github.
+        2. 切到 master 
+        3. 用 GitHub for Windows desktop 的 Branch > Merge into current branch 選 develop 把它 merge 過來。
+           解決 conflicts 之後完成 merge. 
+        4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
+           Master 上的應該是些 README.md 的修改。 
+    [X] version 改成 1.24  (必須跳過 1.20 會變成 1.2）
     
