@@ -3079,6 +3079,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 16:48 2019-05-10 奇怪 LRV2 OA 上 pip list 看到的 peforth 是 1.21!! 
         但是 python -m peforth 跑到的是 1.22，經過 pip uninstall peforth 之後
         馬上 pip list 卻看到了 peforth 1.23 (對了) 
+        [x] 16:38 2019-05-22 release v1.23 時在 T550 又看到類似現象： pip uninstall peforth 
+            之後有把 python setup.py install 灌上的 v1.23 uninstall 掉，但是 site-packages 裡面一查，
+            仍有 v1.22 的 egg 存在 --> 直接再 pip uninstall peforth 一次，才把它 uninstall 掉。
+            --> pip install peforth 下來的在 site-packages 裡面就沒有 egg 字樣，如此可供分辨。同時
+                也證實 pip uninstall 不會 remove egg 版的 (python setup.py install上去的) 要下
+                多次 pip uninstall peforth 才輪得到舊版。
     --> 我猜： 剛才改好程式之後用 ~\GitHub\peforth>python setup.py install 安裝進 site-package
         的 1.23 並沒有蓋掉原來的, 因為這時裝上的是 egg, path 與用 whl 裝上的不同！
     [X] 經過 c:\Users\hcche\Documents\GitHub\peforth>python setup.py install 
@@ -3167,6 +3173,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     Notepad++ ^h replace regular expression
     Find what: "(\(\s+.*\))\s+(//)"
     Replace with: "// \1"
+[x] dos , cd 太重要了，從 misc.f 移進 peforth.f     
 [ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
     [X] complete self-tests for new words , many are commented out.
     [X] 評估 misc.f unknown.f quit.f 的內容要怎麼分配 --> 全部放進 misc.f 加個 marker 全自動 load 進去。
@@ -3176,15 +3183,152 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [X] 好像 *debug* 出不來.... 
         --> 喔喔 是給 breakpoint 用的 exit 出的問題。
         --> 趁放進 misc.f 的機會給它改名吧！ quit 
-    [ ] 測試 jupyter notebook
-    [ ] 測試 ubuntu 
-    [ ] 測試 ubuntu 的 ipython 
+    [X] 測試 jupyter notebook
+        [x] established the method to include misc.f from within quit.f
+    [X] 測試 ipython (DOS box)
+        [X] 進 ipython 之後 import peforth 看起來 self-test 都 ok, 但是從此之後 ipython 就無法輸出了。
+            執行 ipython -m peforth 也一樣。
+            --> ipython 自己的 display 也被關了，執行 peforth.dictate('display-on') 即可恢復。
+            --> 是 selftest 的 display-off 造成的? --> 槓掉 self-test 試試看... 真的好了! 
+                連 ipython -m peforth 也好了。 
+            --> 執行 c:\Users\hcche\Documents\GitHub\peforth\peforth>ipython test.py self-test 與之後的
+                功能都沒問題.
+            [X] self-test on > 做出問題 > 然後下達 display-on 之後，治好了！證實 root cause 是 display-off. (最後發現，錯！不是這樣)
+                but where? --> 從 quit.f 裡把 misc.f comment out 也好了, 故問題在他裡面。--> 找到了， pyclude 的
+                self-test 之前 stop 就好了 --> 查 display-off 怎麼弄的? --> display-on 只是 reset sys.stdout 而已
+                無可挑剔。算了,有 workaround 就好了。
+            [x] WSL Ubuntu 之下 display-off 之後的斷點 *debug* 也怪怪的，本想在其中下 display-on 再回來繼續，
+                結果一 exit 回來就回 Shell 了。試過 time delay 如下也無效。
+                <py> 
+                    # 拖時間
+                    factorial = 1
+                    for i in range(2,10000):
+                        factorial = factorial * i
+                </py>
+            [X] 15:24 2019-05-22 靠! 連 Windows DOS 下也出現了這個問題， SRP: working directory 的差別
+                有問題 c:\Users\hcche\Documents\GitHub\peforth>python -m peforth
+                沒問題 c:\Users\hcche\Documents\GitHub\peforth\peforth>python -m peforth
+                發生在 *** (pyclude) 之前 --> 故意先做個 display-off on 看看.... 
+                RI: Bingo! Shit! selftest 裡 pyclude hello.py 必須以其所在位置為 working directory
+        [x] 15:55 2019-05-22 發現這個 root cause 是耐心跑 v1.23 release check-list 時發現的，所以
+            那個 check-list 還是要好好做。
+            
+    [/] 測試 ubuntu 的 ipython ---> 放棄，error message 如下：
+        hcchen@WKS-4AEN0404:/mnt/c/Users/hcche/Documents/GitHub/peforth$ ipython
+        Command 'ipython' not found, but can be installed with:
+        sudo apt install ipython
+
+        hcchen@WKS-4AEN0404:/mnt/c/Users/hcche/Documents/GitHub/peforth$ sudo apt install ipython
+        [sudo] password for hcchen:
+        Reading package lists... Done
+        Building dependency tree
+        Reading state information... Done
+        Package ipython is not available, but is referred to by another package.
+        This may mean that the package is missing, has been obsoleted, or
+        is only available from another source
+        E: Package 'ipython' has no installation candidate
+    
     [X] Error! tib. unknown! --> 改成 "-->" 了  1.23
-    [ ] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
+    [X] 改寫 pypi.org 上的 readme.rst 本來的例子不太好了, pdb 其實很強。
         改用 Azure notebook 介紹 ipython 的 magic command 比較好。
-        [ ] 17:33 2019-05-19 改了 Github.com 上的 README.md , local 的 .rst 
+        [X] 17:33 2019-05-19 改了 Github.com 上的 README.md , local 的 .rst 
     [X] jupyter notebook 用 import peforth 就很好用了, 
         把 readme.md 裡沒有的 peforth kernel 拿掉，移進 Wiki 裡去。
         --> 17:34 2019-05-19 done 
     [ ] 把 misc.f hello.py 等都加進 package    
 [ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+[X] Test ubuntu 發現 cd 有必要進 peforth.f 但 dos 就該留在 misc.f 裡，且要判斷 os 是哪個。
+    --> py> os.name . cr ( posix or nt )
+[X] v1.23 測試 ubuntu --> 靠！都忘了怎麼測試了，可以不經過 pip 版嗎? 
+    09:35 2019-05-22
+    --> T550 ubuntu 16.04 連 pip 都沒有, python 版本也搞不清, 更不用說 virtualenv 了。
+    --> 感覺用 Linux 很恐慌，乾脆把 T550 上的 Ubuntu 16.04 remove 掉，改用新版的，希望可以避開
+        python 版本的問題。(See Ynote:"[筆記] Install Mozilla DeepSpeech Project" > "wsl ubuntu install python3.6.txt") 
+    --> 09:39 2019-05-22 T550 Ubuntu removed --> The recent is still 18.04 on 
+        Microsoft Store, so be it --> 10:43 2019-05-22 WSL installed 
+        --> how's the built-in python? --> See Ynote "好久沒玩 WSL Ubuntu, 為了 release peforth v1.23 測試整個再玩一次"
+            [X] 有 python 3.6.5 built-in 沒有 pip <--- 先不管它，只測 python test.py 過了再說。 --> 一番折騰，過了！
+            [/] 沒有 pip 可以 python -m peforth 嗎？ 試試 python setup.py install 結果失敗
+                hcchen@WKS-4AEN0404:/mnt/c/Users/hcche/Documents/GitHub/peforth$ python setup.py install
+                Traceback (most recent call last):
+                  File "setup.py", line 4, in <module>
+                    from setuptools import setup
+                ModuleNotFoundError: No module named 'setuptools' <------------------ 
+                hcchen@WKS-4AEN0404:/mnt/c/Users/hcche/Documents/GitHub/peforth$            
+                [X] 看了這篇 https://askubuntu.com/questions/861265/python-3-importerror-no-module-named-setuptools-ubuntu-14-04-lts 
+                    決定放棄，有測過 test.py 就好了。
+    [/] 即使上了 pypi.org 也還需要 pip (但 18.04 default 沒有), 不管了，有測過 test.py 就好了。
+    [ ] 上了 pypi.org 之後，再用 Azure Notebooks 測試。
+    
+[ ] Tests before releasing v1.23
+    *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
+        [V1.22之後的新版] 打包步驟  2018/12/16 11:02 
+        See my Ynote: "Pack peforth to peforth.whl"
+        1. 	檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+        2. 	跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+            得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
+        3.  執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
+            需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
+        4. 	pip uninstall peforth 然後再 pip install peforth 試驗看看。
+        5. 	完成！
+    [X] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！
+    [X] 所有 run 法帶 selftest：
+        [X] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+        [X] Run python setup.py install 更新本地 site-package 版本以供測試
+        [X] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [X] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [X] 3.  ipython import peforth .s words
+                [x] selftest peforth.ok() .s words <--- w/parent
+                [x] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [X] 4.  jupyter notebook 
+                kernel > restart and clear outputs 
+                x = 123
+                %f x .     
+                x . \ ==> 123 (<class 'int'>)
+        [/] 5.  jupyter notebook --> peforth kernel --> .s words 
+        [/] 考慮 README.rst 改良
+            [X] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [X] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [X] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [X] 做出取消 selftest 的 wheel
+            See my Ynote: "Pack peforth to peforth.whl"
+            [x] 1.  檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+                    test.py hello.py misc.f 
+            [X] 2.  跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+                    得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
+        [X] pip uninstall peforth
+        [X] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
+            pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [X] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [X] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [X] 3. (i)python import peforth
+               [X] no selftest, peforth.ok() .s words <--- no parent
+               [X] 1234 bye check echo %errorlevel%
+        [X] 4. jupyter notebook --> *debug* ok> .s cd help exit
+               %f %%f magic command
+        [/] 5. repeat 以上 in ubuntu <------- Ubuntu 18.04 沒有 pip built-in 不想搞了
+                [/] pip uninstall peforth
+                [/] pip install (use /mnt/...the wheel) to WSL ubuntu
+                [/] ipython -m peforth
+                [/] ipython , import peforth , magic commands 
+	[X] 直接用測過的 wheel update Pypi
+        執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
+		需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
+        ID, password search my Ynote with pypi _account_
+    [X] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
+        [/] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
+            [/] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
+        [X] Windows DOS 下試 
+    [X] Test Azure Online Jupyter Notebooks
+        https://peforthplayground-hcchen1471.notebooks.azure.com/j/notebooks/peforth-playground.ipynb 
+        !pip install peforth
+        import peforth
+        %f version drop
+        x = 12345
+        %f x --> \ 查看 unknown 的效果
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+    [ ] version 改成 1.24  (必須跳過 1.20 會變成 1.2）
+    

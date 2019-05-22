@@ -1,8 +1,8 @@
 
     marker === // ( -- ) Marker before misc.f, forget misc.f and all following definitions.
 
-    : (pyclude) // ( <pathname.py> -- "code" ) Prepare the .py file into a <PY>..</PY> section ready to run
-                CR word readTextFile py> re.sub("#__peforth__","",pop()) 
+    : (pyclude) // ( "pathname.py" -- "code" ) Prepare the .py file into a <PY>..</PY> section ready to run
+                readTextFile py> re.sub("#__peforth__","",pop()) 
                 py> re.sub(r"(from\s+__future__\s+import\s+print_function)",r"#\1",pop()) 
                 <text> 
                 os.environ['TF_CPP_MIN_LOG_LEVEL']='2' # https://stackoverflow.com/questions/43134753/tensorflow-wasnt-compiled-to-use-sse-etc-instructions-but-these-are-availab
@@ -15,16 +15,16 @@
                 /// that is not allowed when in a <PY>..</PY> space.
                 
     : pyclude   // ( <pathname.py> -- ... ) Run the .py file in a <PY>..</PY> space
-                (pyclude) dictate ; 
+                CR word (pyclude) dictate ; 
                 ' (pyclude) :> comment last :: comment=pop(1)
 
-                <selftest>
+                <selftest> 
                 *** (pyclude) pyclude run ~.py file 
-                    display-off
-                    pyclude hello.py 
+                    display-off 
+                    py> path char hello.py + (pyclude) dictate    \ compose the pathname
                     display-on
                     screen-buffer <py> pop()[0].find('Hello peforth!!')!=-1 </pyV> ( True )
-                    [d Trued] [p '(pyclude)', 'pyclude' p]
+                    [d True d] [p '(pyclude)', 'pyclude' p]
                 </selftest>
 
     : .members  // ( obj -- ) See the object details through inspect.getmembers(obj)
@@ -46,32 +46,6 @@
                     screen-buffer <py> pop()[0].find('__doc__ = source')!=-1 </pyV> ( True )
                     [d True,True d]
                     [p '.members','.source' p]
-                </selftest>
-
-    : dos       // ( <command line> -- errorlevel ) Shell to DOS Box run rest of the line
-                CR word ( cml ) trim ( cml' )
-                ?dup if py> os.system(pop())
-                else py> os.system('cmd/k') then ;
-                /// See also WshShell 
-                
-    : cd        // ( <path> -- ) Mimic DOS cd command
-                CR word ?dup if py: os.chdir(pop())
-                else py> os.getcwd() . cr then ;
-                /// Use 'dos' command can NOT do chdir, different shell.
-                /// See also: os.chdir('path'); path=os.getcwd()
-
-                <selftest>
-                *** dos cd
-                    display-off
-                    cd
-                    display-on
-                    screen-buffer <py> pop()[0].find(":")!=-1 </pyV> ( True )
-                    screen-buffer <py> pop()[0].find("\\")!=-1 </pyV> ( True )
-                    display-off
-                    dos exit /b 567
-                    display-on
-                    [d True,True,567 d]
-                    [p 'cd','dos' p]
                 </selftest>
 
     : round-off // ( f 100 -- f' ) Round at 0.00 in this example, 0.005 --> 0.01, 0.00499 --> 0.0
@@ -120,6 +94,28 @@
     : quit      // ( -- ) Quit the breakpoint forget _locals_ and continue the process
                 none to _locals_ py: vm.exit=True ;  
                 /// 'exit' also quit the breakpoint but it won't forget _locals_ 
+
+\
+\ For Windows only (not, say, Ubuntu)
+\
+py> os.name char nt = [if]
+
+    : dos       // ( <command line> -- errorlevel ) Shell to DOS Box run rest of the line
+                CR word ( cml ) trim ( cml' )
+                ?dup if py> os.system(pop())
+                else py> os.system('cmd/k') then ;
+                /// See also WshShell 
+                
+                <selftest>
+                *** dos shell to DOSbox or run DOS command
+                    display-off
+                    dos exit /b 567
+                    display-on
+                    [d 567 d]
+                    [p 'dos' p]
+                </selftest>
+[then]
+
 
     \ <text>
     \ \ 
@@ -182,7 +178,6 @@
     \ </py>
     \             
     \ : harry_port py> harry_port.__doc__ -indent . cr ; // ( -- ) Print help message
-
 
 
 

@@ -1,14 +1,13 @@
 
 \ Includes
 
-    \ py> path char ..\playground\misc.f + sinclude  \ compose the pathname
-    \ include ..\foo\bar\foo.f   \ in the specified directory
+    \ include foo.f                     \ in the current directory 
+    \ include ..\foo\bar.f              \ in the specified directory
+    py> path char misc.f + sinclude     \ compose the pathname
 
-    include misc.f    \ relative path to the current directory 
-    
 \ Do selftest or run command-line
 
-    ' <selftest> :: enabled=True \ Master switch of selftest, True:on or False:off
+    ' <selftest> :: enabled=False \ Master switch of selftest, True:on or False:off
 
     py> vm.commandline trim ( commandLine ) ?dup [if] 
         \ When in ipython or jupyter notebook the command line is used by 

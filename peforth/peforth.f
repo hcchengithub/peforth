@@ -1153,7 +1153,7 @@ code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __
         modules os
         display-on
         screen-buffer <py> pop()[0].find('builtins sys')!=-1 </pyV> ( False )
-        screen-buffer <py> pop()[0].find('os os.path')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('os.path')!=-1 </pyV> ( True )
         [d True,False,True d] [p 'modules' p]
     </selftest>
     
@@ -1350,6 +1350,30 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
 
 : see           ' (see) ; // ( <name> -- ) See definition of the word
                 ' (see) :> comment last :: comment=pop(1)
+
+: (cd)          // ( "path" -- "path" ) Mimic DOS/Linux cd command but I/O are from/to data stack
+                ?dup if py: os.chdir(pop()) else py> os.getcwd() then ;
+                /// to 'Change Directory' the input is the path and therefore no output.
+                /// to get 'Current Directory' the input must be an null string.
+
+: cd            // ( <path> -- ) Mimic DOS cd command
+                CR word ?dup if (cd) else "" (cd) . cr  then ;
+                /// Use 'dos' command can NOT do chdir, different shell.
+                /// See also: os.chdir('path'); path=os.getcwd()
+
+                <selftest>
+                *** cd mimic DOS/Linux cd command
+                    "" (cd) \ /mnt/c/Users/hcche/Documents/GitHub/peforth/peforth (<class 'str'>)
+                    cd ..
+                    "" (cd)
+                    \ 0: /mnt/c/Users/hcche/Documents/GitHub/peforth/peforth (<class 'str'>)
+                    \ 1: /mnt/c/Users/hcche/Documents/GitHub/peforth (<class 'str'>)
+                    swap dup (cd) \ cd back 
+                    <    \ parent path must be shorter
+                    [d True d]
+                    [p '(cd)', 'cd' p]
+                </selftest>
+
 
     \ I/O may not be ready enough to read selftest.f at this moment, 
     \ so the below code has been moved to quit.f of each applications.
