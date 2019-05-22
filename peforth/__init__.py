@@ -1,10 +1,38 @@
+'''
+
+peforth - an eforth ported to python 
+
+peforth provides a FORTH virtual machine alongside Python, iPython, 
+and Jupyter notebook for you to work in FORTH way. This is good for 
+debugging,  studying,  or  even  participating  to  your developing. 
+Because  FORTH  is a programming language of flexibility that makes 
+jobs easier in many ways.
+
+Call peforth.ok() to enter the interpret state and you star talking 
+interactively in FORTH, 'exit' command to return to python prompt. 
+
+peforth.dictate('command string') handles FORTH command line(s).
+
+This cascaded line :
+
+    peforth.push(12).push(34).dictate('+ . cr')
+
+actually prints the sum of 12 + 34.
+
+Visit https://github.com/hcchengithub/peforth/wiki for more information.
+
+May the FORTH be with you!
+H.C. Chen @ FigTaiwan 2018.7.3 
+
+'''
+
 import sys,os,site,pdb
 
 if __package__:
     # peforth is imported as a package
     from . import projectk as vm
 else:
-    # peforth is run from __main__.py
+    # peforth is run from test.py when developping 
     import projectk as vm
 
 # Let projtct-k know itself
@@ -48,10 +76,14 @@ vm.writeTextFile = writeTextFile
 # Get the path of data files is really frustrating. 
 # The below method is the only ugly way I have so far:
 deli = '\\' if os.name == 'nt' else '/'
-path = "something wrong peforth path not found"
-for p in sys.path:
-    if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
-        path = p + deli + 'peforth' + deli
+for path in sys.path:
+    if os.path.isfile(path + deli + 'peforth' + deli + 'version.txt'):
+        # for the pip'ed package
+        path = path + deli + 'peforth' + deli
+        break
+    if os.path.isfile(path + deli + 'version.txt'):
+        # for running "python test.py" without pip install from source directory when developping 
+        path = path + deli
         break
 vm.path = path
 
@@ -140,16 +172,34 @@ words       = vm.words
 #     if '__IPYTHON__' in __builtins__.keys(): <--- previous way, not suitable for ipython -m peforth
 #     if 'IPython' in sys.modules.keys(): <--- a candidate never tried
 try:
-    flag = "InteractiveShell" in str(get_ipython)
+    is_ipython = "InteractiveShell" in str(get_ipython)
 except:
-    flag = False
+    is_ipython = False
 
-if flag:
+if is_ipython:
     from IPython.core.magic import register_line_cell_magic
 
     # Define peforth magic command, %f.
     @register_line_cell_magic
     def f(line, cell=None):
+        '''
+        peforth magic command %f can be used both as a line and cell magic in
+        iPython and Jupyter notebooks.
+
+        A %f leading line is interpreted as a FORTH command line. You can even
+        use it as a python statement:
+        
+            def hi():
+                %f ." Hello World!!" cr
+        
+        give it a try then run hi() to see it works.
+            
+        A %%f leading line starts a multiple-line block in iPython or grabs 
+        the entire cell in Jupyter notebook of FORTH code. The rest of the %%f
+        line is ignored like a comment line. %%f must be the first none-white-
+        space token in the block or the cell. 
+
+        '''
         if cell is None:
             vm.dictate(line)
         else:
@@ -160,8 +210,8 @@ if flag:
         ipython.register_magic_function(f, 'line_cell')  
         # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
-# Run once
-if not vm.tick('version'):  # defined in peforth.f 
+# Run once when 'import peforth' 
+if not vm.tick('version'):  # defined in peforth.f , 17:57 2019-05-15 avoid multiple 'import peforth' I guess.
     vm.dictate(readTextFile(path+'peforth.f'))
     vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))

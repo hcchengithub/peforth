@@ -462,8 +462,25 @@ def doendcode(_me=None):
     last().vid = current;
     last().wid = len(current_word_list())-1;
     last().type = 'code';
+    # ---------
+    mm = re.match(r"^.*?#\s*(.*)$", last().xt.__doc__.split('\n')[1])
+    last().help = mm.groups()[0] if mm and mm.groups()[0] else ""
+    # ---------
     wordhash[last().name] = last();
     compiling = False; 
+
+# The basic FORTH word 'end-code's run time. 
+# def doendcode(_me=None):
+#     global compiling
+#     if compiling!="code":
+#         panic("Error! 'end-code' a none code word.")
+#     current_word_list().append(Word(newname,newxt))
+#     last().vid = current;
+#     last().wid = len(current_word_list())-1;
+#     last().type = 'code';
+#     wordhash[last().name] = last();
+#     compiling = False; 
+
 endcode = Word('end-code', doendcode)
 endcode.vid  = 'forth'
 endcode.wid  = 2
