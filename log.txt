@@ -3337,4 +3337,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
            Master 上的應該是些 README.md 的修改。 
     [X] version 改成 1.24  (必須跳過 1.20 會變成 1.2）
+[ ] 11:28 2019-05-26 make a master merge for the article of Febenacci and Decorator
+    [ ] rename the article to 'peforth helps to understand python Decorator'
+[ ] 11:35 2019-05-26 find the video I introduce 'unknown' and the other thing
+[ ] 11:35 2019-05-26 write an article to introduce 'unknown' 
     
