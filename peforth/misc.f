@@ -116,6 +116,17 @@ py> os.name char nt = [if]
                 </selftest>
 [then]
 
+: -->           ( result -- ) // Print the result with the command line.
+                py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
+                s" {} {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
+                /// Good for experiments that need to show command line and the result.
+                /// Tip: "" --> prints the command line only, w/o the TOS.
+
+: ==>           ( result -- ) // Print the result with the command line.
+                py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
+                s" {}{} {} ({})" :> format(pop(),'\n',tos(),type(pop())) . cr ;
+                /// Good for experiments that need to show command line and the result.
+                /// Tip: "" --> prints the command line only, w/o the TOS.
 
     \ <text>
     \ \ 
