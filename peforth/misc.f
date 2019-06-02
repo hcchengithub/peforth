@@ -128,6 +128,18 @@ py> os.name char nt = [if]
                 /// Good for experiments that need to show command line and the result.
                 /// Tip: "" --> prints the command line only, w/o the TOS.
 
+: sign          // ( n -- sign ) sign of n
+                ?dup if dup abs ( n abs(n) ) / int else 1 then ;
+
+                <selftest>
+                *** sign gets the + or - of the given number to 1 or -1 
+                    0.000001 sign ( 1 )
+                    -0.003 sign   ( -1 )
+                    0 sign        ( 1 )
+                    [d 1, -1, 1 d] [p 'sign' p]
+                </selftest>
+
+
     \ <text>
     \ \ 
     \ \ WshShell - users may not install win32 packages yet so only a clue here
