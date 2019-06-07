@@ -25,7 +25,7 @@ An easy way to try peforth is through the [Microsoft Azure Notebooks](https://no
     
 and then you can import peforth like this:
 
-    iport peforth
+    import peforth
     
 and then start using peforth through magics `%f` and `%%f` as shown below: 
 
