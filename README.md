@@ -23,9 +23,14 @@ An easy way to try peforth is through the [Microsoft Azure Notebooks](https://no
     
     !pip install peforth
     
+    # If you want to install a specific version 
+    !pip install peforth==1.23
+    # "Clear before install" is a good idea. Give it a try if things went wrong.
+    !pip uninstall -y peforth 
+    
 and then you can import peforth like this:
 
-    iport peforth
+    import peforth
     
 and then start using peforth through magics `%f` and `%%f` as shown below: 
 
@@ -35,7 +40,7 @@ You can even enter the peforth interprete state to 'talk' with it:
 
     %f *debug* foo>
     
-don't foget to use 'exit' command to stop talking or the page will concentrate on the dialog and not to do anything else.    
+don't foget to use 'exit' command to stop talking or the page will concentrate on the dialog and not to do anything else.
 
 ### Install peforth on your local computer:
 
