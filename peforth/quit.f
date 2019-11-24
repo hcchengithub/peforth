@@ -1,4 +1,12 @@
 
+\ Imports 
+
+	\ peforth imports only native packages, so far 
+	import os      py> vm ::      os=pop(1)
+	import inspect py> vm :: inspect=pop(1)
+	import dis     py> vm ::     dis=pop(1)
+	import json    py> vm ::    json=pop(1)
+
 \ Includes
 
     \ include foo.f                     \ in the current directory 

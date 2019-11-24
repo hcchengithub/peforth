@@ -2681,7 +2681,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] Merge 到 master 但可以不必急著 release, 純粹是 setup.py 的問題，跟程式無關。
         只要讓 mybinder.org 能跑，改 github 上的 setup.py 成 setup.py.whl 即可。
         --> expecting v1.18
-[x] Tests before releasing v1.18 <--- on pypi.org already
+[x] Tests before a Release v1.18 <--- on pypi.org already
     [x] 所有 run 法帶 selftest：
         [x] 改 %USERPROFILE%\Documents\GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
@@ -2801,7 +2801,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [x] windows (none anaconda virtualenv), WSL Ubuntu w/o virtualenv, with virtualenv
             --> all pass!
 
-[x] Tests before releasing v1.19 --> v1.21 actually 
+[x] Tests before a Release v1.19 --> v1.21 actually 
     [x] 所有 run 法帶 selftest：
         [x] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
@@ -3260,7 +3260,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [/] 即使上了 pypi.org 也還需要 pip (但 18.04 default 沒有), 不管了，有測過 test.py 就好了。
     [ ] 上了 pypi.org 之後，再用 Azure Notebooks 測試。
     
-[X] Tests before releasing v1.23
+[X] Tests before a Release v1.23
+	[X] setup.py 裡的 copy right 年份要改成 2019 
     *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
         [V1.22之後的新版] 打包步驟  2018/12/16 11:02 
         See my Ynote: "Pack peforth to peforth.whl"
@@ -3336,11 +3337,131 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            解決 conflicts 之後完成 merge. 
         4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
            Master 上的應該是些 README.md 的修改。 
-    [X] version 改成 1.24  (必須跳過 1.20 會變成 1.2）
+    [X] version 改成 1.24  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
 [X] 11:28 2019-05-26 make a master merge for the article of Febenacci and Decorator
     [X] rename the article to 'peforth helps to understand python Decorator'
     [/] 11:35 2019-05-26 write an article to introduce 'unknown' 
         --> forget this, covered already. 
     [/] 11:35 2019-05-26 find the video I introduce 'unknown' and the other thing
         --> forget this, covered already. 
-        
+
+[X] 09:11 2019-11-21 本來跑 GitHub\peforth\setup.bat 讓改好的新版生效，在 anaconda 之下還行嗎？
+	1. 跑 anaconda's prompt make sure python runable
+	2. peforth runable too, check path 
+	3. cd to GitHub\peforth run setup
+	4. check peforth 
+	OneNote 筆記：
+	"Develop peforth in an Anaconda virtual environment"
+	https://onedrive.live.com/view.aspx?resid=A796EA18AC8C1DA9%2112289&id=documents&wd=target%28Anaconda.one%7CB4E0DFAB-84F7-43D2-A5AB-515B43314252%2FDevelop%20peforth%20in%20an%20Anaconda%20virtual%20environment%7C99DE5C5F-B36D-4949-9471-BC7A857E3C2B%2F%29
+	
+[X] 16:54 2019-07-22 從這裡 https://jupyter-contrib-nbextensions.readthedocs.io/en/latest/install.html 讀到
+    有從 github repo 上直接 pip install 的方法，e.g.:
+        pip install https://github.com/ipython-contrib/jupyter_contrib_nbextensions/tarball/master
+    試試看 peforth 可不可以這樣 install ? 可以的話就不用上 pypi 了
+        pip install https://github.com/hcchengithub/peforth/master 
+        or
+        pip install https://github.com/hcchengithub/peforth
+    ==> 結果兩個都失敗
+[ ] 05:29 2019-11-21 projectk.py 裡面的 local, Comment 兩個 global token 好像是多
+	餘的, 有空檢討看看. 
+	[X] local 可能是 ok(prompt='OK ', loc={}, glo={}, cmd="") 或 redefined unknown 用的 <--- 不是
+[ ] 2019/11/24 06:10:22 projectk.py 裡 import 好多它本身不用的 modules (它自己只 
+	用到 re regular expression 一個) 我的註解說：
+	import re # import whatever we want, don't rely on parent module e.g. peforth __init__.py
+	也是有理，因為 projectk.py kernel 有自己的 space. 然而 modules 應該是 global
+	的, 不是嗎？從 forth code 裡 import 不行嗎？ --> 試了就知道，把 projectk.py 裡
+	多餘的 imports comment 掉 --> 出問題的時候很晚，只要是 native modules 有機會解決.....
+		來自 help import 的 hints
+		\ import os __main__ :: peforth.projectk.os=pop(1) \ peforth global , does not work when run by 'python test.py'
+		import os      py> vm ::      os=pop(1) \ this works! when run by 'python test.py'
+		import inspect py> vm :: inspect=pop(1)
+		import dis     py> vm ::     dis=pop(1)
+		import json    py> vm ::    json=pop(1)
+	但是 sys 太根本了必須要在 projectk.py 裡 import 好。	
+[ ] 05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
+	硬 copy 放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
+[ ] setup.py 裡的 copy right 年份要改成 2019 
+[ ] 2019/11/24 05:20 用 Anaconda 之後似乎 kernel.json 也有問題？
+	裡面描述的 peforthkernel.py path 是寫死的，在我 OA、Anaconda 上就不對了。
+	好像只要無意把 peforth 加進 JupyterNotebook 的 kernel 就沒問題。
+[ ] Tests before a Release v1.24
+	[ ] setup.py 裡的 copy right 年份要改成 2019 
+    *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
+        [V1.22之後的新版] 打包步驟  2018/12/16 11:02 
+        See my Ynote: "Pack peforth to peforth.whl"
+        1. 	檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+        2. 	跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+            得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
+        3.  執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
+            需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
+        4. 	pip uninstall peforth 然後再 pip install peforth 試驗看看。
+        5. 	完成！
+    [ ] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！
+    [ ] 所有 run 法帶 selftest：
+        [ ] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+        [ ] Run python setup.py install 更新本地 site-package 版本以供測試
+        [ ] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [ ] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [ ] 3.  ipython import peforth .s words
+                [ ] selftest peforth.ok() .s words <--- w/parent
+                [ ] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [ ] 4.  jupyter notebook 
+                kernel > restart and clear outputs 
+                x = 123
+                %f x .     
+                x . \ ==> 123 (<class 'int'>)
+        [ ] 5.  jupyter notebook --> peforth kernel --> .s words 
+        [ ] 考慮 README.rst 改良
+            [ ] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [ ] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [ ] 做出取消 selftest 的 wheel
+            See my Ynote: "Pack peforth to peforth.whl"
+            [ ] 1.  檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+                    test.py hello.py misc.f 
+            [ ] 2.  跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+                    得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
+        [ ] pip uninstall peforth
+        [ ] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
+            pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [ ] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [ ] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [ ] 3. (i)python import peforth
+               [ ] no selftest, peforth.ok() .s words <--- no parent
+               [ ] 1234 bye check echo %errorlevel%
+        [ ] 4. jupyter notebook --> *debug* ok> .s cd help exit
+               %f %%f magic command
+        [ ] 5. repeat 以上 in ubuntu <------- Ubuntu 18.04 沒有 pip built-in 不想搞了
+                [ ] pip uninstall peforth
+                [ ] pip install (use /mnt/...the wheel) to WSL ubuntu
+                [ ] ipython -m peforth
+                [ ] ipython , import peforth , magic commands 
+	[ ] 直接用測過的 wheel update Pypi
+        執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
+		需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
+        ID, password search my Ynote with pypi _account_
+    [ ] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
+        [ ] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
+            [ ] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
+        [ ] Windows DOS 下試 
+    [ ] Test Azure Online Jupyter Notebooks
+        https://peforthplayground-hcchen1471.notebooks.azure.com/j/notebooks/peforth-playground.ipynb 
+        !pip install peforth
+        import peforth
+        %f version drop
+        x = 12345
+        %f x --> \ 查看 unknown 的效果
+    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+        1. 先 commit 上 develop branch, upload 上網上 Github.
+        2. 切到 master 
+        3. 用 GitHub for Windows desktop 的 Branch > Merge into current branch 選 develop 把它 merge 過來。
+           解決 conflicts 之後完成 merge. 
+        4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
+           Master 上的應該是些 README.md 的修改。 
+	[ ] Ubuntu 也測測看
+	[ ] notebooks.ai 也測測看
+    [ ] version 改成 1.25  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+	

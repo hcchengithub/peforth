@@ -2,3 +2,5 @@
 @rem bring source code into this computer's site-packages
 
 python setup.py install
+
+pause

@@ -1123,7 +1123,7 @@ code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __
     /// 1. import numpy constant np // ( -- numpy ) module object, method #1
     ///    py> sys.modules['numpy'] constant np // ( -- numpy ) method #2
     ///    __main__ :> np constant np // ( -- numpy ) method #3
-    /// 2. np __main__ :: peforth.projectk.np=pop(1) \ peforth global
+    /// 2. np py> vm :: np=pop(1) \ peforth global
     ///    np __main__ :: np=pop(1) \ __main__ global, see 'help __main__'
     /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
 
@@ -1148,11 +1148,11 @@ code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __
         display-off
         modules
         display-on
-        screen-buffer <py> pop()[0].find('builtins sys')!=-1 </pyV> ( True )
+        screen-buffer <py> pop()[0].find('builtins')!=-1 </pyV> ( True )
         display-off
         modules os
         display-on
-        screen-buffer <py> pop()[0].find('builtins sys')!=-1 </pyV> ( False )
+        screen-buffer <py> pop()[0].find('builtins')!=-1 </pyV> ( False )
         screen-buffer <py> pop()[0].find('os.path')!=-1 </pyV> ( True )
         [d True,False,True d] [p 'modules' p]
     </selftest>

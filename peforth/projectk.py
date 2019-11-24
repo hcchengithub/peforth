@@ -5,13 +5,7 @@
 # FigTaiwan H.C. Chen hcchen5600@gmail.com 21:14 2017-07-31
 #
 
-import re    # import whatever we want, don't rely on parent module
-import pdb
-import os
-import sys
-import inspect  # print (inspect.getsource(func))
-import dis      # dis.dis(func) 
-import json
+import re, sys
 
 name = "peforth"
 vm = __import__(__name__)

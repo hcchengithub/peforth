@@ -48,8 +48,26 @@
                     [p '.members','.source' p]
                 </selftest>
 
+    : sign      // ( n -- sign ) sign of n which is 1 or -1 
+                ?dup if dup abs ( n abs(n) ) / int else 1 then ;
+				\ 用 copysign() 好但是我至今沒有 import math 因此還是自己兜。
+				\ https://stackoverflow.com/questions/1986152/why-doesnt-python-have-a-sign-function
+				\ copysign() usage: math :> copysign(1,pop()) int
+				
+                <selftest>
+                *** sign gets the + or - of the given number to 1 or -1 
+                    0.000001 sign ( 1 )
+                    -0.003 sign   ( -1 )
+                    0 sign        ( 1 )
+                    [d 1, -1, 1 d] [p 'sign' p]
+                </selftest>
+
+
+
     : round-off // ( f 100 -- f' ) Round at 0.00 in this example, 0.005 --> 0.01, 0.00499 --> 0.0
-                py> int(pop(1)*tos(0)+0.500000000001)/pop(0) ;
+                over sign ( f 100 sign )
+                py> int(abs(pop(2))*tos(1)+0.500000000001)/pop(1) * ;
+                /// numpy.round(n,decimal) is better where decimal=0 means integer
         
                 <selftest>
                 *** round-off
@@ -69,7 +87,8 @@
                 </selftest>
 
     \
-    \ Redefine unknown to try global variables in __main__ 
+    \ Redefine unknown try to find global variables in __main__ 
+    \                          and local variables in _locals_
     \
     
     none value _locals_ // ( -- dict ) locals passed down from ok()
@@ -121,24 +140,14 @@ py> os.name char nt = [if]
                 s" {} {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
                 /// Good for experiments that need to show command line and the result.
                 /// Tip: "" --> prints the command line only, w/o the TOS.
+                ///      -5 slice --> prints the command line and 5 TOS 
 
-: ==>           ( result -- ) // Print the result with the command line.
+: ==>           ( result -- ) // Print the command line cr and the result
                 py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
                 s" {}{} {} ({})" :> format(pop(),'\n',tos(),type(pop())) . cr ;
                 /// Good for experiments that need to show command line and the result.
                 /// Tip: "" --> prints the command line only, w/o the TOS.
-
-: sign          // ( n -- sign ) sign of n
-                ?dup if dup abs ( n abs(n) ) / int else 1 then ;
-
-                <selftest>
-                *** sign gets the + or - of the given number to 1 or -1 
-                    0.000001 sign ( 1 )
-                    -0.003 sign   ( -1 )
-                    0 sign        ( 1 )
-                    [d 1, -1, 1 d] [p 'sign' p]
-                </selftest>
-
+                ///      -5 slice ==> prints the command line and 5 TOS 
 
     \ <text>
     \ \ 
