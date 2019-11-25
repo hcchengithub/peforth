@@ -150,7 +150,6 @@ vm.ok = ok  # invoke REPL from within REPL, I don't know if we need this.
 dictate     = vm.dictate
 execute     = vm.execute
 push        = vm.push    
-debug       = vm.debug
 dictionary  = vm.dictionary
 ntib        = vm.ntib
 pop         = vm.pop
@@ -210,10 +209,9 @@ if is_ipython:
         ipython.register_magic_function(f, 'line_cell')  
         # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
-# Run once when 'import peforth' 
-if not vm.tick('version'):  # defined in peforth.f , 17:57 2019-05-15 avoid multiple 'import peforth' I guess.
+# Load high level source code 
+if not vm.tick('version'):  # defined in peforth.f, run only once.
     vm.dictate(readTextFile(path+'peforth.f'))
-    vm.dictate(readTextFile(path+'peforth.selftest'))
     vm.dictate(readTextFile(path+'quit.f'))
 
 ##### End of peforth __init__.py #####

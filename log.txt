@@ -1197,11 +1197,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> The TOS provides the prompt, the locals
 [x] debug command 不要了, 會跟 py> debug which is vm.debug 撞名,沒必要增加這個問題。
 
-[ ] I found a python problem!!
+[X] I found a python problem!!
     False==0 is True, False<=0 is True, False<=0.1 is True
     False<0.0001 is True, False<-0.1 is False
     這是在引用 debug 來篩選哪些 breakpoint 做不做用時遇到的問題。debug 初值為 False 結果
-    debug<=33 竟然是成立的!
+    debug<=33 竟然是成立的! 
+	2019/11/25 10:26:06 
 [x] ." a" prints an extra space <--- problem
     RI: dot . command 早期為了 debug 好看，有多印一個 space 可以不要了。
 [x] peforth.path to indicates the home directory where peforth.f is
@@ -3174,7 +3175,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     Find what: "(\(\s+.*\))\s+(//)"
     Replace with: "// \1"
 [x] dos , cd 太重要了，從 misc.f 移進 peforth.f     
-[ ] 17:53 2019-05-11 接下來考慮出 v1.23 版。
+[X] 17:53 2019-05-11 接下來考慮出 v1.23 版。
     [X] complete self-tests for new words , many are commented out.
     [X] 評估 misc.f unknown.f quit.f 的內容要怎麼分配 --> 全部放進 misc.f 加個 marker 全自動 load 進去。
         --> 不要的人只要跑一下 marker 就可以全清掉。
@@ -3235,8 +3236,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [X] jupyter notebook 用 import peforth 就很好用了, 
         把 readme.md 裡沒有的 peforth kernel 拿掉，移進 Wiki 裡去。
         --> 17:34 2019-05-19 done 
-    [ ] 把 misc.f hello.py 等都加進 package    
-[ ] projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+    [X] 把 misc.f hello.py 等都加進 package    
 [X] Test ubuntu 發現 cd 有必要進 peforth.f 但 dos 就該留在 misc.f 裡，且要判斷 os 是哪個。
     --> py> os.name . cr ( posix or nt )
 [X] v1.23 測試 ubuntu --> 靠！都忘了怎麼測試了，可以不經過 pip 版嗎? 
@@ -3258,7 +3258,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                 [X] 看了這篇 https://askubuntu.com/questions/861265/python-3-importerror-no-module-named-setuptools-ubuntu-14-04-lts 
                     決定放棄，有測過 test.py 就好了。
     [/] 即使上了 pypi.org 也還需要 pip (但 18.04 default 沒有), 不管了，有測過 test.py 就好了。
-    [ ] 上了 pypi.org 之後，再用 Azure Notebooks 測試。
+    [/] 上了 pypi.org 之後，再用 Azure Notebooks 測試。
     
 [X] Tests before a Release v1.23
 	[X] setup.py 裡的 copy right 年份要改成 2019 
@@ -3277,7 +3277,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [X] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
         [X] Run python setup.py install 更新本地 site-package 版本以供測試
-        [X] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
+        [X] 1.  python -i -m peforth [/] with-selftest .s words exit bye
         [X] 2.  ipython -i -m peforth .' Hello World!!' cr bye
         [X] 3.  ipython import peforth .s words
                 [x] selftest peforth.ok() .s words <--- w/parent
@@ -3303,7 +3303,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [X] pip uninstall peforth
         [X] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
             pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [X] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [X] 1. (i)python -i -m peforth [/] no-selftest .s words exit
         [X] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
         [X] 3. (i)python import peforth
                [X] no selftest, peforth.ok() .s words <--- no parent
@@ -3362,10 +3362,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         or
         pip install https://github.com/hcchengithub/peforth
     ==> 結果兩個都失敗
-[ ] 05:29 2019-11-21 projectk.py 裡面的 local, Comment 兩個 global token 好像是多
-	餘的, 有空檢討看看. 
-	[X] local 可能是 ok(prompt='OK ', loc={}, glo={}, cmd="") 或 redefined unknown 用的 <--- 不是
-[ ] 2019/11/24 06:10:22 projectk.py 裡 import 好多它本身不用的 modules (它自己只 
+	[ ] GitHub 有開始做 package hosting 了：
+		https://help.github.com/en/github/managing-packages-with-github-packages/about-github-packages#supported-clients-and-formats
+[X] 2019/11/24 06:10:22 projectk.py 裡 import 好多它本身不用的 modules (它自己只 
 	用到 re regular expression 一個) 我的註解說：
 	import re # import whatever we want, don't rely on parent module e.g. peforth __init__.py
 	也是有理，因為 projectk.py kernel 有自己的 space. 然而 modules 應該是 global
@@ -3378,19 +3377,21 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 		import dis     py> vm ::     dis=pop(1)
 		import json    py> vm ::    json=pop(1)
 	但是 sys 太根本了必須要在 projectk.py 裡 import 好。	
-[ ] 05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
+[ ] (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+	05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
 	硬 copy 放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
-[ ] setup.py 裡的 copy right 年份要改成 2019 
-[ ] 2019/11/24 05:20 用 Anaconda 之後似乎 kernel.json 也有問題？
+[X] setup.py 裡的 copy right 年份要改成 2019 
+[/] 2019/11/24 05:20 用 Anaconda 之後似乎 kernel.json 也有問題？
 	裡面描述的 peforthkernel.py path 是寫死的，在我 OA、Anaconda 上就不對了。
 	好像只要無意把 peforth 加進 JupyterNotebook 的 kernel 就沒問題。
 [ ] Tests before a Release v1.24
-	[ ] setup.py 裡的 copy right 年份要改成 2019 
+	[X] setup.py 裡的 copy right 年份要改成 2019 
     *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
         [V1.22之後的新版] 打包步驟  2018/12/16 11:02 
         See my Ynote: "Pack peforth to peforth.whl"
         1. 	檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
-        2. 	跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+        2. 	(記得先把 dist , build , peforth.egg-info 等 folder 先殺掉) 跑 
+			c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
             得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
         3.  執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
             需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
@@ -3464,4 +3465,17 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	[ ] Ubuntu 也測測看
 	[ ] notebooks.ai 也測測看
     [ ] version 改成 1.25  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+[X] 05:29 2019-11-21 projectk.py 裡面的 local, Comment, debug 這三個 global token 好像是多
+	餘的, 有空檢討看看. 
+	[X] local 可能是 ok(prompt='OK ', loc={}, glo={}, cmd="") 或 redefined unknown 用的 <--- 不是
+	13:47 2019/11/25 delete all suspected things from projectk.py --> dos ok, jupyternotebook ok.
+	* 注意！setup.bat 不會更新 site-packages 的 peforth\ folder 要手動從 peforth-1.24-py3.7.egg 
+	  copy peforth\ 來蓋過 site-packages 裡的 peforth\ folder. 
+	  refer to https://onedrive.live.com/view.aspx?resid=A796EA18AC8C1DA9%2112289&id=documents&wd=target%28Anaconda.one%7CB4E0DFAB-84F7-43D2-A5AB-515B43314252%2FDevelop%20peforth%20in%20an%20Anaconda%20virtual%20environment%7C99DE5C5F-B36D-4949-9471-BC7A857E3C2B%2F%29
+[X] 14:41 2019/11/25 quit.f 裡這種東西應該要改良，太笨了：
+		import os py> vm :: os=pop(1) \ 太笨
+		import os \ 應該改良成這樣
+[X] 15:21 2019/11/25 整理 peforth.f quit.f peforth.selftest 的關係，更有系統了。
+	__init__.py 只 load 進基本的 peforth.f quit.f 其他的都由 quit.f 負責，使 quit.f 
+	成為 eforth 系統的 main program, 統籌者。
 	

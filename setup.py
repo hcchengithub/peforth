@@ -14,7 +14,7 @@ setup(
     version=loc['__version__'],
     packages=["peforth", ],
     license='The MIT License (MIT) Copyright © 2019 H.C. Chen',
-    description="A programmable debugger in FORTH syntax. Set one breakpoint to X-ray everything.",
+    description="A FORTH programming language built on python.",
     long_description=open("README.rst", "r").read(),
     author="H.C. Chen",
     author_email="hcchen5600@gmail.com",

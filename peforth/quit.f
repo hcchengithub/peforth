@@ -2,16 +2,17 @@
 \ Imports 
 
 	\ peforth imports only native packages, so far 
-	import os      py> vm ::      os=pop(1)
-	import inspect py> vm :: inspect=pop(1)
-	import dis     py> vm ::     dis=pop(1)
-	import json    py> vm ::    json=pop(1)
+	import os      	
+	import inspect 	
+	import dis     	
+	import json    	
 
 \ Includes
+\   include foo.f          \ in the current directory 
+\   include ..\foo\bar.f   \ in the specified directory
 
-    \ include foo.f                     \ in the current directory 
-    \ include ..\foo\bar.f              \ in the specified directory
-    py> path char misc.f + sinclude     \ compose the pathname
+    py> path char peforth.selftest + sinclude   \ compose the pathname
+    py> path char misc.f + sinclude     		\ compose the pathname
 
 \ Do selftest or run command-line
 
