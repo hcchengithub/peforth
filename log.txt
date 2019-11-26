@@ -3377,14 +3377,29 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 		import dis     py> vm ::     dis=pop(1)
 		import json    py> vm ::    json=pop(1)
 	但是 sys 太根本了必須要在 projectk.py 裡 import 好。	
-[ ] (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
-	05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
-	硬 copy 放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
 [X] setup.py 裡的 copy right 年份要改成 2019 
 [/] 2019/11/24 05:20 用 Anaconda 之後似乎 kernel.json 也有問題？
 	裡面描述的 peforthkernel.py path 是寫死的，在我 OA、Anaconda 上就不對了。
 	好像只要無意把 peforth 加進 JupyterNotebook 的 kernel 就沒問題。
-[ ] Tests before a Release v1.24
+[X] 05:29 2019-11-21 projectk.py 裡面的 local, Comment, debug 這三個 global token 好像是多
+	餘的, 有空檢討看看. 
+	[X] local 可能是 ok(prompt='OK ', loc={}, glo={}, cmd="") 或 redefined unknown 用的 <--- 不是
+	13:47 2019/11/25 delete all suspected things from projectk.py --> dos ok, jupyternotebook ok.
+	* 注意！setup.bat 不會更新 site-packages 的 peforth\ folder 要手動從 peforth-1.24-py3.7.egg 
+	  copy peforth\ 來蓋過 site-packages 裡的 peforth\ folder. 
+	  refer to https://onedrive.live.com/view.aspx?resid=A796EA18AC8C1DA9%2112289&id=documents&wd=target%28Anaconda.one%7CB4E0DFAB-84F7-43D2-A5AB-515B43314252%2FDevelop%20peforth%20in%20an%20Anaconda%20virtual%20environment%7C99DE5C5F-B36D-4949-9471-BC7A857E3C2B%2F%29
+[X] 14:41 2019/11/25 quit.f 裡這種東西應該要改良，太笨了：
+		import os py> vm :: os=pop(1) \ 太笨
+		import os \ 應該改良成這樣
+[X] 15:21 2019/11/25 整理 peforth.f quit.f peforth.selftest 的關係，更有系統了。
+	__init__.py 只 load 進基本的 peforth.f quit.f 其他的都由 quit.f 負責，使 quit.f 
+	成為 eforth 系統的 main program, 統籌者。
+[X] 16:07 2019/11/25 一舉搞懂 pop(1) 
+	code test # ( a b c -- ) print given things
+		print(pop(), pop(), pop()) end-code
+	1 2 3 test
+	3 2 1 <-- 結果，顯示三個 pop() 是從左到右抓取 TOS 的。
+[X] Tests before a Release v1.24
 	[X] setup.py 裡的 copy right 年份要改成 2019 
     *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
         [V1.22之後的新版] 打包步驟  2018/12/16 11:02 
@@ -3419,7 +3434,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [/] 考慮 README.rst 改良
             [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+    [X] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
         [X] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
 		[X] 同上 python test.py 先試試看
@@ -3466,40 +3481,26 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         %f version drop
         x = 12345
         %f x --> \ 查看 unknown 的效果
-		\ Colab & Azure 都用 Ubuntu 查版本
+		\ Colab & Azure 都用 Ubuntu 查版本, Notebooks.ai 用 Debian 都可用這行指令
 		!cat /etc/os-release 
 		%f py> path --> \ 查看 path 發現 Azure 就是用 Anaconda 所以它有 support Ubuntu！ 
 		%pwd \ 查看 working directory 
 		[x] Colab https://colab.research.google.com/drive/1nZpybQryEiwYzpMvG1tHg4qbNnd_rMey#scrollTo=yAuF9DZcrFaT
         [X] Azure https://peforthplayground-hcchen1471.notebooks.azure.com/j/notebooks/peforth-playground.ipynb 
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+		[X] notebooks.ai 也測測看
+    [X] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
         1. 先 commit 上 develop branch, upload 上網上 Github.
         2. 切到 master 
         3. 用 GitHub for Windows desktop 的 Branch > Merge into current branch 選 develop 把它 merge 過來。
            解決 conflicts 之後完成 merge. 
         4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
            Master 上的應該是些 README.md 的修改。 
-	[ ] Ubuntu 也測測看
-	[ ] notebooks.ai 也測測看
-    [ ] version 改成 1.25  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
-[X] 05:29 2019-11-21 projectk.py 裡面的 local, Comment, debug 這三個 global token 好像是多
-	餘的, 有空檢討看看. 
-	[X] local 可能是 ok(prompt='OK ', loc={}, glo={}, cmd="") 或 redefined unknown 用的 <--- 不是
-	13:47 2019/11/25 delete all suspected things from projectk.py --> dos ok, jupyternotebook ok.
-	* 注意！setup.bat 不會更新 site-packages 的 peforth\ folder 要手動從 peforth-1.24-py3.7.egg 
-	  copy peforth\ 來蓋過 site-packages 裡的 peforth\ folder. 
-	  refer to https://onedrive.live.com/view.aspx?resid=A796EA18AC8C1DA9%2112289&id=documents&wd=target%28Anaconda.one%7CB4E0DFAB-84F7-43D2-A5AB-515B43314252%2FDevelop%20peforth%20in%20an%20Anaconda%20virtual%20environment%7C99DE5C5F-B36D-4949-9471-BC7A857E3C2B%2F%29
-[X] 14:41 2019/11/25 quit.f 裡這種東西應該要改良，太笨了：
-		import os py> vm :: os=pop(1) \ 太笨
-		import os \ 應該改良成這樣
-[X] 15:21 2019/11/25 整理 peforth.f quit.f peforth.selftest 的關係，更有系統了。
-	__init__.py 只 load 進基本的 peforth.f quit.f 其他的都由 quit.f 負責，使 quit.f 
-	成為 eforth 系統的 main program, 統籌者。
-[X] 16:07 2019/11/25 一舉搞懂 pop(1) 
-	code test # ( a b c -- ) print given things
-		print(pop(), pop(), pop()) end-code
-	1 2 3 test
-	3 2 1 <-- 結果，顯示三個 pop() 是從左到右抓取 TOS 的。
+    [X] version 改成 1.25  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+	[ ] 要不要把 projectk.py sync 回 project-k
+		(很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+		05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
+		硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
+
 [ ] 15:56 2019/11/25 經常要 (see) 東西都會出這個問題：
 	Callable in phaseB <function compyle_anonymous at 0x00000232B1164A68>: Circular reference detected
 	問問看有沒有 workaround ？
