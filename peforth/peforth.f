@@ -1114,8 +1114,7 @@ code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __
     /// __main__ :: peforth.projectk.y=456 \ Define peforth global variable
     /// __main__ :> np constant np // ( -- moduel ) numpy, see 'help import'
     
-: (import) // ( <module> -- obj ) Import the module, get the module object
-    BL word ( <module> )
+: (import) // ( "module" -- obj ) Import the module, get the module object
     s" import {}" :> format(tos()) ( <module> "import <module>" )
     py: exec(pop()) py> sys.modules[pop()] ( module ) ;
     /// Introduce a module to global of peforth or the main program
@@ -1127,8 +1126,9 @@ code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __
     /// 3. py: setattr(sys.modules['peforth'].projectk,'np',v('np')) \ alt method
 
 : import // ( <module> -- ) Import the module to peforth namespace
-    py> vm (import) dup :> __name__ ( vm module name ) 
-	py: setattr(pop(2),pop(),pop()) ;
+    BL word ( "module" ) (import) dup :> __name__
+	py> vm ( module name vm ) 
+	py: setattr(pop(),pop(),pop()) ;
 	/// refer to (import)
 
 : module // ( 'name' -- module ) Get the module object from sys.modules
