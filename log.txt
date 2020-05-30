@@ -17,7 +17,7 @@ peforth
 	https://www.zhihu.com/question/20125256
 
 [x] review project-k , should project-k support python too?
-    which will be peforth.py
+    which will be peforth.py 10:04 2019/11/26 it's projectk.py now.
 
 [x] 直接問 pyforth 的原作者的版權條件 ---> 用不著了.
 [x] 實驗用 exec() 生成一個 function
@@ -3475,7 +3475,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [X] Windows DOS 下試 
         [/] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
             [/] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
-    [X] Test Google Colab and Microsoft Azure Online Jupyter Notebooks
+    [X] Test Online Jupyter Notebooks Google Colab, Microsoft Azure, and Notebooks.ai 
         !pip install peforth
         import peforth
         %f version drop
@@ -3496,7 +3496,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
            Master 上的應該是些 README.md 的修改。 
     [X] version 改成 1.25  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
-	[ ] 要不要把 projectk.py sync 回 project-k
+	[X] 要不要把 projectk.py sync 回 project-k
 		(很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
 		05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
 		硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
@@ -3504,4 +3504,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] 15:56 2019/11/25 經常要 (see) 東西都會出這個問題：
 	Callable in phaseB <function compyle_anonymous at 0x00000232B1164A68>: Circular reference detected
 	問問看有沒有 workaround ？
+
+[ ] 13:42 2019/11/27 下回 release 要在 README.rst ~.md 裡明列有測過的系統：
+	1. Windows Anaconda DOSBox pyhon 3.7, DOSBox ipython, JupyterNotebook, JupyterLab
+	2. Colab (Ubuntu,Anaconda), Azure notebooks (Ubuntu), Notebooks.ai (Debian)
 	
