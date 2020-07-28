@@ -34,8 +34,13 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
     \ Redirect print() to screen-buffer 
     \
 
-    py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
-                                 /// Enveloped in array is for "access by reference"
+    \ py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
+    \                              /// Enveloped in array is for "access by reference"
+
+    py: vm.forth['screen-buffer']=[""]
+    code screen-buffer # ( -- ['string'] ) Selftest screen buffer
+        push(vm.forth['screen-buffer']) end-code
+    
     <py>
         class Screenbuffer:
             def __init__(self,buf):
@@ -66,7 +71,7 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
     \ sys.stdout.reset()
 
     : display-off // ( -- ) Redirect stdout to a empty screen-buffer
-        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer']) 
+        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
         screen-buffer :: [0]="" ;
 
     : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it off.
@@ -261,6 +266,9 @@ code </pyV>     # ( "statements" -- value ) Eval in-line python statement
         tick('\\').immediate=True
         tick('<selftest>').interpretonly=True
         tick('</selftest>').interpretonly=True
+        
+        # init the global variable namespace
+        vm.forth = {}
 
         # Now we can finally define any useful python functions
         def v(name):
@@ -280,6 +288,7 @@ code </pyV>     # ( "statements" -- value ) Eval in-line python statement
             # means variable in the (R)oot context, the forth vocabulary.'''
             return vm.forth[name]
         vm.r = r
+        
     </py>
     
 code words      # ( <pattern> -- ) List all words, in the active vocabularies, with the pattern in their name.
@@ -981,13 +990,36 @@ variable '<text> private
                     [ last literal ] dup execute execute
                 then ; immediate
 : </comment>    ; // ( -- ) Delimiter of <comment>
+\ : (constant)    // ( n "name" -- ) Create a constnat
+\                 (create) <py>   
+\                 source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
+\                 last().xt = genxt('constant',source)
+\                 if not getattr(vm,current,False): setattr(vm,current,{})
+\                 exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
+\                 last().type = 'constant'
+\                 </py> 
+\                 reveal ; 
+\ : constant      // ( n <name> -- ) Create a constnat
+\                 BL word (constant) ;
+\ : value         // ( n <name> -- ) Create a 'value' variable.
+\                 constant last :: type='value' ; 
+\ : to            // ( n <value> -- ) Assign n to <value>.
+\                 ' ( n word ) 
+\                 py> tos().type.find("value")==-1 ?abort" Error! Assigning to a none-value."
+\                 compiling if ( n word ) 
+\                     char getattr(vm,"{}")["{}"]=pop() 
+\                     :> format(tos().vid,pop().name) ( n s ) 
+\                     compyle , ( n ) \ n has already been compiled as a literal
+\                 else ( n word )
+\                     py: getattr(vm,tos().vid)[pop().name]=pop(1)
+\                 then ; immediate
+
 : (constant)    // ( n "name" -- ) Create a constnat
                 (create) <py>   
-                source = '    push(getattr(vm,"{}")["{}"])'.format(current, last().name)
+                source = '    push(_me.value)'
                 last().xt = genxt('constant',source)
-                if not getattr(vm,current,False): setattr(vm,current,{})
-                exec('getattr(vm,"{}")["{}"]=pop()'.format(current, last().name)) 
                 last().type = 'constant'
+                last().value = pop()
                 </py> 
                 reveal ; 
 : constant      // ( n <name> -- ) Create a constnat
@@ -995,14 +1027,13 @@ variable '<text> private
 : value         // ( n <name> -- ) Create a 'value' variable.
                 constant last :: type='value' ; 
 : to            // ( n <value> -- ) Assign n to <value>.
-                ' ( n word ) 
+                ' \ ( n word ) interpret state or ( word ) compile state 
                 py> tos().type.find("value")==-1 ?abort" Error! Assigning to a none-value."
-                compiling if ( n word ) 
-                    char getattr(vm,"{}")["{}"]=pop() 
-                    :> format(tos().vid,pop().name) ( n s ) 
-                    compyle , ( n ) \ n has already been compiled as a literal
+                compiling if ( word )
+                    literal \ compile the word as a literal into dictionary
+                    char pop().value=pop(1) compyle ,  \ compile the code 
                 else ( n word )
-                    py: getattr(vm,tos().vid)[pop().name]=pop(1)
+                    py: pop().value=pop(1)
                 then ; immediate
 
 : -->           ( result -- ) // Print the result with the command line.
@@ -1098,13 +1129,16 @@ code dict>keys  # ( dict -- [keys] ) Get keys of the dict
 code _dir_      # ( x -- dir ) Get complete dir list (keys) of an object
                 push(dir(pop())) end-code
                 /// see also 'dir' and dict>keys
-                last alias obj>keys
             
 code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __things__)
                 x = dir(pop())
                 push([i for i in x if (i[0]!='_' and i[-1]!='_')]) 
                 end-code
                 /// See '_dir_' that gets complete dir, also 'dict>keys' that gets hash keys.
+
+: keys          // ( sth -- dir|dict_keys ) Keys list of the object or dictionary.
+                py> type(tos())==dict if dict>keys else dir then ;
+                /// This is the compouned of command 'dir' and 'dict>keys' like obj>keys of jeforth.
 
 : __main__ // ( -- module ) Get __main__ module of this python session
     py> sys.modules['__main__'] ;
@@ -1254,15 +1288,15 @@ code tib.insert # ( "string" -- ) Insert the "string" into TIB to run it.
     \ json.dumps() needs this function to convert a Word object to dict 
     <py>   
         def obj2dict(obj):
-            #convert object to a dict
+            #convert object to a dict for json.dumps(...,default=r('obj2dict')) 
             d = {}
             d['__class__'] = obj.__class__.__name__
             d['__module__'] = getattr(obj,"__module__","unknown")
             d['__doc__'] = getattr(obj,"__doc__",None)
             d.update(getattr(obj,"__dict__",{}))
             return d
-        push(obj2dict)
-    </py> constant obj2dict // ( -- func ) obj to dict converter for json.dumps(...,default=r('obj2dict'))
+        vm.forth['obj2dict']=obj2dict
+    </py> 
 
 : stringify     // ( thing -- "string" ) Dict'fy and JSON.stringify anything  
                 py> json.dumps(pop(),default=r('obj2dict'),indent=4) ;

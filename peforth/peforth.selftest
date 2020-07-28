@@ -418,7 +418,7 @@
         screen-buffer <py> pop()[0].find('cfa')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('colon')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('"bb": 22')!=-1 </pyV> ( True )
-        [d True,True,True,True d] [p 'see','(see)','stringify','dump2ret','obj2dict' p]
+        [d True,True,True,True d] [p 'see','(see)','stringify','dump2ret' p]
         --- marker ---
     *** trim indent -indent
         <text>

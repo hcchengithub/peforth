@@ -3156,7 +3156,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         /// Nested not allowed yet.
     
     
-[ ] 經 marker 刪除的 value & constant 留在 vm[context] 裡面的 garbage
+[X] 經 marker 刪除的 value & constant 留在 vm[context] 裡面的 garbage
     沒有回收! marker 還要再加強，forget 也要注意。
     --> 123 value x char abc value ss vm.forth dict>keys --> 
         dict_keys(['CRLF', 'obj2dict', '_locals_', 'debug', 'screen-buffer', 
@@ -3165,6 +3165,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                              ^^^       ^^^^   有在 vm.forth 裡面 
     --> 執行 marker --> words 裡沒有 x, ss 了, 當然 --> 但是 vm.forth 裡還是存在，造成堆積！！ 
         v1.23 還是有這個問題，不知道該怎麼做。。。。
+    FP, see below 2020/07/27 08:38:15 value constant to 要重新定義. . . . .
 
 [X] 改寫所有的 code words 把彆扭的 help 用新的 # 功能改自然點。
     done! v1.23 
@@ -3386,7 +3387,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	餘的, 有空檢討看看. 
 	[X] local 可能是 ok(prompt='OK ', loc={}, glo={}, cmd="") 或 redefined unknown 用的 <--- 不是
 	13:47 2019/11/25 delete all suspected things from projectk.py --> dos ok, jupyternotebook ok.
-	* 注意！setup.bat 不會更新 site-packages 的 peforth\ folder 要手動從 peforth-1.24-py3.7.egg 
+	* 注意！setup.bat 不會更新 site-packages 的 peforth\ folder 要手動從 peforth-1.24-py3.7.egg  <== 2020.7.28 解了！ see OneNote2020 > "Develop peforth in an Anaconda virtual environment" 
 	  copy peforth\ 來蓋過 site-packages 裡的 peforth\ folder. 
 	  refer to https://onedrive.live.com/view.aspx?resid=A796EA18AC8C1DA9%2112289&id=documents&wd=target%28Anaconda.one%7CB4E0DFAB-84F7-43D2-A5AB-515B43314252%2FDevelop%20peforth%20in%20an%20Anaconda%20virtual%20environment%7C99DE5C5F-B36D-4949-9471-BC7A857E3C2B%2F%29
 [X] 14:41 2019/11/25 quit.f 裡這種東西應該要改良，太笨了：
@@ -3509,4 +3510,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] 13:42 2019/11/27 下回 release 要在 README.rst ~.md 裡明列有測過的系統：
 	1. Windows Anaconda DOSBox pyhon 3.7, DOSBox ipython, JupyterNotebook, JupyterLab
 	2. Colab (Ubuntu,Anaconda), Azure notebooks (Ubuntu), Notebooks.ai (Debian)
-	
+
+[X] 2020/07/27 08:33 可以把 [obj>keys] 'keys' 定義成 dir | dict>keys 這樣就不會與 dir 重複了。又可以與 jeforth 相容。
+[X] 2020/07/27 08:38:15 value constant to 要重新定義，不要再用 vm.forth 存放了，改用 variable 自己 word. 
+    See OneNote2020 > "Jeforth variable 變革" --> 成功了。
+[ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
+
+
+
