@@ -103,17 +103,17 @@ vm.exit = False
 
 def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     '''
-    Invoke the peforth interpreter.
-    An statement: peforth.ok(prompt='OK ', loc=locals(), glo=globals(), cmd="") 
-    is like a breakpoint. The prompt indicates which breakpoint it is if there are 
-    many. Arguments loc (locals) and glo (globals) along with the prompt are the 
-    debuggee's informations that is packed as a tuple (loc,glo,prompt) left on TOS 
-    of the FORTH vm when the breakpoint is called. Replace the loc=locals() with
-    loc=dict(locals()) to get a snapshot copy instead of a reference, as well as 
-    the glo. 'exit' command to stop debugging.
+    Invoke the peforth interpreter that can be used as a breakpoint. New and better breakpoint pattern :
+    if peforth.execute('debug').pop() : peforth.push(locals()).ok("bp>",cmd='to _locals_');
+    However, old pattern is still available : peforth.ok(prompt='OK ', loc=locals(), glo=globals(), cmd="") 
+    The prompt indicates which breakpoint it is if there are many. Arguments loc (locals) and glo (globals) 
+    along with the prompt are the debuggee's informations that is packed as a tuple (loc,glo,prompt) left 
+    on TOS of the FORTH vm when ok() is called with loc or glo. Replace locals() with dict(locals()) 
+    to get a snapshot copy instead of a reference. 'exit' command to stop debugging. 
     '''
     if loc or glo: vm.push((loc,glo,prompt))  # parent's data
     while True:
+        if not vm.compiling and not vm.multiple: print(prompt, end="")
         if cmd == "":                                    #
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or
                 vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
@@ -126,15 +126,12 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
 
         # pass the command line to forth VM
         if cmd == "":
-            print(prompt, end="")
             continue
         elif cmd == chr(4):
             vm.multiple = not vm.multiple
-            if not vm.multiple: print(prompt, end="")
         else:
             vm.dictate(cmd)
             if vm.multiple: vm.multiple = False # switch back to the normal mode
-            print(prompt, end="")
         cmd = ""
         # Master switch vm.exit is a flag of boolean. When it's True
         # then exit to the caller that usually is python interpreter.

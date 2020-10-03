@@ -1,3 +1,3 @@
 if __name__ == '__main__':
     import peforth
-    peforth.ok(cmd='\n')
+    peforth.ok()
