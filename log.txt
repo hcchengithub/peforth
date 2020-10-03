@@ -3515,6 +3515,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 2020/07/27 08:38:15 value constant to 要重新定義，不要再用 vm.forth 存放了，改用 variable 自己 word. 
     See OneNote2020 > "Jeforth variable 變革" --> 成功了。
 [ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
-
+[X] 07:49 2020/10/04 參考 KsanaVM 發現我原先對 prompt 的時機有誤解，改好了。
 
 
