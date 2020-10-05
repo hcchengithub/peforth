@@ -452,6 +452,9 @@ peforth
         OK re :> group(2) bool .
         False OK
     [x] 多行輸入公用 routine
+        [x] 19:46 2020/10/04 複習需要 ^D 多行輸入 multiple lines inpue 的原因：如果是 colon definition 本來
+            就可以在 compiling state 多行輸入，問題出在 code ... end-code 期間需要 ^D multiple lines input.
+             
         : accepts ( "deli" <multiple lines> -- "string" ) // Get multiple lines from tib up to delimiter
             ( deli )
             begin
