@@ -43,7 +43,7 @@ vm.commandline = " ".join(sys.argv[1:])
 
 # panic() when something wrong
 def panic(msg,serious=False):
-    # defined in project-k kernel peforth.py
+    # defined in __init__.py
     print("\n{}".format(msg))
     if serious:
         c = input("Continue, Debug, or Abort? [C/d/a] ")
@@ -111,13 +111,13 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     on TOS of the FORTH vm when ok() is called with loc or glo. Replace locals() with dict(locals()) 
     to get a snapshot copy instead of a reference. 'exit' command to stop debugging. 
     '''
+    vm.prompt = prompt  # 13:58 2020/10/16 for input dialog to show the prompt directly                                                                                         
     if loc or glo: vm.push((loc,glo,prompt))  # parent's data
     while True:
-        if not vm.compiling and not vm.multiple: print(prompt, end="")
+        if not vm.compiling and not vm.multiple: print(prompt, end="")  # [X] 07:49 2020/10/04 KsanaVM reveals my mistaken about prompt now fixed
         if cmd == "":                                    #
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or
-                vm.execute('accept')                     # multiple lines. Press Ctrl-D to toggle
-                cmd = vm.pop().strip()                   # between the two modes. Place a Ctrl-D
+                cmd = vm.dictate('accept').pop().strip()                   
             elif vm.tick('<accept>') and vm.multiple:    # before the last <Enter> key to end the
                 vm.execute('<accept>')                   # input when in multiple-line mode.
                 cmd = vm.pop().strip()                   #
