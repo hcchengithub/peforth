@@ -3636,4 +3636,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
 [X] 17:01 2020/10/24 v1.25 已經上了 pypi 也測過 Gom 成功，以上測試慢慢做，先上 github 再說。
+[X] 14:22 2020/10/29 vm.prompt 是要給 gom port dialog 知道目前 prompt 否則只在 ok() 肚子裡。
+
 
