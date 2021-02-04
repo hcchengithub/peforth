@@ -3786,3 +3786,4 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
     [X] version 改成 1.27  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+
