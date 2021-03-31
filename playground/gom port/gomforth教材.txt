@@ -1,0 +1,50 @@
+
+    p e f o r t h   G O M   p o r t  教材
+
+    Forth 基本常識
+    ===============
+    
+    - data stack
+    - Postfix notation 
+    - FORTH 八家將 drop dropall dup swap over 
+      + - * / % AND OR NOT and or not 
+      variable constant value to 
+      ( stack diagram -- ) words help bye stop : ; count space ."
+    - Scope of __main__ and peforth kernel 
+
+    進階 
+    =====
+    
+    - Add a colon word
+    - <py> ... </py>  
+    - <py> ... </pyV>  
+    - py> py: py>~  py:~ 
+    - debug 
+    
+        Example low level breakpoint: ( High level simply *debug* <prompt> )
+        
+            peforth.bp(22,locals())
+            
+        Breakpoint commands:  bl  be  bd  be*  bd*  (try " help bl " )
+        'exit' or ESC leaves the breakpoint and continue running.
+        'bye' to totally stop the script session.
+        
+    常用的 words 
+    =============
+        
+    \ // /// ( 
+    bye stop words help 
+    : ; 
+    <py> </py> </pyV> py: py> py:~ py>~ :: :> ::~ :>~ 
+    swap drop nip dup over depth pick roll rot -rot 
+    bool and or not AND OR NOT XOR true false 
+    "" [] {} none 0< + * - / % 1+ 2+ 1- 2- >> << 0= 0> 0<> 0<= 0>= = == > < != >= <= <> 
+    invert negate within abs max min sign trim count 
+    if then else for begin until again repeat while 
+    ?stop ?dup 
+    constant value to variable ! @ ? 
+    . cr space chars spaces --> .( ." .' s" s' s` <text> </text> 
+    int float type list dict str set tuple dict>keys dir keys 
+    dropall .s see cd 
+    *debug* bl bd be bd* be* 
+
