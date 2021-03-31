@@ -248,7 +248,7 @@ def phaseB(w):
         rstack.append(ip);  # Forth ip is the "next" instruction to be executed. Push return address.
         ip = w;  # jump
     else:
-        panic("Error! don't know how to execute : "+w+" ("+type(w)+")\n","error");
+        panic("Error! don't know how to execute : "+w+" ("+type(w)+")\n");
         
 # execute("unknown") == do nothing, this is beneficial when executing a future word
 # May be redefined for selftest to detect private words called by name.
@@ -258,7 +258,7 @@ def execute(entry):
     w = phaseA(entry)
     if w:
         if type(w) in [int, float]:
-            panic("Error! please use inner("+w+") instead of execute("+w+").\n","severe");
+            panic("Error! please use inner("+w+") instead of execute("+w+").\n");
         else:
             phaseB(w); 
             return(vm) # support function cascade
@@ -296,10 +296,7 @@ def outer(entry=None):
         if (w) :
             if(not compiling): # interpret state or immediate words
                 if getattr(w,'compileonly',False):
-                    panic(
-                        "Error! "+token+" is compile-only.", 
-                        len(tib)-ntib>100  # error or warning? depends
-                    ); 
+                    panic("Error! "+token+" is compile-only."); 
                     return;
                 execute(w);
             else:  # compile state
@@ -307,10 +304,7 @@ def outer(entry=None):
                     execute(w);  # Not inner(w);
                 else:
                     if getattr(w,'interpretonly',False):
-                        panic(
-                            "Error! "+token+" is interpret-only.", 
-                            len(tib)-ntib>100  # error or warning? depends
-                        );
+                        panic("Error! "+token+" is interpret-only.");
                         return;
                     comma(w);  # compile w into dictionary. w is a Word() object
         else:
@@ -335,10 +329,7 @@ def outer(entry=None):
             else: 
                 # token is unknown or (hex, oct, binary)
                 def panic_unknown():
-                    panic(
-                        "Error! "+token+" unknown.\n", 
-                        len(tib)-ntib>100  # error or warning? depends
-                    );
+                    panic("Error! "+token+" unknown.\n");
                 try:
                     # token is a number
                     if token[:2] in ["0x","0X"]:
@@ -528,7 +519,11 @@ def rpop(index=None):
 # push(formula(pop(i)),i-1) manipulate the tos(i) directly, when i is the index of a loop.
 def pop(index=None):
     if index==None:
-        return stack.pop();
+        try:
+            return stack.pop();
+        except Exception as err:
+            print(err);
+            return None;
     else:
         return stack.pop(len(stack)-1-index);
 
