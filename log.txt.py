@@ -2344,7 +2344,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     NameError                                 Traceback (most recent call last)
     c:\users\hcche\appdata\local\programs\python\python36\lib\runpy.py in run_module(mod_name, init_globals, run_name, alter_sys)
         199        Returns the resulting top level namespace dictionary
-        200     """
+        200     """"""""
     --> 201     mod_name, mod_spec, code = _get_module_details(mod_name)
         202     if run_name is None:
         203         run_name = mod_name
@@ -3640,7 +3640,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 13:52 2020/11/23 把 pypi 的 v1.25 直接換成 local 的 v1.26 
     --> 直接 copy __init__.py version.txt 蓋過去 c:\Users\8304018\AppData\Roaming\gom\2020\python\peforth  
     --> 11> <py> ok() </py> --> prompt 變成 ok , exit --> prompt 變回 11> 成功！ 這就是 v1.26 無誤。
-[X] 10:26 2020/11/26 改良 breakpoint 不需要改 peforth, 從 application 端外掛就可以了。
+[X] 10:26 2020/11/26 改良 breakpoint 不需要改 peforth, 從 application 端外掛就可以了。 (see GitHub\peforth\playground\jupyternotebook.py)
     Usage of breakpoint:
         peforth.bp(22,locals())                # drop breakpoint 22 with locals()
         for i in [11,22,33]: peforth.bps[i]=0    # disable breakpoints 11,22,33 
@@ -3786,4 +3786,32 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
     [X] version 改成 1.27  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+[ ] 12:24 2021/03/31 peforth 本來就有 tstack 了，但它是加在 TIB 後面的，故只能放 integer.
+    [X] 12:25 2021/03/31 弄出個 xstack 來用
+        -------- xtack 的定義 ---------------------------------------
+        [] value xstack xstack py: vm.xstack=pop() // ( -- array ) The xstack. 掛進 vm 就可以直接以 py> xstack 取用。
+        : x@    xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
+        : x>    // ( -- n ) Pop the xstack
+                xstack :> pop() ; 
+        : >x    // ( n -- ) Push n into the xstack
+                xstack :: append(pop()) ;
+        : .x    // ( -- ) List xstack 
+                xstack . ;
+        : xdrop x> drop ; // ( X: ... a -- X: ... ) drop xstack 
+        : xdropall [] to xstack ; // ( X: ... -- X: empty ) clear xstack 
+        -------- xtack 的定義 ---------------------------------------
+        首先用在研究 Genetic Algorithm 的 jupyternotebook 中。
+    [ ] 12:25 2021/03/31 考慮把 tstack 弄成一般化，不要再用 TIB 這樣的花招了。
+    
+[X] 2021/04/06 10;19:27 jupyternotebook 之下無法 multiple input 的問題有解了。答案是直接取用
+    clipboard 給 tib.input 就好了。先定義讀取 clipboard 的 word :
+    import IPython
+    : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ; 
+    // ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
+
+
+
+
+
+
 
