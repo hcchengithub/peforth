@@ -3803,8 +3803,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         首先用在研究 Genetic Algorithm 的 jupyternotebook 中。
     [ ] 12:25 2021/03/31 考慮把 tstack 弄成一般化，不要再用 TIB 這樣的花招了。
     
-[X] 2021/04/06 10;19:27 jupyternotebook 之下無法 multiple input 的問題有解了。答案是直接取用
-    clipboard 給 tib.input 就好了。先定義讀取 clipboard 的 word :
+[X] 2021/04/06 10;19:27 jupyternotebook 之下無法 multiple input 的問題有解了。
+    https://stackoverflow.com/questions/49817934/read-clipboard-not-working-in-jupyter-or-terminal
+    答案是直接取用 clipboard 給 tib.input 就好了。先定義讀取 clipboard 的 word :
     import IPython
     : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ; 
     // ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
