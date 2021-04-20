@@ -172,6 +172,15 @@ peforth
 [x] IDLE path working directory working folder
     import sys
     sys.path.append('c:/Users/hcche/Documents/GitHub/peforth')
+    20:32 2021/04/10 python 的標準方法用來 import 本機遠處的 module. 我做 Einstein's problems 時的例子：
+        # 把本機提供 GA 的 directory 增加到 path 裡去，真的就成功了！
+        !cd  --> C:\Users\User\Documents\GitHub\Einstein-s-Problem  # 目前的 working directory. 注意，以下用到的東西都在這個 directory 底下一層的 sub-directory 裡。
+        import sys 
+        sys.path.append(r'c:\Users\User\Documents\GitHub\genetic-algorithms') # 讓 python 找得到 Kei Codes 的 repo 
+        from problems import knapsack  # 從 GitHub\genetic-algorithms\problems 裡 imort 到 knapsack.js
+        from algorithms import bruteforce, genetic  # 從 GitHub\genetic-algorithms\algorithms 裡 imort 到 bruteforce.js 與 genetic.js
+        from utils.analyze import timer  # 從 GitHub\genetic-algorithms\utils 裡 imort 到 analyze.js 裡的 timer() function.
+
 [x] 12:50 2017/08/12 已經跑起來了, debugging compiling == 'code' 的問題
     --> 可能是 end-code 裡面 Word(newname,newxt) 失敗的關係 --> no, it can't fail
     --> 應該是 docode 裡面, 結構不太好, 萬一 reDef 或 genxt() 失敗了會怎樣?
