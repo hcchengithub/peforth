@@ -3815,9 +3815,17 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     https://stackoverflow.com/questions/49817934/read-clipboard-not-working-in-jupyter-or-terminal
     答案是直接取用 clipboard 給 tib.input 就好了。先定義讀取 clipboard 的 word :
     import IPython
-    : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ; 
+    : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ;
     // ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
 
+    11:29 2021/04/21 clipboard 在 Mars Lander 爬取 data from the web page 時
+        Documents/GitHub/MarsLander/episode-1/Read the log file2.ipynb
+    也有用到。
+    import IPython, peforth
+    %f : clipboard __main__ :> IPython.lib.clipboard.win32_clipboard_get() ; // ( -- str ) Get string from clipboard.
+    peforth 看不到 IPython 因它是從 jupyternotebook import IPython 的。簡單用 __main__ :> IPython 即可
+    解決。
+    
 [ ] 14:42 2021/04/12 peforth breakpoint 外掛如下，考慮加進 master 裡去 why not? 
     import peforth
     peforth.bps = [i for i in range(100)]  # 預設有這麼多 Breakpoint ID
