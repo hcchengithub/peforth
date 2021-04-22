@@ -3903,3 +3903,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         : xdropall [] to xstack ; // ( X: ... -- X: empty ) clear xstack 
         ''')
     %f version ==>
+[ ] 23:43 2021/04/22 我本來沒啥處理 json 的 words? This is from Codingame > Mars Lander 
+    to save log json from parsed Mars Lander web page after a run.
+    %%f
+    : json2file // ( json pathname -- ) Save josn to text file 
+        py> open(pop(),'w') ( json file ) >r ( json )R( file )
+        py> json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
+        r> :: close() ;
+
