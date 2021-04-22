@@ -3908,6 +3908,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     %%f
     : json2file // ( json pathname -- ) Save josn to text file 
         py> open(pop(),'w') ( json file ) >r ( json )R( file )
-        py> json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
+        py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
         r> :: close() ;
-
+        /// Usage: dictJson char aa.json json2file \ to save file
+        /// but: "pathname" readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
