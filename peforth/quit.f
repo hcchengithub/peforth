@@ -51,4 +51,4 @@
     [then] py: tick('<selftest>').buffer="" \ release the memory
 
 
-
+*debug* 55> 

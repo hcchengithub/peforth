@@ -1041,6 +1041,14 @@ variable '<text> private
                 s" {} {} ({})" :> format(pop(),tos(),type(pop())) . cr ;
                 /// Good for experiments that need to show command line and the result.
                 /// Tip: "" --> prints the command line only, w/o the TOS.
+                ///      -5 slice --> prints the command line and 5 TOS 
+
+: ==>           ( result -- ) // Print the command line cr and the result
+                py> tib[:ntib].rfind("\n") py> tib[max(pop(),0):ntib].strip() ( result cmd-line )
+                s" {}{} {} ({})" :> format(pop(),'\n',tos(),type(pop())) . cr ;
+                /// Good for experiments that need to show command line and the result.
+                /// Tip: "" --> prints the command line only, w/o the TOS.
+                ///      -5 slice ==> prints the command line and 5 TOS 
 
 \ To TIB command line TSRs, the tib/ntib is their only private storage. So save-restore and
 \ loop back information must be using the tib. That's why we have >t t@ and t> 
@@ -1241,7 +1249,7 @@ code .s         # ( ... -- ... ) Dump the data stack.
                 py: ok(pop(),cmd="cr") ;
                 /// How to invoke pdb when not locally imported:
                 /// py: sys.modules['pdb'].set_trace()
-
+				/// Example: %f debug [if] *debug* 1234> [then]
                 
 : *debug*       // ( <prompt> -- ... ) FORTH breakpoint, 'exit' to continue. 
                 BL word ( prompt ) compiling if literal compile (*debug*)
@@ -1351,7 +1359,7 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
                 if drop exit then \ it's RET, all done
                 1+ again ;
                 
-: d             // ( <addr> -- ) dump dictionary
+: du           // ( <addr> -- ) dump dictionary
                 [ last literal ]
                 CR word trim                \ (me str) 避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
                 count 0=                    \ (me str undef?) No start address?
@@ -1411,6 +1419,14 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
                     [d True d]
                     [p '(cd)', 'cd' p]
                 </selftest>
+				
+: json2file 	// ( json pathname -- ) Save josn to text file 
+				py> open(pop(),'w') ( json file ) >r ( json R: file )
+				py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
+				r> :: close() ;
+				/// Usage: 
+				/// Save: py> {"aa":11,"bb":22} char path\1.json json2file
+				/// Restore: char path\1.json readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
 
 
     \ I/O may not be ready enough to read selftest.f at this moment, 
