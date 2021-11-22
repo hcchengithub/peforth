@@ -3679,7 +3679,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     peforth.bps = [i for i in range(1000)]
     
 [X] 17:33 2020/12/07 配合 peforth.bp(22,locals()) 新增 bl be bd be* bd* 等指令
-[ ] 17:34 2020/12/07 release v1.26 to pypi 
+[X] 17:34 2020/12/07 release v1.26 to pypi 
     [X] 17:37 2020/12/07 先試試看 gom ok? --> Pass, 連 selftest 也都 pass. 
     [X] setup.py 裡的 copy right 年份要改成 2019 
     *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
@@ -3694,6 +3694,209 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             需要帳號密碼，看這裡 Ynote or Evernote: "python pypi 研究 -- upload to PyPI ok now.note"
         4.  pip uninstall peforth 然後再 pip install peforth 試驗看看。
         5.  完成！
+    [/] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！
+    [/] 所有 run 法帶 selftest：
+        [/] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=True
+        [/] 先通過最基本的 selftest： GitHub\peforth\peforth>python test.py
+        [/] Run python setup.py install 更新本地 site-package 版本以供測試
+            [/] 要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
+                裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
+                16:27 2020/10/24 不必這樣，因為 python setup.py install 灌好的 peforth v1.25 是
+                    c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth-1.25-py3.7.egg 
+                而 pip install peforth 灌好的是另一個 peforth v1.25 
+                    c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth\
+                兩個可以並存！而且後者優先。只要把後者 directory name 改成 peforth.disabled
+                就可以讓前者生效，前者是 local install 測試時有其方便性。
+        [/] 1.  python -i -m peforth [X] with-selftest .s words exit bye
+        [/] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [/] 3.  ipython import peforth .s words
+                [/] selftest peforth.ok() .s words <--- w/parent
+                [/] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [/] 4.  jupyter notebook 
+                kernel > restart and clear outputs 
+                x = 123
+                %f x .     
+                x . \ ==> 123 (<class 'int'>)
+        [/] 5.  jupyter notebook --> peforth kernel --> .s words 
+        [/] 6.  Gom 手動移除現有的 peforth directories from:
+                    c:\Users\8304018\AppData\Roaming\gom\2020\python\.. 
+                然後從 SCRIPTING > Script Choice >  pip install peforth > Tools > Install Python Package 灌 peforth 很快很順
+                    import peforth, peforth_gom_port
+                執行 peforth.ok() 無誤。
+                新增 peforth_gom_port.py 放到 peforth repo 的 playground directory 裡。
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
+                --> quit.f selftest=False --> 重來
+    [/] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [/] 改 GitHub\peforth\quit.f
+            ' <selftest> :: enabled=False
+        [/] 同上 python test.py 先試試看
+        [/] Run python setup.py install 更新本地 site-package 版本以供測試
+            [X] 可能要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
+                裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
+        [/] 同上 repeat 1) python -m peforth  2) ipython -m peforth
+        [/] 做出取消 selftest 的 wheel
+            See my Ynote: "Pack peforth to peforth.whl"
+            [/] 1.  檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+                    test.py hello.py misc.f 
+            [/] 2.  跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+                    得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
+        [/] pip uninstall peforth
+            site-packages 下兩個 peforth folder 刪掉了。
+            setup.bat 建立的 EGG 檔 peforth-1.24-py3.7.egg 也刪掉，否則 pip install 會
+            被 skip 過去。
+        [/] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
+            pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
+        [/] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [/] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [/] 3. (i)python import peforth
+               [/] no selftest, peforth.ok() .s words <--- no parent
+               [/] 1234 bye check echo %errorlevel%
+        [/] 4. jupyter notebook --> *debug* ok> .s cd help exit
+               %f %%f magic command
+        [/] 5. repeat 以上 in ubuntu <------- Ubuntu 18.04 沒有 pip built-in 不想搞了
+                [/] pip uninstall peforth     已知 Colab & Azure 都是 Ubuntu 故不必自己多測了 
+                [/] pip install (use /mnt/...the wheel) to WSL ubuntu
+                [/] ipython -m peforth
+                [/] ipython , import peforth , magic commands 
+    [/] 直接用測過的 wheel update Pypi
+        執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
+        需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
+        ID, password search my Ynote with pypi _account_
+        Note: Anaconda base 沒有 twine, 在 Anaconda Navigator 裡找到 twine 把它勾起來 Apply.
+    [/] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
+        [/] Windows DOS 下試 
+        [/] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
+            [/] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
+    [/] Test Online Jupyter Notebooks Google Colab, Microsoft Azure, and Notebooks.ai 
+        !pip install peforth
+        import peforth
+        %f version drop
+        x = 12345
+        %f x --> \ 查看 unknown 的效果
+        \ Colab & Azure 都用 Ubuntu 查版本, Notebooks.ai 用 Debian 都可用這行指令
+        !cat /etc/os-release 
+        %f py> path --> \ 查看 path 發現 Azure 就是用 Anaconda 所以它有 support Ubuntu！ 
+        %pwd \ 查看 working directory 
+        [/] Colab https://colab.research.google.com/drive/1nZpybQryEiwYzpMvG1tHg4qbNnd_rMey#scrollTo=yAuF9DZcrFaT
+        [/] Azure https://peforthplayground-hcchen1471.notebooks.azure.com/j/notebooks/peforth-playground.ipynb 
+        [/] notebooks.ai 也測測看
+    [/] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+        1. 先 commit 上 develop branch, upload 上網上 Github.
+        2. 切到 master 
+        3. 用 GitHub for Windows desktop 的 Branch > Merge into current branch 選 develop 把它 merge 過來。
+           解決 conflicts 之後完成 merge. 
+        4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
+           Master 上的應該是些 README.md 的修改。 
+    [ ] 要不要把 projectk.py sync 回 project-k
+        (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
+        05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
+        硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
+    [X] version 改成 1.27  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+[X] 12:24 2021/03/31 peforth 本來就有 tstack 了，但它是加在 TIB 後面的，故只能放 integer.
+    [X] 12:25 2021/03/31 弄出個 xstack 來用
+        -------- xtack 的定義 ---------------------------------------
+        [] value xstack xstack py: vm.xstack=pop() // ( -- array ) The xstack. 掛進 vm 就可以直接以 py> xstack 取用。
+        : x@    xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
+        : x>    // ( -- n ) Pop the xstack
+                xstack :> pop() ; 
+        : >x    // ( n -- ) Push n into the xstack
+                xstack :: append(pop()) ;
+        : .x    // ( -- ) List xstack 
+                xstack . ;
+        : xdrop x> drop ; // ( X: ... a -- X: ... ) drop xstack 
+        : xdropall [] to xstack ; // ( X: ... -- X: empty ) clear xstack 
+        -------- xtack 的定義 ---------------------------------------
+        首先用在研究 Genetic Algorithm 的 jupyternotebook 中。
+    [/] 12:25 2021/03/31 考慮把 tstack 弄成一般化，不要再用 TIB 這樣的花招了 <== 不對喔 TIB 是 command line 唯一的 resource! tstack 別有意義。
+    
+[X] 2021/04/06 10;19:27 jupyternotebook 之下無法 multiple input 的問題有解了。
+    https://stackoverflow.com/questions/49817934/read-clipboard-not-working-in-jupyter-or-terminal
+    答案是直接取用 clipboard 給 tib.input 就好了。先定義讀取 clipboard 的 word :
+    import IPython
+    : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ;
+    // ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
+
+    11:29 2021/04/21 clipboard 在 Mars Lander 爬取 data from the web page 時
+        Documents/GitHub/MarsLander/episode-1/Read the log file2.ipynb
+    也有用到。
+    import IPython, peforth
+    %f : clipboard __main__ :> IPython.lib.clipboard.win32_clipboard_get() ; // ( -- str ) Get string from clipboard.
+    peforth 看不到 IPython 因它是從 jupyternotebook import IPython 的。簡單用 __main__ :> IPython 即可
+    解決。
+    
+[X] 23:43 2021/04/22 我本來沒啥處理 json 的 words? This is from Codingame > Mars Lander 
+    to save log json from parsed Mars Lander web page after a run.
+    %%f
+    : json2file // ( json pathname -- ) Save josn to text file 
+        py> open(pop(),'w') ( json file ) >r ( json )R( file )
+        py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
+        r> :: close() ;
+        /// Usage: dictJson char aa.json json2file \ to save file
+        /// but: "pathname" readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
+	01:24 2021/11/20 改好這個想要用 peforth 的 setup.bat 灌進去 site-package 試跑結果不行因為
+		(C:\Program Files\Orange) C:\Users\8304018>conda env list
+		# conda environments:
+		#
+							  *  C:\Program Files\Orange <--------------- 咱正在用的
+		base                     C:\ProgramData\Miniconda3
+	01:43 2021/11/20 但即使切回 (base) venv 再新建 peforth venv 又用 admin preledge 也沒用，因為 Windows App Store
+	裝起來的 python 在這裡： (see the error message of setup.bat below)
+		The following error occurred while trying to add or remove files in the
+		installation directory: [Errno 13] Permission denied: 'C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.9_3.9.2544.0_x64__qbz5n2kfra8p0\\Lib\\site-packages\\test-easy-install-18740.write-test'
+	以前研究過 egg 啥的的複習一下。。。 Yes, see OneNote "Develop peforth in an Anaconda virtual environment" 
+	當時 setup.bat 很順。先不管了，用 python -m peforth 在 working directory 試驗即可 。。。 True :-D  and it's now v1.27 
+	under developping. 
+    
+[X] 03:26 2021/11/20 resolve --> and unknown ReDef warning
+	unknown is a code word, how about to replace its xt? 應該可以
+		OK ' test :> xt -->
+		' test :> xt --> <function xt at 0x000001EA1F33F9D0> (<class 'function'>)
+	But the new one is a colon word --> 把舊的名字改掉 <== 對 unknown 成功了！
+		' unknown :: name='unknown_deactivated'
+	--> 單純不該重複出現在 misc.f 裡
+    
+[X] 14:42 2021/04/12 peforth breakpoint 外掛如下，考慮加進 master 裡去 why not? (因為大有問題)
+	15:13 11/22/2021 錯了！ peforth.bp 不能放在 projectk.py 裡！因為 kernel 沒有 ok() 也就不會有 bp() 
+	應該要放在定義 ok() 的地方才對。	
+		( 預設有這麼多 Breakpoint ID ) <py> [i for i in range(100)] </pyV> __main__ :: peforth.bps=pop(1)
+		__main__ :> peforth <py>
+			peforth = pop()
+			def bp(id=None,locals=None):
+				# Breakpoint ID 不能超過 peforth.bps 保留，超過的無效。
+				if id==None: 
+					id = 0
+					prompt='bp> '
+				else:
+					prompt="{}>".format(id)
+				if id in peforth.bps: peforth.push(locals).ok(prompt, cmd="to _locals_")
+			push(bp)
+		</py> __main__ :: peforth.bp=pop(1)
+		[X] 04:56 2021/11/20 但是 __main__ 很後面才有東西，研究看看。。。。。。。 要過了 __init__.py 
+			之後 __main__ 裡才會有 peforth, 算了改 projectk 吧! 
+		[X] 15:01 11/22/2021 要讓 peforth.bp peforth.bps 直接認得，得把這兩個在 peforth/__init__.py 加進去
+				tib   = vm.tib
+				tos   = vm.tos
+				words = vm.words
+				bps   = vm.bps <---------- 加進去
+				bp    = vm.bp  <---------- 加進去
+			否則 peforth 不直接認得， projectk 的東西都在 vm 裡面。	
+
+[ ] 11:34 2021/11/22 為了擴充 peforth.bp for breakpoint GitHub\peforth\peforth\projectk.py 改了，更新 projectk 主流。
+[X] 12:55 2021/11/22 d command 改成了 du 避免經常用到 d 撞名。peforth 沒有 i j k 也是一樣道理。因為 jupyternotebook
+    裡經常有 i j. 插曲，如何在 colon word 裡抓到自己？ 它裡面有個 .lastaddress 有參考自己 [ last literal ] 沒錯吧？
+    沒錯 that's the colon word itself indeed this is the way colon word to get self. 
+[X] 02:15 2021/11/22 release v1.27 to pypi 
+    [X] Gom port 只測到 v1.26 此 v1.27 我沒 license 測不到了。
+    [X] setup.py 裡的 copy right 年份要改成 2021 
+    [ ] 做成 .whl 來測試
+        1.  (記得先把 dist , build , peforth.egg-info 等 folder 先殺掉) 跑 
+        2.  c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+        3.  得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist 可用來 pip install ~.whl 
+		[ ] 只要是定義在 __init__.py 裡的東西就必須 import peforth 才有，正好 peforth.bp 就是這種， 開發比較麻煩。
+			不能直接用 python -m peforth 跑 source code 測試，必須做成 .whl > pip install > test > pip uninstall ...
+			來回 debug. 
     [ ] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！
     [ ] 所有 run 法帶 selftest：
         [ ] 改 GitHub\peforth\quit.f
@@ -3708,11 +3911,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                     c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth\
                 兩個可以並存！而且後者優先。只要把後者 directory name 改成 peforth.disabled
                 就可以讓前者生效，前者是 local install 測試時有其方便性。
-        [ ] 1.  python -i -m peforth [X] with-selftest .s words exit bye
+        [ ] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
         [ ] 2.  ipython -i -m peforth .' Hello World!!' cr bye
         [ ] 3.  ipython import peforth .s words
-                [/] selftest peforth.ok() .s words <--- w/parent
-                [/] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+                [ ] selftest peforth.ok() .s words <--- w/parent
+                [ ] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
         [ ] 4.  jupyter notebook 
                 kernel > restart and clear outputs 
                 x = 123
@@ -3733,7 +3936,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             ' <selftest> :: enabled=False
         [ ] 同上 python test.py 先試試看
         [ ] Run python setup.py install 更新本地 site-package 版本以供測試
-            [X] 可能要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
+            [ ] 可能要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
                 裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
         [ ] 同上 repeat 1) python -m peforth  2) ipython -m peforth
         [ ] 做出取消 selftest 的 wheel
@@ -3793,82 +3996,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
-    [X] version 改成 1.27  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
-[ ] 12:24 2021/03/31 peforth 本來就有 tstack 了，但它是加在 TIB 後面的，故只能放 integer.
-    [X] 12:25 2021/03/31 弄出個 xstack 來用
-        -------- xtack 的定義 ---------------------------------------
-        [] value xstack xstack py: vm.xstack=pop() // ( -- array ) The xstack. 掛進 vm 就可以直接以 py> xstack 取用。
-        : x@    xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
-        : x>    // ( -- n ) Pop the xstack
-                xstack :> pop() ; 
-        : >x    // ( n -- ) Push n into the xstack
-                xstack :: append(pop()) ;
-        : .x    // ( -- ) List xstack 
-                xstack . ;
-        : xdrop x> drop ; // ( X: ... a -- X: ... ) drop xstack 
-        : xdropall [] to xstack ; // ( X: ... -- X: empty ) clear xstack 
-        -------- xtack 的定義 ---------------------------------------
-        首先用在研究 Genetic Algorithm 的 jupyternotebook 中。
-    [ ] 12:25 2021/03/31 考慮把 tstack 弄成一般化，不要再用 TIB 這樣的花招了。
-    
-[X] 2021/04/06 10;19:27 jupyternotebook 之下無法 multiple input 的問題有解了。
-    https://stackoverflow.com/questions/49817934/read-clipboard-not-working-in-jupyter-or-terminal
-    答案是直接取用 clipboard 給 tib.input 就好了。先定義讀取 clipboard 的 word :
-    import IPython
-    : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ;
-    // ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
+    [ ] See above "*** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。" for how to upload to pypi.
+    [ ] version 改成 1.28  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+[X] 02:24 2021/11/22 GitHub\peforth\forth.py 可以刪掉很多已經進 v1.27 的東西，考慮改名成 jupyter-extension.py 
+    [x] it's now: GitHub\peforth\playground\jupyter-extension.py.py 
+[ ] 02:36 2021/11/22 jupyter-extension 做出 paste command 的方法可以 apply to DOS box too. 目前 dos box 之下用 ^D 的方法
+    suppport multiple lines 的 input 也不錯了。
 
-    11:29 2021/04/21 clipboard 在 Mars Lander 爬取 data from the web page 時
-        Documents/GitHub/MarsLander/episode-1/Read the log file2.ipynb
-    也有用到。
-    import IPython, peforth
-    %f : clipboard __main__ :> IPython.lib.clipboard.win32_clipboard_get() ; // ( -- str ) Get string from clipboard.
-    peforth 看不到 IPython 因它是從 jupyternotebook import IPython 的。簡單用 __main__ :> IPython 即可
-    解決。
-    
-[X] 23:43 2021/04/22 我本來沒啥處理 json 的 words? This is from Codingame > Mars Lander 
-    to save log json from parsed Mars Lander web page after a run.
-    %%f
-    : json2file // ( json pathname -- ) Save josn to text file 
-        py> open(pop(),'w') ( json file ) >r ( json )R( file )
-        py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
-        r> :: close() ;
-        /// Usage: dictJson char aa.json json2file \ to save file
-        /// but: "pathname" readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
-	01:24 2021/11/20 改好這個想要用 peforth 的 setup.bat 灌進去 site-package 試跑結果不行因為
-		(C:\Program Files\Orange) C:\Users\8304018>conda env list
-		# conda environments:
-		#
-							  *  C:\Program Files\Orange <--------------- 咱正在用的
-		base                     C:\ProgramData\Miniconda3
-	01:43 2021/11/20 但即使切回 (base) venv 再新建 peforth venv 又用 admin preledge 也沒用，因為 Windows App Store
-	裝起來的 python 在這裡： (see the error message of setup.bat below)
-		The following error occurred while trying to add or remove files in the
-		installation directory: [Errno 13] Permission denied: 'C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.9_3.9.2544.0_x64__qbz5n2kfra8p0\\Lib\\site-packages\\test-easy-install-18740.write-test'
-	以前研究過 egg 啥的的複習一下。。。 Yes, see OneNote "Develop peforth in an Anaconda virtual environment" 
-	當時 setup.bat 很順。先不管了，用 python -m peforth 在 working directory 試驗即可 。。。 True :-D  and it's now v1.27 
-	under developping. 
-    
-[X] 03:26 2021/11/20 resolve --> and unknown ReDef warning
-	unknown is a code word, how about to replace its xt? 應該可以
-		OK ' test :> xt -->
-		' test :> xt --> <function xt at 0x000001EA1F33F9D0> (<class 'function'>)
-	But the new one is a colon word --> 把舊的名字改掉 <== 對 unknown 成功了！
-		' unknown :: name='unknown_deactivated'
-	--> 單純不該重複出現在 misc.f 裡
-    
-[ ] 14:42 2021/04/12 peforth breakpoint 外掛如下，考慮加進 master 裡去 why not? 
-    ( 預設有這麼多 Breakpoint ID ) <py> [i for i in range(100)] </pyV> __main__ :: peforth.bps=pop(1)
-    __main__ :> peforth <py>
-        peforth = pop()
-        def bp(id=None,locals=None):
-            # Breakpoint ID 不能超過 peforth.bps 保留，超過的無效。
-            if id==None: 
-                id = 0
-                prompt='bp> '
-            else:
-                prompt="{}>".format(id)
-            if id in peforth.bps: peforth.push(locals).ok(prompt, cmd="to _locals_")
-        push(bp)
-    </py> __main__ :: peforth.bp=pop(1)
-    [ ] 04:56 2021/11/20 但是 __main__ 很後面才有東西，研究看看。。。。。。。

@@ -402,12 +402,6 @@
         screen-buffer <py> pop()[0].find('2:')==-1 </pyV> ( True )
         [d 32424,-24324,True,True,True,True,True d] [p ".s" p]
         --- marker ---
-    *** d dump
-        display-off
-        d 0
-        display-on
-        screen-buffer <py> pop()[0].find("00000: 0  (<class 'int'>)")!=-1 </pyV> ( True )
-        [d True d] [p 'dump', 'd' p]
     *** see (see)
         : test ; // test.test.test
         display-off
@@ -487,21 +481,21 @@
         0 100 [for] t@ + [next] ( 5050 )
         [d 5050 d] [p '[if]','[else]','[then]','[begin]',
         '[again]','[until]','[for]','[next]','>t','t@','t>' p]
-    *** d dump 
+    *** du dump 
         display-off
-        d 0
-        d
-        d
-        d
-        d
-        d
-        d
+        du 0
+        du
+        du
+        du
+        du
+        du
+        du
         10 800 dump ( 10 + 800 )
         display-on
         screen-buffer <py> pop()[0].find('00000: 0')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('00798: ')!=-1 </pyV> ( True )
         screen-buffer <py> pop()[0].find('00799: ')!=-1 </pyV> ( True )
-        [d 810,True,True,True d] [p '<accept>','</accept>','accept','d','dump',
+        [d 810,True,True,True d] [p '<accept>','</accept>','accept','du','dump',
         '(dump)','toString', '.literal', '.function' p]
 
     *** [r r]

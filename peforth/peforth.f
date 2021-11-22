@@ -185,14 +185,6 @@ code ///        # ( <comment> -- ) Add comment to the new word, it appears in 's
                 ss = ss.rstrip()+'\n' # trim tailing white spaces
                 last().comment = getattr(last(), 'comment', "") + ss;
                 end-code
-
-code unknown    # ( token -- false ) Default unknown command does nothing. 
-                pop();push(False) end-code 
-                /// Usually FORTH prints error message if token unknown.
-                /// We can redefine this word so that it try to find the token 
-                /// in __main__ module name space thus peforth knows all python 
-                /// global variables then! And even local variables too! See gist: 
-                /// https://gist.github.com/hcchengithub/6da91898d2c7604ec3bb4a06245d1e37
     
 code immediate  # ( -- ) Make the last new word an immediate.
                 last().immediate=True end-code 
@@ -1359,7 +1351,7 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
                 if drop exit then \ it's RET, all done
                 1+ again ;
                 
-: du           // ( <addr> -- ) dump dictionary
+: du           	// ( <addr> -- ) dump dictionary
                 [ last literal ]
                 CR word trim                \ (me str) 避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
                 count 0=                    \ (me str undef?) No start address?
@@ -1427,6 +1419,130 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
 				/// Usage: 
 				/// Save: py> {"aa":11,"bb":22} char path\1.json json2file
 				/// Restore: char path\1.json readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
+
+: path-to-find-modules // ( <path> -- ) Add path to sys.path so "import module-name" can find the module
+				CR word trim ( "path" ) py: sys.path.append(pop()) ;
+
+\ ------ debugger ------------------------------------------------------------
+none value _locals_ // ( -- dict ) locals passed down from ok()
+false value debug // ( -- flag ) enable/disable the ok() breakpoint
+
+\ code unknown    # ( token -- false ) Default unknown command does nothing. 
+\                 pop();push(False) end-code 
+\                 /// Usually FORTH prints error message if token unknown.
+\                 /// We can redefine this word so that it try to find the token 
+\                 /// in __main__ module name space thus peforth knows all python 
+\                 /// global variables then! And even local variables too! See gist: 
+\                 /// https://gist.github.com/hcchengithub/6da91898d2c7604ec3bb4a06245d1e37
+\ ' unknown 		:: name='deactivated_unknown' marker --- --- \ so as to rebuild words 
+
+: unknown   	// ( token -- thing Y|N) Try to find the unknown token in __main__ or _locals_
+                _locals_ if \ in a function
+                ( token ) _locals_ :> get(tos(),"Ûnknôwn") ( token, local )
+                py> str(tos())!="Ûnknôwn" ( token, local, unknown? ) 
+                if ( token, local ) nip true exit ( return local Y ) else drop ( token ) then   
+                then   
+                ( token ) py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") ( thing ) 
+                py> str(tos())=="Ûnknôwn" if ( thing ) drop false else true then ; 
+
+: bp 			s" help bp " dictate ; // Usage: peforth.bp(11,locals()) # drop a breakpoint with ID=11, see also help bl 
+                /// Example: Set a breakpoint in python code like this: 
+                ///   if peforth.execute('debug').pop() : peforth.bp(11,locals()) # new simpler method
+                ///   if peforth.execute('debug').pop() : peforth.push(locals()).ok("bp>",cmd='to _locals_') # base method
+                /// Example: Save locals for investigations:
+                ///   if peforth.execute('debug').pop() : peforth.push(locals()).dictate('to _locals_')
+                /// 'quit' to leave the breakpoint and forget locals.
+                /// 'exit' to leave the breakpoint w/o forget locals.
+
+: bl 			// ( -- ) List all breakpoints
+				<py>
+				print('Disabled breakpoints:')
+				for i in range(len(bps)):
+					if not bps[i]: 
+						print(i, end=' ')
+				print(); print('Enabled breakpoints:')
+				count = 0
+				for i in range(len(bps)):
+					if bps[i]: 
+						print(i, end=' ')
+						count += 1
+				print(); print('Enabled breakpoints count: {}/{}'.format(count,len(bps)))
+				</py> cr ;
+				/// Breakpoint commands:
+				///	  bl   - list all breakpoints (capital BL is white space) 
+				///	  be   - enable breakpoints, e.g. be 1 2 3 
+				///	  bd   - disable breakpoints, e.g. bd 1 2 3 
+				///	  be*  - enable all breakpoints
+				///	  bd*  - disable all breakpoints 
+				///   quit - Quit the breakpoint and continue
+
+: bd 			// ( <1 2 3 4...> -- ) Disable listed breakpoints 
+				CR word ( line )
+				<py>
+				line = pop()
+				points = map(int, line.split(' '))
+				for i in points: bps[i] = 0
+				</py> ; 
+				' bl :> comment last :: comment=pop(1)
+
+: be 			// ( <1 2 3 4...> -- ) Enable listed breakpoints 
+				CR word ( line )
+				<py>
+				line = pop(0)
+				points = map(int, line.split(' '))
+				for i in points: bps[i] = i
+				</py> ; 
+				' bl :> comment last :: comment=pop(1)
+
+: bd* 			// ( -- ) Disable all breakpoints 
+				<py>
+				for i in range(len(bps)): bps[i] = 0
+				</py> ;
+				' bl :> comment last :: comment=pop(1)
+
+: be* 			// ( -- ) Enable all breakpoints 
+				<py>
+				for i in range(len(bps)): bps[i] = i
+				</py> ;
+				' bl :> comment last :: comment=pop(1)
+
+: quit      	// ( -- ) Quit the breakpoint forget _locals_ and continue the process
+                none to _locals_ py: vm.exit=True ;  
+                /// 'exit' also quit the breakpoint but it won't forget _locals_ 
+
+                <selftest>
+                *** debugger commands x@ x> >x .sx xdrop xdropall 
+					1 >x 2 >x dropall xdropall xstack py> len(pop()) 0= ( T )
+					4567 >x 1234 >x depth 0= ( TF ) 
+					x@ 1234 = ( TFT  )
+					x> 1234 = ( TFTT )
+					xdrop xstack py> len(pop()) 0= ( TFTTT )
+                    [d True, False, True, True, True d]
+                    [p 'x@', 'x>', '>x', '.sx', 'xdrop', 'xdropall' p]
+                </selftest>
+
+\ ------ end of debugger ------------------------------------------------------------
+
+\ ------ xstack ------------------------------------------------------------
+[] value xstack // ( -- array ) The xstack 
+: x@ 			xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
+: x> 			xstack :> pop() ; // ( -- n ) Pop the xstack
+: >x 			xstack :: append(pop()) ; // ( n -- ) Push n into the xstack
+: .sx 			xstack . ; // ( -- ) List xstack 
+: xdrop 		x> drop ; // ( X: ... a -- X: ... ) drop xstack 
+: xdropall 		[] to xstack ; // ( X: ... -- X: empty ) clear xstack 
+
+                <selftest>
+                *** xstack commands x@ x> >x .sx xdrop xdropall 
+					1 >x 2 >x dropall xdropall xstack py> len(pop()) 0= ( T )
+					4567 >x 1234 >x depth 0= ( TF ) 
+					x@ 1234 = ( TFT  )
+					x> 1234 = ( TFTT )
+					xdrop xstack py> len(pop()) 0= ( TFTTT )
+                    [d True, False, True, True, True d]
+                    [p 'x@', 'x>', '>x', '.sx', 'xdrop', 'xdropall' p]
+                </selftest>
+\ ------ end xstack ------------------------------------------------------------
 
 
     \ I/O may not be ready enough to read selftest.f at this moment, 

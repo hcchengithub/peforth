@@ -38,6 +38,24 @@ else:
 # Let projtct-k know itself
 vm.vm = vm
 
+# Aliases that make it easier to access project-k methods and properties
+# So we can use peforth.dictate(), peforth.execute(), and peforth.push() directly
+# instead of peforth.vm.dictate(), peforth.vm.execute(), and peforth.vm.push().
+dictate     = vm.dictate
+execute     = vm.execute
+push        = vm.push
+dictionary  = vm.dictionary
+ntib        = vm.ntib
+pop         = vm.pop
+reset       = vm.reset
+rpop        = vm.rpop
+rstack      = vm.rstack
+rtos        = vm.rtos
+stack       = vm.stack
+tib         = vm.tib
+tos         = vm.tos
+words       = vm.words
+
 # Get command line, as is
 vm.commandline = " ".join(sys.argv[1:])
 
@@ -50,9 +68,9 @@ def panic(msg,serious=False):
         if c in ['D', 'd']:
             pdb.set_trace()
         elif c in ['A', 'a']:
-            vm.reset()
+            reset()
     else:
-        vm.reset()
+        reset()
 
 vm.panic = panic
 
@@ -111,16 +129,16 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     on TOS of the FORTH vm when ok() is called with loc or glo. Replace locals() with dict(locals())
     to get a snapshot copy instead of a reference. 'exit' command to stop debugging.
     '''
-    if loc or glo: vm.push((loc,glo,prompt))  # parent's data
+    if loc or glo: push((loc,glo,prompt))  # parent's data
     while True:
         vm.prompt = prompt  # 13:58 2020/10/16 dialog needs to know it to show the prompt before the text input box. In the loop because shell level can be multiple.
         if not vm.compiling and not vm.multiple: print(prompt, end="")  # [X] 07:49 2020/10/04 KsanaVM reveals my mistaken about prompt now fixed
         if cmd == "":                                    #
             if vm.tick('accept') and not vm.multiple:    # Input can be single line (default) or
-                cmd = vm.dictate('accept').pop().strip()
+                cmd = dictate('accept').pop().strip()
             elif vm.tick('<accept>') and vm.multiple:    # before the last <Enter> key to end the
-                vm.execute('<accept>')                   # input when in multiple-line mode.
-                cmd = vm.pop().strip()                   #
+                execute('<accept>')                   # input when in multiple-line mode.
+                cmd = pop().strip()                   #
             else:                                        #
                 cmd = input("").strip()                  #
 
@@ -130,7 +148,7 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
         elif cmd == chr(4):
             vm.multiple = not vm.multiple
         else:
-            vm.dictate(cmd)
+            dictate(cmd)
             if vm.multiple: vm.multiple = False # switch back to the normal mode
         cmd = ""
         # Master switch vm.exit is a flag of boolean. When it's True
@@ -141,23 +159,15 @@ def ok(prompt='OK ', loc={}, glo={}, cmd=""):
     return(vm) # support function cascade
 vm.ok = ok  # invoke REPL from within REPL, I don't know if we need this.
 
-# Aliases that make it easier to access project-k methods and properties
-# So we can use peforth.dictate(), peforth.execute(), and peforth.push() directly
-# instead of peforth.vm.dictate(), peforth.vm.execute(), and peforth.vm.push().
-dictate     = vm.dictate
-execute     = vm.execute
-push        = vm.push
-dictionary  = vm.dictionary
-ntib        = vm.ntib
-pop         = vm.pop
-reset       = vm.reset
-rpop        = vm.rpop
-rstack      = vm.rstack
-rtos        = vm.rtos
-stack       = vm.stack
-tib         = vm.tib
-tos         = vm.tos
-words       = vm.words
+bps = [i for i in range(100)]  # 預設有這麼多 Breakpoint ID，超過的無效。
+def bp(id=None,locals=None):
+    # Breakpoint ID 不能超過 peforth.bps 保留，超過的無效。
+    if id==None: 
+        id = 0
+        prompt='bp> '
+    else:
+        prompt="{}>".format(id)
+    if id in bps: push(locals).ok(prompt, cmd="to _locals_")
 
 ##### Setup peforth magic command %f and %%f for ipython and jupyter notebook #####
 
@@ -197,9 +207,9 @@ if is_ipython:
 
         '''
         if cell is None:
-            vm.dictate(line)
+            dictate(line)
         else:
-            vm.dictate(cell)
+            dictate(cell)
 
     # Register auto '%load_ext peforth' at an ipython session
     def load_ipython_extension(ipython):
@@ -208,8 +218,8 @@ if is_ipython:
 
 # Load high level source code
 if not vm.tick('version'):  # defined in peforth.f, run only once.
-    vm.dictate(readTextFile(path+'peforth.f'))
-    vm.dictate(readTextFile(path+'quit.f'))
+    dictate(readTextFile(path+'peforth.f'))
+    dictate(readTextFile(path+'quit.f'))
 
 ##### End of peforth __init__.py #####
 

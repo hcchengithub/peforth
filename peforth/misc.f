@@ -86,34 +86,6 @@
                     [d {'a': 1, 'b': 2} d] [p 'txt2json' p]
                 </selftest>
 
-    \
-    \ Redefine unknown try to find global variables in __main__ 
-    \                          and local variables in _locals_
-    \
-    
-    none value _locals_ // ( -- dict ) locals passed down from ok()
-    false value debug // ( -- flag ) enable/disable the ok() breakpoint
-	' unknown :: name='unknown_deactivated'
-    : unknown   // ( token -- thing Y|N) Try to find the unknown token in __main__ or _locals_
-                _locals_ if \ in a function
-                ( token ) _locals_ :> get(tos(),"Ûnknôwn") ( token, local )
-                py> str(tos())!="Ûnknôwn" ( token, local, unknown? ) 
-                if ( token, local ) nip true exit ( return local Y ) else drop ( token ) then   
-                then   
-                ( token ) py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") ( thing ) 
-                py> str(tos())=="Ûnknôwn" if ( thing ) drop false else true then ; 
-                /// Example: Set a breakpoint in python code like this: 
-                ///   if peforth.execute('debug').pop() : peforth.push(locals()).ok("bp>",cmd='to _locals_')
-                /// Example: Save locals for investigations:
-                ///   if peforth.execute('debug').pop() : peforth.push(locals()).dictate('to _locals_')
-                /// That enters peforth that knows variables in __main__ and locals at the breakpoint.
-                /// 'quit' to leave the breakpoint and forget locals.
-                /// 'exit' to leave the breakpoint w/o forget locals.
-
-    : quit      // ( -- ) Quit the breakpoint forget _locals_ and continue the process
-                none to _locals_ py: vm.exit=True ;  
-                /// 'exit' also quit the breakpoint but it won't forget _locals_ 
-
 \
 \ For Windows only (not, say, Ubuntu)
 \
@@ -134,99 +106,6 @@ py> os.name char nt = [if]
                     [p 'dos' p]
                 </selftest>
 [then]
-
-*debug* 33> 
-
-<comment>
-import IPython
-: paste 		py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ;
-				// ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
-: path-to-find-modules ( <path> -- ) // Add path to sys.path so "import module-name" can find the module
-				CR word trim ( "path" ) py: sys.path.append(pop()) ;
-
-( 預設有這麼多 Breakpoint ID ) <py> [i for i in range(100)] </pyV> __main__ :: peforth.bps=pop(1)
-__main__ :> peforth <py>
-	peforth = pop()
-	def bp(id=None,locals=None):
-		# Breakpoint ID 不能超過 peforth.bps 保留，超過的無效。
-		if id==None: 
-			id = 0
-			prompt='bp> '
-		else:
-			prompt="{}>".format(id)
-		if id in peforth.bps: peforth.push(locals).ok(prompt, cmd="to _locals_")
-	push(bp)
-</py> __main__ :: peforth.bp=pop(1)
-
-: bp ." Usage: peforth.bp(11,locals())  # drop a breakpoint with ID=11" cr ;
-: bl // ( -- ) List all breakpoints
-	__main__ :> peforth.bps 
-	<py>
-	bps = pop()
-	print('Disabled breakpoints:')
-	for i in range(len(bps)):
-		if not bps[i]: 
-			print(i, end=' ')
-	print(); print('Enabled breakpoints:')
-	count = 0
-	for i in range(len(bps)):
-		if bps[i]: 
-			print(i, end=' ')
-			count += 1
-	print(); print('Enabled breakpoints count: {}/{}'.format(count,len(bps)))
-	</py> cr ;
-	/// Breakpoint commands:
-	///   bl  - list all breakpoints (capital BL is white space) 
-	///   be  - enable breakpoints, e.g. be 1 2 3 
-	///   bd  - disable breakpoints, e.g. bd 1 2 3 
-	///   be* - enable all breakpoints
-	///   bd* - disable all breakpoints 
-	/// Also: 
-	///   for i in [11,22,33]: peforth.bps[i]=0  # disable breakpoints 11,22,33 
-	///   for i in [11,22,33]: peforth.bps[i]=i  # enable  breakpoints 11,22,33 
-
-: bd // ( <1 2 3 4...> -- ) Disable listed breakpoints 
-	CR word ( line ) __main__ :> peforth.bps ( line bps )
-	<py>
-	line, bps = pop(1), pop(0)
-	points = map(int, line.split(' '))
-	for i in points: bps[i] = 0
-	</py> ; 
-	' bl :> comment last :: comment=pop(1)
-
-: be // ( <1 2 3 4...> -- ) Enable listed breakpoints 
-	CR word ( line ) __main__ :> peforth.bps ( line bps ) 
-	<py>
-	line, bps = pop(1), pop(0)
-	points = map(int, line.split(' '))
-	for i in points: bps[i] = i
-	</py> ; 
-	' bl :> comment last :: comment=pop(1)
-
-: bd* // ( -- ) Disable all breakpoints 
-	__main__ :> peforth.bps  ( bps ) 
-	<py>
-	bps = pop()
-	for i in range(len(bps)): bps[i] = 0
-	</py> ;
-	' bl :> comment last :: comment=pop(1)
-
-: be* // ( -- ) Enable all breakpoints 
-	__main__ :> peforth.bps  ( bps ) 
-	<py>
-	bps = pop()
-	for i in range(len(bps)): bps[i] = i
-	</py> ;
-	' bl :> comment last :: comment=pop(1)
-\ ------ xtack ------------------------------------------------------------
-[] value xstack xstack py: vm.xstack=pop() // ( -- array ) The xstack. 掛進 vm 就可以直接以 py> xstack 取用。
-: x@ xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
-: x> xstack :> pop() ; // ( -- n ) Pop the xstack
-: >x xstack :: append(pop()) ; // ( n -- ) Push n into the xstack
-: .sx xstack . ; // ( -- ) List xstack 
-: xdrop x> drop ; // ( X: ... a -- X: ... ) drop xstack 
-: xdropall [] to xstack ; // ( X: ... -- X: empty ) clear xstack 
-</comment>
 
     \ <text>
     \ \ 
