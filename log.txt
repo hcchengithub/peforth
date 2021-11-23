@@ -3973,7 +3973,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 				GitHub\peforth>C:\Users\8304018\AppData\Roaming\Python\Python38\Scripts\twine upload dist/* 
 				終於成功了。
 		[X] 17:08 11/22/2021 v1.27 上 Pypi 了今天先到這。。。。。。 08:19 11/23/2021 確定有上 pypi 了。
-	[ ] 08:30 11/23/2021 注意了，本地 repo 還是 develop branch 都好了要 merge to main branch.  
+	[/] 08:30 11/23/2021 注意了，本地 repo 還是 develop branch 都好了要 merge to main branch <--- 下面有 check box. 
     [X] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
         [X] Windows DOS 下試 
         [/] (Google colab 就是 ubuntu 了) WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth 
@@ -3991,7 +3991,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [X] Colab https://colab.research.google.com/drive/1nZpybQryEiwYzpMvG1tHg4qbNnd_rMey#scrollTo=yAuF9DZcrFaT
         [/] Azure https://peforthplayground-hcchen1471.notebooks.azure.com obseleted I guess 
         [/] notebooks.ai obseleted 
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
+    [X] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
         1. 先 commit 上 develop branch, upload 上網上 Github.
         2. 切到 master 
         3. 用 GitHub for Windows desktop 的 Branch > Merge into current branch 選 develop 把它 merge 過來。
@@ -4001,7 +4001,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [ ] 要不要把 projectk.py sync 回 project-k
         (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
-        硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
+        硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦，先手動作吧！
     [ ] See above "*** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。" for how to upload to pypi.
     [ ] version 改成 1.28  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
 [X] 02:24 2021/11/22 GitHub\peforth\forth.py 可以刪掉很多已經進 v1.27 的東西，考慮改名成 jupyter-extension.py 
