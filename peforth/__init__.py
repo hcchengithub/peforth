@@ -168,6 +168,8 @@ def bp(id=None,locals=None):
     else:
         prompt="{}>".format(id)
     if id in bps: push(locals).ok(prompt, cmd="to _locals_")
+vm.bps = bps # 不放進 vm 用時就搆不著了。
+vm.bp = bp
 
 ##### Setup peforth magic command %f and %%f for ipython and jupyter notebook #####
 

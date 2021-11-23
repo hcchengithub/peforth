@@ -3835,7 +3835,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         r> :: close() ;
         /// Usage: dictJson char aa.json json2file \ to save file
         /// but: "pathname" readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
-	01:24 2021/11/20 改好這個想要用 peforth 的 setup.bat 灌進去 site-package 試跑結果不行因為
+	01:24 2021/11/20 改好這個想要用 peforth 的 setup.bat (Run python setup.py install) 灌進去 site-package 試跑。。。
+		結果不行因為 Permission denied 
 		(C:\Program Files\Orange) C:\Users\8304018>conda env list
 		# conda environments:
 		#
@@ -3845,7 +3846,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	裝起來的 python 在這裡： (see the error message of setup.bat below)
 		The following error occurred while trying to add or remove files in the
 		installation directory: [Errno 13] Permission denied: 'C:\\Program Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.9_3.9.2544.0_x64__qbz5n2kfra8p0\\Lib\\site-packages\\test-easy-install-18740.write-test'
-	以前研究過 egg 啥的的複習一下。。。 Yes, see OneNote "Develop peforth in an Anaconda virtual environment" 
+	以前研究過 egg 啥的複習一下。。。 Yes, see OneNote "Develop peforth in an Anaconda virtual environment" and (16:27 2020/10/24)
 	當時 setup.bat 很順。先不管了，用 python -m peforth 在 working directory 試驗即可 。。。 True :-D  and it's now v1.27 
 	under developping. 
     
@@ -3890,20 +3891,20 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 02:15 2021/11/22 release v1.27 to pypi 
     [X] Gom port 只測到 v1.26 此 v1.27 我沒 license 測不到了。
     [X] setup.py 裡的 copy right 年份要改成 2021 
-    [ ] 做成 .whl 來測試
+    [X] 做成 .whl 來測試
         1.  (記得先把 dist , build , peforth.egg-info 等 folder 先殺掉) 跑 
         2.  c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
         3.  得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist 可用來 pip install ~.whl 
-		[ ] 只要是定義在 __init__.py 裡的東西就必須 import peforth 才有，正好 peforth.bp 就是這種， 開發比較麻煩。
+		[*] 只要是定義在 __init__.py 裡的東西就必須 import peforth 才有，正好 peforth.bp 就是這種， 開發比較麻煩。
 			不能直接用 python -m peforth 跑 source code 測試，必須做成 .whl > pip install > test > pip uninstall ...
 			來回 debug. 
-    [ ] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！
-    [ ] 所有 run 法帶 selftest：
-        [ ] 改 GitHub\peforth\quit.f
+    [X] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！09:29 11/23/2021 真的有發現問題。
+    [X] 所有 run 法帶 selftest：
+        [X] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
-        [ ] 先通過最基本的 selftest： GitHub\peforth\peforth>python test.py
-        [ ] Run python setup.py install 更新本地 site-package 版本以供測試
-            [ ] 要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
+        [/] (16:04 11/22/2021 local install 現在不行了，做成 whl 在本地灌，麻煩點還是能做事) 
+			Run python setup.py install 更新本地 site-package 版本以供測試   
+            [/] 要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
                 裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
                 16:27 2020/10/24 不必這樣，因為 python setup.py install 灌好的 peforth v1.25 是
                     c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth-1.25-py3.7.egg 
@@ -3911,68 +3912,73 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                     c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth\
                 兩個可以並存！而且後者優先。只要把後者 directory name 改成 peforth.disabled
                 就可以讓前者生效，前者是 local install 測試時有其方便性。
-        [ ] 1.  python -i -m peforth [ ] with-selftest .s words exit bye
-        [ ] 2.  ipython -i -m peforth .' Hello World!!' cr bye
-        [ ] 3.  ipython import peforth .s words
-                [ ] selftest peforth.ok() .s words <--- w/parent
-                [ ] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
-        [ ] 4.  jupyter notebook 
+        [X] 1.  python -i -m peforth [X] with-selftest .s words exit bye
+        [X] 2.  ipython -i -m peforth .' Hello World!!' cr bye
+        [X] 3.  ipython import peforth .s words
+                [X] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
+        [X] 4.  jupyter notebook 
                 kernel > restart and clear outputs 
-                x = 123
-                %f x .     
-                x . \ ==> 123 (<class 'int'>)
-        [ ] 5.  jupyter notebook --> peforth kernel --> .s words 
-        [ ] 6.  Gom 手動移除現有的 peforth directories from:
+				def test():
+					x = 234
+					y = 'abc'
+					peforth.bp(11,locals())
+				test() 
+				11>x --> 123 (<class 'int'>)
+        [/] 5.  Gom 手動移除現有的 peforth directories from:
                     c:\Users\8304018\AppData\Roaming\gom\2020\python\.. 
                 然後從 SCRIPTING > Script Choice >  pip install peforth > Tools > Install Python Package 灌 peforth 很快很順
                     import peforth, peforth_gom_port
                 執行 peforth.ok() 無誤。
                 新增 peforth_gom_port.py 放到 peforth repo 的 playground directory 裡。
-        [ ] 考慮 README.rst 改良
-            [ ] 若有改過 README.rst 則 wheel 就要重做
+        [/] 考慮 README.rst 改良
+            [/] 若有改過 README.rst 則 wheel 就要重做
                 --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [ ] 改 GitHub\peforth\quit.f
+    [X] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
+        [X] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=False
-        [ ] 同上 python test.py 先試試看
-        [ ] Run python setup.py install 更新本地 site-package 版本以供測試
-            [ ] 可能要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
-                裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
-        [ ] 同上 repeat 1) python -m peforth  2) ipython -m peforth
-        [ ] 做出取消 selftest 的 wheel
+        [X] Run [python setup.py install] pip install peforth-1.27-py3-none-any.whl 
+        [X] 同上 repeat 1) python -m peforth  2) ipython -m peforth
+        [X] 做出取消 selftest 的 wheel
             See my Ynote: "Pack peforth to peforth.whl"
-            [ ] 1.  檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
-                    test.py hello.py misc.f 
-            [ ] 2.  跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
+            [X] 1.  檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
+            [X] 2.  跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
                     得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
-        [ ] pip uninstall peforth
+        [X] pip uninstall peforth
             site-packages 下兩個 peforth folder 刪掉了。
             setup.bat 建立的 EGG 檔 peforth-1.24-py3.7.egg 也刪掉，否則 pip install 會
             被 skip 過去。
-        [ ] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
+        [X] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
             pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [ ] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
-        [ ] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
-        [ ] 3. (i)python import peforth
-               [ ] no selftest, peforth.ok() .s words <--- no parent
-               [ ] 1234 bye check echo %errorlevel%
-        [ ] 4. jupyter notebook --> *debug* ok> .s cd help exit
+        [X] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [X] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
+        [X] 3. (i)python import peforth
+               [X] no selftest, peforth.ok() .s words <--- no parent
+               [X] 1234 bye check echo %errorlevel%
+        [X] 4. jupyter notebook --> *debug* ok> .s cd help exit
                %f %%f magic command
-        [ ] 5. repeat 以上 in ubuntu <------- Ubuntu 18.04 沒有 pip built-in 不想搞了
-                [ ] pip uninstall peforth     已知 Colab & Azure 都是 Ubuntu 故不必自己多測了 
-                [ ] pip install (use /mnt/...the wheel) to WSL ubuntu
-                [ ] ipython -m peforth
-                [ ] ipython , import peforth , magic commands 
-    [ ] 直接用測過的 wheel update Pypi
+        [/] 5. repeat 以上 in ubuntu <------- Ubuntu 18.04 沒有 pip built-in 不想搞了
+                [/] pip uninstall peforth     已知 Colab & Azure 都是 Ubuntu 故不必自己多測了 
+                [/] pip install (use /mnt/...the wheel) to WSL ubuntu
+                [/] ipython -m peforth
+                [/] ipython , import peforth , magic commands 
+    [X] 直接用測過的 wheel update Pypi
         執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
         需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
         ID, password search my Ynote with pypi _account_
         Note: Anaconda base 沒有 twine, 在 Anaconda Navigator 裡找到 twine 把它勾起來 Apply.
-    [ ] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
-        [ ] Windows DOS 下試 
-        [ ] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
-            [ ] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
-    [ ] Test Online Jupyter Notebooks Google Colab, Microsoft Azure, and Notebooks.ai 
+			  或者 pip install twine 
+			  或者 conda install twine 
+			[x] 17:01 11/22/2021 結果因為 Orange3 的關係，用 conda install 失敗， pip 倒好了。但執行不到，
+				找到了 path @ C:\Users\8304018\AppData\Roaming\Python\Python38\Scripts
+				GitHub\peforth>C:\Users\8304018\AppData\Roaming\Python\Python38\Scripts\twine upload dist/* 
+				終於成功了。
+		[X] 17:08 11/22/2021 v1.27 上 Pypi 了今天先到這。。。。。。 08:19 11/23/2021 確定有上 pypi 了。
+	[ ] 08:30 11/23/2021 注意了，本地 repo 還是 develop branch 都好了要 merge to main branch.  
+    [X] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
+        [X] Windows DOS 下試 
+        [/] (Google colab 就是 ubuntu 了) WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth 
+            [/] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
+    [X] Test Online Jupyter Notebooks Google Colab, Microsoft Azure, and Notebooks.ai 
         !pip install peforth
         import peforth
         %f version drop
@@ -3982,9 +3988,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         !cat /etc/os-release 
         %f py> path --> \ 查看 path 發現 Azure 就是用 Anaconda 所以它有 support Ubuntu！ 
         %pwd \ 查看 working directory 
-        [ ] Colab https://colab.research.google.com/drive/1nZpybQryEiwYzpMvG1tHg4qbNnd_rMey#scrollTo=yAuF9DZcrFaT
-        [ ] Azure https://peforthplayground-hcchen1471.notebooks.azure.com/j/notebooks/peforth-playground.ipynb 
-        [ ] notebooks.ai 也測測看
+        [X] Colab https://colab.research.google.com/drive/1nZpybQryEiwYzpMvG1tHg4qbNnd_rMey#scrollTo=yAuF9DZcrFaT
+        [/] Azure https://peforthplayground-hcchen1471.notebooks.azure.com obseleted I guess 
+        [/] notebooks.ai obseleted 
     [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
         1. 先 commit 上 develop branch, upload 上網上 Github.
         2. 切到 master 

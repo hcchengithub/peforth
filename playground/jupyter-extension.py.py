@@ -10,5 +10,4 @@ peforth.dictate('''
     import IPython
     : paste py> IPython.lib.clipboard.win32_clipboard_get() tib.insert ;
         // ( ... -- ... ) 執行 clipboard 裡的內容，jupyternotebook 進了 peforth prompt 特別需要此功能。
-    version drop 
     ''')
