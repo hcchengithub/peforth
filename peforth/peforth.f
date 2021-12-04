@@ -17,7 +17,7 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
     <selftest>
 
     \ Self-test section will be run after all words are defined. At this point 
-    \ we only collect self-test codes so don't worry about words that are not 
+    \ we only collect self-test snippets so don't worry about words that are not 
     \ defined yet ;-) 
     
     \ Important!
@@ -28,54 +28,6 @@ code </selftest> # ( "selftest" -- ) Save the self-test statements to <selftest>
     \                 py: tick=vm.g.selftest_tick;execute=vm.g.selftest_execute ;
     \ : referenced-by-name-warning-off   // ( -- ) Turn off run-time warnings
     \                 py: tick=vm.tick;execute=vm.execute ;
-
-
-    \
-    \ Redirect print() to screen-buffer 
-    \
-
-    \ py> [""] value screen-buffer // ( -- ['string'] ) Selftest screen buffer
-    \                              /// Enveloped in array is for "access by reference"
-
-    py: vm.forth['screen-buffer']=[""]
-    code screen-buffer # ( -- ['string'] ) Selftest screen buffer
-        push(vm.forth['screen-buffer']) end-code
-    
-    <py>
-        class Screenbuffer:
-            def __init__(self,buf):
-                self.stdoutwas=sys.stdout
-                self.buffer=buf
-            def write(self, output_stream):
-                self.buffer[0] += output_stream
-            def view(self):
-                self.stdoutwas.write(self.buffer[0])
-            def reset(self):
-                sys.stdout=self.stdoutwas
-            def flush(self):
-                # self.buffer[0]=''
-                pass
-        vm.Screenbuffer=Screenbuffer
-    </py>
-    \ # Start redirection
-    \ sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
-    \ 
-    \ # Print to screen when redirected
-    \ sys.stdout.stdoutwas.write("-------1111-----\n")
-    \ sys.stdout.stdoutwas.write("-------2222-----\n")
-    \ 
-    \ # view screen buffer
-    \ sys.stdout.view()
-    \ 
-    \ # reset
-    \ sys.stdout.reset()
-
-    : display-off // ( -- ) Redirect stdout to a empty screen-buffer
-        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
-        screen-buffer :: [0]="" ;
-
-    : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it off.
-        py: sys.stdout.reset() ;
                     
     "" value description     ( private ) // ( -- "text" ) description of a selftest section
     [] value expected_rstack ( private ) // ( -- [..] ) an array to compare rstack in selftest
@@ -1522,6 +1474,59 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
                 </selftest>
 
 \ ------ end of debugger ------------------------------------------------------------
+
+\ ------ Redirect STDOUT to screen-buffer ------------------------------------------------------------
+
+    \
+    \ Redirect print() to screen-buffer 
+    \ 	v1.28 版 built-in, v1.27 之前用 forth.py 加上。
+
+    py: vm.forth['screen-buffer']=[""]
+    code screen-buffer # ( -- ['string'] ) Selftest screen buffer
+        push(vm.forth['screen-buffer']) end-code
+		/// Enveloped in array for "access by reference"
+    
+    <py>
+		'''
+		A home made STDOUT substitution
+		Usage guide 
+		  # Start redirection
+		  sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+		  
+		  # Print to screen when redirected
+		  sys.stdout.stdoutwas.write("-------1111-----\n")
+		  sys.stdout.stdoutwas.write("-------2222-----\n")
+		  
+		  # view screen buffer
+		  sys.stdout.view()
+		  
+		  # reset
+		  sys.stdout.reset()
+		'''
+        class Screenbuffer:
+            def __init__(self,buf):
+                self.stdoutwas=sys.stdout
+                self.buffer=buf
+            def write(self, output_stream):
+                self.buffer[0] += output_stream
+            def view(self):
+                self.stdoutwas.write(self.buffer[0])
+            def reset(self):
+                sys.stdout=self.stdoutwas
+            def flush(self):
+                # self.buffer[0]=''
+                pass
+        vm.Screenbuffer=Screenbuffer
+    </py>
+
+    : display-off // ( -- ) Redirect stdout to an empty screen-buffer
+        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+        screen-buffer :: [0]="" ;
+
+    : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it was off.
+        py: sys.stdout.reset() ;
+
+\ ------ end of STDOUT redirection ------------------------------------------------------------
 
 \ ------ xstack ------------------------------------------------------------
 [] value xstack // ( -- array ) The xstack 

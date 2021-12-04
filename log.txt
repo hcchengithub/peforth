@@ -1582,7 +1582,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] Bug: (see) unexpectedly leaves the given tos on the data stack if it's not a Word.
 [x] 發現 python 應該也能執行 WshShell 因此可能不用靠 jeforth.3hta pykb.f
 [x] 錄 elearning 介紹 peforth
-[ ] wiki 介紹 py: help(genxt) py> genxt .source ' + . members 等好用的東西
+[/] wiki 介紹 py: help(genxt) py> genxt .source ' + . members 等好用的東西
     --> 唉，當時的層次真是，不好說啊！好是好，推薦自己的好東西，沒有照
         顧 user 的需求。
 [X] 把網頁或至少 3hta 變成 peforth 的 input box, 解決 multiple line input 的問題。
@@ -1977,9 +1977,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         https://github.com/jupyter/jupyter/wiki/Jupyter-kernels
 
 
-[ ] Like harry_port that brings all wanted variables to projectk
+[/] Like harry_port that brings all wanted variables to projectk
     How to make it easier?
-    [ ] Study when deep in a certain module, how peforth find and bring in
+    [/] Study when deep in a certain module, how peforth find and bring in
         specified variables?
         1. debug the toy.. keras exercise, breakpoint deep in a keras module
         2. instead of using the trick of loc={**locals(),**{'foo':foo,'bar':bar}}
@@ -2035,7 +2035,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     __main__ :: peforth.projectk.{0}=v('{0}')
     </text> :> format(pop()) dictate
 
-    import peforth # [ ] _debug_
+    import peforth # [/] _debug_
     peforth.ok(cmd='''
       0 value Count
       none value child_output_shape
@@ -2071,7 +2071,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         正是那個怪東西。
         RI
 
-[ ] 最好 inport 能用挑的。程序如下：
+[/] 最好 inport 能用挑的。程序如下：
 
     load2> locals keys . cr
         dict_keys(['__name__', '__doc__', '__package__', '__loader__', '__spec__', '__builtin__', '__builtins__', '_ih', '_oh', '_dh', 'In', 'Out', 'get_ipython', 'exit', 'quit', '_', '__', '___', '_i', '_ii', '_iii', '_i1', 'tf', '_i2', 'tflearn', '_i3', 'speech_data', '_i4', 'time', 'peforth', 'epoch_count', 'learning_rate', 'training_iters', 'batch_size', 'width', 'height', 'classes', '_i5', 'batch', 'word_batch', '_i6', 'net', 'model', 'x', '_i7'])
@@ -3368,15 +3368,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     "Develop peforth in an Anaconda virtual environment"
     https://onedrive.live.com/view.aspx?resid=A796EA18AC8C1DA9%2112289&id=documents&wd=target%28Anaconda.one%7CB4E0DFAB-84F7-43D2-A5AB-515B43314252%2FDevelop%20peforth%20in%20an%20Anaconda%20virtual%20environment%7C99DE5C5F-B36D-4949-9471-BC7A857E3C2B%2F%29
     
-[X] 16:54 2019-07-22 從這裡 https://jupyter-contrib-nbextensions.readthedocs.io/en/latest/install.html 讀到
-    有從 github repo 上直接 pip install 的方法，e.g.:
-        pip install https://github.com/ipython-contrib/jupyter_contrib_nbextensions/tarball/master
-    試試看 peforth 可不可以這樣 install ? 可以的話就不用上 pypi 了
-        pip install https://github.com/hcchengithub/peforth/master 
-        or
-        pip install https://github.com/hcchengithub/peforth
-    ==> 結果兩個都失敗
-    [ ] GitHub 有開始做 package hosting 了：
+[X] 09:52 11/23/2021 從這裡 https://stackoverflow.com/questions/20101834/pip-install-from-git-repo-branch 讀到
+    不用上 pypi 了，有從 github repo 上直接 pip install 的方法:
+        pip install git+https://github.com/hcchengithub/peforth.git@develop
+	成功了！ 
+    [ ] GitHub 有開始做 package hosting (與 pypi, npm 競爭?) 了：
         https://help.github.com/en/github/managing-packages-with-github-packages/about-github-packages#supported-clients-and-formats
 [X] 2019/11/24 06:10:22 projectk.py 裡 import 好多它本身不用的 modules (它自己只 
     用到 re regular expression 一個) 我的註解說：
@@ -3524,9 +3520,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 2020/07/27 08:33 可以把 [obj>keys] 'keys' 定義成 dir | dict>keys 這樣就不會與 dir 重複了。又可以與 jeforth 相容。
 [X] 2020/07/27 08:38:15 value constant to 要重新定義，不要再用 vm.forth 存放了，改用 variable 自己 word. 
     See OneNote2020 > "Jeforth variable 變革" --> 成功了。
-[ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
 [X] 07:49 2020/10/04 參考 KsanaVM 發現我原先對 prompt 的時機有誤解，改好了。
-[ ] 15:49 2020/10/24 v1.25 好了以後 projectk.py 要 sync 回 projectk 
+[X] 15:49 2020/10/24 v1.25 好了以後 projectk.py 要 sync 回 projectk 
 [X] 15:30 2020/10/24 準備 release v1.25 to pypi so as to allow gom to have it easily
     [X] 15:54 2020/10/24 先試試看 gom ok? --> Pass, 連 selftest 也都 pass. 
     [X] setup.py 裡的 copy right 年份要改成 2019 
@@ -3543,105 +3538,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         4.  pip uninstall peforth 然後再 pip install peforth 試驗看看。
         5.  完成！
     [X] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！
-    [ ] 所有 run 法帶 selftest：
-        [X] 改 GitHub\peforth\quit.f
-            ' <selftest> :: enabled=True
-        [X] 先通過最基本的 selftest： GitHub\peforth\peforth>python test.py
-        [X] Run python setup.py install 更新本地 site-package 版本以供測試
-            [X] 要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
-                裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
-                16:27 2020/10/24 不必這樣，因為 python setup.py install 灌好的 peforth v1.25 是
-                    c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth-1.25-py3.7.egg 
-                而 pip install peforth 灌好的是另一個 peforth v1.25 
-                    c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth\
-                兩個可以並存！而且後者優先。只要把後者 directory name 改成 peforth.disabled
-                就可以讓前者生效，前者是 local install 測試時有其方便性。
-        [X] 1.  python -i -m peforth [X] with-selftest .s words exit bye
-        [X] 2.  ipython -i -m peforth .' Hello World!!' cr bye
-        [/] 3.  ipython import peforth .s words
-                [/] selftest peforth.ok() .s words <--- w/parent
-                [/] 1234 bye check echo %errorlevel% <-- 從 ipython 下直接出來也無誤。
-        [X] 4.  jupyter notebook 
-                kernel > restart and clear outputs 
-                x = 123
-                %f x .     
-                x . \ ==> 123 (<class 'int'>)
-        [X] 5.  jupyter notebook --> peforth kernel --> .s words 
-        [X] 6.  Gom 手動移除現有的 peforth directories from:
-                    c:\Users\8304018\AppData\Roaming\gom\2020\python\.. 
-                然後從 SCRIPTING > Script Choice >  pip install peforth > Tools > Install Python Package 灌 peforth 很快很順
-                    import peforth, peforth_gom_port
-                執行 peforth.ok() 無誤。
-                新增 peforth_gom_port.py 放到 peforth repo 的 playground directory 裡。
-        [/] 考慮 README.rst 改良
-            [/] 若有改過 README.rst 則 wheel 就要重做
-                --> quit.f selftest=False --> 重來
-    [ ] 所有 run 法不帶 selftest 跑一遍，準備要 release 的版本：
-        [ ] 改 GitHub\peforth\quit.f
-            ' <selftest> :: enabled=False
-        [ ] 同上 python test.py 先試試看
-        [ ] Run python setup.py install 更新本地 site-package 版本以供測試
-            [X] 可能要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
-                裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
-        [ ] 同上 repeat 1) python -m peforth  2) ipython -m peforth
-        [ ] 做出取消 selftest 的 wheel
-            See my Ynote: "Pack peforth to peforth.whl"
-            [ ] 1.  檢查 ~\GitHub\peforth\setup.py 看有沒有漏掉新檔案，有沒有要去掉的檔案。
-                    test.py hello.py misc.f 
-            [ ] 2.  跑 c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
-                    得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
-        [ ] pip uninstall peforth
-            site-packages 下兩個 peforth folder 刪掉了。
-            setup.bat 建立的 EGG 檔 peforth-1.24-py3.7.egg 也刪掉，否則 pip install 會
-            被 skip 過去。
-        [ ] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
-            pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [ ] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
-        [ ] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
-        [ ] 3. (i)python import peforth
-               [ ] no selftest, peforth.ok() .s words <--- no parent
-               [ ] 1234 bye check echo %errorlevel%
-        [ ] 4. jupyter notebook --> *debug* ok> .s cd help exit
-               %f %%f magic command
-        [ ] 5. repeat 以上 in ubuntu <------- Ubuntu 18.04 沒有 pip built-in 不想搞了
-                [ ] pip uninstall peforth     已知 Colab & Azure 都是 Ubuntu 故不必自己多測了 
-                [ ] pip install (use /mnt/...the wheel) to WSL ubuntu
-                [ ] ipython -m peforth
-                [ ] ipython , import peforth , magic commands 
-    [ ] 直接用測過的 wheel update Pypi
-        執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
-        需要帳號密碼，看這裡 Ynote: "python pypi 研究 -- upload to PyPI ok now.note"
-        ID, password search my Ynote with pypi _account_
-        Note: Anaconda base 沒有 twine, 在 Anaconda Navigator 裡找到 twine 把它勾起來 Apply.
-    [ ] 查看 pypi.org 網頁，若不行，晚點 (過幾分鐘就好) 再看。
-        [ ] Windows DOS 下試 
-        [ ] WSL Ubuntu 下試 pip uninstall peforth -> pip install peforth
-            [ ] WSL Ubuntu with and w/o w/o virtualenv --> python -m peforth
-    [ ] Test Online Jupyter Notebooks Google Colab, Microsoft Azure, and Notebooks.ai 
-        !pip install peforth
-        import peforth
-        %f version drop
-        x = 12345
-        %f x --> \ 查看 unknown 的效果
-        \ Colab & Azure 都用 Ubuntu 查版本, Notebooks.ai 用 Debian 都可用這行指令
-        !cat /etc/os-release 
-        %f py> path --> \ 查看 path 發現 Azure 就是用 Anaconda 所以它有 support Ubuntu！ 
-        %pwd \ 查看 working directory 
-        [ ] Colab https://colab.research.google.com/drive/1nZpybQryEiwYzpMvG1tHg4qbNnd_rMey#scrollTo=yAuF9DZcrFaT
-        [ ] Azure https://peforthplayground-hcchen1471.notebooks.azure.com/j/notebooks/peforth-playground.ipynb 
-        [ ] notebooks.ai 也測測看
-    [ ] Make a master release up to GitHub --> 用 GitHub Windows 很簡單。
-        1. 先 commit 上 develop branch, upload 上網上 Github.
-        2. 切到 master 
-        3. 用 GitHub for Windows desktop 的 Branch > Merge into current branch 選 develop 把它 merge 過來。
-           解決 conflicts 之後完成 merge. 
-        4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
-           Master 上的應該是些 README.md 的修改。 
-    [X] version 改成 1.25  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
-    [ ] 要不要把 projectk.py sync 回 project-k
-        (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
-        05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
-        硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
+	... snip .....
 [X] 17:01 2020/10/24 v1.25 已經上了 pypi 也測過 Gom 成功，以上測試慢慢做，先上 github 再說。
 [X] 14:22 2020/10/29 vm.prompt 是要給 gom port dialog 知道目前 prompt 否則只在 ok() 肚子裡。
 [X] 13:52 2020/11/23 把 pypi 的 v1.25 直接換成 local 的 v1.26 
@@ -3699,7 +3596,8 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         [/] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
         [/] 先通過最基本的 selftest： GitHub\peforth\peforth>python test.py
-        [/] Run python setup.py install 更新本地 site-package 版本以供測試
+        [/] Local install 後來 (10:06 11/23/2021) 會遇上障礙 permission denied 之類。發現 pip install from github/gitlab 的方法了。
+			Run python setup.py install 更新本地 site-package 版本以供測試
             [/] 要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
                 裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
                 16:27 2020/10/24 不必這樣，因為 python setup.py install 灌好的 peforth v1.25 是
@@ -3748,7 +3646,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             被 skip 過去。
         [/] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
             pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [/] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [/] 1. (i)python -i -m peforth [X] no-selftest .s words exit
         [/] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
         [/] 3. (i)python import peforth
                [/] no selftest, peforth.ok() .s words <--- no parent
@@ -3789,7 +3687,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            解決 conflicts 之後完成 merge. 
         4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
            Master 上的應該是些 README.md 的修改。 
-    [ ] 要不要把 projectk.py sync 回 project-k
+    [X] 要不要把 projectk.py sync 回 project-k
         (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
@@ -3884,34 +3782,28 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 				bp    = vm.bp  <---------- 加進去
 			否則 peforth 不直接認得， projectk 的東西都在 vm 裡面。	
 
-[ ] 11:34 2021/11/22 為了擴充 peforth.bp for breakpoint GitHub\peforth\peforth\projectk.py 改了，更新 projectk 主流。
+[X] 11:34 2021/11/22 為了擴充 peforth.bp for breakpoint GitHub\peforth\peforth\projectk.py 改了，更新 projectk 主流。
 [X] 12:55 2021/11/22 d command 改成了 du 避免經常用到 d 撞名。peforth 沒有 i j k 也是一樣道理。因為 jupyternotebook
     裡經常有 i j. 插曲，如何在 colon word 裡抓到自己？ 它裡面有個 .lastaddress 有參考自己 [ last literal ] 沒錯吧？
     沒錯 that's the colon word itself indeed this is the way colon word to get self. 
 [X] 02:15 2021/11/22 release v1.27 to pypi 
+	pip install 探討 10:12 11/23/2021
+		1. Local install (16:27 2020/10/24) python setup.py install 最方便，但可能不行。
+		2. 先 commit 上 GitHub/GitLab 然後 pip install:
+			pip install git+https://github.com/hcchengithub/peforth.git@develop
+		3. 做成 .whl 來測試
+			1.  記得先把 dist , build , peforth.egg-info 等 folder 先殺掉
+			2.  跑 GitHub\peforth>python setup.py sdist bdist_wheel
+			3.  得到 peforth.whl in GitHub\peforth\dist 可用來 pip install ~.whl 
+			[*] 只要是定義在 __init__.py 裡的東西就必須 import peforth 才有，不能用：
+					GitHub\peforth>python -m peforth 
+				直接用 source code 跑. 正好 peforth.bp 就是這種， 開發比較麻煩。
     [X] Gom port 只測到 v1.26 此 v1.27 我沒 license 測不到了。
     [X] setup.py 裡的 copy right 年份要改成 2021 
-    [X] 做成 .whl 來測試
-        1.  (記得先把 dist , build , peforth.egg-info 等 folder 先殺掉) 跑 
-        2.  c:\Users\hcche\Documents\GitHub\peforth>python setup.py sdist bdist_wheel
-        3.  得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist 可用來 pip install ~.whl 
-		[*] 只要是定義在 __init__.py 裡的東西就必須 import peforth 才有，正好 peforth.bp 就是這種， 開發比較麻煩。
-			不能直接用 python -m peforth 跑 source code 測試，必須做成 .whl > pip install > test > pip uninstall ...
-			來回 debug. 
     [X] See (15:55 2019-05-22) 這個 check-list 要耐心好好做完！09:29 11/23/2021 真的有發現問題。
     [X] 所有 run 法帶 selftest：
         [X] 改 GitHub\peforth\quit.f
             ' <selftest> :: enabled=True
-        [/] (16:04 11/22/2021 local install 現在不行了，做成 whl 在本地灌，麻煩點還是能做事) 
-			Run python setup.py install 更新本地 site-package 版本以供測試   
-            [/] 要 (Anaconda virtualenv 之下) 從 site-packages\peforth-1.24-py3.7.egg 
-                裡 copy peforth\ 去蓋掉 site-packages\peforth\ 這樣 upgrade 才有生效。
-                16:27 2020/10/24 不必這樣，因為 python setup.py install 灌好的 peforth v1.25 是
-                    c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth-1.25-py3.7.egg 
-                而 pip install peforth 灌好的是另一個 peforth v1.25 
-                    c:\Users\8304018\AppData\Local\Continuum\anaconda3\lib\site-packages\peforth\
-                兩個可以並存！而且後者優先。只要把後者 directory name 改成 peforth.disabled
-                就可以讓前者生效，前者是 local install 測試時有其方便性。
         [X] 1.  python -i -m peforth [X] with-selftest .s words exit bye
         [X] 2.  ipython -i -m peforth .' Hello World!!' cr bye
         [X] 3.  ipython import peforth .s words
@@ -3949,7 +3841,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             被 skip 過去。
         [X] 切 CD 到 c:\Users\hcche\Documents\GitHub\peforth\dist>
             pip install peforth-1.23-py3-none-any.whl  <== 注意！用剛做好的 wheel 否則會上網抓。
-        [X] 1. (i)python -i -m peforth [ ] no-selftest .s words exit
+        [X] 1. (i)python -i -m peforth [/] no-selftest .s words exit
         [X] 2. (i)python -i -m peforth version 12345 bye --> echo %errorlevel%
         [X] 3. (i)python import peforth
                [X] no selftest, peforth.ok() .s words <--- no parent
@@ -3998,14 +3890,22 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            解決 conflicts 之後完成 merge. 
         4. 再 repeat 2-3 但切到 develop 把 master merge 過去。
            Master 上的應該是些 README.md 的修改。 
-    [ ] 要不要把 projectk.py sync 回 project-k
+    [X] 要不要把 projectk.py sync 回 project-k
         (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦，先手動作吧！
-    [ ] See above "*** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。" for how to upload to pypi.
-    [ ] version 改成 1.28  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+		09:38 11/23/2021 v1.27 的 projectk.py 有經過 GOM port 的考驗有些改進。
+    [X] version 改成 1.28  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
 [X] 02:24 2021/11/22 GitHub\peforth\forth.py 可以刪掉很多已經進 v1.27 的東西，考慮改名成 jupyter-extension.py 
     [x] it's now: GitHub\peforth\playground\jupyter-extension.py.py 
-[ ] 02:36 2021/11/22 jupyter-extension 做出 paste command 的方法可以 apply to DOS box too. 目前 dos box 之下用 ^D 的方法
-    suppport multiple lines 的 input 也不錯了。
-
+[/] 02:36 2021/11/22 jupyter-extension 做出 paste command 的方法可以 apply to DOS box too. 
+	算了，目前 dos box 之下用 ^D Ctrl-D 的方法 suppport multiple lines 的 input 很好了。
+[ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
+[ ] 17:52 12/4/2021 受到 icecream 啟發，原本只存在於 selftest 期間的 display-off display-on 
+	等於是咱的 disable/enable 可讓 peforth 與 PROD 版並存無須來回 加上/刪除。
+	[ ] 1.28 版 built-in, 1.27 之前用 forth.py 加上。
+[ ] 18:41 12/4/2021 peforth greeting 不該主動 print! 自找麻煩。version command 
+	與 greeting command 分開，保持安靜！這事兒 v1.28 該搞定了。 
+[ ] 18:45 12/4/2021 啟動 %%skip magic 不能靠 %run forth.py 必須靠之後的：
+		%f get_ipython init_skip_magic :: (pop())
+	command 下達
