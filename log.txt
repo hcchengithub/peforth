@@ -3903,7 +3903,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 17:52 12/4/2021 受到 icecream 啟發，原本只存在於 selftest 期間的 display-off display-on 
 	等於是咱的 disable/enable 可讓 peforth 與 PROD 版並存無須來回 加上/刪除。
 	[X] 1.28 版 built-in 了, 1.27 之前用 forth.py 加上。
-	[X] 16:21 12/8/2021 need an init , do the trick of "display-off display-on" right after their def.
+	[X] 16:21 12/8/2021 need an init --> no it's a bug that has been fixed. 
+    [ ] 16:55 12/8/2021 in jupyternotebook was display-off then in another cell display-on and print something that 
+        goes to the output of the previous display-off cell !! behavior of jupyternotebook. 
 [X] 18:41 12/4/2021 peforth greeting 不該主動 print! 自找麻煩。version command 
 	與 greeting command 分開，保持安靜！這事兒 v1.28 該搞定了。 
 [ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
