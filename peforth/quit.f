@@ -16,7 +16,7 @@
 
 \ Do selftest or run command-line
 
-    ' <selftest> :: enabled=False \ Master switch of selftest, True:on or False:off
+    ' <selftest> :: enabled=True \ Master switch of selftest, True:on or False:off
 
     py> vm.commandline trim ( commandLine ) ?dup [if] 
         \ When in ipython or jupyter notebook the command line is used by 
@@ -41,9 +41,9 @@
             tib.insert
         [then]
     [else]
-        \ No command line, show greeting and run selftest
-        version drop 
+        \ No command line the do the selftest if enabled
         ' <selftest> :> enabled [if]
+			version drop
             marker ###  // ( -- ) Marker before self-test 
             ' <selftest> :> buffer tib.insert
             ###         \ Clean up 

@@ -778,9 +778,9 @@ code nop end-code // ( -- ) no operation
                 ['] drop , begin ?dup while [compile] then repeat ; immediate compile-only
                 /// see help case
 
-				<selftest>
-					*** case ... endcase 
-					marker ---
+                <selftest>
+                    *** case ... endcase 
+                    marker ---
                     : test
                         case 
                             char a of char AAAA endof
@@ -794,10 +794,10 @@ code nop end-code // ( -- ) no operation
                     char c test \ ==> CCCC (string)
                     char d test \ ==> ???? (string)
 
-					[d 'AAAA','BBBB','CCCC','????' d]
-					[p 'case', 'of', 'endof', 'endcase' p]
-					---
-				</selftest>
+                    [d 'AAAA','BBBB','CCCC','????' d]
+                    [p 'case', 'of', 'endof', 'endcase' p]
+                    ---
+                </selftest>
     
 : refill        // ( -- flag ) Reload TIB from stdin. return false means no input or EOF
                 accept count if py: vm.tib=pop();vm.ntib=0 true else false then ;
@@ -1113,9 +1113,9 @@ code dir        # ( object -- dir ) Get member names (keys) of an object (w/o __
 
 : import // ( <module> -- ) Import the module to peforth namespace
     BL word ( "module" ) (import) dup :> __name__
-	py> vm ( module name vm ) 
-	py: setattr(pop(),pop(),pop()) ;
-	/// refer to (import)
+    py> vm ( module name vm ) 
+    py: setattr(pop(),pop(),pop()) ;
+    /// refer to (import)
 
 : module // ( 'name' -- module ) Get the module object from sys.modules
     py> sys.modules[pop()] ;
@@ -1193,7 +1193,7 @@ code .s         # ( ... -- ... ) Dump the data stack.
                 py: ok(pop(),cmd="cr") ;
                 /// How to invoke pdb when not locally imported:
                 /// py: sys.modules['pdb'].set_trace()
-				/// Example: %f debug [if] *debug* 1234> [then]
+                /// Example: %f debug [if] *debug* 1234> [then]
                 
 : *debug*       // ( <prompt> -- ... ) FORTH breakpoint, 'exit' to continue. 
                 BL word ( prompt ) compiling if literal compile (*debug*)
@@ -1303,7 +1303,7 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
                 if drop exit then \ it's RET, all done
                 1+ again ;
                 
-: du           	// ( <addr> -- ) dump dictionary
+: du            // ( <addr> -- ) dump dictionary
                 [ last literal ]
                 CR word trim                \ (me str) 避免 selftest 時抓 tib 過頭，本來 BL word 就可以。
                 count 0=                    \ (me str undef?) No start address?
@@ -1363,17 +1363,17 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
                     [d True d]
                     [p '(cd)', 'cd' p]
                 </selftest>
-				
-: json2file 	// ( json pathname -- ) Save josn to text file 
-				py> open(pop(),'w') ( json file ) >r ( json R: file )
-				py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
-				r> :: close() ;
-				/// Usage: 
-				/// Save: py> {"aa":11,"bb":22} char path\1.json json2file
-				/// Restore: char path\1.json readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
+                
+: json2file     // ( json pathname -- ) Save josn to text file 
+                py> open(pop(),'w') ( json file ) >r ( json R: file )
+                py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
+                r> :: close() ;
+                /// Usage: 
+                /// Save: py> {"aa":11,"bb":22} char path\1.json json2file
+                /// Restore: char path\1.json readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
 
 : path-to-find-modules // ( <path> -- ) Add path to sys.path so "import module-name" can find the module
-				CR word trim ( "path" ) py: sys.path.append(pop()) ;
+                CR word trim ( "path" ) py: sys.path.append(pop()) ;
 
 \ ------ debugger ------------------------------------------------------------
 none value _locals_ // ( -- dict ) locals passed down from ok()
@@ -1386,9 +1386,9 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
 \                 /// in __main__ module name space thus peforth knows all python 
 \                 /// global variables then! And even local variables too! See gist: 
 \                 /// https://gist.github.com/hcchengithub/6da91898d2c7604ec3bb4a06245d1e37
-\ ' unknown 		:: name='deactivated_unknown' marker --- --- \ so as to rebuild words 
+\ ' unknown         :: name='deactivated_unknown' marker --- --- \ so as to rebuild words 
 
-: unknown   	// ( token -- thing Y|N) Try to find the unknown token in __main__ or _locals_
+: unknown       // ( token -- thing Y|N) Try to find the unknown token in __main__ or _locals_
                 _locals_ if \ in a function
                 ( token ) _locals_ :> get(tos(),"Ûnknôwn") ( token, local )
                 py> str(tos())!="Ûnknôwn" ( token, local, unknown? ) 
@@ -1397,7 +1397,7 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
                 ( token ) py> getattr(sys.modules['__main__'],pop(),"Ûnknôwn") ( thing ) 
                 py> str(tos())=="Ûnknôwn" if ( thing ) drop false else true then ; 
 
-: bp 			s" help bp " dictate ; // Usage: peforth.bp(11,locals()) # drop a breakpoint with ID=11, see also help bl 
+: bp            s" help bp " dictate ; // Usage: peforth.bp(11,locals()) # drop a breakpoint with ID=11, see also help bl 
                 /// Example: Set a breakpoint in python code like this: 
                 ///   if peforth.execute('debug').pop() : peforth.bp(11,locals()) # new simpler method
                 ///   if peforth.execute('debug').pop() : peforth.push(locals()).ok("bp>",cmd='to _locals_') # base method
@@ -1406,69 +1406,69 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
                 /// 'quit' to leave the breakpoint and forget locals.
                 /// 'exit' to leave the breakpoint w/o forget locals.
 
-: bl 			// ( -- ) List all breakpoints
-				<py>
-				print('Disabled breakpoints:')
-				for i in range(len(bps)):
-					if not bps[i]: 
-						print(i, end=' ')
-				print(); print('Enabled breakpoints:')
-				count = 0
-				for i in range(len(bps)):
-					if bps[i]: 
-						print(i, end=' ')
-						count += 1
-				print(); print('Enabled breakpoints count: {}/{}'.format(count,len(bps)))
-				</py> cr ;
-				/// Breakpoint commands:
-				///	  bl   - list all breakpoints (capital BL is white space) 
-				///	  be   - enable breakpoints, e.g. be 1 2 3 
-				///	  bd   - disable breakpoints, e.g. bd 1 2 3 
-				///	  be*  - enable all breakpoints
-				///	  bd*  - disable all breakpoints 
-				///   quit - Quit the breakpoint and continue
+: bl            // ( -- ) List all breakpoints
+                <py>
+                print('Disabled breakpoints:')
+                for i in range(len(bps)):
+                    if not bps[i]: 
+                        print(i, end=' ')
+                print(); print('Enabled breakpoints:')
+                count = 0
+                for i in range(len(bps)):
+                    if bps[i]: 
+                        print(i, end=' ')
+                        count += 1
+                print(); print('Enabled breakpoints count: {}/{}'.format(count,len(bps)))
+                </py> cr ;
+                /// Breakpoint commands:
+                ///   bl   - list all breakpoints (capital BL is white space) 
+                ///   be   - enable breakpoints, e.g. be 1 2 3 
+                ///   bd   - disable breakpoints, e.g. bd 1 2 3 
+                ///   be*  - enable all breakpoints
+                ///   bd*  - disable all breakpoints 
+                ///   quit - Quit the breakpoint and continue
 
-: bd 			// ( <1 2 3 4...> -- ) Disable listed breakpoints 
-				CR word ( line )
-				<py>
-				line = pop()
-				points = map(int, line.split(' '))
-				for i in points: bps[i] = 0
-				</py> ; 
-				' bl :> comment last :: comment=pop(1)
+: bd            // ( <1 2 3 4...> -- ) Disable listed breakpoints 
+                CR word ( line )
+                <py>
+                line = pop()
+                points = map(int, line.split(' '))
+                for i in points: bps[i] = 0
+                </py> ; 
+                ' bl :> comment last :: comment=pop(1)
 
-: be 			// ( <1 2 3 4...> -- ) Enable listed breakpoints 
-				CR word ( line )
-				<py>
-				line = pop(0)
-				points = map(int, line.split(' '))
-				for i in points: bps[i] = i
-				</py> ; 
-				' bl :> comment last :: comment=pop(1)
+: be            // ( <1 2 3 4...> -- ) Enable listed breakpoints 
+                CR word ( line )
+                <py>
+                line = pop(0)
+                points = map(int, line.split(' '))
+                for i in points: bps[i] = i
+                </py> ; 
+                ' bl :> comment last :: comment=pop(1)
 
-: bd* 			// ( -- ) Disable all breakpoints 
-				<py>
-				for i in range(len(bps)): bps[i] = 0
-				</py> ;
-				' bl :> comment last :: comment=pop(1)
+: bd*           // ( -- ) Disable all breakpoints 
+                <py>
+                for i in range(len(bps)): bps[i] = 0
+                </py> ;
+                ' bl :> comment last :: comment=pop(1)
 
-: be* 			// ( -- ) Enable all breakpoints 
-				<py>
-				for i in range(len(bps)): bps[i] = i
-				</py> ;
-				' bl :> comment last :: comment=pop(1)
+: be*           // ( -- ) Enable all breakpoints 
+                <py>
+                for i in range(len(bps)): bps[i] = i
+                </py> ;
+                ' bl :> comment last :: comment=pop(1)
 
-: quit      	// ( -- ) Quit the breakpoint forget _locals_ and continue the process
+: quit          // ( -- ) Quit the breakpoint forget _locals_ and continue the process
                 none to _locals_ py: vm.exit=True ;  
                 /// 'exit' also quit the breakpoint but it won't forget _locals_ 
 
                 <selftest>
                 *** debugger commands x@ x> >x .sx xdrop xdropall 
-					1 >x 2 >x dropall xdropall xstack py> len(pop()) 0= ( T )
-					4567 >x 1234 >x depth 0= ( TF ) 
-					x@ 1234 = ( TFT  )
-					x> 1234 = ( TFTT )
-					xdrop xstack py> len(pop()) 0= ( TFTTT )
+                    1 >x 2 >x dropall xdropall xstack py> len(pop()) 0= ( T )
+                    4567 >x 1234 >x depth 0= ( TF ) 
+                    x@ 1234 = ( TFT  )
+                    x> 1234 = ( TFTT )
+                    xdrop xstack py> len(pop()) 0= ( TFTTT )
                     [d True, False, True, True, True d]
                     [p 'x@', 'x>', '>x', '.sx', 'xdrop', 'xdropall' p]
                 </selftest>
@@ -1479,30 +1479,30 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
 
     \
     \ Redirect print() to screen-buffer 
-    \ 	v1.28 版 built-in, v1.27 之前用 forth.py 加上。
+    \   v1.28 版 built-in, v1.27 之前用 forth.py 加上。
 
     py: vm.forth['screen-buffer']=[""]
     code screen-buffer # ( -- ['string'] ) Selftest screen buffer
         push(vm.forth['screen-buffer']) end-code
-		/// Enveloped in array for "access by reference"
+        /// Enveloped in array for "access by reference"
     
     <py>
-		'''
-		A home made STDOUT substitution
-		Usage guide 
-		  # Start redirection
-		  sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
-		  
-		  # Print to screen when redirected
-		  sys.stdout.stdoutwas.write("-------1111-----\n")
-		  sys.stdout.stdoutwas.write("-------2222-----\n")
-		  
-		  # view screen buffer
-		  sys.stdout.view()
-		  
-		  # reset
-		  sys.stdout.reset()
-		'''
+        '''
+        A home made STDOUT substitution
+        Usage guide 
+          # Start redirection
+          sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+          
+          # Print to screen when redirected
+          sys.stdout.stdoutwas.write("-------1111-----")
+          sys.stdout.stdoutwas.write("-------2222-----")
+          
+          # view screen buffer
+          sys.stdout.view()
+          
+          # reset
+          sys.stdout.reset()
+        '''
         class Screenbuffer:
             def __init__(self,buf):
                 self.stdoutwas=sys.stdout
@@ -1530,20 +1530,20 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
 
 \ ------ xstack ------------------------------------------------------------
 [] value xstack // ( -- array ) The xstack 
-: x@ 			xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
-: x> 			xstack :> pop() ; // ( -- n ) Pop the xstack
-: >x 			xstack :: append(pop()) ; // ( n -- ) Push n into the xstack
-: .sx 			xstack . ; // ( -- ) List xstack 
-: xdrop 		x> drop ; // ( X: ... a -- X: ... ) drop xstack 
-: xdropall 		[] to xstack ; // ( X: ... -- X: empty ) clear xstack 
+: x@            xstack :> [-1] ; // ( -- n ) Get TOS of the xstack
+: x>            xstack :> pop() ; // ( -- n ) Pop the xstack
+: >x            xstack :: append(pop()) ; // ( n -- ) Push n into the xstack
+: .sx           xstack . ; // ( -- ) List xstack 
+: xdrop         x> drop ; // ( X: ... a -- X: ... ) drop xstack 
+: xdropall      [] to xstack ; // ( X: ... -- X: empty ) clear xstack 
 
                 <selftest>
                 *** xstack commands x@ x> >x .sx xdrop xdropall 
-					1 >x 2 >x dropall xdropall xstack py> len(pop()) 0= ( T )
-					4567 >x 1234 >x depth 0= ( TF ) 
-					x@ 1234 = ( TFT  )
-					x> 1234 = ( TFTT )
-					xdrop xstack py> len(pop()) 0= ( TFTTT )
+                    1 >x 2 >x dropall xdropall xstack py> len(pop()) 0= ( T )
+                    4567 >x 1234 >x depth 0= ( TF ) 
+                    x@ 1234 = ( TFT  )
+                    x> 1234 = ( TFTT )
+                    xdrop xstack py> len(pop()) 0= ( TFTTT )
                     [d True, False, True, True, True d]
                     [p 'x@', 'x>', '>x', '.sx', 'xdrop', 'xdropall' p]
                 </selftest>

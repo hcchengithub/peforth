@@ -3901,11 +3901,14 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [/] 02:36 2021/11/22 jupyter-extension 做出 paste command 的方法可以 apply to DOS box too. 
 	算了，目前 dos box 之下用 ^D Ctrl-D 的方法 suppport multiple lines 的 input 很好了。
 [ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
-[ ] 17:52 12/4/2021 受到 icecream 啟發，原本只存在於 selftest 期間的 display-off display-on 
-	等於是咱的 disable/enable 可讓 peforth 與 PROD 版並存無須來回 加上/刪除。
-	[ ] 1.28 版 built-in, 1.27 之前用 forth.py 加上。
-[ ] 18:41 12/4/2021 peforth greeting 不該主動 print! 自找麻煩。version command 
-	與 greeting command 分開，保持安靜！這事兒 v1.28 該搞定了。 
 [ ] 18:45 12/4/2021 啟動 %%skip magic 不能靠 %run forth.py 必須靠之後的：
 		%f get_ipython init_skip_magic :: (pop())
 	command 下達
+
+[ ] 17:52 12/4/2021 受到 icecream 啟發，原本只存在於 selftest 期間的 display-off display-on 
+	等於是咱的 disable/enable 可讓 peforth 與 PROD 版並存無須來回 加上/刪除。
+	[ ] 1.28 版 built-in 了, 1.27 之前用 forth.py 加上。
+[ ] 15:45 12/8/2021 用 peforth + forth.py 模擬 icecream 的功能 
+
+[ ] 18:41 12/4/2021 peforth greeting 不該主動 print! 自找麻煩。version command 
+	與 greeting command 分開，保持安靜！這事兒 v1.28 該搞定了。 
