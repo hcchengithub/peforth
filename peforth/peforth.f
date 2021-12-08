@@ -1516,16 +1516,17 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
             def flush(self):
                 # self.buffer[0]=''
                 pass
-        vm.Screenbuffer=Screenbuffer
-    </py>
+        # vm.Screenbuffer=Screenbuffer
+        myStdout = Screenbuffer(vm.forth['screen-buffer'])
+        push(myStdout)
+    </py> constant myStdout // ( -- obj ) Alternative stdout that outputs to screen-buffer
 
     : display-off // ( -- ) Redirect stdout to an empty screen-buffer
-        py: sys.stdout=Screenbuffer(vm.forth['screen-buffer'])
+        myStdout py: sys.stdout=pop()
         screen-buffer :: [0]="" ;
 
     : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it was off.
-        py: sys.stdout.reset() ;
-		display-off display-on \ make an initialization
+        myStdout py> sys.stdout==pop() if py: sys.stdout.reset() then ;
 
 \ ------ end of STDOUT redirection ------------------------------------------------------------
 

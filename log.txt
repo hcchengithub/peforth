@@ -3908,6 +3908,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	與 greeting command 分開，保持安靜！這事兒 v1.28 該搞定了。 
 [ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
 [ ] 18:45 12/4/2021 啟動 %%skip magic 不能靠 %run forth.py 必須靠之後的：
-		%f get_ipython init_skip_magic :: (pop())
+		%f get_ipython init_skip_magic :: (pop()) --> 16:47 12/8/2021 還是用 %load_ext skip_kernel_extension 最好。 
 	command 下達
+    See https://stackoverflow.com/questions/26494747/simple-way-to-choose-which-cells-to-run-in-ipython-notebook-during-run-all
 [ ] 15:45 12/8/2021 用 peforth + forth.py 模擬 icecream 的功能 
