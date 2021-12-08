@@ -1525,6 +1525,7 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
 
     : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it was off.
         py: sys.stdout.reset() ;
+		display-off display-on \ make an initialization
 
 \ ------ end of STDOUT redirection ------------------------------------------------------------
 
