@@ -1524,7 +1524,7 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
     : display-off // ( -- ) Redirect stdout to an empty screen-buffer
         myStdout py: sys.stdout=pop()
         screen-buffer :: [0]="" ;
-
+*debug* 22> 
     : display-on // ( -- ) Redirect stdout back to what it was. screen-buffer has data during it was off.
         myStdout py> sys.stdout==pop() if py: sys.stdout.reset() then ;
 
