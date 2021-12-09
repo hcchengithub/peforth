@@ -173,6 +173,7 @@ vm.bp = bp
 
 ##### Setup peforth magic command %f and %%f for ipython and jupyter notebook #####
 
+
 # How to tell if ipython magic is available?
 #     pdb.set_trace() works fine here even when run from jupyter notebook
 #     if 'get_ipython' in globals():  <--- always false
@@ -184,9 +185,9 @@ try:
 except:
     is_ipython = False
 
+vm.magic = True # enable peforth magic %f and %%f 
 if is_ipython:
     from IPython.core.magic import register_line_cell_magic
-    vm.magic = True # enable peforth magic %f and %%f 
     # Define peforth magic command, %f.
     @register_line_cell_magic
     def f(line, cell=None):
