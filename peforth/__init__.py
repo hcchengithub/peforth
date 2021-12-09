@@ -94,7 +94,7 @@ vm.writeTextFile = writeTextFile
 # Get the path of data files is really frustrating.
 # The below method is the only ugly way I have so far:
 deli = '\\' if os.name == 'nt' else '/'
-path = '.%speforth%s' % (deli,deli) # for run by "python -m peforth" when in developing 
+path = '.%speforth%s' % (deli,deli) # for run by "python -m peforth" or "GitHub\peforth> python peforth" when in developing 
 for p in sys.path:
     if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
         # for the pip'ed package
@@ -187,7 +187,7 @@ vm.magic = True # Enable Jupyternotebook peforth magic %f and %%f
 
 try:
     # Put in try-block because "ipython -m peforth" triggers exception: "get_ipython not defined" thus no %f magic.
-    # After entering ipython then "import peforth" then %f magic ok
+    # After entering ipython then "import peforth" then %f magic ok. "GitHub\peforth> python peforth" totally ok with %f magic.
     is_ipython = bool(get_ipython) 
 except:
     is_ipython = False

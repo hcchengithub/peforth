@@ -3919,7 +3919,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     09:10 12/9/2021 vm.magic switch to on/off %f in __init__.py 
 
 [X] 10:35 12/9/2021 __init__.py 裡面取得 path 方法很勉強，有待改進。
-    當前的問題是開發中這樣測試 ipython -m peforth 
+    當前的問題是開發中這樣測試 ipython -m peforth  (其實應該這樣測 GitHub\peforth> python peforth)
     半路就 error FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\8304018\\.ipythonversion.txt'
     因為 path 錯了！
         ipdb> os.path.isfile(path + deli + 'peforth' + deli + 'version.txt') --> False
