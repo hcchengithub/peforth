@@ -186,7 +186,7 @@ except:
 
 if is_ipython:
     from IPython.core.magic import register_line_cell_magic
-
+    vm.magic = True # enable peforth magic %f and %%f 
     # Define peforth magic command, %f.
     @register_line_cell_magic
     def f(line, cell=None):
@@ -208,10 +208,11 @@ if is_ipython:
         space token in the block or the cell.
 
         '''
-        if cell is None:
-            dictate(line)
-        else:
-            dictate(cell)
+        if vm.magic:
+            if cell is None:
+                dictate(line)
+            else:
+                dictate(cell)
 
     # Register auto '%load_ext peforth' at an ipython session
     def load_ipython_extension(ipython):
