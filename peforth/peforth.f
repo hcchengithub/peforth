@@ -1551,6 +1551,8 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
                 </selftest>
 \ ------ end xstack ------------------------------------------------------------
 
+: magic-disable py: vm.magic=False ; // ( -- ) Disable peforth %f %%f iPython magic.
+: magic-enable  py: vm.magic=True ;  // ( -- ) Enable peforth %f %%f iPython magic.
 
     \ I/O may not be ready enough to read selftest.f at this moment, 
     \ so the below code has been moved to quit.f of each applications.
