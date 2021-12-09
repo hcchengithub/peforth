@@ -2211,7 +2211,12 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [x] %f magic command 暫無 auto-load, 必須 import peforth 才有 --> 解決了，雖然這樣也好。
     "c:\Users\hcche\OneDrive\文件\Jupyter Notebooks\Creating an IPython extension with custom magic commands.ipynb"
     討論複製過來如下:
-    [x] 如上述加上 c.InteractiveShellApp.extensions = ["c:\\Users\\hcche\\Downloads\\csvmagic.py"] 之後，無效。參考 [stackoverflow](https://stackoverflow.com/questions/27483637/auto-reload-extension-not-reloading-on-change) 學到用 '%load_ext c:\\Users\\hcche\\Downloads\\csvmagic.py' 在 jupyter notebook 或 ipython 中試試看 . . . 果然是 path 寫法的問題。照以上範例, csvmagic.py 位在 current directory 直接 '%load_ext csvmagic' 就可以了。如果不在 crrent directory 那就是要 importable 則手動放到 site-packages 去亦可，討論如下。
+    [x] 如上述加上 c.InteractiveShellApp.extensions = ["c:\\Users\\hcche\\Downloads\\csvmagic.py"] 
+        之後，無效。參考 
+        [stackoverflow](https://stackoverflow.com/questions/27483637/auto-reload-extension-not-reloading-on-change) 
+        學到用 '%load_ext c:\\Users\\hcche\\Downloads\\csvmagic.py' 在 jupyter notebook 或 ipython 中試試看 . . . 
+        果然是 path 寫法的問題。照以上範例, csvmagic.py 位在 current directory 直接 '%load_ext csvmagic' 
+        就可以了。如果不在 crrent directory 那就是要 importable 則手動放到 site-packages 去亦可，討論如下。
     [x] 又或者必須是個 -m 搆得著的 module? 對了！上述的 importable 就是這個意思。--> 手動放進 site-packages (檔名改成 __init__.py) 就 importable 了，試試看 --> 成功！但是必須跑過 '%load_ext csvmagic' 之後才有 %%csv 不會自動 load。
         [x] 而且 import csvmagic 也無效；然而經過以下正確安排之後 import peforth 有效，不知何故？
     [x] 如何自動 load 應該跟 peforth 的 install 方式類似，這表示 csvmagic.py 所做的工作要由 `GitHub\peforth\peforthkernel.py` 來完成 (錯！要由 peforth 的 `__init__.py` 來負責)。其中 peforth %f 具有 line magic 與 cell magic 雙重腳色，該怎麼寫？看這裡：http://ipython.readthedocs.io/en/stable/config/custommagics.html

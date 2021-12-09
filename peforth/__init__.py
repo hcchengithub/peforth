@@ -173,19 +173,22 @@ vm.bp = bp
 
 ##### Setup peforth magic command %f and %%f for ipython and jupyter notebook #####
 
+vm.magic = True # Enable Jupyternotebook peforth magic %f and %%f 
 
 # How to tell if ipython magic is available?
 #     pdb.set_trace() works fine here even when run from jupyter notebook
 #     if 'get_ipython' in globals():  <--- always false
 #     if '__IPYTHON__' in dir(__builtins__):  <--- always false
 #     if '__IPYTHON__' in __builtins__.keys(): <--- previous way, not suitable for ipython -m peforth
-#     if 'IPython' in sys.modules.keys(): <--- a candidate never tried
+#     is_ipython = "InteractiveShell" in str(get_ipython)  # workable for jupyternotebook 08:54 12/9/2021 當初這樣寫好像是為了讓 %f magic auto load w/o import peforth。但是 ipython 進去有 import peforth 卻不認得。
+#     if 'IPython' in sys.modules.keys(): <--- 08:57 12/9/2021 trying now 
+
 try:
-    is_ipython = "InteractiveShell" in str(get_ipython)
+    # is_ipython = "InteractiveShell" in str(get_ipython)  # 08:54 12/9/2021 當初這樣寫好像是為了讓 %f magic auto load w/o import peforth。但是 ipython 進去有 import peforth 卻不認得 %f 只有 jupyternotebook 認得。
+    is_ipython = 'IPython' in sys.modules.keys()
 except:
     is_ipython = False
 
-vm.magic = True # enable peforth magic %f and %%f 
 if is_ipython:
     from IPython.core.magic import register_line_cell_magic
     # Define peforth magic command, %f.
