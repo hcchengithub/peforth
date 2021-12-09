@@ -94,14 +94,15 @@ vm.writeTextFile = writeTextFile
 # Get the path of data files is really frustrating.
 # The below method is the only ugly way I have so far:
 deli = '\\' if os.name == 'nt' else '/'
-for path in sys.path:
-    if os.path.isfile(path + deli + 'peforth' + deli + 'version.txt'):
+path = '.%speforth%s' % (deli,deli) # for run by "python -m peforth" when in developing 
+for p in sys.path:
+    if os.path.isfile(p + deli + 'peforth' + deli + 'version.txt'):
         # for the pip'ed package
-        path = path + deli + 'peforth' + deli
+        path = p + deli + 'peforth' + deli
         break
-    if os.path.isfile(path + deli + 'version.txt'):
+    if os.path.isfile(p + deli + 'version.txt'):
         # for running "python test.py" without pip install from source directory when developping
-        path = path + deli
+        path = p + deli
         break
 vm.path = path
 
@@ -181,10 +182,13 @@ vm.magic = True # Enable Jupyternotebook peforth magic %f and %%f
 #     if '__IPYTHON__' in dir(__builtins__):  <--- always false
 #     if '__IPYTHON__' in __builtins__.keys(): <--- previous way, not suitable for ipython -m peforth
 #     if 'IPython' in sys.modules.keys(): <--- fail, NameError: Decorator can only run in context where `get_ipython` exists
-#     is_ipython = "InteractiveShell" in str(get_ipython)  # workable for jupyternotebook 08:54 12/9/2021 當初這樣寫好像是為了讓 %f magic auto load w/o import peforth。但是 ipython 進去有 import peforth 卻不認得。
-vm.hello = True
+#     is_ipython = "InteractiveShell" in str(get_ipython)  # workable for jupyternotebook 08:54 12/9/2021 當初這樣寫好像是為了讓 %f magic auto load w/o import peforth。
+#     is_ipython = bool(get_ipython) 11:05 12/9/2021 目前用此法，似乎最自然。
+
 try:
-    is_ipython = bool(get_ipython)
+    # Put in try-block because "ipython -m peforth" triggers exception: "get_ipython not defined" thus no %f magic.
+    # After entering ipython then "import peforth" then %f magic ok
+    is_ipython = bool(get_ipython) 
 except:
     is_ipython = False
 

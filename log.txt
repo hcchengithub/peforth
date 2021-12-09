@@ -3909,18 +3909,42 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	等於是咱的 disable/enable 可讓 peforth 與 PROD 版並存無須來回 加上/刪除。
 	[X] 1.28 版 built-in 了, 1.27 之前用 forth.py 加上。
 	[X] 16:21 12/8/2021 need an init --> no it's a bug that has been fixed. 
-    [ ] 16:55 12/8/2021 in jupyternotebook was display-off then in another cell display-on and print something that 
+    [ ] 16:55 12/8/2021 怪事 in jupyternotebook. display-off in a cell, then in another cell display-on and print something that 
         goes to the output of the previous display-off cell !! behavior of jupyternotebook. 
 [X] 18:41 12/4/2021 peforth greeting 不該主動 print! 自找麻煩。version command 
 	與 greeting command 分開，保持安靜！這事兒 v1.28 該搞定了。 
+[X] 15:45 12/8/2021 引進 icecream 的功能，不是跟它重複 e.g. display-off is our existing feature, also the ic.disable() is 
+    needed too, thus we can use %f more flexibly. Simply make dictate to skip all tib, move ntib to the end is a 
+    possible idea. 
+    09:10 12/9/2021 vm.magic switch to on/off %f in __init__.py 
+
+[X] 10:35 12/9/2021 __init__.py 裡面取得 path 方法很勉強，有待改進。
+    當前的問題是開發中這樣測試 ipython -m peforth 
+    半路就 error FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\8304018\\.ipythonversion.txt'
+    因為 path 錯了！
+        ipdb> os.path.isfile(path + deli + 'peforth' + deli + 'version.txt') --> False
+        ipdb> os.path.isfile(path + deli + 'version.txt') --> False
+        ipdb> for i in sys.path:
+                print(i)
+            C:\Program Files\Orange\Scripts
+            C:\Program Files\Orange\python38.zip
+            C:\Program Files\Orange\DLLs
+            C:\Program Files\Orange\lib
+            C:\Program Files\Orange
+            C:\Users\8304018\AppData\Roaming\Python\Python38\site-packages
+            C:\Program Files\Orange\lib\site-packages
+            C:\Program Files\Orange\lib\site-packages\win32
+            C:\Program Files\Orange\lib\site-packages\win32\lib
+            C:\Program Files\Orange\lib\site-packages\Pythonwin
+            C:\Program Files\Orange\lib\site-packages\IPython\extensions
+            C:\Users\8304018\.ipython <------------------------------------- 全部都沒有 
+        ipdb> path --> 'C:\\Users\\8304018\\.ipython' <---- 結果 path 大錯！
+        ipdb> path='.\\peforth' <---------- 直接改成這樣
+        ipdb> os.path.isfile(path + deli + 'version.txt') --> True 結果可以！ 
+    10:39 12/9/2021 所以可以用 path='.\\peforth\\' 當 default 值試試看 --> 有效！ v1.28 
 [ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
 [ ] 18:45 12/4/2021 啟動 %%skip magic 不能靠 %run forth.py 必須靠之後的：
 		%f get_ipython init_skip_magic :: (pop())  命令下達
     --> 16:47 12/8/2021 還是用 %load_ext skip_kernel_extension 最好，那就與 peforth 無關了嗎？
         不然，考慮用 %load_ext 來安裝 peforth ... 
     See https://stackoverflow.com/questions/26494747/simple-way-to-choose-which-cells-to-run-in-ipython-notebook-during-run-all
-[ ] 15:45 12/8/2021 引進 icecream 的功能，不是跟它重複 e.g. display-off is our existing feature, also the ic.disable() is 
-    needed too, thus we can use %f more flexibly. Simply make dictate to skip all tib, move ntib to the end is a 
-    possible idea. 
-    
-    
