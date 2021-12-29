@@ -1,16 +1,21 @@
 #
 # Python debugger in FORTH language for jupyternotebook 
 #
-# Usage: %run <this file>.py 
+# Usage: 
+#   %run "drive:\path\this file.py" 
+#        ^^^^^^^^^ backslash is ok magic does not need to use r" which is of python not magic  
 #
-# In a jupyternotebook cell to initialize peforth environment. So we have, 
-# bp    - breakpoints
-# paste - run anything in clipboard at a breakpoint
-# display-on display-off - turn on/off peforth STDOUT
-# magic %f and %%f for peforth
-# magic %%skip True / False / $python_variable to skip the cell 
+#   In a jupyternotebook cell to initialize peforth environment. So we have, 
+#   bp    - breakpoints
+#   paste - run anything in clipboard at a breakpoint
+#   display-on display-off - turn on/off peforth STDOUT
 #
-# H.C. Chen 18:10 12/4/2021
+# Conditional invoke:
+#   if not PROD:
+#       get_ipython().run_line_magic('run', r"drive:\path\this file.py") 
+#
+#
+# H.C. Chen 16:01 12/15/2021
 # http://github.com/hcchengithub/peforth
 #
 

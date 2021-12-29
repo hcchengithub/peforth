@@ -2896,8 +2896,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     [x] version 改成 1.22  (必須跳過 1.20 會變成 1.2）
 [x] 14:48 2018-12-09 python object (attributes -> values) and hash table or 
     dictionary (keys --> values) are confusing me especially when JavaScript sees 
-    both the samething. The python 'dir' function lists an object's attributes and
-    JSON can stringify a hash table to a readable string. Let's make an experient:
+    both the samething. The python 'dir' function lists an object's attributes (攤平了，看不見結構) and
+    JSON can stringify a hash table to a readable string. 有 obj.__dict__ 最好，但不一定有。
+    Let's make an experient:
 
     \ o1 is a dict     
     py> {'a':11,'b':22} constant o1
@@ -2914,10 +2915,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     }
     OK 
     這樣看來，dict 與 object 的混淆是 JavaScript user 的問題。 任何東西都是 object 而只有 dict 才有 hash table.
-    用 (see) dir .members 查看 object 的 attributes, 用 (see) keys values 查看 dict. 用 stringify 查看 dict'fy 之後的
-    任何東西。
+    a. 用 (see) dir _dir_ .members pprint obj.__dict__ 查看 object 的 attributes, 
+    b. 用 (see) keys values stringify 查看 dict. 
+    c. 用 stringify 查看 dict'fy 之後的任何東西。
     --> 結論是在 help (see) 裡講清楚就好了。 來自 jeforth 的 obj>keys 與 dir 或 keys 重複所以很少用了。
-    
+    o C:\Users\8304018\OneDrive\文件\Jupyter Notebooks\I study python dir and __dict__.ipynb
+    o https://stackoverflow.com/questions/14361256/whats-the-biggest-difference-between-dir-and-dict-in-python
+
 [x] Install peforth from source 
     ---- 2018.12.15 懂得用 python setup.py install 需要修改 ---- 
     [x] Ynote: "研究 install peforth from source 的方法" 已經成功。
@@ -3379,6 +3383,31 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 	成功了！ 
     [ ] GitHub 有開始做 package hosting (與 pypi, npm 競爭?) 了：
         https://help.github.com/en/github/managing-packages-with-github-packages/about-github-packages#supported-clients-and-formats
+    [ ] 13:35 12/16/2021 python poetry init 某個 folder 時，暗示有更多種方法灌 python package:
+            (playground) C:\Users\8304018\Downloads\playground>poetry init
+
+            This command will guide you through creating your pyproject.toml config.
+
+            Package name [playground]:
+            Version [0.1.0]:
+            Description []:  try to poetry init on an exising folder with existing .toml and .lock renamed to ~.disabled
+            Author [H.C. Chen <hcchen5600@gmail.com>, n to skip]:
+            License []:  MIT
+            Compatible Python versions [^3.9]:
+
+            Would you like to define your main dependencies interactively? (yes/no) [yes]
+            You can specify a package in the following forms:
+              - A single name (requests)
+              - A name and a constraint (requests@^2.23.0)
+              - A git url (git+https://github.com/python-poetry/poetry.git)
+              - A git url with a revision (git+https://github.com/python-poetry/poetry.git#develop)
+              - A file path (../my-package/my-package.whl)
+              - A directory (../my-package/)
+              - A url (https://example.com/packages/my-package-0.1.0.tar.gz)
+
+            Search for package to add (or leave blank to continue):
+
+            Would you like to define your development dependencies interactively? (yes/no) [yes]
 [X] 2019/11/24 06:10:22 projectk.py 裡 import 好多它本身不用的 modules (它自己只 
     用到 re regular expression 一個) 我的註解說：
     import re # import whatever we want, don't rely on parent module e.g. peforth __init__.py
