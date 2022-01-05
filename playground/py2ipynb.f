@@ -1,4 +1,6 @@
 
+14:27 01/05/2022 moved to jupyter-extension.py 可以伺機殺掉了
+
 \ 16:10 2018-01-12
 \ I found this solution from 
 \ https://www.webucator.com/blog/2015/07/bulk-convert-python-files-to-ipython-notebook-files-py-to-ipynb-conversion/
@@ -9,7 +11,7 @@ constant nb_start // ( -- "text" )
 <text> ]}],"metadata":{"kernelspec":{"display_name":"Python 3","language":"python","name":"python3"},"language_info":{"codemirror_mode":{"name":"ipython","version":3},"file_extension":".py","mimetype":"text/x-python","name":"python","nbconvert_exporter":"python","pygments_lexer":"ipython3","version":"3.4.2"}},"nbformat":4,"nbformat_minor":0}</text> 
 constant nb_end // ( -- "text" ) 
 
-: py2ipynb ( pathname -- ) // Convert the given .py to .ipynb 
+: py2ipynb ( pathname -- ) // Convert the given foo.py to foo.py.ipynb 
     dup readTextFile ( pathname file.py )
     json :> encoder.JSONEncoder().encode(pop()) ( pathname file.py.json )
     nb_start swap + nb_end + ( pathname packed )
