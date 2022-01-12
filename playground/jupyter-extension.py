@@ -20,6 +20,15 @@
 #
 
 import peforth
+
+peforth.dictate('false value isipython // ( -- bool ) Are we running in iPython or jupyternotebook?')
+try:
+	# bypass if not ipython 
+	if callable(get_ipython): 
+		peforth.dictate('true to isipython')
+except:
+	pass
+	
 peforth.dictate(
     r'''
 	\ paste command ---------------------------------------------------------------------------------------------
@@ -78,7 +87,37 @@ peforth.dictate(
 			///   Created new file c:\Users\username\1.py.ipynb
 			/// 16:10 2018-01-12 https://www.webucator.com/blog/2015/07/bulk-convert-python-files-to-ipython-notebook-files-py-to-ipynb-conversion/
 
-	\ ----------------------------------------------------------------------------------------------------------------------
+	\ Conditional skip jupyternotebook cells -------------------------------------------------------------------------------
+	
+		\ https://stackoverflow.com/questions/26494747/simple-way-to-choose-which-cells-to-run-in-ipython-notebook-during-run-all
+		\ 
+		\ Run the skip magic command in the cells you want to skip:               
+		\                                                                         
+		\   %%skip True  #skips cell                                              
+		\   %%skip False #won't skip                                              
+		\                                                                         
+		\ You can use a variable to decide if a cell should be skipped by using $:
+		\                                                                         
+		\   should_skip = True                                                    
+		\   %%skip $should_skip                                                   
+
+		isipython [if]
+			<py>
+				def skip(line, cell):
+					"""Skips execution of the current line/cell if line evaluates to True."""
+					if eval(line): # 執行 %%skip 後面的一整行得 boolean 
+						return
+					get_ipython().run_cell(cell)  # instead of get_ipython().ex(cell) 執行該 cell 
+				def load_ipython_extension(shell):
+					"""Registers the skip magic when the extension loads."""
+					shell.register_magic_function(skip, 'line_cell')
+				def unload_ipython_extension(shell):
+					"""Unregisters the skip magic when the extension unloads."""
+					del shell.magics_manager.magics['cell']['skip']
+				load_ipython_extension(get_ipython()) # register the %%skip magic
+			</py>
+		[then]
+		
 	\ ----------------------------------------------------------------------------------------------------------------------
 	\ ----------------------------------------------------------------------------------------------------------------------
 	\ ----------------------------------------------------------------------------------------------------------------------
@@ -87,5 +126,5 @@ peforth.dictate(
     [then] 
 	
 	''')
-
+Timer = peforth.dictate('Timer').pop()
 
