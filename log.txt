@@ -3977,3 +3977,11 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     --> 16:47 12/8/2021 還是用 %load_ext skip_kernel_extension 最好，那就與 peforth 無關了嗎？
         不然，考慮用 %load_ext 來安裝 peforth ... 
     See https://stackoverflow.com/questions/26494747/simple-way-to-choose-which-cells-to-run-in-ipython-notebook-during-run-all
+[ ] https://stackoverflow.com/questions/24816237/ipython-notebook-clear-cell-output-in-code
+	: cls // ( -- ) Clear output of this cell in Jupyternotebook
+		<py>
+		from IPython.display import clear_output
+		clear_output()
+		</py> ;
+
+
