@@ -3761,12 +3761,27 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] 23:43 2021/04/22 我本來沒啥處理 json 的 words? This is from Codingame > Mars Lander 
     to save log json from parsed Mars Lander web page after a run.
     %%f
-    : json2file // ( json pathname -- ) Save josn to text file 
+    : json2file // ( json pathname -- ) Save json to text file 
         py> open(pop(),'w') ( json file ) >r ( json )R( file )
         py: json.dump(pop(),rtos()) ( does jaosn.dump return anything? ) 
         r> :: close() ;
         /// Usage: dictJson char aa.json json2file \ to save file
         /// but: "pathname" readTextFile py> eval(pop()) \ eval() is more reliable than txt2json
+
+    常有需要 Save-Restore json 結構 
+    https://www.adamsmith.haus/python/answers/how-to-save-and-import-a-dictionary-to-and-from-a-json-file-in-python
+    
+    How to save and import a dictionary to and from a JSON file 
+    其實 help json2file 有最好的建議
+        # save to .json file
+            data = {"a":1, "b":2, "c":3}
+            fo = open("1.json", "w")
+            json.dump(data, fo) # save to file 
+        # restore from .json file 
+            fi = open("1.json", "r")
+            j = json.load(fi) # restore from file 
+
+        
 	01:24 2021/11/20 改好這個想要用 peforth 的 setup.bat (Run python setup.py install) 灌進去 site-package 試跑。。。
 		結果不行因為 Permission denied 
 		(C:\Program Files\Orange) C:\Users\8304018>conda env list
