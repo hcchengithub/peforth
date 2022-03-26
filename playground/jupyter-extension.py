@@ -118,12 +118,20 @@ peforth.dictate(
 			</py>
 		[then]
 		
-	\ ----------------------------------------------------------------------------------------------------------------------
-	\ https://stackoverflow.com/questions/24816237/ipython-notebook-clear-cell-output-in-code
+	\ CLS clear screen command for Jupyternotebook -------------------------------------------------------------------------
+        \ https://stackoverflow.com/questions/24816237/ipython-notebook-clear-cell-output-in-code
 		: cls // ( -- ) Clear output of this cell in Jupyternotebook
 			py: IPython.display.clear_output() ;
 
-	\ ----------------------------------------------------------------------------------------------------------------------
+    \ Azure ML dev tools ---------------------------------------------------------------------------------------------------
+        : get-experiment // ( ws "exp_name" -- exp ) Get or create Azure experiment by name onto the given workspace
+            __main__ :> Experiment ( ws name Experiment )
+            \ experiment = Experiment(ws, "get-started-with-jobsubmission-tutorial")
+            py> pop()(pop(1),pop(0)) ; 
+            /// from azureml.core.experiment import Experiment 要先準備好 Azure ML experiment
+        : get-runs // ( experiment -- [run,run,...] ) Get list of runs of the given Azure ML expriment
+            :> get_runs() list ;     
+    \ ----------------------------------------------------------------------------------------------------------------------
 	\ ----------------------------------------------------------------------------------------------------------------------
 	\ ----------------------------------------------------------------------------------------------------------------------
 	
