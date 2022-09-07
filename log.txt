@@ -3971,7 +3971,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         ipdb> path='.\\peforth' <---------- 直接改成這樣
         ipdb> os.path.isfile(path + deli + 'version.txt') --> True 結果可以！ 
     10:39 12/9/2021 所以可以用 path='.\\peforth\\' 當 default 值試試看 --> 有效！ v1.28 
-[ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
 [X] 18:45 12/4/2021 啟動 %%skip magic 不能靠 %run forth.py 必須靠之後的：
 		%f get_ipython init_skip_magic :: (pop())  命令下達
     --> 16:47 12/8/2021 還是用 %load_ext skip_kernel_extension 最好，那就與 peforth 無關了嗎？
@@ -3986,6 +3985,40 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [X] Google colab jupyternotebook cell output wraparound 
     Evernote   : 跑一下讓 Google Colab cell output 能 wrap long lines.
     OneNote2022: Google Colab tips
+        
+[X] 13:39 2022/9/7 peforth 配合 jupyterlab 的 scratchpad debug 超好用，但是最好能斷在 function 
+    裡面利用 peforth 取得 _locals_ 結束程式，回到 console 來，把 peforth _locals_ 帶出來變成 globals.
+    然後就可以用 jupyterlab 的 scratchpad 來 debug 了，大成功！
+    
+    How to stop executing the program in a function - Python peforth DevTools debug
+    從 function 裡面可以把程式停掉來檢查 context，甚至在 peforth.bp() 裡面也可以做得到，命令是 
+    
+        raise SystemExit("Stop right there!") 
+        
+    配合 magic %tb and %debug 很方便查看當時的現況。peforth 的 _locals_ 也可以整個帶出來到 globals() 方法是：
+
+        for k,v in peforth.execute("_locals_").pop().items():
+            globals()[k] = v
+
+    因此配合 DevTools.py 可以很方便地做各種實驗。以下 sample code :
+        
+        __file__ = "DevTools.py"
+        import pandas as pd  # 故意看看 df 能不能 SystemExit 之後藉由 peforth 從 function 內部被帶出來到 globals()? 
+        def thefunction():
+            a = 123
+            b = 456
+            print(a+b)
+            df = pd.read_feather(r"c:\Users\8304018\Downloads\hubble2\2021-6-1.feather")
+            peforth.bp(11,locals()) # raise SystemExit("Stop right there!")
+
+        # 執行之後被 peforth 中斷，在斷點中除了 peforth 的功能之外還可以 raise SystemExit 把程式停掉。
+        thefunction()
+
+        # raise SystemExit 停掉程式之後可以把當時的 context 帶到 globals() 來查看，甚至用 DevTools.py 來做更複雜的實驗。
+        %tb
+        for k,v in peforth.execute("_locals_").pop().items():
+            globals()[k] = v
+[ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
 [ ] 8:53 AM 1/28/2022 unknown (Ûnknôwn) should be ... as a formal solution. 
 [ ] 15:21 2022-06-15 其實沒有 peforth Python 自己就可以變出 repl 
     # https://dev.to/amal/building-the-python-repl-3468
@@ -4004,4 +4037,4 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                     print(f"Error: {e}")
         except KeyboardInterrupt as e:
             print("\nExiting...")
-        
+    [ ] 13:48 2022/9/7 看怎麼放進 forth.py 裡去好用點。 
