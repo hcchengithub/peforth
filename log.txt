@@ -4038,3 +4038,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         except KeyboardInterrupt as e:
             print("\nExiting...")
     [ ] 13:48 2022/9/7 看怎麼放進 forth.py 裡去好用點。 
+    
+[ ] 11:07 2022/10/11 發現問題！ callback 中 ipython I/O 無效了 peforth.bp() 也跟著無效。
+    http://localhost:8888/notebooks/OneDrive/Documents/Jupyter%20Notebooks/ipywidgets%20-%20Using%20Interact.ipynb
+

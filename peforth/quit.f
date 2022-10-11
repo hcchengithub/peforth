@@ -16,7 +16,7 @@
 
 \ Do selftest or run command-line
 
-    ' <selftest> :: enabled=True \ Master switch of selftest, True:on or False:off
+    ' <selftest> :: enabled=False \ Master switch of selftest, True:on or False:off
 
     py> vm.commandline trim ( commandLine ) ?dup [if] 
         \ When in ipython or jupyter notebook the command line is used by 
