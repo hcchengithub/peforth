@@ -3093,7 +3093,9 @@ peforth.main() # 從 python interpreter 切換進入 peforth
             c:\Users\hcche\Documents\>python -m peforth include GitHub\peforth\playground\misc.f
         這兩行都可以。
 
-[x] 18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
+[x] 從 source code working directory 用 setup.py 直接 install
+    =========================================================
+    18:35 2019-05-09 我忘了 peforth 要怎麼 maintain 了!!!! 以上程式要改到哪裡去？
     --> 直接在 github working directory 修改
     --> 這樣 run 到的還是 installed 到 site-packages 的版本，因為 __main__.py 其實是 import peforth 
             c:\Users\hcche\Documents\GitHub\peforth>python peforth 
@@ -3125,7 +3127,14 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            a. 用 Jupyter Notebook 試驗，只要 Kernel > Restart 新版就生效了。
            b. 執行 c:\Users\hcche\Documents\GitHub\peforth\peforth>python test.py 
         5. repeat 
+    [ ] 10:59 2022/10/17 新發現 @ https://hyp.is/lwAoFE3HEe2UxFN9MY2KjA/github.com/jupyterlab/extension-examples
+        # install in editable mode 就是直接從 working directory install 的方法
+        python -m pip install -e .
+        Editable mode 意思 is run from the working directory directly 可以隨時改來改去生效！Try pip list and observe:
         
+            peforth  1.28    d:\github\peforth
+                             ^^^^^^^^^^^^^^^^^ <--- Wow !! this is the perfect dream come true. 
+    
 [X] 19:07 2019-05-13 這段 code 在 peforth.f 裡面本應處裡 alias 的新 // help, 但是又有問題
         \
         \ Redefine // to "replace" alias' help message instead of "append".
