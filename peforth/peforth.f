@@ -1377,7 +1377,16 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
 
 \ ------ debugger ------------------------------------------------------------
 none value _locals_ // ( -- dict ) locals passed down from ok()
-false value debug // ( -- flag ) enable/disable the ok() breakpoint
+false value debug // ( -- flag ) enable/disable debugging. 
+    /// Python 從 function 裡面可以把程式停掉來檢查 context，
+    ///    raise SystemExit("Stop right there!") 
+    ///    配合 magic %tb and %debug 很方便查看當時的現況。
+    /// peforth 的 _locals_ 也可以把整個帶出來到 globals() 方便 debug：
+    ///    pefort.bp(11,locals()) 改用 exit 不用 quit 離開以保留 _locals_
+    ///    等效 peforth.push(locals()).dictate('to _locals_')
+    /// 把 _locals_ 轉成 global 方便 debug:
+    ///     for k,v in peforth.execute("_locals_").pop().items():
+    ///         globals()[k] = v
 
 \ code unknown    # ( token -- false ) Default unknown command does nothing. 
 \                 pop();push(False) end-code 
@@ -1399,10 +1408,8 @@ false value debug // ( -- flag ) enable/disable the ok() breakpoint
 
 : bp            s" help bp " dictate ; // Usage: peforth.bp(11,locals()) # drop a breakpoint with ID=11, see also help bl 
                 /// Example: Set a breakpoint in python code like this: 
-                ///   if peforth.execute('debug').pop() : peforth.bp(11,locals()) # new simpler method
-                ///   if peforth.execute('debug').pop() : peforth.push(locals()).ok("bp>",cmd='to _locals_') # base method
-                /// Example: Save locals for investigations:
-                ///   if peforth.execute('debug').pop() : peforth.push(locals()).dictate('to _locals_')
+                ///   if flag : peforth.bp(11,locals()) # new simpler method
+                ///   if flag : peforth.push(locals()).ok("bp>",cmd='to _locals_') # older method
                 /// 'quit' to leave the breakpoint and forget locals.
                 /// 'exit' to leave the breakpoint w/o forget locals.
 

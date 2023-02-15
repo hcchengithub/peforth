@@ -4027,6 +4027,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         %tb
         for k,v in peforth.execute("_locals_").pop().items():
             globals()[k] = v
+    [X] 11:47 2023/2/15 把以上技巧加進 constant debug 的 help 裡去，方便查詢。
 [ ] 考慮 projectk.py 本身也上 pypi , 可以 pip install projectk 更有意義！
 [ ] 8:53 AM 1/28/2022 unknown (Ûnknôwn) should be ... as a formal solution. 
 [ ] 15:21 2022-06-15 其實沒有 peforth Python 自己就可以變出 repl 
