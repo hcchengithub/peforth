@@ -659,20 +659,21 @@ code 2dup       vm.stack+=stack[-2:] end-code // ( a b -- a b a b ) Duplicate tw
     ///   : test ?dup if dup for dup r@ - ( COUNT i ) . space ( COUNT ) next drop then ; 
     ///   5 test ==> 0 1 2 3 4 
     /// Pattern : The normalized for-loop pattern. Count down
-    ///   : test ?dup if for r@ . space next then ;
+    ///   : test ?dup if for r@ ( count i ) . space ( count ) next then ;
     ///   5 test ==> 5 4 3 2 1
-    /// Pattern : Normalized for-loop pattern but n based.
-    ///   : test py: push(tos()+3,0) for dup r@ - ( count+n i ) . space next drop ; 
-    ///   5 test ==> 3 4 5 6 7 ; 1 test ==> 1 ; 0 test ==> nothing
+    /// Pattern : Normalized for-loop pattern start from 3 for 5 items
+    ///   : test py: push(tos()+pop(1),0) for dup r@ - ( count i ) . space ( count ) next drop ; 
+    ///   3 5 test ==> 3 4 5 6 7 ; 1 test ==> 1 ; 0 test ==> nothing
     /// Pattern : Simplest, fixed times.
-    ///   : test 5 for r@ . space next ; 
+    ///   : test 5 for r@ ( count i ) . space ( count ) next ; 
     ///   test ==> 5 4 3 2 1
     /// Pattern : fixed times and 0 based index
-    ///   : test 5 for 5 r@ - . space next ; 
+    ///   : test 5 for 5 r@ - ( count i ) . space ( count ) next ; 
     ///   test ==> 0 1 2 3 4 
     /// Pattern of break : "r> drop 0 >r" or "py: rstack[rstack.length-1]=0"
-    ///   : test 10 for 10 r@ - dup . space 5 >= if r> drop 0 >r then next ; 
+    ///   : test 10 for 10 r@ - ( count 10 i ) dup . space 5 >= if r> drop 0 >r then ( count ) next ; 
     ///   test ==> 0 1 2 3 4 5 
+    /// 10:33 2023/8/14 修訂過範例，待測。
                 
 : begin // ( -- a ) begin..again, begin..until, begin..while..until..then, begin..while..repeat
     here ; immediate compile-only
@@ -1054,6 +1055,8 @@ code t>         # ( -- int ) Pop integer from end of the TIB
                 ///   ==> 0 1 2 3 4 5
                 /// Don't forget some nap.
                 /// 'stop' command or {Ctrl-Break} hotkey to abort.
+                /// 10:33 2023/8/14 for 有修訂過範例，待抄。
+
 
 : [next]        // ( -- ) (T ntib count -- ntib count-1 | empty ) [for]..[next]
                 t> 1- dup >t py> pop()>0 ( count>0 ) if 
