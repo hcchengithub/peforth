@@ -3127,14 +3127,46 @@ peforth.main() # 從 python interpreter 切換進入 peforth
            a. 用 Jupyter Notebook 試驗，只要 Kernel > Restart 新版就生效了。
            b. 執行 c:\Users\hcche\Documents\GitHub\peforth\peforth>python test.py 
         5. repeat 
-    [ ] 10:59 2022/10/17 新發現 @ https://hyp.is/lwAoFE3HEe2UxFN9MY2KjA/github.com/jupyterlab/extension-examples
+    [X] 10:59 2022/10/17 新發現 @ https://hyp.is/lwAoFE3HEe2UxFN9MY2KjA/github.com/jupyterlab/extension-examples
         # install in editable mode 就是直接從 working directory install 的方法
         python -m pip install -e .
         Editable mode 意思 is run from the working directory directly 可以隨時改來改去生效！Try pip list and observe:
         
             peforth  1.28    d:\github\peforth
                              ^^^^^^^^^^^^^^^^^ <--- Wow !! this is the perfect dream come true. 
-    
+                             
+        [X] 2023-12-21 14:26:40 讀 https://github.com/cpacker/MemGPT?tab=readme-ov-file 又看到這個方法，成功！以下是完整的 screen dump ... 
+            
+            Windows PowerShell
+            Copyright (C) Microsoft Corporation. 著作權所有，並保留一切權利。
+
+            請嘗試新的跨平台 PowerShell https://aka.ms/pscore6
+
+            PS D:\GitHub\insightbridge\notebooks> cmd
+            Microsoft Windows [版本 10.0.19044.3693]
+            (c) Microsoft Corporation. 著作權所有，並保留一切權利。
+
+            (InsightBridge) D:\GitHub\insightbridge\notebooks>pip list | find /i "peforth" 
+            peforth                       1.27
+
+            (InsightBridge) D:\GitHub\insightbridge\notebooks>cd d:\GitHub\peforth    
+
+            (InsightBridge) d:\GitHub\peforth>pip install -e .
+            Obtaining file:///D:/GitHub/peforth
+              Preparing metadata (setup.py) ... done
+            Installing collected packages: peforth
+              Attempting uninstall: peforth
+                Found existing installation: peforth 1.27
+                Uninstalling peforth-1.27:
+                  Successfully uninstalled peforth-1.27
+              Running setup.py develop for peforth     
+            Successfully installed peforth-1.28
+
+            (InsightBridge) d:\GitHub\peforth>pip list | find /i "peforth"
+            peforth                       1.28        d:\github\peforth
+
+            (InsightBridge) d:\GitHub\peforth>
+        
 [X] 19:07 2019-05-13 這段 code 在 peforth.f 裡面本應處裡 alias 的新 // help, 但是又有問題
         \
         \ Redefine // to "replace" alias' help message instead of "append".
