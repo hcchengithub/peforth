@@ -4080,4 +4080,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     include pandas.f
 
     -----------------------------------------------------------------------------------------------------------
-
+[ ] 上午 05:31 2024/1/21 從 ChatLKK_RAG_Server_with_Pinecone.py server 裡，一 import peforth 就會
+    出現 peforth 的 unknown error. 這是因為 import peforth 啟動時它會去抓 command line 來執行之故
+        -> import peforth
+        Error! ChatLKK_RAG_Server_with_Pinecone:app unknown.
+    這怎麼解決？ peforth import 時要去處理 command line 裡的東西實在沒有甚麼用。
+    
+    
