@@ -4084,3 +4084,10 @@ peforth.main() # 從 python interpreter 切換進入 peforth
 [ ] 11:07 2022/10/11 發現問題！ callback 中 ipython I/O 無效了 peforth.bp() 也跟著無效。
     http://localhost:8888/notebooks/OneDrive/Documents/Jupyter%20Notebooks/ipywidgets%20-%20Using%20Interact.ipynb
 
+[ ] 2024-01-25 10:41:56 咱的 words 發生衝突了！
+    1. 
+        peforth 有 str 意思是 TOS casting 成 str 
+        ChatLKK 有 str, str: 意思是從 tib 取 string 
+    2. 
+        peforth 的 help 不能用 \ 只能用 //。 我覺得這個反而比 jeforth/ChatLKK 更自然。
+
