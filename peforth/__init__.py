@@ -221,9 +221,32 @@ if is_ipython:
             else:
                 dictate(cell)
 
+
+    # Define peforth magic command, %ai.
+    @register_line_cell_magic
+    def ai(line, cell=None):
+        '''
+        peforth magic command %ai can be used both as a line and cell magic in
+        iPython and Jupyter notebooks.
+
+        A %ai leading line or cell is interpreted as a FORTH command line: 
+        user: <user message> 
+
+        A %%ai leading line starts a multiple-line block in iPython or grabs
+        the entire cell to be the user message sent to AI. The rest of the %%ai
+        line is ignored like a comment line. %%ai must be the first none-white-
+        space token in the block or the cell.
+
+        '''
+        if cell is None:
+            vm.dictate("user: " + line)
+        else:
+            vm.dictate("user:\n" + cell)
+
     # Register auto '%load_ext peforth' at an ipython session
     def load_ipython_extension(ipython):
         ipython.register_magic_function(f, 'line_cell')
+        ipython.register_magic_function(ai, 'line_cell')
         # see http://ipython.readthedocs.io/en/stable/api/generated/IPython.core.interactiveshell.html?highlight=register_magic_function
 
 # Load high level source code

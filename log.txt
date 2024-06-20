@@ -4091,3 +4091,14 @@ peforth.main() # 從 python interpreter 切換進入 peforth
     2. 
         peforth 的 help 不能用 \ 只能用 //。 我覺得這個反而比 jeforth/ChatLKK 更自然。
 
+[ ] 10:46 2024/06/20 new Jupyter notebook magic %ai %%ai to call user: command 
+    if llm.invoke("hi") is how AI is called where llm = columbus.get_llm_for_LangChain()
+	then %f user: talk to ai 
+		%%f
+		llm constant llm // ( -- llm ) AI LLM object for LangChain 
+		: user: ( <message> -- "AIMessage" ) \ Talk to AI 
+			char _user:_ word ( msg ) llm :> invoke(pop()) ( AIMessage )
+			:> content ( "AIMessage" ) . ;	
+	Thus %ai ... is equvalent of %f user: ...
+	
+	
