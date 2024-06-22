@@ -41,7 +41,7 @@
             tib.insert
         [then]
     [else]
-        \ No command line the do the selftest if enabled
+        \ No command line then do the selftest if enabled
         ' <selftest> :> enabled [if]
 			version drop
             marker ###  // ( -- ) Marker before self-test 

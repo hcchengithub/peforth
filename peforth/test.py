@@ -11,5 +11,5 @@
 # the source. 
 
 if __name__ == '__main__':
-    exec(open("__init__.py").read())  # this is like: include __init__.py 
+    exec(open("__init__.py", encoding="utf-8").read())  # this is like: include __init__.py 
     ok(cmd ="\n")

@@ -14,7 +14,7 @@ setup(
     name="peforth",
     version=loc['__version__'],
     packages=["peforth", ],
-    license='The MIT License (MIT) Copyright © 2021 H.C. Chen',
+    license='The MIT License (MIT) Copyright © 2024 H.C. Chen',
     description="A FORTH programming language built on python.",
     long_description=open("README.rst", "r").read(),
     author="H.C. Chen",

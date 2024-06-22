@@ -89,7 +89,7 @@
 \
 \ For Windows only (not, say, Ubuntu)
 \
-py> os.name char nt = [if]
+	py> os.name char nt = [if]
 
     : dos       // ( <command line> -- errorlevel ) Shell to DOS Box run rest of the line
                 CR word ( cml ) trim ( cml' )
@@ -105,7 +105,7 @@ py> os.name char nt = [if]
                     [d 567 d]
                     [p 'dos' p]
                 </selftest>
-[then]
+	[then]
 
     \ <text>
     \ \ 
@@ -169,7 +169,124 @@ py> os.name char nt = [if]
     \             
     \ : harry_port py> harry_port.__doc__ -indent . cr ; // ( -- ) Print help message
 
+\
+\ Ported from forth.py 
+\
 
+	\ 23:45 2024/06/21 DevTools.py 加上 forth.py 是客製化 peforth 的方法，不用動到 peforth 本身, 只要在
+	\ 用場上當地動手即可。 但今天 peforth v1.31 有了新 magic %ai 以及 %chat for Jupyter notebook, 更希望
+	\ 單 import peforth 就可以，不用跑一大段 code (DevTools.py 的前半部)。 以下的 definitions moved from
+	\ {Jupyter}\\forth.py 成功後那邊就可以少一點了。
+	
+    \ Timer -- the "with Timer():" block -----------------------------------------------------------
+        <py>
+            from time import time
+
+            class Timer():
+                """
+                %%time equivalent Context manager -- the "with Timer():" block
+                Learned from https://www.codingame.com/playgrounds/500/advanced-python-features
+                Usage : with Timer('This job costs {} ms'): ...
+                Where the argument of description can be omitted and use default 'Wall time: ... ms'.
+                """
+                def __init__(self, message=None):
+                    self.message = message
+
+                def __enter__(self):
+                    self.start = time()
+                    return None  # could return anything, to be used like this: with Timer("Message") as value:
+
+                def __exit__(self, type, value, traceback):
+                    elapsed_time = (time() - self.start) * 1000
+                    if self.message:
+                        print(self.message.format(elapsed_time))
+                    else:
+                        print("Wall time: {} ms".format(elapsed_time))
+            push(Timer)
+        </py> constant Timer // ( -- class ) %%time magic equivalent "with" block. Usage: with Timer('This job costs {} ms'): ...
+                             /// Learned from https://www.codingame.com/playgrounds/500/advanced-python-features
+                             /// Usage :
+                             /// 	Timer = peforth.dictate('Timer').pop()
+                             /// 	with Timer('This job costs {} ms'): ...
+                             /// Arg omitted use default 'Wall time: ... ms'.
+
+    \ Converter .py to .ipynb ----------------------------------------------------------------------
+
+        : py2ipynb ( pathname -- ) // Create converted foo.py.ipynb from given foo.py
+            dup readTextFile ( pathname file.py )
+            py> json.encoder.JSONEncoder().encode(pop()) ( pathname file.py.json )
+            ( before ) <text> {"cells":[{"cell_type":"code","execution_count":null,"metadata":{"collapsed":false},"outputs":[],"source":[</text>
+            swap +
+            ( after ) <text> ]}],"metadata":{"kernelspec":{"display_name":"Python 3","language":"python","name":"python3"},"language_info":{"codemirror_mode":{"name":"ipython","version":3},"file_extension":".py","mimetype":"text/x-python","name":"python","nbconvert_exporter":"python","pygments_lexer":"ipython3","version":"3.4.2"}},"nbformat":4,"nbformat_minor":0}</text>
+            + ( pathname packed )
+            swap char .ipynb + writeTextFile ;
+            /// Usage:
+            ///   char c:\Users\username\foo.py py2ipynb
+            /// Result:
+            ///   Created new file c:\Users\username\foo.py.ipynb
+            /// 16:10 2018-01-12 https://www.webucator.com/blog/2015/07/bulk-convert-python-files-to-ipython-notebook-files-py-to-ipynb-conversion/
+
+    \ Clear output box when in *debug* prompt ------------------------------------------------------
+    
+        \ https://stackoverflow.com/questions/24816237/ipython-notebook-clear-cell-output-in-code
+        : clear // ( -- ) Clear output of this cell in Jupyternotebook
+            py: IPython.display.clear_output() ;
+
+    \ Magics %ai and %chat for Jupyter notebook ----------------------------------------------------
+    
+        none value @llm // ( -- llm ) Word llm ( prompt -- complete ) does the AI's job.
+        none value @get_ipython // ( -- func ) Jupyter Notebook get_ipython() function.
+            /// get_ipython().execution_count is the current cell number.
+        import datetime
+        "" value chat_history // ( -- str ) ChatBot history. 
+            /// Using a string instead of an array makes editing more convenient.
+        : check_llm_get_ipython // ( -- ) Check for the existence of llm and get_ipython.
+            @llm none != ( flagLLM )
+            @get_ipython type str <py> "method" in pop()</pyV> ( " flagGet_ipython )
+            and if else
+                [ last literal ] :> comment . cr abort
+            then ;
+            /// Peforth offers AI capabilities, such as %ai and %chat, for Jupyter notebooks.
+            /// To enable the AI magics, all you need to prepare are:
+            ///   %f llm constant llm_object
+            ///   %f : llm_wrapper trim llm_object :> invoke(pop()).content ;
+            ///   %f ' llm_wrapper to @llm
+            ///   %f get_ipython to @get_ipython    
+            /// Now either @llm or @get_ipython is not given, which is why you see this message.
+            ///
+            /// Explanation:
+            /// When you provide a Forth word, like llm_wrapper, to peforth, it assigns the value @llm:
+            ///   %f ' llm_wrapper to @llm
+            /// The definition of llm_wrapper may look like this:
+            ///   %f llm constant llm_object \ 'llm' is obtained from columbus.get_llm_for_LangChain()
+            ///   %f : llm_wrapper ( "prompt" -- "completion" ) trim llm_object :> invoke(pop()).content ;
+            /// Additionally, you provide the "get_ipython" function from your Jupyter notebook environment 
+            /// to peforth:
+            ///   %f get_ipython to @get_ipython
+
+        : timestamp ( -- str ) \ ChatBot timestamp with the recent cell number
+            py> "\n\nChat#" @get_ipython py> pop()().execution_count str + (space) +
+            <py> datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")</pyV> + ;
+        : ai: // ( <prompt> -- "AIMessage" ) Prompt to AI w/o history but add the answer to history.
+            check_llm_get_ipython
+            s" User: " char _uSeR_ word trim ( "User: " USERMessage )
+            dup @llm execute trim ( "User: " USERMessage AIMessage )
+            s" Assistant: " swap ( "User: " USERMessage "Assistant: " AIMessage )
+            timestamp + dup . cr cr ( "User: " USERMessage "Assistant: " AIMessage_timestamp )
+            + py> "\n" swap + + + py> "\n---\n" + chat_history swap + to chat_history
+            ;
+        : chat: // ( <prompt> -- "AIMessage" ) Talk to AI with history.
+            check_llm_get_ipython
+            s" User: " char _uSeR_ word trim ( "User: " USERMessage )
+            chat_history ( "User: " USERMessage history ) over + ( "User: " USERMessage history+USERMessage ) 
+            @llm execute trim ( "User: " USERMessage AIMessage )
+            s" Assistant: " swap ( "User: " USERMessage "Assistant: " AIMessage )
+            timestamp + dup . cr cr ( "User: " USERMessage "Assistant: " AIMessage_timestamp )
+            + py> "\n" swap + + + py> "\n---\n" + chat_history swap + to chat_history
+            ;
+
+    \ ----------------------------------------------------------------------------------------------------------------------
+	
 
 
 
