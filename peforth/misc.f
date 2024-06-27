@@ -269,20 +269,20 @@
             <py> datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")</pyV> + ;
         : ai: // ( <prompt> -- "AIMessage" ) Prompt to AI w/o history but add the answer to history.
             check_llm_get_ipython
-            s" User: " char _uSeR_ word trim ( "User: " USERMessage )
+            s" **User:** " char _uSeR_ word trim ( "User: " USERMessage )
             dup @llm execute trim ( "User: " USERMessage AIMessage )
-            s" Assistant: " swap ( "User: " USERMessage "Assistant: " AIMessage )
+            py> "\n" s" **Assistant:** " + swap ( "User: " USERMessage "Assistant: " AIMessage )
             timestamp + dup . cr cr ( "User: " USERMessage "Assistant: " AIMessage_timestamp )
-            + py> "\n" swap + + + py> "\n---\n" + chat_history swap + to chat_history
+            + py> "\n" swap + + + py> "\n---===---\n" + chat_history swap + to chat_history
             ;
         : chat: // ( <prompt> -- "AIMessage" ) Talk to AI with history.
             check_llm_get_ipython
-            s" User: " char _uSeR_ word trim ( "User: " USERMessage )
+            s" **User:** " char _uSeR_ word trim ( "User: " USERMessage )
             chat_history ( "User: " USERMessage history ) over + ( "User: " USERMessage history+USERMessage ) 
             @llm execute trim ( "User: " USERMessage AIMessage )
-            s" Assistant: " swap ( "User: " USERMessage "Assistant: " AIMessage )
+            py> "\n" s" **Assistant:** " + swap ( "User: " USERMessage "Assistant: " AIMessage )
             timestamp + dup . cr cr ( "User: " USERMessage "Assistant: " AIMessage_timestamp )
-            + py> "\n" swap + + + py> "\n---\n" + chat_history swap + to chat_history
+            + py> "\n" swap + + + py> "\n---===---\n" + chat_history swap + to chat_history
             ;
 
     \ ----------------------------------------------------------------------------------------------------------------------
