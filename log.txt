@@ -4115,7 +4115,7 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         e.g. Timer, py2ipynb, clear.  
 [ ] (13:22 2024/06/22) release v1.31 to pypi 
     [X] setup.py 裡的 copy right 年份要改成 2024
-    [ ] version.txt 裡的 __version__ = "1.31-beta" <-- Pypi.org 沒有 public 開關，AI 教我用這 beta 法。 
+    [X] version.txt 裡的 __version__ = <"1.31-beta">1.31 <-- Pypi.org 沒有 public 開關，AI 教我用這 beta 法。 
 		結果真的 upload 好了之後在 Pypi.org 上顯示的是 1.31b0 而且得用 pip install peforth==1.31b0 才 install 得到。
 		但 peforth.__version__ is '1.31-beta' 一切完美！
     *** 打包上 pypi.org 的方法 setup.bat 可以大簡化了。
@@ -4128,15 +4128,13 @@ peforth.main() # 從 python interpreter 切換進入 peforth
                得到 peforth.whl in c:\Users\hcche\Documents\GitHub\peforth\dist
         [X] 4. 若無 twine 則 pip install twine 很快很順
                執行 c:\Users\hcche\Documents\GitHub\peforth>twine upload dist/* 
-               ! 需要帳號密碼，看這裡 Ynote or Evernote: "python pypi 研究 -- upload to PyPI ok now.note"
-               !    Ynote web log in: hcchen5600@gmail.com/2y0o1u9dao
-               !    Enter your username: hcchen5600
-               !    Enter your password: 
-               15:26 2024/06/22 結果它現在跟我要的不是帳號密碼而是只用一次的 API token!              
+			   15:26 2024/06/22 結果它現在跟我要的不是帳號密碼而是只用一次的 API token!              
                (MyMLenv) C:\Users\8304018\Documents\GitHub\peforth>twine upload dist/*
                Uploading distributions to https://upload.pypi.org/legacy/
                Enter your API token: pypi-AgEIcHlw...... 會 commit 上 GitHub 不能留在這裡，算了，需要時都上網頁去要。
-				                     從 Pypi.org 網頁上去要。
+					Login Pypi.org Chrome remember password > 2FA use Microsoft Authenticator 產生的動態密碼。
+					Your project > Peforth > Manage > Settings > [Create a token for peforth] 
+					保存在 Evernote 上。
         [X] 5. pip uninstall peforth 然後再 pip install peforth 試驗看看。
         [X] 6. 完成！
     [X] 所有 run 法帶 selftest：
@@ -4190,6 +4188,6 @@ peforth.main() # 從 python interpreter 切換進入 peforth
         (很早以前) projectk.py 改了一點，忘了如何 sync 回 project-k 的？
         05:30 2019-11-21 peforth source code 裡的 projectk.py 本身不是從 github 直接下來的, 而是
         硬放上去的，因此不會與 project-k github 自動同步 <--- 想想看怎麼辦。
-    [X] version 改成 1.27  (必須跳過 1.20 直接到 1.21 否則會變成 1.2）
+    [ ] version 改成 1.31  (必須跳過 1.30 直接到 1.31 否則會變成 1.3）
 	
 	

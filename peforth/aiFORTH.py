@@ -14,35 +14,51 @@
     magics are unknown. Be aware of this is why %f, %ai does
     not work in there.
 """
-
+# %%time
 import os, peforth
 from IPython.display import display, Markdown
 # from IPython import get_ipython 這樣不行，用 %run -i %pathname 即可。
 from columbus_api import Columbus
 columbus = Columbus()
 
+# %%time
 peforth.dictate("""
     display constant display // ( -- obj ) Jupyternotebook display function
     Markdown constant Markdown // ( -- obj ) Jupyternotebook Markdown class
     get_ipython to @get_ipython \ 把 get_ipython 介紹給 peforth
     """)
 
+GEMINI   = False
+COLUMBUS = True
+
 # Gemini Pro ------
-peforth_llm = columbus.get_llm_gemini(
-    modelname="gemini-pro:generateContent",
-    api_key=os.getenv("GoogleAIStudio_API_KEY")
-)
-peforth.dictate("""
-    peforth_llm constant llm_function \ 把 llm 介紹給 peforth
-    : llm_wrapper ( prompt -- complete ) // llm_wrapper for Gemini
-        trim llm_function :> (pop()) dup
-        str :> rfind("candidates")==-1
-        if str else :>
-        ["candidates"][0]['content']['parts'][0]['text']
-        then ;
-    ' llm_wrapper to @llm \ 把 llm_wrapper 介紹給 peforth
-    """);
-# Gemini Pro ------
+if GEMINI:
+    gemini_llm = columbus.get_llm_gemini(
+        modelname="gemini-pro:generateContent",
+        api_key=os.getenv("GoogleAIStudio_API_KEY")
+    )
+    peforth.dictate("""
+        gemini_llm  constant llm_function \ 把 llm 介紹給 peforth
+        : llm_wrapper ( prompt -- complete ) // llm_wrapper for Gemini
+            trim llm_function :> (pop()) dup
+            str :> rfind("candidates")==-1
+            if str else :>
+            ["candidates"][0]['content']['parts'][0]['text']
+            then ;
+        ' llm_wrapper to @llm \ 把 llm_wrapper 介紹給 peforth
+        """);
+
+# Columbus gpt-35-turbo --------------
+if COLUMBUS:
+    columbus35_llm = columbus.get_llm_for_LangChain()
+    peforth.dictate("""
+        columbus35_llm constant llm_function \ 把 llm 介紹給 peforth
+        : llm_wrapper ( prompt -- complete ) // llm_wrapper for Gemini
+            trim llm_function :> invoke(pop()) dup
+            str :> rfind("content")==-1
+            if str else :> content then ;
+        ' llm_wrapper to @llm \ 把 llm_wrapper 介紹給 peforth
+        """);
 
 peforth.dictate("""
     : .chat // ( chat turn# -- ) Print chat turn with markdown rendering.
