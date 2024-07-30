@@ -6,7 +6,14 @@
 
         module_directory = os.path.dirname(peforth.__file__)
         aiforth = os.path.join(module_directory, "aiFORTH.py")
-        aiModel = "gpt-3.5-turbo" # "gpt-3.5-turbo", "GeminiPro"
+        aiModel = "GeminiPro"
+            # "gpt-4o-mini"
+            # "gpt-3.5-turbo"
+            # "GeminiPro"
+            # "Columbus35"
+            # "Columbus4"
+            # "Llama3-8b-instruct"
+            # "RootCauseAssistant"
         %run -i $aiforth
 
     and then you can start talking to AI.
@@ -30,8 +37,13 @@ columbus = Columbus()
 
 # 從外面定義好 aiModel 才 %run 進來，否則用這裡的 default 值。
 if 'aiModel' not in locals():
-    aiModel = "gpt-3.5-turbo" # "gpt-3.5-turbo", "GeminiPro"
-    
+    aiModel = "GeminiPro"
+    # "gpt-4o-mini"
+    # "gpt-3.5-turbo"
+    # "GeminiPro"
+    # "Columbus35"
+    # "Columbus4"
+
 peforth.dictate("""
     display constant display // ( -- obj ) Jupyternotebook display function
     Markdown constant Markdown // ( -- obj ) Jupyternotebook Markdown class
@@ -54,10 +66,24 @@ if aiModel == "GeminiPro":
         ' llm_wrapper to @llm \ 把 llm_wrapper 介紹給 peforth
         """);
 
-if aiModel == "gpt-3.5-turbo":
+if aiModel in ["gpt-3.5-turbo","gpt-4o-mini","gpt-4o"]:
     peforth_llm = columbus.get_llm_for_LangChain(
-        modelname="gpt-3.5-turbo",
+        modelname=aiModel,
         openai_api_key=os.getenv("OPENAI_API_KEY")
+    )
+    peforth.dictate("""
+        peforth_llm constant llm_object
+        : llm_wrapper trim llm_object :> invoke(pop()).content ;
+        ' llm_wrapper to @llm
+        """);
+
+if aiModel in ["Columbus35","Columbus4"]:
+    peforth_llm = columbus.get_llm_for_LangChain(
+        modelname=({
+            "Columbus35" : "gpt-35-turbo",
+            "Columbus4"  : "gpt-4-turbo",
+            })[aiModel],
+        openai_api_key=""
     )
     peforth.dictate("""
         peforth_llm constant llm_object
@@ -78,4 +104,4 @@ peforth.dictate("""
         ///  1 第一個 chat turn。
         /// -1 最後一個 chat turn。
     """);
-# %ai: You are aiFORTH, say Hi to the world.
+# %ai You are aiFORTH, say Hi to the world.
