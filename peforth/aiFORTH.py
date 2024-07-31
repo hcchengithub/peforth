@@ -47,6 +47,7 @@ if 'aiModel' not in locals():
 peforth.dictate("""
     display constant display // ( -- obj ) Jupyternotebook display function
     Markdown constant Markdown // ( -- obj ) Jupyternotebook Markdown class
+    columbus constant columbus // ( -- obj ) Columbus API
     get_ipython to @get_ipython \ 把 get_ipython 介紹給 peforth
     """)
 
@@ -56,9 +57,9 @@ if aiModel == "GeminiPro":
         api_key=os.getenv("GoogleAIStudio_API_KEY")
     )
     peforth.dictate("""
-        peforth_llm constant llm_function \ 把 llm 介紹給 peforth
+        peforth_llm constant peforth_llm \ 把 llm 介紹給 peforth
         : llm_wrapper ( prompt -- complete ) // llm_wrapper for Gemini
-            trim llm_function :> (pop()) dup
+            trim peforth_llm :> (pop()) dup
             str :> rfind("candidates")==-1
             if str else :>
             ["candidates"][0]['content']['parts'][0]['text']
@@ -72,8 +73,8 @@ if aiModel in ["gpt-3.5-turbo","gpt-4o-mini","gpt-4o"]:
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
     peforth.dictate("""
-        peforth_llm constant llm_object
-        : llm_wrapper trim llm_object :> invoke(pop()).content ;
+        peforth_llm constant peforth_llm
+        : llm_wrapper trim peforth_llm :> invoke(pop()).content ;
         ' llm_wrapper to @llm
         """);
 
@@ -85,9 +86,12 @@ if aiModel in ["Columbus35","Columbus4"]:
             })[aiModel],
         openai_api_key=""
     )
+    def refresh_llm():
+        peforth_llm.model_kwargs['extra_headers']['Authorization']="Bearer " + columbus.get_access_token()
     peforth.dictate("""
-        peforth_llm constant llm_object
-        : llm_wrapper trim llm_object :> invoke(pop()).content ;
+        peforth_llm constant peforth_llm
+        refresh_llm constant refresh_llm // peforth_llm :> model_kwargs['extra_headers']['Authorization'] -->
+        : llm_wrapper trim refresh_llm :: () peforth_llm :> invoke(pop()).content ;
         ' llm_wrapper to @llm
         """);
 
