@@ -8,10 +8,9 @@
         aiforth = os.path.join(module_directory, "aiFORTH.py")
         aiModel = "GeminiPro"
             # "gpt-4o-mini"
-            # "gpt-3.5-turbo"
             # "GeminiPro"
-            # "Columbus35"
-            # "Columbus4"
+            # "Columbus4o"
+            # "Columbus4o-mini"
             # "Llama3-8b-instruct"
             # "RootCauseAssistant"
         %run -i $aiforth
@@ -27,6 +26,26 @@
     注意: 行尾緊貼著 ? 在 JupyterlAB 是取得 help 的 magic 所以或前
     或後要多個空格以免打架。
 
+    Usage 
+    ==========================================
+
+    LPM2 GitHub\peforth> pip install --force-reinstall .
+    Or 
+    LPM2 pip install --force-reinstall "c:\Users\8304018\Documents\GitHub\peforth"
+
+    import os, peforth
+    module_directory = os.path.dirname(peforth.__file__)
+    aiforth = os.path.join(module_directory, "aiFORTH.py")
+    aiModel = "gpt-4o-mini"
+        # "GeminiPro","gpt-4o-mini"
+        # "Columbus4o","Columbus4o-mini" 
+    %run -i $aiforth
+
+    %ai introduce yourself please
+    %ai where from ?
+    %f "" to chat_history
+
+
 """
 
 import os, peforth
@@ -38,17 +57,20 @@ columbus = Columbus()
 # 從外面定義好 aiModel 才 %run 進來，否則用這裡的 default 值。
 if 'aiModel' not in locals():
     aiModel = "GeminiPro"
-    # "gpt-4o-mini"
-    # "gpt-3.5-turbo"
-    # "GeminiPro"
-    # "Columbus35"
-    # "Columbus4"
 
 peforth.dictate("""
     display constant display // ( -- obj ) Jupyternotebook display function
     Markdown constant Markdown // ( -- obj ) Jupyternotebook Markdown class
     columbus constant columbus // ( -- obj ) Columbus API
-    get_ipython to @get_ipython \ 把 get_ipython 介紹給 peforth
+    get_ipython to @get_ipython // 把 get_ipython 介紹給 peforth
+    
+    <text>
+    "gpt-4o-mini"
+    "gpt-4o"
+    "GeminiPro",
+    "Columbus4o","Columbus4o-mini" 
+    aiModel 
+    
     """)
 
 if aiModel == "GeminiPro":
@@ -57,46 +79,47 @@ if aiModel == "GeminiPro":
         api_key=os.getenv("GoogleAIStudio_API_KEY")
     )
     peforth.dictate("""
-        peforth_llm constant peforth_llm \ 把 llm 介紹給 peforth
+        peforth_llm constant peforth_llm // 把 llm GeminiPro 介紹給 peforth
         : llm_wrapper ( prompt -- complete ) // llm_wrapper for Gemini
             trim peforth_llm :> (pop()) dup
             str :> rfind("candidates")==-1
             if str else :>
             ["candidates"][0]['content']['parts'][0]['text']
             then ;
-        ' llm_wrapper to @llm \ 把 llm_wrapper 介紹給 peforth
+        ' llm_wrapper to @llm // 把 llm_wrapper 介紹給 peforth
         """);
 
-if aiModel in ["gpt-3.5-turbo","gpt-4o-mini","gpt-4o"]:
+if aiModel in ["gpt-4o-mini","gpt-4o"]:
     peforth_llm = columbus.get_llm_for_LangChain(
         modelname=aiModel,
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
     peforth.dictate("""
-        peforth_llm constant peforth_llm
-        : llm_wrapper trim peforth_llm :> invoke(pop()).content ;
-        ' llm_wrapper to @llm
+        peforth_llm constant peforth_llm // 把 OpenAI 某 llm 介紹給 peforth
+        : llm_wrapper trim peforth_llm :> invoke(pop()).content ;  // llm_wrapper for OpenAI models
+        ' llm_wrapper to @llm // 把 llm_wrapper 介紹給 peforth
         """);
 
-if aiModel in ["Columbus35","Columbus4"]:
+if aiModel in ["Columbus4o","Columbus4o-mini"]:
     peforth_llm = columbus.get_llm_for_LangChain(
         modelname=({
             "Columbus35" : "gpt-35-turbo",
-            "Columbus4"  : "gpt-4-turbo",
+            "Columbus4o"  : "gpt-4o",
+            "Columbus4o-mini"  : "gpt-4o-mini",
             })[aiModel],
         openai_api_key=""
     )
     def refresh_llm():
         peforth_llm.model_kwargs['extra_headers']['Authorization']="Bearer " + columbus.get_access_token()
     peforth.dictate("""
-        peforth_llm constant peforth_llm
+        peforth_llm constant peforth_llm // 把 WistronGPT 某 llm 介紹給 peforth
         refresh_llm constant refresh_llm // peforth_llm :> model_kwargs['extra_headers']['Authorization'] -->
-        : llm_wrapper trim refresh_llm :: () peforth_llm :> invoke(pop()).content ;
-        ' llm_wrapper to @llm
+        : llm_wrapper trim refresh_llm :: () peforth_llm :> invoke(pop()).content ; // WistronGPT refresh access toekn
+        ' llm_wrapper to @llm // 把 llm_wrapper 介紹給 peforth
         """);
 
 peforth.dictate("""
-    : .chat // ( chat turn# -- ) Print chat turn with markdown rendering.
+    : .chat // ( chat_turn# -- ) Print chat turn with markdown rendering.
         1- display Markdown
         <py>
         display, Markdown = pop(1), pop()

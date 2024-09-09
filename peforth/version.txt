@@ -1,4 +1,3 @@
-
-# 22:24 2024/07/28 "1.32" 改良 peforth\peforth\aiFORTH.py 可用 aiModel 選用 LLM model.
-# 14:00 2024/07/31 "1.33" 改良 peforth\peforth\aiFORTH.py auto refresh columbus LLM access token
+# 22:24 2024/07/28 "1.32" improve peforth\peforth\aiFORTH.py use aiModel to select LLM model.
+# 14:00 2024/07/31 "1.33" improve peforth\peforth\aiFORTH.py auto refresh columbus LLM access token
 __version__ = "1.33"
