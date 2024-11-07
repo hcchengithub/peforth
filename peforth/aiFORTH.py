@@ -1,4 +1,4 @@
-"""
+r"""
     aiFORTH - Add %ai to your jupyter notebook
     ==========================================
 
@@ -11,8 +11,6 @@
             # "GeminiPro"
             # "Columbus4o"
             # "Columbus4o-mini"
-            # "Llama3-8b-instruct"
-            # "RootCauseAssistant"
         %run -i $aiforth
 
     and then you can start talking to AI.
@@ -83,7 +81,7 @@ if aiModel == "GeminiPro":
 
 if aiModel in ["gpt-4o-mini","gpt-4o"]:
     peforth_llm = columbus.get_llm_for_LangChain(
-        modelname=aiModel,
+        model=aiModel,
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
     peforth.dictate("""
@@ -94,8 +92,7 @@ if aiModel in ["gpt-4o-mini","gpt-4o"]:
 
 if aiModel in ["Columbus4o","Columbus4o-mini"]:
     peforth_llm = columbus.get_llm_for_LangChain(
-        modelname=({
-            "Columbus35" : "gpt-35-turbo",
+        model=({
             "Columbus4o"  : "gpt-4o",
             "Columbus4o-mini"  : "gpt-4o-mini",
             })[aiModel],
