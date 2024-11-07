@@ -63,14 +63,6 @@ peforth.dictate("""
     Markdown constant Markdown // ( -- obj ) Jupyternotebook Markdown class
     columbus constant columbus // ( -- obj ) Columbus API
     get_ipython to @get_ipython // 把 get_ipython 介紹給 peforth
-    
-    <text>
-    "gpt-4o-mini"
-    "gpt-4o"
-    "GeminiPro",
-    "Columbus4o","Columbus4o-mini" 
-    aiModel 
-    
     """)
 
 if aiModel == "GeminiPro":
