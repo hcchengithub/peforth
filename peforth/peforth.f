@@ -665,7 +665,7 @@ code 2dup       vm.stack+=stack[-2:] end-code // ( a b -- a b a b ) Duplicate tw
     ///   : test py: push(tos()+pop(1),0) for dup r@ - ( count i ) . space ( count ) next drop ; 
     ///   3 5 test ==> 3 4 5 6 7 ; 1 test ==> 1 ; 0 test ==> nothing
     /// Pattern : Simplest, fixed times.
-    ///   : test 5 for r@ ( count i ) . space ( count ) next ; 
+    ///   : test 5 for r@ ( ... count ) . space ( ... ) next ; 
     ///   test ==> 5 4 3 2 1
     /// Pattern : fixed times and 0 based index
     ///   : test 5 for 5 r@ - ( count i ) . space ( count ) next ; 
