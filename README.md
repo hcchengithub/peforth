@@ -25,8 +25,9 @@ An easy way to try peforth is through the [Microsoft Azure Notebooks](https://no
     
     # If you want to install a specific version 
     !pip install peforth==1.23
-    # "Clear before install" is a good idea. Give it a try if things went wrong.
-    !pip uninstall -y peforth 
+    
+    # Install from GitHub when developping 
+    pip install --force-reinstall git+https://github.com/hcchengithub/peforth.git
     
 and then you can import peforth like this:
 
