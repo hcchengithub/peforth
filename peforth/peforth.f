@@ -1197,6 +1197,7 @@ code .s         # ( ... -- ... ) Dump the data stack.
                 /// How to invoke pdb when not locally imported:
                 /// py: sys.modules['pdb'].set_trace()
                 /// Example: %f debug [if] *debug* 1234> [then]
+				/// See 'help debug' for more tips about peforth.bp() breakpoint.
                 
 : *debug*       // ( <prompt> -- ... ) FORTH breakpoint, 'exit' to continue. 
                 BL word ( prompt ) compiling if literal compile (*debug*)
@@ -1383,10 +1384,10 @@ none value _locals_ // ( -- dict ) locals passed down from ok()
 false value debug // ( -- flag ) enable/disable debugging. 
     /// Python 從 function 裡面可以把程式停掉來檢查 context，
     ///    raise SystemExit("Stop right there!") 
-    ///    配合 magic %tb and %debug 很方便查看當時的現況。
-    /// peforth 的 _locals_ 也可以把整個帶出來到 globals() 方便 debug：
-    ///    pefort.bp(11,locals()) 改用 exit 不用 quit 離開以保留 _locals_
-    ///    等效 peforth.push(locals()).dictate('to _locals_')
+    ///    配合 JupyterNotebook magic %tb and %debug 很方便查看當時的現況。
+    /// peforth 的 _locals_ 也可以把 variables 都帶出來方便 debug：
+    ///    peforth.bp(11,locals()) 若用 exit 而不用 quit 離開，可保留 _locals_ variables.
+    ///    等效 peforth.push(locals()).dictate('to _locals_ debug [if] *debug* 11> [then]')
     /// 把 _locals_ 轉成 global 方便 debug:
     ///     for k,v in peforth.execute("_locals_").pop().items():
     ///         globals()[k] = v
