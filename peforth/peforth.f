@@ -1383,14 +1383,18 @@ code toString   # ( value -- string ) To see dictionary cell, toString() of the 
 none value _locals_ // ( -- dict ) locals passed down from ok()
 false value debug // ( -- flag ) enable/disable debugging. 
     /// Python 從 function 裡面可以把程式停掉來檢查 context，
-    ///    raise SystemExit("Stop right there!") 
-    ///    配合 JupyterNotebook magic %tb and %debug 很方便查看當時的現況。
-    /// peforth 的 _locals_ 也可以把 variables 都帶出來方便 debug：
-    ///    peforth.bp(11,locals()) 若用 exit 而不用 quit 離開，可保留 _locals_ variables.
-    ///    等效 peforth.push(locals()).dictate('to _locals_ debug [if] *debug* 11> [then]')
-    /// 把 _locals_ 轉成 global 方便 debug:
-    ///     for k,v in peforth.execute("_locals_").pop().items():
-    ///         globals()[k] = v
+    ///   raise SystemExit("Stop right there!") 
+    ///   配合 magic %tb and %debug 很方便查看當時的現況。
+    /// peforth 的 _locals_ 也可以把整個帶出來到 globals() 方便 debug：
+    ///   pefort.bp(11,locals()) 改用 exit 不用 quit 離開以保留 _locals_
+    ///   等效 peforth.push(locals()).dictate('to _locals_')
+	/// 
+	/// 如何邊寫邊驗證 function definition：
+	/// 1. 一進 function 就用 peforth 抄取 locals() 用 'exit' 離開，然後用 'raise' 打斷： 
+	///      peforth.bp(11,locals()); raise Exception("solve_problem()")  
+    /// 2. 把 _locals_ 轉成 global 方便 debug:
+    ///      for k,v in peforth.execute("_locals_").pop().items():
+    ///        globals()[k] = v
 
 \ code unknown    # ( token -- false ) Default unknown command does nothing. 
 \                 pop();push(False) end-code 
