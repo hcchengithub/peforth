@@ -29,6 +29,8 @@ r"""
     Usage
     ===========================================
     
+    %f columbus :> config :> ['openai_api_type'] -->
+    %f columbus :> access_token -->
     %ai tell me a joke
     %%ai 
        tell me a joke
