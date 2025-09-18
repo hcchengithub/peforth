@@ -362,7 +362,7 @@ code ;          # ( -- ) End of the colon definition.
 \                 /// Nested not allowed yet.
 
 code (          # ( <str> -- ) Comment down to ')' which can be nested if balanced
-                nextstring('\(|\)')['str']  # skip TIB to the next delimiter
+                nextstring(r'\(|\)')['str']  # skip TIB to the next delimiter
                 cc = tib[ntib]  # cc must be delimiter '(', ')', or '\n'
                 vm.ntib+=1      # skip any of them
                 if cc=='(': 
