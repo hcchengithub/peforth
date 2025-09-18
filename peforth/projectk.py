@@ -112,13 +112,12 @@ def nextstring(deli):
 def nexttoken(deli='\\s'):
     global tib, ntib
     if ntib >= len(tib): return ""
-    if deli == '\\s': 
+    if deli == '\\s':
         # skip all leading white spaces
-        while tib[ntib] in [" ","\t","\n","\r"]:
-            if (ntib+1) < len(tib):
-                ntib += 1
-            else:
-                break
+        while ntib < len(tib) and tib[ntib] in [" ","\t","\n","\r"]:
+            ntib += 1
+        if ntib >= len(tib):
+            return ""
     elif deli in ['\\n','\n','\\r','\r','\\n|\\r','\n|\r','\\r|\\n', '\r|\n']: 
         # skip the next character that must be whitespace
         if tib[ntib] not in ['\n','\r']:
