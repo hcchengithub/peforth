@@ -73,7 +73,7 @@ def llm(prompt):
     )
     return response.choices[0].message.content
 
-peforth.dictate("""
+peforth.dictate(r"""
     display constant display // ( -- obj ) Jupyternotebook display function
     Markdown constant Markdown // ( -- obj ) Jupyternotebook Markdown class
     columbus constant columbus // ( -- obj ) Columbus API
