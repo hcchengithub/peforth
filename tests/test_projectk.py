@@ -397,6 +397,37 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("Last active:", rendered)
         self.assertEqual(saved, [{"id": "sess_full_12345678", "title": "Design chat"}])
 
+    def test_agent_tool_names_are_peforth_branded_and_package_skill_is_found(self):
+        import json
+        from peforth import ai_bridge
+
+        vm = _f_mod.create_vm()
+        captured = {}
+
+        def create_session(payload):
+            captured.update(payload)
+            return iter([
+                {"type": "agent.session.created", "session": {"id": "sess_new_12345678"}},
+                {"type": "agent.session.turn.output_text.done", "text": "ok"},
+                {"type": "agent.session.turn.completed"},
+            ])
+
+        with patch.object(ai_bridge, "_create_session", side_effect=create_session), \
+                patch.object(ai_bridge, "_saved_session", return_value=None), \
+                patch.object(ai_bridge, "load_dotenv"), \
+                patch.dict("os.environ", {"OPENAI_API_KEY": "test-only"}):
+            vm.push("hello")
+            vm.push(False)
+            vm.execute(vm.tick("(ai)"))
+
+        functions = captured["agent"]["tools"]
+        self.assertEqual([tool["name"] for tool in functions],
+                         ["peforth_search_words", "peforth_run_forth"])
+        instructions = captured["agent"]["instructions"]
+        self.assertIn("peforth Forth", instructions)
+        self.assertNotIn("Project K", instructions)
+        self.assertEqual(captured["environment"], {"type": "none"})
+
     def test_ai_words_have_visible_source_and_help(self):
         ai_line = self.vm.tick("ai:")
         self.assertIsNotNone(ai_line)
@@ -487,7 +518,7 @@ class ReplBootstrapTests(unittest.TestCase):
         items = [
             {"id": "item_1", "type": "message", "role": "user",
              "content": [{"type": "input_text", "text": "Hello"}]},
-            {"id": "item_2", "type": "function_call", "name": "projectk_words"},
+            {"id": "item_2", "type": "function_call", "name": "peforth_words"},
             {"id": "item_3", "type": "message", "role": "assistant",
              "content": [{"type": "output_text", "text": "Hi there."}]},
         ]

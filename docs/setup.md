@@ -1,82 +1,52 @@
-# Project K 安裝與啟動
+# peforth v2 安裝與開發環境
 
-本指南適用於一般使用者。請在已 clone 的 Project K repo 根目錄執行對應作業系統的步驟。Linux/WSL 和 Windows 各自需要一個 Python 3.10+ venv；兩者不能共用。REPL 依賴會從 py/requirements.txt 安裝。
+> v2 是重大不相容改寫，不支援 v1 debugger、Jupyter 整合或舊 API。本文是開發 checkout 的安裝方式，不是已發布的一鍵安裝器。
 
-每個系統只需一個全域 hook：
-- Linux/WSL：~/.local/bin/f
-- Windows：%USERPROFILE%\.local\bin\f.cmd
+## 目前可用性
 
-Windows 的 PowerShell 和 CMD 共用 f.cmd。hook 會直接呼叫 venv 裡的 Python，不必先 activate。
+GitHub 上的 `v2-migration-orphan-bootstrap` 目前仍只有遷移計畫，尚無 Python package、`pyproject.toml` 或 `peforth/`。因此遠端 clone 後執行 `pip install -e .` 會失敗。請先取得已含完整 v2 source 的可寫 checkout；不要用尚未更新的遠端分支安裝。
 
-## Linux / WSL
+Windows 與 WSL 是不同作業環境，必須各自使用 checkout、Python venv 與 `f` 命令，不共用 Windows/WSL venv，也不要以 WSL 執行的 `f` 代表 Windows 安裝已完成。
 
-在 repo 根目錄執行：
+## Ubuntu / WSL
 
-~~~bash
-PROJECT_ROOT="$(pwd)"
-VENV="$HOME/.venvs/project-k"
+進入本機可寫的 peforth checkout：
 
-python3 -m venv "$VENV"
-"$VENV/bin/python" -m pip install -r "$PROJECT_ROOT/py/requirements.txt"
+```bash
+cd /path/to/your/writable/peforth-checkout
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+```
 
-mkdir -p "$HOME/.local/bin"
-cat > "$HOME/.local/bin/f" <<EOF
-#!/usr/bin/env bash
-exec "$VENV/bin/python" "$PROJECT_ROOT/py/repl.py" "\$@"
-EOF
-chmod +x "$HOME/.local/bin/f"
-~~~
+將 `<checkout>/.venv/bin` 加入 WSL 的 `PATH`（或啟用 `.venv`），在 checkout 外執行 `f --help` 與 `f -e 10 20 + . cr`。預期第二個命令輸出 `30`。
 
-確保 ~/.local/bin 在 PATH 中。若尚未加入，將下列一行放入 ~/.profile：
+## Windows PowerShell
 
-~~~bash
-export PATH="$HOME/.local/bin:$PATH"
-~~~
+請在 Windows 本機有寫入權的 checkout 執行，而非透過 WSL 操作：
 
-開啟新的終端機後即可在任何目錄輸入 f。
+```powershell
+Set-Location 'C:\path\to\your\writable\peforth-checkout'
+py -3 -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install -e .
+```
 
-## Windows PowerShell / CMD
+將 `<checkout>\.venv\Scripts` 加入使用者 `PATH`，開啟新的 PowerShell，在 checkout 外執行 `f --help` 與 `f -e 10 20 + . cr`。預期第二個命令輸出 `30`。若沒有 `py` launcher，請安裝支援 Python 3.10+ 的 Windows Python，再重試。若要改 Windows 使用者 PATH，請先確認該項目尚未存在，避免重複新增。
 
-在 repo 根目錄開啟 PowerShell，執行：
+## 設定和使用者資料
 
-~~~powershell
-$Project = (Get-Location).Path
-$Venv = Join-Path $env:USERPROFILE '.venvs\project-k'
-py -3 -m venv $Venv
+AI API key 可放在 `~/.peforth/.env`（Windows：`$HOME\.peforth\.env`）或程序環境變數。不要將 `.env` 提交到 Git。可選設定：
 
-$Python = Join-Path $Venv 'Scripts\python.exe'
-& $Python -m pip install -r (Join-Path $Project 'py\requirements.txt')
+```dotenv
+OPENAI_API_KEY=
+PEFORTH_AI_MODEL=gpt-6-astra
+PEFORTH_AI_SKILLS_DIR=skills
+PEFORTH_WSL_DISTRO=Ubuntu
+```
 
-$Bin = Join-Path $env:USERPROFILE '.local\bin'
-New-Item -ItemType Directory -Force $Bin | Out-Null
-$Repl = Join-Path $Project 'py\repl.py'
-$Launcher = Join-Path $Bin 'f.cmd'
+session index 和本機 `.env` 位於 `PEFORTH_CONFIG_DIR` 指定目錄（預設 `~/.peforth`），不與 package resources、checkout 或另一作業系統共用。`docs/`、`skills/`、`plugins/` 隨 source checkout 提供，不會自動安裝到其他 AI CLI 的全域目錄。
 
-@"
-@echo off
-"$Python" "$Repl" %*
-exit /b %ERRORLEVEL%
-"@ | Set-Content -Encoding ascii $Launcher
+## 更新、修改與解除安裝
 
-$UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-$PathEntries = @($UserPath -split ';' | Where-Object { $_ })
-if ($PathEntries -notcontains $Bin) {
-    [Environment]::SetEnvironmentVariable(
-        'Path',
-        (($PathEntries + $Bin) -join ';'),
-        'User'
-    )
-}
-~~~
+更新前先看 `git status`，保留 dirty/untracked 修改；不要對有本機修改的 checkout 使用 reset、強制清理或覆寫式更新。使用者可建立個人 branch 並自行 commit；推送時需使用有寫入權的 fork/remote。本 repo 的 bootstrap 不應自動 reset、覆蓋修改、commit 或 push。
 
-關閉並重新開啟 PowerShell 或 CMD，之後便可在任何目錄輸入 f。這個 Windows venv 同時供兩種 shell 使用。
-
-## 啟動與環境資訊
-
-在任意工作目錄輸入：
-
-~~~text
-f
-~~~
-
-REPL 啟動後，可輸入 `system_info stringify . ` 查看目前 Python、venv、shell 與 Project K source_path。
+解除安裝時，先從 PATH 移除 checkout 的 venv Scripts/bin 路徑，再由使用者自行刪除 checkout 和 venv。設定目錄 `~/.peforth`（包含 `.env` 和 session index）是獨立使用者資料；除非使用者明確想刪除，否則保留。

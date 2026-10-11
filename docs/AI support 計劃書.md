@@ -1,20 +1,20 @@
-# Project K AI 支援計劃書
+# peforth v2 AI 支援計劃書
 
 > 狀態：已依使用者回覆定案，開始實作  
 > 日期：2026-10-08  
-> 適用範圍：Python Edition（py/）
+> 適用範圍：peforth v2 Python package
 
 ## 1. 目的
 
-在 Project K 的 Forth CLI 中加入 `ai:` 指令，讓使用者以自然語言與 AI 討論問題並請求協助。AI 能理解 Project K 的 Forth 慣例，提出操作，透過本機工具呼叫目前的 VM，並依實際結果繼續工作。資料堆疊介面使用 `(ai)`，保留 `ai` 名稱。
+在 peforth 的 Forth CLI 中加入 `ai:` 指令，讓使用者以自然語言與 AI 討論問題並請求協助。AI 能理解 peforth 的 Forth 慣例，提出操作，透過本機工具呼叫目前的 VM，並依實際結果繼續工作。資料堆疊介面使用 `(ai)`，保留 `ai` 名稱。
 
 第一階段目標：提出需求 → AI 理解 Forth → 提出操作 → 使用者確認 → CLI 執行 → AI 根據結果繼續。
 
 ## 2. 設計原則
 
-Project K 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充沿用這種分工：Forth 使用者介面放在 ai.f，API 與工具交握由 Python Host 處理；保留 projectk.py 的小型核心。
+peforth 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充沿用這種分工：Forth 使用者介面放在 ai.f，API 與工具交握由 Python Host 處理；保留 projectk.py 的小型核心。
 
-AI 以 Agents API session 保存多輪對話；AI 學習 Project K 的 Forth 規則則用 Agent Skills 表達。本機檔案、Forth VM 與操作結果只透過明確定義的工具提供。
+AI 以 Agents API session 保存多輪對話；AI 學習 peforth 的 Forth 規則則用 Agent Skills 表達。本機檔案、Forth VM 與操作結果只透過明確定義的工具提供。
 
 ## 3. 使用者介面草案
 
@@ -31,13 +31,13 @@ ai: 取用本行剩餘文字作為問題，顯示 AI 回覆。同一 CLI 對話�
 
 ## 4. Agents API、Skills 與對話保存
 
-使用 OpenAI Agents API。由於使用者希望 AI 能按需讀取較完整的 Forth 使用規則，採用官方 Agent Skills 格式建立 Project K Forth skill，內容以 SKILL.md 描述 Forth 慣例、dictionary 查詢方式、程式執行工具及其使用限制，並可附上精選手冊參考資料。
+使用 OpenAI Agents API。由於使用者希望 AI 能按需讀取較完整的 Forth 使用規則，採用官方 Agent Skills 格式建立 peforth Forth skill，內容以 SKILL.md 描述 Forth 慣例、dictionary 查詢方式、程式執行工具及其使用限制，並可附上精選手冊參考資料。
 
-Agents API 的 Skills 需要把 skill 提供給 agent 的執行環境。初步建議在 OpenAI-hosted session 中以 Agents Plugin ZIP 傳入內含 skill 的小型 plugin；agent 依 skill 指引呼叫本機 function tools 操作 Project K。這不會把使用者的本機 Forth VM 搬進雲端；本機 VM 操作仍由 CLI 的工具處理。須依 Agents Plugin 文件確認 session 建立欄位及工具組態。
+Agents API 的 Skills 需要把 skill 提供給 agent 的執行環境。初步建議在 OpenAI-hosted session 中以 Agents Plugin ZIP 傳入內含 skill 的小型 plugin；agent 依 skill 指引呼叫本機 function tools 操作 peforth。這不會把使用者的本機 Forth VM 搬進雲端；本機 VM 操作仍由 CLI 的工具處理。須依 Agents Plugin 文件確認 session 建立欄位及工具組態。
 
-若希望 agent 只保有 Forth 知識、完全沒有 hosted shell，則需評估 self-hosted sandbox 與 executor；這比第一版預期增加本機 executor、連線和生命週期管理。故第一版優先採 hosted skill plugin 加受限的本機 function tools，明確要求 agent 只透過 Forth tools 操作 Project K。
+若希望 agent 只保有 Forth 知識、完全沒有 hosted shell，則需評估 self-hosted sandbox 與 executor；這比第一版預期增加本機 executor、連線和生命週期管理。故第一版優先採 hosted skill plugin 加受限的本機 function tools，明確要求 agent 只透過 Forth tools 操作 peforth。
 
-Agents API 會保存 session 狀態。CLI 將 session ID 存在 `py/.ai_session.json`，後續請求沿用該 ID；重啟 CLI 可接續雲端對話，但不會還原本機 VM 的 stack、dictionary 或檔案。提供建立新 session 的操作；session 生命週期與清除方式需記錄在使用文件中。
+Agents API 會保存 session 狀態。本機 session index 位於 `~/.peforth/.ai_session.json`（可由 `PEFORTH_CONFIG_DIR` 指定）；目前每個 `f` process 的 active session selection 留在該 VM 記憶體中，不會自動恢復本機 VM 的 stack、dictionary 或檔案。session 操作與清除方式記錄於 `docs/ai.md`。
 
 官方參考：[Agents API 概觀](https://developers.openai.com/api/docs/guides/agents-api/overview)、[Sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions)、[Skills](https://developers.openai.com/api/docs/guides/tools-skills)、[Agents API Plugins](https://developers.openai.com/api/docs/guides/agents-api/tools/plugins)、[Agents API hosted files](https://developers.openai.com/api/docs/guides/agents-api/environments/files)。
 
@@ -56,18 +56,18 @@ AI 的請求、function tool 呼叫與工具回覆都透過 Agents API session e
 
 AI 等待本機執行確認期間，使用者輸入的其他 Forth 命令先排隊，待目前 AI Task 結束後依序處理。Agents API 網路等待目前由 REPL 同步處理，尚不能在該期間接收新輸入；後續可改為非同步事件工作者以支援完整等待期間的佇列。不在第一版交錯執行 AI 工作與一般 Forth 工作，降低共享 data stack、dictionary 與 VM 的狀態混淆。
 
-CLI 以 Project K Task continuation 配合 Agents API 事件處理長時間等待；網路工作和 VM 指令執行分開處理，所有 Forth tools 都在 REPL 主執行緒中執行。實作需定義按 Ctrl-C 或 ai-cancel 時，如何取消遠端 turn、結束目前 Task 並恢復命令佇列。
+CLI 以 peforth Task continuation 配合 Agents API 事件處理長時間等待；網路工作和 VM 指令執行分開處理，所有 Forth tools 都在 REPL 主執行緒中執行。實作需定義按 Ctrl-C 或 ai-cancel 時，如何取消遠端 turn、結束目前 Task 並恢復命令佇列。
 
 ## 7. 設定與金鑰
 
 由 Python 標準函式庫直接呼叫 Agents API，不增加 SDK 依賴。載入 repo 根目錄的 .env，並支援使用作業系統環境變數。設定項目為：
 
 - OPENAI_API_KEY：Platform API key。
-- PROJECTK_AI_MODEL：預設模型名稱；由環境變數設定，不把易變模型名稱寫死在 Forth 字典。
+- PEFORTH_AI_MODEL：預設模型名稱；由環境變數設定，不把易變模型名稱寫死在 Forth 字典。
 
 若使用 .env，repo 提供不含實際 key 的 .env.example，並將 .env 加入 .gitignore。環境變數中已存在的值優先，不被檔案值覆蓋。啟動 AI 功能時若沒有 key，顯示清楚的設定指引；不影響一般 Forth 使用。
 
-hc: .env 已經提供啦 c:\Users\hcche\OneDrive\Documents\GitHub\project-k\py\.env 
+已提供 API key（請勿將 key 或私人設定提交到 Git）。 
 
 API key 僅用於本機 Host 向 OpenAI API 驗證，不放入 skill、plugin ZIP、function tool 結果或 agent 指令。Agents API session 將對話送至 OpenAI 服務；使用者需留意平台資料保存與資料區域政策。
 
@@ -75,21 +75,21 @@ API key 僅用於本機 Host 向 OpenAI API 驗證，不放入 skill、plugin ZI
 
 | 檔案 | 預計職責 |
 | --- | --- |
-| py/ai.f | 使用者可見的 Forth words、stack effect、session 操作、turn flow、工具交握與本機核准流程 |
-| py/ai_bridge.py | 標準函式庫 HTTP/SSE、API 傳輸、session index 檔案、skill 載入及本機 Forth 輸出擷取等基礎功能 |
-| py/skills/projectk-forth/SKILL.md | AI 使用 Forth、查詢字典與提交程式的技能說明 |
-| py/skills/projectk-forth 參考資料 | 從 Project K 文件精選的 Forth 操作與語言說明 |
-| py/plugins/projectk-forth/.codex-plugin/plugin.json | Agent Plugin 描述，將 skill 打包提供給 hosted session |
-| py/repl.py | 啟動 .env 載入、AI 擴充載入、互動佇列與本機確認 |
-| py/docs/ai.md | 設定、使用、權限、session 保存與故障處理 |
+| `peforth/ai.f` | 使用者可見的 Forth words、stack effect、session 操作、turn flow、工具交握與本機核准流程 |
+| `peforth/ai_bridge.py` | 標準函式庫 HTTP/SSE、API 傳輸、session index 檔案、skill 載入及本機 Forth 輸出擷取等基礎功能 |
+| `skills/peforth-forth/SKILL.md` | AI 使用 Forth、查詢字典與提交程式的技能說明 |
+| `skills/peforth-forth/references/` | Forth 操作與語言說明 |
+| `plugins/peforth-forth/.codex-plugin/plugin.json` | Agent Plugin 描述；隨 source 提供，不自動全域部署 |
+| `peforth/repl.py` | REPL 與 f CLI |
+| `docs/ai.md` | 設定、使用、權限、session 保存與故障處理 |
 
-skill/plugin 內容應由 repo 中審閱過的 Project K 文件維護，不讓模型任意載入未檢查的 skills。
+skill/plugin 內容應由 repo 中審閱過的 peforth 文件維護，不讓模型任意載入未檢查的 skills。
 
 ## 9. 分階段交付
 
 ### 第一階段：Forth skill 與 API 對話
 
-建立 Project K Forth Agent Skill/plugin，採標準函式庫呼叫 Agents API，提供 ai:、(ai)、雲端 session ID 保存、模型環境變數及 .env 設定。
+建立 peforth Forth Agent Skill/plugin，採標準函式庫呼叫 Agents API，提供 ai:、(ai)、雲端 session ID 保存、模型環境變數及 .env 設定。
 
 ### 第二階段：本機 Forth 工具循環
 
@@ -102,8 +102,8 @@ skill/plugin 內容應由 repo 中審閱過的 Project K 文件維護，不讓�
 ## 10. 驗收條件草案
 
 - ai: 能送出問題、串流顯示回覆，並在相同 session 延續對話。
-- 重啟 CLI 後能讀取保存的 session ID 並繼續雲端對話。
-- Agents API 能發現 Project K Forth skill，並按需參考 Forth 說明。
+- `ai-sessions` 可刷新本機標題索引；active session 僅在目前 `f` VM 內，除非明確執行 `ai-use`，新 process 不會自動續接。
+- Agents API 能發現 peforth Forth skill，並按需參考 Forth 說明。
 - AI 能查詢目前 dictionary；提交的 Forth 程式每次先顯示並取得使用者確認。
 - 獲准執行後，程式在本機 VM 執行，實際輸出或錯誤返回 AI。
 - AI Task 進行期間的新 REPL 命令排隊，Task 結束後依序執行。
@@ -112,12 +112,12 @@ skill/plugin 內容應由 repo 中審閱過的 Project K 文件維護，不讓�
 
 ## 11. 已確認的實作決定
 
-1. 同意第一版使用 OpenAI-hosted agent sandbox 載入 Forth skill plugin，並讓本機 CLI 以 function tools 執行 Forth？此方案最貼近「Agent Skills + 本機 Forth CLI」，也比自行維護 self-hosted executor 輕量。 --> hc: 同意
+1. 已確認使用 OpenAI Agents API 提供雲端 session；Forth 執行留在本機 VM，並經 CLI 核准流程執行。新 session 使用 `environment.type: none`，不建立 hosted sandbox。
 
-2. Python 設定與 session 檔案放在 `py/` 下，不與 JavaScript 版共用；`.env`、模型變數 `PROJECTK_AI_MODEL` 和本機 session 設定檔均依此配置。
-	--> hc: 我們這個 repo 會有 Python 跟 JavaScript，所以只放在 Python 目錄底下。 Path 上面有給過了，我就不再重複。
+2. 使用者設定與 session index 預設放在 `~/.peforth`（可由 `PEFORTH_CONFIG_DIR` 指定），與 source checkout 分離；模型環境變數為 `PEFORTH_AI_MODEL`。
+	--> 已改採 peforth repo 根目錄套件佈局；Windows 與 WSL 使用各自 checkout。
 	
-3. Forth skill 根目錄可由 `PROJECTK_AI_SKILLS_DIR` 環境變數指定，預設為 `py/skills`。Agent Plugin 的 hosted session ZIP 傳入方式已依官方文件核對。
-	--> hc: 希望 Skills 的目錄可以用環境變數指定
+3. Forth skill 根目錄可由 `PEFORTH_AI_SKILLS_DIR` 環境變數指定，預設為 checkout 的 `skills`。docs、skills、plugins 隨 source 提供，不會自動部署到其他 AI CLI 全域目錄。
+	--> 已實作 `PEFORTH_AI_SKILLS_DIR`，預設值為 checkout 的 `skills`。
 
-本文件記錄已確認方向及最後需核對的 API 整合細節；此設計稿不包含程式實作。
+本文件記錄已確認的 AI 設計及目前實作狀態；v2 package/CLI 實作以 source code、`docs/ai.md` 和測試為準。

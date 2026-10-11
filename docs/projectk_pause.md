@@ -1,8 +1,8 @@
 # 一聲 `pause`，把未完成的未來交回 host
 
-## —— Project K 的 Continuation 與 cooperative multitasking
+## —— peforth Kernel 的 Continuation 與 cooperative multitasking
 
-Project K 是一個極小的 Forth kernel。它不把所有功能預先塞進核心，而是從少數能力開始，讓使用者逐步定義出自己的 words、語法與工具。
+peforth 共用 kernel 是一個極小的 Forth kernel。它不把所有功能預先塞進核心，而是從少數能力開始，讓使用者逐步定義出自己的 words、語法與工具。
 
 在目前的 Python 實作中，kernel 最初只有 `code` 與 `end-code`；`pause` 是建立在其上的一個小小 extension：
 
@@ -16,7 +16,7 @@ end-code
 
 > 暫停目前這條執行路徑，將控制權交回 Python host；host 日後呼叫 `task.resume()` 時，同一條路徑便從原處繼續。
 
-這三行看似平淡，卻足以讓 Project K 用同一種基本動作處理鍵盤輸入、AI response、network I/O、timer，或任何「現在還不能往下做」的工作。
+這三行看似平淡，卻足以讓 host 用同一種基本動作處理鍵盤輸入、AI response、network I/O、timer，或任何「現在還不能往下做」的工作。
 
 先把一句最重要的話放在前面：
 
@@ -85,7 +85,7 @@ Continuation 可以先用一句白話來記：
 
 > Continuation 是程式此刻還沒走完的那一段未來。
 
-它很像遊戲的即時存檔，但這個比喻不能用得太滿。遊戲存檔常會把整個世界複製成一份檔案；Project K 的 `pause` 不會複製整台 VM，也不會把 data stack 包成每個 Task 私有的快照。
+它很像遊戲的即時存檔，但這個比喻不能用得太滿。遊戲存檔常會把整個世界複製成一份檔案；`pause` 不會複製整台 VM，也不會把 data stack 包成每個 Task 私有的快照。
 
 目前實作真正保留的是：
 
@@ -109,7 +109,7 @@ Task 持有最外層 generator，因此持有這段尚未完成的 execution。
 1. Forth word 執行 `yield vm.pause()`。
 2. `VM.call()` 用 `yield from` 承接這個 generator。
 3. `VM.evaluate()` 再把暫停訊號向外傳。
-4. `Task.resume()` 收到 Project K 專用的 pause signal。
+4. `Task.resume()` 收到 kernel 的 pause signal。
 5. Task 轉為 `paused`，控制權回到 host。
 6. host 下一次呼叫 `resume()`，同一條 generator chain 從 `yield` 後面接著走。
 
@@ -119,7 +119,7 @@ Task 持有最外層 generator，因此持有這段尚未完成的 execution。
 
 ## 3. 等鍵盤：polling 與「無知的巡邏警衛」
 
-以下是概念性的 Forth。它使用 `begin/while/repeat`、`key?`、`get-char` 等高階 words；這些不是 Project K 初始 kernel 的一部分，而是可以在 kernel 上逐步長出來的 extension。
+以下是概念性的 Forth。它使用 `begin/while/repeat`、`key?`、`get-char` 等高階 words；這些不是初始 kernel 的一部分，而是可以在 kernel 上逐步長出來的 extension。
 
 ```forth
 : key ( -- char )
@@ -224,7 +224,7 @@ sequenceDiagram
 
 ## 5. mechanism 與 policy 的分離
 
-Project K 的重點不在於讓 `pause` 知道所有事情，而在於讓它只知道自己的事情。
+peforth 的重點不在於讓 `pause` 知道所有事情，而在於讓它只知道自己的事情。
 
 ```mermaid
 flowchart TB
@@ -248,7 +248,7 @@ flowchart TB
 
 這些屬於 policy；`pause` 提供的是 mechanism。
 
-把 policy 移出小小的 kernel，不等於 policy 從世界上消失。host 仍要管理 event、timer、Task lifetime 與 error handling。Project K 的克制在於：不是每一個等待都必須背著同一套龐大 API。
+把 policy 移出小小的 kernel，不等於 policy 從世界上消失。host 仍要管理 event、timer、Task lifetime 與 error handling。kernel 的克制在於：不是每一個等待都必須背著同一套龐大 API。
 
 ---
 
@@ -256,7 +256,7 @@ flowchart TB
 
 ### 6.1 Task ID：可以沒有號碼，但不能沒有 identity
 
-Project K 不要求數字型 `task_id`。host 可以直接保有 Task object：
+Kernel 不要求數字型 `task_id`。host 可以直接保有 Task object：
 
 ```python
 task = machine.run("interrupted")
@@ -295,7 +295,7 @@ task.cancel()
 
 ### 6.4 Lock：VM 內不必用 mutex，但邊界仍要守
 
-在 single-threaded 的 cooperative multitasking 中，每一瞬間只有一個 Task 正在執行；切換只發生在它主動 `pause` 的地方。因此，Project K kernel 不需要在每一個 stack operation 前後加 mutex，也不會有 preemptive multithreading 那種 data race。
+在 single-threaded 的 cooperative multitasking 中，每一瞬間只有一個 Task 正在執行；切換只發生在它主動 `pause` 的地方。因此，peforth kernel 不需要在每一個 stack operation 前後加 mutex，也不會有 preemptive multithreading 那種 data race。
 
 但這句話有清楚的邊界：
 
@@ -382,5 +382,5 @@ task.cancel()
 
 它像文章裡的一個逗號：逗號不知道作者為何停筆，也不知道下一句何時到來；它只忠實地保留一句話尚未說完這件事。
 
-Project K 的優雅，不在於聲稱三行程式能解決所有 async 問題，而在於它只承擔自己真正需要承擔的那一小段——不多，也不少。
+這個設計的優雅，不在於聲稱三行程式能解決所有 async 問題，而在於它只承擔自己真正需要承擔的那一小段——不多，也不少。
 

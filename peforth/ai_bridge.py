@@ -193,7 +193,7 @@ def _agent_instructions():
     skills_root = _source_skills_dir()
     if not skills_root.is_absolute():
         skills_root = (SOURCE_ROOT / skills_root).resolve()
-    skill = skills_root / "projectk-forth"
+    skill = skills_root / "peforth-forth"
     skill_file = skill / "SKILL.md"
     if not skill_file.is_file():
         raise RuntimeError(f"peforth Forth skill not found: {skill_file}")

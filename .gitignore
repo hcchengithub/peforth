@@ -1,6 +1,8 @@
 .env
 .ai_session.json
 .ai_session.tmp
+.ai_session.json.*.tmp
+.env.*.tmp
 __pycache__/
 *.py[cod]
 .venv/

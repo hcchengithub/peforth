@@ -185,11 +185,11 @@ code (ai)
 
     ai_bridge.load_dotenv()
     tools = [
-        {"type": "function", "name": "projectk_search_words",
+        {"type": "function", "name": "peforth_search_words",
          "description": "Search the current Forth dictionary and documentation.",
          "parameters": {"type": "object", "properties": {"query": {"type": "string"}},
                         "required": ["query"], "additionalProperties": False}},
-        {"type": "function", "name": "projectk_run_forth",
+        {"type": "function", "name": "peforth_run_forth",
          "description": "Propose Forth source for execution in the user's current local VM. The CLI applies its current approval mode.",
          "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "purpose": {"type": "string"}},
                         "required": ["source", "purpose"], "additionalProperties": False}},
@@ -229,9 +229,9 @@ code (ai)
             + json.dumps(capability_inventory, ensure_ascii=False, indent=2)
         )
         if len(instructions.encode("utf-8")) > 100_000:
-            raise RuntimeError("Project K runtime capability instructions are too large.")
+            raise RuntimeError("peforth runtime capability instructions are too large.")
         payload = {
-            "agent": {"model": os.environ.get("PROJECTK_AI_MODEL", "gpt-6-astra"),
+            "agent": {"model": os.environ.get("PEFORTH_AI_MODEL", "gpt-6-astra"),
                       "tools": tools, "instructions": instructions},
             "environment": {"type": "none"}, "input": prompt, "stream": True,
         }
@@ -278,7 +278,7 @@ code (ai)
                     arguments = action.get("arguments", {})
                     if isinstance(arguments, str):
                         arguments = json.loads(arguments)
-                    if name == "projectk_search_words":
+                    if name == "peforth_search_words":
                         terms = str(arguments.get("query", "")).casefold().split()
                         matches = []
                         for word_name, word in vm.words.items():
@@ -294,7 +294,7 @@ code (ai)
                                 break
                         ai_bridge._tool_result(session_id, action, True,
                                                json.dumps(matches, ensure_ascii=False))
-                    elif name == "projectk_run_forth":
+                    elif name == "peforth_run_forth":
                         proposal = {"kind": "approval", "action": action,
                                     "source": str(arguments.get("source", "")),
                                     "purpose": str(arguments.get("purpose", ""))}

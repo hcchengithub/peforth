@@ -1,6 +1,6 @@
-# Project K Python Forth quick reference
+# peforth v2 Python Forth quick reference
 
-Curated from the Project K manuals, live `base.f` and `auxiliary.f` dictionaries, and AI-facing `words`.
+Curated from the peforth manuals, live `base.f` and `auxiliary.f` dictionaries, and AI-facing `words`.
 
 ## Input and definitions
 
@@ -16,7 +16,7 @@ Curated from the Project K manuals, live `base.f` and `auxiliary.f` dictionaries
 
 ## VM tasks
 
-Project K evaluates each input as a resumable `Task`. A host word can yield `vm.pause()` and later continue with `Task.resume()`. `Task.cancel()` closes a paused continuation, but it does not roll back work already performed. AI function calls therefore use the REPL's explicit approval boundary; cancellation is not an undo operation.
+peforth evaluates each input as a resumable `Task`. A host word can yield `vm.pause()` and later continue with `Task.resume()`. `Task.cancel()` closes a paused continuation, but it does not roll back work already performed. AI function calls therefore use the REPL's explicit approval boundary; cancellation is not an undo operation.
 
 ## Python bridge and side effects
 

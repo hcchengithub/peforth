@@ -1,28 +1,28 @@
-# Project K Forth 新手快速導覽
+# peforth Forth 新手快速導覽
 
-這份導覽帶你用幾分鐘開始操作 Project K（Python Edition）。不用先讀 VM 原始碼，也不用先學 Python；只要跟著輸入幾個例子，就能掌握 Forth 最重要的思考方式：**資料在 stack 上流動，word 依序取用 stack 上的資料並把結果放回去。**
+這份導覽帶你用幾分鐘開始操作 peforth v2。不用先讀 VM 原始碼，也不用先學 Python；只要跟著輸入幾個例子，就能掌握 Forth 最重要的思考方式：**資料在 stack 上流動，word 依序取用 stack 上的資料並把結果放回去。**
 
-> 本導覽以 `py/repl.py` 載入 `base.f` 後的完整互動環境為準。Project K 的底層核心刻意很小；像 `+`、`dup`、`:`、`if` 等常用 word 都是啟動時從 `base.f` 載入的擴充字典。
+> 本導覽以 `f` 載入 `base.f` 後的完整互動環境為準。peforth 共用 kernel 刻意保持精簡；像 `+`、`dup`、`:`、`if` 等常用 word 都是啟動時從 `base.f` 載入的擴充字典。
 
 ## 1. 啟動 Forth
 
-先依 [`setup.md`](setup.md) 安裝互動式 REPL 依賴與全域啟動 hook，之後可在任意工作目錄啟動：
+先依 [`setup.md`](setup.md) 完成目前 checkout 的 editable install，之後可在任意工作目錄啟動 `f`：
 
 ```bash
 f
 ```
 
-看到 `Project K Forth REPL` 和 `>` 提示字元後，就可以輸入 Forth。離開請輸入 `bye`，或在 Linux / WSL 按 `Ctrl+D`。
+看到 `peforth Forth REPL` 和 `>` 提示字元後，就可以輸入 Forth。離開請輸入 `bye`，或在 Linux / WSL 按 `Ctrl+D`。
 
 不進互動介面也能直接執行一段程式：
 
 ```bash
-python3 py/repl.py -e 10 20 + . cr
+f -e 10 20 + . cr
 ```
 
 預期會印出 `30`。以下 Forth 範例請在 REPL 中逐段輸入（每個程式碼區塊視為一次輸入），或整理成 `.f` 檔再執行；用 `-e` 時，請將需解析行尾的 `py>>` 放在該次輸入的最後一行。
 
-若想執行後繼續使用同一個 VM，可在 `-e` 前加 `-i`：`python3 py/repl.py -i -e 10 20 + . cr`。`-e` 後的所有參數會以單一空格連接成一份 TIB；`-h` 可查看命令列說明。
+若想執行後繼續使用同一個 VM，可在 `-e` 前加 `-i`：`f -i -e 10 20 + . cr`。`-e` 後的所有參數會以單一空格連接成一份 TIB；`-h` 可查看命令列說明。
 
 ## 2. 關鍵觀念：Forth 使用後綴順序
 
@@ -197,9 +197,9 @@ total . cr
 
 `constant` 不可用 `to` 改值；`value` 可以。初學階段可以先記：`variable` 放需要反覆更新的資料，`constant` 放固定值，`value` 放可替換的單一值。
 
-## 8. 借用 Python：Project K 的 Host Bridge
+## 8. 借用 Python：peforth 的 Host Bridge
 
-Project K 的 stack 可以保存 Python 物件；Python 程式碼可直接使用目前 VM 提供的 host 環境。最簡單的 Python 表達式寫法是 `py>>`，它會讀取該行剩餘內容、求值並把結果放到 Forth stack：
+peforth 的 stack 可以保存 Python 物件；Python 程式碼可直接使用目前 VM 提供的 host 環境。最簡單的 Python 表達式寫法是 `py>>`，它會讀取該行剩餘內容、求值並把結果放到 Forth stack：
 
 ```forth
 py>> 2 + 3
@@ -249,8 +249,8 @@ Forth 的 `pause` 可讓目前 Task 暫停，之後由 Python host 呼叫同一�
 
 ```bash
 # Linux / WSL
-python3 py/verify_projectk.py
+python3 -m unittest discover -s tests -v
 
 # Windows PowerShell / CMD
-python py\verify_projectk.py
+py -3 -m unittest discover -s tests -v
 ```

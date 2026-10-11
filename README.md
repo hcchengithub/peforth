@@ -4,6 +4,19 @@
 
 > **Breaking change:** v2 is a major rewrite and does not retain peforth v1 debugger, Jupyter integrations, `peforth.ok()`, or other v1 APIs. If you need the frozen v1.33 behavior, install the v1.33 release instead.
 
+## Current availability
+
+The v2 source is currently available only in the `v2-migration-orphan-bootstrap` branch's local checkout; the corresponding GitHub branch does not yet contain the package or CLI files. Do not use `pip install -e .` against a remote clone of that branch until those files have been pushed. The commands below install the existing local checkout, not a fresh remote clone.
+
+## Bootstrap from a writable local checkout
+
+These platform-specific bootstraps create/reuse only the checkout-local `.venv` and install the current source in editable mode. They validate the checkout's origin and migration branch, never fetch/checkout/reset or overwrite source, and never commit or push. They may install Python package dependencies into `.venv`; inspect the script before running it. Run them from this local repo checkout (not from a remote clone that lacks the migration files):
+
+- WSL/Linux: `bash ./bootstrap.sh`
+- Windows PowerShell: `./bootstrap.ps1`
+
+Neither script modifies PATH. Add `.venv/bin` (WSL/Linux) or `.venv\\Scripts` (Windows) yourself if you want bare `f` in new terminals.
+
 ## Development install (Windows and Ubuntu/WSL)
 
 The checkout is the editable source tree. Windows and WSL have separate checkouts and Python environments; install separately in each environment where you want `f`.
@@ -11,8 +24,7 @@ The checkout is the editable source tree. Windows and WSL have separate checkout
 ### Ubuntu / WSL
 
 ```bash
-git clone --branch v2-migration-orphan-bootstrap https://github.com/hcchengithub/peforth.git ~/.peforth
-cd ~/.peforth
+cd /path/to/your/writable/peforth-checkout
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 ```
@@ -26,13 +38,12 @@ f
 ### Windows PowerShell
 
 ```powershell
-git clone --branch v2-migration-orphan-bootstrap https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
-Set-Location "$HOME\.peforth"
+Set-Location 'C:\path\to\your\writable\peforth-checkout'
 py -3 -m venv .venv
 & .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-Add `$HOME\.peforth\.venv\Scripts` to the user `PATH`, then open a new terminal and run `f` from any directory.
+Add `<checkout>\.venv\Scripts` to the user `PATH`, then open a new terminal and run `f` from any directory.
 
 ## Configuration
 

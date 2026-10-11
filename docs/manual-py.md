@@ -1,4 +1,4 @@
-# Project K (Python Edition) 技術手冊與架構設計理念
+# peforth v2 共用 Forth Kernel 技術手冊與架構設計理念
 
 > **版本**：16:32 2026-10-08
 > **適用環境**：Python 3.10+ / Linux, WSL, Windows  
@@ -10,21 +10,21 @@
 
 在電腦科學的演進史中，Forth 代表著一種登峰造極的極簡美學：雙 stack 虛擬機、零語法開銷、純粹的後綴表示法，以及完全開放編譯器內部狀態的 Metaprogramming 威力。然而，傳統 16-bit 與裸機 (Bare-metal) 時代的 Forth 體系，在現代軟體工程中卻逐漸陷入孤島困局——封閉的平坦位元組記憶體空間、薄弱的原生資料結構、缺乏現代型別系統，以及無法直接調用海量第三方軟體庫的窘境。
 
-**Project K (Python Edition)** 的誕生，並非為了在現代作業系統中復刻一套 1980 年代的骨董模擬器，而是為了探索一個全新的架構範式：  
+**peforth (Python Edition)** 的誕生，並非為了在現代作業系統中復刻一套 1980 年代的骨董模擬器，而是為了探索一個全新的架構範式：  
 **當 Forth 純粹的雙 stack 拓撲與 Metaprogramming 靈魂，直接寄生於 Python 這種具備豐富物件生態與動態特性的現代 Host Language 之上，會引爆出何等強大的化學反應？**
 
-本手冊是 Project K 的系統架構指南與設計理念記錄。本手冊**不做**傳統 Forth 語法的入門字典（各 Word 本身已內建 `help` 與 `comment` 自我文檔），而是深入剖析 Project K 如何用一個僅數百行程式碼的微核心，在動態物件世界中重建純粹的 Forth 哲學，並徹底解構傳統非同步編程的沉重枷鎖。
+本手冊是 peforth 的系統架構指南與設計理念記錄。本手冊**不做**傳統 Forth 語法的入門字典（各 Word 本身已內建 `help` 與 `comment` 自我文檔），而是深入剖析 peforth 如何用一個僅數百行程式碼的微核心，在動態物件世界中重建純粹的 Forth 哲學，並徹底解構傳統非同步編程的沉重枷鎖。
 
 > [!TIP]
 > **想直接動手跑起來？**  
-> 如果您希望立即在終端機操作、執行互動 REPL 或配置全域命令列工具 `f`，請直接參閱專門指南 [`setup.md`](setup.md)（如何執行指南）。  
-> 本手冊（Manual）與執行指南（Setup Guide）分開撰寫的根本原因在於：**本手冊記錄的是 Project K 歷久彌新的架構設計理念，而如何執行與環境配置方式則會隨著作業系統、命令列工具或安裝方案的演進而隨時迭代更新**。讀者只需參閱 `setup.md` 前兩三行指令，即可保證在 3 秒內最簡啟動。
+若您希望立即在終端機操作、執行互動 REPL 或設定 checkout 的 `f` entry point，請參閱專門指南 [`setup.md`](setup.md)（如何執行指南）。
+> 本手冊（Manual）與執行指南（Setup Guide）分開撰寫的根本原因在於：**本手冊記錄的是 peforth 歷久彌新的架構設計理念，而如何執行與環境配置方式則會隨著作業系統、命令列工具或安裝方案的演進而隨時迭代更新**。讀者只需參閱 `setup.md` 前兩三行指令，即可保證在 3 秒內最簡啟動。
 
 ---
 
 ## 第一章：設計理念與架構概述 (Design Philosophy & Architecture)
 
-### 1.1 傳統 Forth 的困局與 Project K 的解方
+### 1.1 傳統 Forth 的困局與 peforth 的解方
 
 傳統 Forth（如 FIG-Forth、Forth-79/83 與 ANS Forth）具備驚人的執行效率與自我延展性，但在現代計算環境中面臨三大根本瓶頸：
 
@@ -32,15 +32,15 @@
 2. **型別系統與資料結構的匱乏**：傳統 Forth 的 stack 單元本質上只是單純的 cell（整數或指標）。處理多維陣列、雜湊表 (hash map)、多型物件或動態字串時，程式設計師必須從頭用記憶體位移自行實作，代碼難以維護。
 3. **生態系割裂**：現代工程的生產力建立在第三方庫（科學計算、機器學習、網路協定、作業系統 API）之上。如果一個語言無法零成本地直接調用這些庫，就只能淪為玩具。
 
-**Project K 的核心破局之道：共生微核心 (Symbiotic Micro-Kernel)**
-* **拋棄沙盒，共享物件空間**：Project K 的 stack 上流轉的不再是單純的 16-bit/32-bit 位元組，而是**活生生的 Python 物件參照**（整數、浮點數、字串、清單、字典、生成器乃至自訂 class 實例）。
+**peforth 的核心破局之道：共生微核心 (Symbiotic Micro-Kernel)**
+* **拋棄沙盒，共享物件空間**：peforth 的 stack 上流轉的不再是單純的 16-bit/32-bit 位元組，而是**活生生的 Python 物件參照**（整數、浮點數、字串、清單、字典、生成器乃至自訂 class 實例）。
 * **機制在 Forth，能力在 Host**：Forth 保留其無可匹敵的流程中樞控制力、自訂 DSL 能耐與 Metaprogramming factory；而重型運算、系統 API、字元編碼與巨量庫則直接由 Python 全權支撐。
 
 ---
 
 ### 1.2 雙 Stack 虛擬機架構 (Dual-Stack VM)
 
-Project K 恪守經典 Forth 的雙 stack 虛擬機核心幾何：
+peforth 恪守經典 Forth 的雙 stack 虛擬機核心幾何：
 
 ```mermaid
 flowchart TB
@@ -75,7 +75,7 @@ flowchart TB
    * 雙 stack 的徹底解耦，使得運算資料與控制流程互不干擾，維持清晰的結構對稱性。
 
 #### Stack Effect 標記慣例
-在無型別語法的後綴世界中，Stack Effect 註釋是理解程式不變式的命脈。Project K 採用標準雙 stack 註釋慣例：
+在無型別語法的後綴世界中，Stack Effect 註釋是理解程式不變式的命脈。peforth 採用標準雙 stack 註釋慣例：
 ```forth
 \ 單純操縱 Data stack
 ( a b -- c )
@@ -94,7 +94,7 @@ flowchart TB
 
 ### 1.3 核心執行模型與生命週期
 
-Project K 的 Outer Interpreter 擁有極致簡明的狀態循環：
+peforth 的 Outer Interpreter 擁有極致簡明的狀態循環：
 
 ```mermaid
 flowchart TD
@@ -182,7 +182,7 @@ end-code
 傳統的正則搜尋在掃描到第一行註解 `# ... end-code` 或字串常數時，就會**誤以為代碼塊已結束**，導致後半段程式碼被丟給 Forth 直譯器執行，瞬間引發不可收拾的語法崩潰！
 
 #### Python 原生語彙分析器的降維打擊
-Project K 的破局點在於：**讓 Host 的 Lexer 來審查 Host 的程式碼！**  
+peforth 的破局點在於：**讓 Host 的 Lexer 來審查 Host 的程式碼！**  
 在 `VM._find_code_terminator` 中，核心直接引入 Python 標準庫的 `tokenize.generate_tokens`：
 
 ```python
@@ -194,7 +194,7 @@ for token in tokenize.generate_tokens(io.StringIO(text).readline):
 * `tokenize.STRING`（字串常數內部文字）
 * `tokenize.NAME` 與 `tokenize.OP`（真正的語法標記）
 
-當且僅當 `end`、`-`、`code` 出現在頂層且非字串、非註解的代碼位置時，Project K 才確認找到真正的定界邊界！**這種直接借力 Host 語彙分析器的架構，徹底杜絕了代碼邊界判定失效的長年痛點。**
+當且僅當 `end`、`-`、`code` 出現在頂層且非字串、非註解的代碼位置時，peforth 才確認找到真正的定界邊界！**這種直接借力 Host 語彙分析器的架構，徹底杜絕了代碼邊界判定失效的長年痛點。**
 
 ---
 
@@ -202,7 +202,7 @@ for token in tokenize.generate_tokens(io.StringIO(text).readline):
 
 在傳統語言中，字串遇到包含雙引號時往往必須寫成繁瑣的跳脫符號（如 `\"` 或 `\'`），這在編寫正則表達式或 JSON 時被稱為「跳脫字元地獄 (Escaping Hell)」。
 
-Project K 在 `base.f` 中透過 Metaprogramming 打造了一整套字串定界符族群：
+peforth 在 `base.f` 中透過 Metaprogramming 打造了一整套字串定界符族群：
 
 ```forth
 : string-quote ( delim <name> -- )
@@ -228,7 +228,7 @@ does> ( -- string )
 ### 3.1 告別 Flat Memory：現代物件導向 Data Space
 
 在傳統 Forth 系統中，`here` 是一個指向 RAM 位元組的整數指標，`,` (comma) 是將數值拷貝進實體記憶體。  
-在 Project K 裡，這個概念被現代物件模型昇華：
+在 peforth 裡，這個概念被現代物件模型昇華：
 
 1. **Word 的資料載體是 Python List**：  
    由 `create` 建立的 Word，其內部包含一個專屬的 `body = []` 清單。
@@ -247,7 +247,7 @@ does> ( -- string )
    * 當 `addr` 是一個 Python `list` 時（例如 Word 的 `body`），`!` 與 `@` 直接讀寫該 list 的第一個元素 `addr[0]`！
    * 這使得 `variable` 與自訂結構不需要計算實體位元組偏移量，直接享有 Python 原生垃圾回收機制維護物件生命週期。
    * **非首元素存取與切片 (Indexing & Slicing)**：  
-     在傳統 Forth 中，連續存取陣列必須依賴指標算術（如 `addr 1 CELLS + @`）。但在 Project K 中，Word 的 `body` 是真實的 Python `list`，若強行使用數值加法運算（如 `xx 1+ @`）會直接被 Python 攔截型別錯誤。  
+     在傳統 Forth 中，連續存取陣列必須依賴指標算術（如 `addr 1 CELLS + @`）。但在 peforth 中，Word 的 `body` 是真實的 Python `list`，若強行使用數值加法運算（如 `xx 1+ @`）會直接被 Python 攔截型別錯誤。  
      正確且優雅的做法是直接透過 Host Bridge 的 `:>` 享受 Python 原生索引與切片：
      ```forth
      create xx 123 , 456 ,
@@ -274,7 +274,7 @@ does> ( -- string )
 
 在傳統架構中，PAD 是一塊固定大小的靜態記憶體區塊，既無法動態擴展、容易有記憶體溢位風險，又與直譯器的輸入緩衝區各自為政。
 
-在 Project K 的設計理念中，這個經典架構迎來了本質上的昇華：
+在 peforth 的設計理念中，這個經典架構迎來了本質上的昇華：
 1. **`vm.input.tib` 即是現代化的 `TIB` 陣列**（以字串陣列 Array of Strings 為載體，常簡稱為 `tib`）。
 2. **`itib` 直接指向 TIB 陣列中下一個要讀取的元素索引 (`tib[itib]`)**。
 3. **在 `itib` 後方排隊的陣列元素，正是天然的動態 PAD！**
@@ -363,12 +363,12 @@ flowchart TB
 
 #### 為什麼「itib 後面就是 PAD」？
 
-這是 Project K 架構設計上的重大創新：**未被消費的排隊空間本身就是最高效的動態草稿區！**
+這是 peforth 架構設計上的重大創新：**未被消費的排隊空間本身就是最高效的動態草稿區！**
 
 * **自由拿捏與動態注入**：
   直譯器與應用程式可以隨時在 `itib` 之後動態切割、修剪、拼裝或插入新的字串元素。例如程式在執行當前邏輯時，若需要動態產生一段 Forth 指令並交付執行，只需將組裝完成的字串注入到 `tib[itib + 1]`。
 * **草稿暫存與程式求值的合一**：
-  在傳統 Forth 中，在 PAD 拼裝完文字後，必須耗費心力透過字串搬移拷貝至 TIB 才能交由直譯器執行。而在 Project K 中，直譯器順流前進時，隨著 `itib` 往前推進，原本在 PAD 中排隊或動態拼裝的字串（如 `tib[2] = ". cr"`）自然無縫地成為下一個被讀取求值的指令。
+  在傳統 Forth 中，在 PAD 拼裝完文字後，必須耗費心力透過字串搬移拷貝至 TIB 才能交由直譯器執行。而在 peforth 中，直譯器順流前進時，隨著 `itib` 往前推進，原本在 PAD 中排隊或動態拼裝的字串（如 `tib[2] = ". cr"`）自然無縫地成為下一個被讀取求值的指令。
 * **徹底免除溢位隱患**：
   陣列的大小與各字串長度均由現代動態語言環境全權管理，完全沒有固定位元組上限的困擾，讓「草稿暫存 (PAD)」與「動態程式碼求值 (Dynamic Evaluation)」在概念與實作上融為一體。
 
@@ -376,14 +376,14 @@ flowchart TB
 
 #### 3. 非同步 IO 期間的 PAD：天然的指令 Queue（情境一）
 
-當 Project K 邁入非同步與多任務協作（例如調用大型語言模型 AI、等待非同步網路封包或計時器）時，PAD 架構展現出了令人驚豔的雙重用途：**它既是文字草稿區，也是單一 Task 內部的指令排程佇列（Queue）！**
+當 peforth 邁入非同步與多任務協作（例如調用大型語言模型 AI、等待非同步網路封包或計時器）時，PAD 架構展現出了令人驚豔的雙重用途：**它既是文字草稿區，也是單一 Task 內部的指令排程佇列（Queue）！**
 
 ##### 當執行陷入漫長等待時，新輸入去了哪裡？
 假設使用者在 REPL 送出了一條耗時的 AI 查詢：
 ```forth
 ai-ask "請分析這段代碼的潛在漏洞..."   \ Task 1 在此發起請求並執行 pause 暫停
 ```
-此時，外部 AI 可能需要數秒甚至數十秒才會回傳。在傳統阻塞式系統中，終端機會直接凍結、鼠標轉圈、禁止任何輸入；但在 Project K 中，Task 1 已透過 `yield vm.pause()` 主動交還控制權。
+此時，外部 AI 可能需要數秒甚至數十秒才會回傳。在傳統阻塞式系統中，終端機會直接凍結、鼠標轉圈、禁止任何輸入；但在 peforth 中，Task 1 已透過 `yield vm.pause()` 主動交還控制權。
 
 若使用者在等待 AI 回應期間，又在鍵盤上打入了後續處理指令並按下 Enter：
 ```forth
@@ -433,7 +433,7 @@ if self.itib + 1 < len(self.tib):
     continue
 ```
 `itib` 順暢前進至 `2`，無縫接著執行排隊在 PAD 裡的 `.s cr print-result`！  
-這證明了在 Project K 裡，**未消費的 TIB/PAD 空間本質上就是一條天然的非同步指令 Pipeline**。
+這證明了在 peforth 裡，**未消費的 TIB/PAD 空間本質上就是一條天然的非同步指令 Pipeline**。
 
 ---
 
@@ -443,7 +443,7 @@ if self.itib + 1 < len(self.tib):
 
 在沒有底層組合語言、沒有平坦機器碼記憶體、指令是一串 Python 物件與 action tuple 的環境下，我們要如何實現經典的 `if else then`、`begin until` 與計數迴圈？
 
-Project K 給出的答案是：**以編譯期 Control Stack 實現典雅的抽象回填。**  
+peforth 給出的答案是：**以編譯期 Control Stack 實現典雅的抽象回填。**  
 在外表看來，Forth 代碼保持著純粹經典的書寫風格；但在幕後，直譯器精巧地利用 Control Stack（即編譯期的 Data stack）在指令清單的陣列索引上穿針引線。
 
 ---
@@ -497,7 +497,7 @@ Project K 給出的答案是：**以編譯期 Control Stack 實現典雅的抽�
 
 ### 4.4 計數迴圈的精妙結構：`for ... next` 與 `aft`
 
-除了條件迴圈，Project K 還實作了基於 Return stack 的高效計數迴圈：
+除了條件迴圈，peforth 還實作了基於 Return stack 的高效計數迴圈：
 
 * `for` `( count -- ) ( R: -- count )`：
   編譯 `>r` 將計數器推入 Return stack，並留下迴圈起點。
@@ -511,7 +511,7 @@ Project K 給出的答案是：**以編譯期 Control Stack 實現典雅的抽�
 ```forth
 : aft  drop [compile] ahead [compile] begin swap ; immediate
 ```
-首輪執行直接越過 `aft ... then` 之間的區塊，從次輪起方才進入循環。這種幾何般的結構美感，在 Project K 現代 VM 上得以 100% 完整重現！
+首輪執行直接越過 `aft ... then` 之間的區塊，從次輪起方才進入循環。這種幾何般的結構美感，在 peforth 現代 VM 上得以 100% 完整重現！
 
 ---
 
@@ -519,7 +519,7 @@ Project K 給出的答案是：**以編譯期 Control Stack 實現典雅的抽�
 
 ### 5.1 字典模型與 Word 結構
 
-Project K 的字典是由 Word 物件組成的動態集合。每個 Word 均被封裝為 `projectk.py` 中的 `_Word` 資料類別：
+peforth 的字典是由 Word 物件組成的動態集合。每個 Word 均被封裝為 `projectk.py` 中的 `_Word` 資料類別：
 
 ```python
 @dataclass
@@ -574,7 +574,7 @@ class _Word:
 
 在 Forth 哲學中，最崇高的境界不是寫出功能強大的函數，而是寫出**「能製造新 Word 的 Word (Defining Words)」**。在現代架構中，這就是極致的 **Custom Factory 模式**。
 
-Project K 透過 `create` 與 `(does>)` / `does>` 實現了完美的 factory 機制：
+peforth 透過 `create` 與 `(does>)` / `does>` 實現了完美的 factory 機制：
 
 ```forth
 code create
@@ -614,7 +614,7 @@ end-code
 
 在物件導向程式設計 (OOP) 中，每個實例 (instance) 都有一個 Class 作為其類型歸屬。在傳統 Forth 裡，子 Word 往往只是無名的記憶體結構，缺乏型態 Introspection 能力。
 
-**Project K 給出了一個極其典雅的解決方案：將 Factory 的名稱直接印刻在子 Word 的 `word.type` 上！**
+**peforth 給出了一個極其典雅的解決方案：將 Factory 的名稱直接印刻在子 Word 的 `word.type` 上！**
 
 1. **`constant` Factory**：
    ```forth
@@ -653,7 +653,7 @@ end-code
 ### 6.1 嵌入式共生思路 (Symbiotic Design)
 
 傳統語言通常把「呼叫其他語言」視為外部 FFI (Foreign Function Interface)，需要配置型別定義、記憶體封裝與序列化開銷。  
-在 Project K 中，**Python 不是外部語言，Python 就是執行環境本身！**
+在 peforth 中，**Python 不是外部語言，Python 就是執行環境本身！**
 
 Forth 扮演著靈巧、簡潔的宣告式 DSL 與流程編排大腦；Python 則作為運算能量的供應池。兩者在同一個進程、同一個記憶體空間內無縫共生。
 
@@ -661,7 +661,7 @@ Forth 扮演著靈巧、簡潔的宣告式 DSL 與流程編排大腦；Python �
 
 ### 6.2 內聯 Python 程式碼區塊
 
-Project K 提供了四種粒度的 Python 代碼嵌入機制：
+peforth 提供了四種粒度的 Python 代碼嵌入機制：
 
 #### 1. Word 級嵌入：`code ... end-code`
 用於在 Forth 字典中直接註冊高性能的原生 Python Word：
@@ -686,7 +686,7 @@ end-code
 
 ### 6.3 動態物件解析與調用：`::` 與 `:>`
 
-要調用已存在於 stack 頂端之 Python 物件的方法或屬性，Project K 設計了一對極簡的操作符號：
+要調用已存在於 stack 頂端之 Python 物件的方法或屬性，peforth 設計了一對極簡的操作符號：
 
 #### `::`（無回傳值調用 / Procedure Invocation）
 語法：`<object> :: <member_or_method>`  
@@ -706,15 +706,15 @@ end-code
   \ 輸出：HELLO WORLD
 
   \ 取得物件屬性或字典鍵值
-  py> {'name': 'Project K', 'version': 2.0} :> ['name'] .
-  \ 輸出：Project K
+  py> {'name': 'peforth', 'version': 2.0} :> ['name'] .
+  \ 輸出：peforth
 
   \ 鏈式調用與數學計算
   py> __import__('math') :> sqrt(144) .
   \ 輸出：12.0
   ```
 
-不需要手寫任何包裝膠水代碼，整個龐大的 Python 標準庫與第三方生產生態，在 Project K 中均可憑藉 `:>` 探囊取物。
+不需要手寫任何包裝膠水代碼，整個龐大的 Python 標準庫與第三方生產生態，在 peforth 中均可憑藉 `:>` 探囊取物。
 
 ---
 
@@ -722,7 +722,7 @@ end-code
 
 ### 7.1 主流非同步與並行編程的困局與批判 (Critique of Mainstream Concurrency Paradigms)
 
-在深入 Project K 的 Coroutine 與多任務設計前，我們必須徹底審視現代主流語言在處理非同步 (Asynchronous) 與並行 (Concurrency) 問題時，積累了多少沉重、勉強而費工夫的歷史包袱。理解這些批判，能幫助我們清楚看見 Project K 所處的坐標，並深入體會其核心內涵：
+在深入 peforth 的 Coroutine 與多任務設計前，我們必須徹底審視現代主流語言在處理非同步 (Asynchronous) 與並行 (Concurrency) 問題時，積累了多少沉重、勉強而費工夫的歷史包袱。理解這些批判，能幫助我們清楚看見 peforth 所處的坐標，並深入體會其核心內涵：
 
 #### 1. 盲目猜測的「Timeout」之痛
 幾乎所有傳統系統在面臨等待時，第一反應都是引入 `timeout` 參數。但 Timeout 本質上是一場注定痛苦的猜測：
@@ -751,12 +751,12 @@ end-code
 
 ---
 
-### 7.2 Project K 的根本超越：機制與策略的徹底分離 (Mechanism vs. Policy)
+### 7.2 peforth 的根本超越：機制與策略的徹底分離 (Mechanism vs. Policy)
 
-面對上述亂象，Project K 選擇了一條回歸電腦科學純粹本質的道路：
+面對上述亂象，peforth 選擇了一條回歸電腦科學純粹本質的道路：
 
 #### `pause` 的極致純粹性
-在 Project K 裡，`pause` **沒有任何參數、不接受 Timeout、不繫結 Event ID、不負責排程優先級**。它在核心中真的只有這三行代碼：
+在 peforth 裡，`pause` **沒有任何參數、不接受 Timeout、不繫結 Event ID、不負責排程優先級**。它在核心中真的只有這三行代碼：
 ```python
 code pause
     yield vm.pause()
@@ -764,8 +764,8 @@ end-code
 ```
 它只做一件極致純粹的事：**「凍結當下執行的 Continuation，將主控權優雅讓渡回 Host」**。
 
-#### 為什麼 Project K 根本沒有「函數著色問題」？
-在 Project K 中，包含 `pause` 的 Word 依然是一個普通純粹的 Word！
+#### 為什麼 peforth 根本沒有「函數著色問題」？
+在 peforth 中，包含 `pause` 的 Word 依然是一個普通純粹的 Word！
 * 呼叫一個會暫停的 Word，呼叫者**完全不需要改變語法**，不需要加 `async`，不需要加 `await`。
 * 底層的 Continuation 透過 Python 生成器的 `yield from` 穿透機制，全自動、無感地在 call stack 向上委派凍結。整個 Forth 語言世界永遠保持統一、純粹。
 
@@ -776,7 +776,7 @@ end-code
 
 ### 7.3 Task 的生命本質：每一次 `dictate()` 都是一個獨立 Task
 
-在 Project K 的架構構想中，`Task` 不是外掛的附加品，它是**執行的最小生命單元**與 **Continuation 的具體承載者**。
+在 peforth 的架構構想中，`Task` 不是外掛的附加品，它是**執行的最小生命單元**與 **Continuation 的具體承載者**。
 
 #### 1. `dictate()` 的本質
 當我們在 Host Python 或 REPL 中執行 `vm.dictate(text)` 時，底層執行的不是一段單純的同步直譯迴圈，而是立即孕育出一個新的 `Task` 實例：
@@ -814,7 +814,7 @@ flowchart TD
 
 ### 7.4 資源全景哲學：全域共享 (Global) vs. 任務私有 (Task-Private)
 
-Project K 既不盲從 Erlang/Go 的「全面隔離（Shared-Nothing）」，也不固守傳統 Forth 的「全面全域（Everything-Global）」，而是開闢了一條極其優雅的第三條路：
+peforth 既不盲從 Erlang/Go 的「全面隔離（Shared-Nothing）」，也不固守傳統 Forth 的「全面全域（Everything-Global）」，而是開闢了一條極其優雅的第三條路：
 
 > **「只隔離執行進度與串流，共享字典與計算空間。」**
 
@@ -865,9 +865,9 @@ flowchart TB
 
 ### 7.5 從傳統誤區到 Task 境界：為什麼 Return Stack 必須是 Task Private？
 
-在 Project K 的早期探索中，我們曾一度沿襲傳統 Forth 的慣性思維：既然 Data stack 放在全域，那麼 Return stack 似乎也理所當然地被放在全域（宣告為 `vm.host["rstack"] = []`）。
+在 peforth 的早期探索中，我們曾一度沿襲傳統 Forth 的慣性思維：既然 Data stack 放在全域，那麼 Return stack 似乎也理所當然地被放在全域（宣告為 `vm.host["rstack"] = []`）。
 
-**然而，當 Project K 真正跨入 Task 的境界時，我們意識到了這是一個歷史遺留的重大錯誤！**
+**然而，當 peforth 真正跨入 Task 的境界時，我們意識到了這是一個歷史遺留的重大錯誤！**
 
 #### 1. 全域 Return Stack 的致命陷阱
 考慮以下經典計數迴圈：
@@ -926,7 +926,7 @@ sequenceDiagram
 
 當前一個 Task 送入 VM 後觸發了耗時的非同步等待（例如調用大型語言模型 AI 回應），此時使用者在終端機繼續輸入新的指令並按下 Enter，**這段新輸入究竟會跑到哪裡去？**
 
-這正是體現 Project K「機制與策略分離」最精彩之處。在架構上存在兩種清晰的調度策略：
+這正是體現 peforth「機制與策略分離」最精彩之處。在架構上存在兩種清晰的調度策略：
 
 #### 情境一：同一 Task 內的指令排隊 (Queue in TIB / PAD)
 * **意圖**：使用者打入的新指令是「等前一個動作（AI 回應）完成後，接續處理」的後續步驟。
@@ -1011,7 +1011,7 @@ sequenceDiagram
       read-result ;         \ 甦醒瞬間，資料保證已在 stack 上！
   ```
 
-**無論 Host 採行的是「巡邏警衛（Polling）」還是「震動號碼牌（Event-driven）」，Project K 內部的 `pause` 原力永遠純粹如一。**
+**無論 Host 採行的是「巡邏警衛（Polling）」還是「震動號碼牌（Event-driven）」，peforth 內部的 `pause` 原力永遠純粹如一。**
 
 ---
 
@@ -1026,7 +1026,7 @@ sequenceDiagram
 
 ### 8.2 字典探索與自文檔系統
 
-Project K 拒絕文檔與代碼分離。透過 `base.f` 內建的註解體系，字典本身就是一套即時互動文件庫：
+peforth 拒絕文檔與代碼分離。透過 `base.f` 內建的註解體系，字典本身就是一套即時互動文件庫：
 
 * `words <filter>`：
   列出字典中所有 Word。若提供過濾字串，則執行不分大小寫的模糊過濾比對。
@@ -1038,7 +1038,7 @@ Project K 拒絕文檔與代碼分離。透過 `base.f` 內建的註解體系，
 ### 8.3 三階段反編譯器 `see` (Three-Stage Decompiler)
 
 在傳統系統中，反編譯器要麼只能吐出位元組十六進位碼，要麼對動態產生的詞束手無策。  
-Project K 設計了革命性的**三階段反編譯器 `see`**：
+peforth 設計了革命性的**三階段反編譯器 `see`**：
 
 ```text
 使用者輸入：see ten
@@ -1084,22 +1084,21 @@ Project K 設計了革命性的**三階段反編譯器 `see`**：
 
 ### 9.1 核心解耦與職責分離
 
-Project K 的代碼組織貫徹高內聚、低耦合原則：
+peforth 的代碼組織貫徹高內聚、低耦合原則：
 
 ```text
-       project-k/
-       ├── py/
-       │   ├── projectk.py      (純粹微核心 VM 引擎，~560 行)
-       │   ├── repl.py          (REPL 介面與 CLI 啟動入口，~190 行)
-       │   ├── base.f           (核心 Forth Bootstrap 字典)
+       peforth/
+       ├── peforth/
+       │   ├── projectk.py      (共用 Forth Kernel)
+       │   ├── repl.py          (REPL 與 f CLI)
+       │   ├── base.f           (核心 Forth bootstrap 字典)
        │   ├── auxiliary.f      (Forth 輔助 words)
-       │   ├── ai.f            (AI 使用者介面 words)
-       │   ├── verify_projectk.py (自動化單元驗證套件)
-       │   └── docs/
-       │       ├── outline.md   (手冊規劃大綱)
-       │       ├── manual-py.md (本書：技術手冊正本)
-       │       └── setup.md     (如何執行與環境設定指南)
-       └── js/                  (對稱之 JavaScript 核心實作)
+       │   ├── ai.f             (AI 使用者介面 words)
+       │   └── data/            (wheel 內的 Forth runtime resources)
+       ├── tests/               (自動化測試)
+       ├── docs/                (使用與開發文件)
+       ├── skills/              (隨 source 提供，不自動全域安裝)
+       └── plugins/             (隨 source 提供，不自動全域安裝)
 ```
 
 > [!NOTE]
@@ -1109,7 +1108,7 @@ Project K 的代碼組織貫徹高內聚、低耦合原則：
 
 ### 9.2 全域環境部署機制：動態路徑轉發
 
-若要在任意目錄輸入 `f` 啟動 Project K，請使用系統全域安裝的啟動 hook。Linux/Ubuntu 使用全域的 `f` 可執行檔；Windows 使用全域的 `f.cmd`。這些啟動器不屬於 repo，也不讀取 `py/.env` 的 Python 虛擬環境設定；其安裝與維護方式請見 [`setup.md`](setup.md)。
+`f` 是 `pyproject.toml` 定義的 Python entry point；editable install 後由目前 checkout 的 venv 執行。開發安裝命令與 Windows/WSL 分開設定方式請見 [`setup.md`](setup.md)。
 
 ---
 ### 9.3 跨平台路徑與換行相容性
@@ -1121,7 +1120,7 @@ Shift+Enter 只有在終端提供可區分的按鍵序列時才能使用。部�
 ---
 ### 9.4 自動化驗證套件
 
-系統品質由 `verify_projectk.py` 進行嚴密的持續整合驗證。
+系統品質由 `tests/` 進行嚴密的持續整合驗證。
 
 套件涵蓋 **65 項自動化測試**：
 * 基礎算術與大整數 / 浮點數精度
@@ -1134,4 +1133,4 @@ Shift+Enter 只有在終端提供可區分的按鍵序列時才能使用。部�
 * `Task` 狀態機、`pause` 中斷與 `resume()` Coroutine 恢復
 * 三階段 `see` 與自文檔 `help` 查詢
 
-執行 `python -m unittest verify_projectk -q` 可驗證目前測試結果。
+在 repo 根目錄執行 `python -m unittest discover -s tests -q` 可驗證目前測試結果。
