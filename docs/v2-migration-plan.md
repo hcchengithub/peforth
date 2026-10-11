@@ -1,193 +1,179 @@
 # peforth v2 遷移與安裝計畫
 
-> **目的：** 在 `peforth` repository 建立一條與 peforth v1 無共同 Git 歷史的 `v2-migration` orphan branch，從 Project K `v2-migration` 的 Python Edition 建立 peforth v2。v2 幾乎重新開始，以共用 Forth Kernel、AI-first REPL 和可安裝的 `f` 命令為核心，不承接 v1.33 的舊產品功能。
+> **目標：** 在 peforth repository 的 `v2-migration-orphan-bootstrap` orphan branch 上，以 Project K `v2-migration` branch 的 Python Edition 建立 peforth v2。v2 是以共用 Forth Kernel、AI-first REPL 和自帶 AI 的 `f` 命令為核心的大幅重整；不承接 v1.33 的舊功能或 Git 歷史。
 >
-> **安裝方向：** 將 v2 做成 Python CLI package，優先以 `pipx` 安裝，也支援在使用者指定的 Python venv 中以 `pip` 安裝。Windows PowerShell 與 Ubuntu／WSL 各自在自己的 Python 環境安裝；初期不另寫兩份自訂安裝器，除非實測發現套件安裝方式無法滿足需求。
+> **安裝與開發原則：** Windows 與 Ubuntu／WSL 各自在使用者家目錄維護可寫的 peforth source checkout：Windows `%USERPROFILE%\.peforth`，Ubuntu／WSL `~/.peforth`。`docs/`、`skills/`、`plugins/` 跟著 source 一起放在 checkout 中。安裝後的 `f` 必須執行這份 checkout 的程式，讓使用者可在該目錄自行修改、測試及 commit。
 >
-> **狀態：** 本文件是待審閱計畫。尚未重建 orphan branch、搬移程式、刪除舊 branch、發布套件或執行安裝。
+> **狀態：** 本計畫已依 `hc:` 審閱意見修訂，待再次審閱。尚未搬移 Project K 程式、建立安裝流程或對 GitHub 遠端發布。
 
-## 1. 已確認的方向
+## 1. 已定案的產品與歷史方向
 
-### v1 與 v2 的界線
+- peforth v1.33 已封存；需要舊功能的使用者仍可安裝 v1.33。
+- v2 不保留 v1 程式、文件、產品目錄或相容性負擔；v2 的 Git history 也不承接 v1 commit。舊版 tag/branch 留在 repository，供取得舊版使用，不代表 v2 有 v1 ancestry。
+- v2 已在本機建立為 orphan history。目前接受的工作 branch 名稱是 `v2-migration-orphan-bootstrap`，不必為了命名而改名。其首個 planning commit 為 `0cc00f8`，只含計畫文件；原本從 v1 建立的本機 `v2-migration` branch 已刪除。尚未 push 遠端。
+- Project K 的 `projectk.py` 是共用 Forth Kernel；搬入 v2 後仍保留其共用 Kernel 的原意和模組角色，不做盲目全域改名。
+- v2 著重 AI-first 的 `f` command，不搬遷 v1 debugger、Jupyter magic/kernel、`peforth.ok()` 或其他舊功能。這是重大不相容變更，必須在 README、安裝入口和 release notes 明確通知使用者。
+- distribution/產品名稱為 `peforth`，主要命令為 `f`。Project K 的使用者可見產品名稱、設定與文件路徑應改為 peforth v2；保留必要的核心技術名稱、來源 attribution 和 API protocol 名稱。
+- 目標 repo：`https://github.com/hcchengithub/peforth.git`。Project K 來源 repo：`https://github.com/hcchengithub/project-k.git`，branch `v2-migration`。搬移只取經確認的來源檔案快照，不合併兩個 repo 的 Git history。
+- Project K 工作樹曾有未提交 `log.txt` 修改；預設排除該修改及其他未提交/未追蹤狀態，只搬已提交內容，除非使用者另行指定。
 
-- peforth v1.33 已封存；需要 v1 的使用者仍可安裝既有 v1.33。
-- v2 的工作樹不保留 v1 的程式、文件、產品結構或相容性負擔。v1 的歷史已由現有 tag/branch 保存，v2 不承接那段 Git 歷史。
-- v2 使用 orphan branch；v2 初始 commit 不以 v1 commit 為祖先。保留 v1 tag 不等於把 v1 檔案或歷史帶進 v2 的 commit lineage。
-- v2 以 Project K 的共用 `projectk.py` Kernel 為基礎，沿用其共用 Kernel 的設計精神；面向使用者的產品和命令名稱是 peforth v2 / `f`。
-- v2 不遷移 v1 debugger、Jupyter magic/kernel、`peforth.ok()` 舊 API 或其他舊產品功能。想使用這些舊功能的使用者可安裝 v1.33。
+## 2. 舊 peforth 與 Project K 檔案處理
 
-### Repository 與來源
+### 不從舊 v1 工作樹帶入的內容
 
-- 目標 repository：`https://github.com/hcchengithub/peforth.git`
-- 目標工作 branch 名稱：`v2-migration`。目前本機同名 branch 是從 v1.33 commit 建立的普通 branch；遷移前須安全換成 orphan branch。
-- 程式來源：`https://github.com/hcchengithub/project-k.git` 的 `v2-migration` branch，主要內容在 `py/`。
-- 搬移時記錄實際採用的 Project K commit SHA。只搬核准的檔案快照，不合併兩個 repository 的 Git 歷史。
-- Project K 工作樹曾有未提交的 `log.txt` 修改；預設不搬，除非使用者另行明確指定。
+v2 orphan tree 不沿用舊 peforth 的程式和產品佈局，包括：
 
-## 2. v2 檔案範圍
+- `build/`、`notebook/`、舊 `peforth/`、`peforth.egg-info/`、`playground/`
+- 舊 `.gitattributes`、`.gitignore`、`README.md`、`README.rst`、`setup.bat`、`setup.py`
 
-### 從舊 peforth v2 branch 工作樹移除
+v2 仍需新建對應的必要專案檔案：新的 `.gitignore`、README、`pyproject.toml` 等。舊 notebook 和 playground 不納入；日後如需要 v2 範例，再按新產品需求建立。
 
-建立乾淨的 orphan tree 時，不帶入舊 peforth 的下列產品檔案／目錄：
+LICENSE 以已同意的 MIT 授權為基礎，使用舊 peforth LICENSE 的簡潔形式稍作整理，更新為適用於 v2 的 copyright/attribution；核對 Project K LICENSE 的原文與 attribution 後再定稿。不可在未確認授權文字前發布。
 
-- `/build`
-- `/notebook`
-- `/peforth`
-- `/peforth.egg-info`
-- `/playground`
-- `.gitattributes`
-- `.gitignore`
-- `LICENSE`
-- `README.md`
-- `README.rst`
-- `setup.bat`
-- `setup.py`
+### 從 Project K `py/` 搬入的內容
 
-這些是舊版工作樹內容的移除，不代表 v2 不需要相應的新檔案：
+**核心程式與執行期資源：**
 
-- 建立新的 `.gitignore`，忽略 Python cache、venv、build/dist/egg-info、`.env`、API key、session/user state 等。
-- 建立新的 README/安裝與使用文件，清楚介紹 peforth v2 的 AI-first `f` 命令。
-- 以 `pyproject.toml` 和選定 build backend 建立新 package metadata，取代舊 `setup.py`。
-- 新增 v2 的 LICENSE；授權文字及 attribution 須先由使用者確認，不能未確認就沿用或發布。
-- 不搬入舊 notebook/playground；若日後確有 v2 教學內容需要，再另行建立。
-
-### 從 Project K `py/` 選擇性搬入
-
-**預計納入核心：**
-
-- `projectk.py`：共用 Forth Kernel，保留此核心模組及其設計精神。
+- `projectk.py`：共用 Forth Kernel。
 - `repl.py`、`ai_bridge.py`、`ai_tools.py`。
-- `base.f`、`auxiliary.f`、`ai.f` 等 runtime 所需 Forth 資源。
-- `requirements.txt` 中確認需要的 runtime dependency，以及可移植到 v2 的測試。
+- `base.f`、`auxiliary.f`、`ai.f` 及 REPL 實際載入的其他 Forth source。
+- `requirements.txt` 中確認需要的 runtime dependencies。
+- `verify_projectk.py` 中可移植的 Kernel/REPL 測試。
 
-**逐項判斷後才納入：**
+`projectk.py` 可以從 Project K repo 的已確認 commit 手動 copy 到 peforth v2 source tree；這是直接、可審查的搬移方式，本計畫不要求額外寫自動同步工具。搬移時記錄來源 commit SHA 和檔案來源，避免日後不清楚差異從何而來。
 
-- `docs/`：只挑選核心語意、AI、使用方式等有助於 v2 的文件；改寫產品名稱、路徑和連結。歷史對話、暫停紀錄、舊計畫書和不適用文件不作為一般使用者文件直接複製。
-- `skills/`、`plugins/`：確認是開發輔助、可選整合還是 runtime 功能；不預設它們必須隨 package 安裝。
-- `verify_projectk.py`：保留並調整共用 Kernel 的有效測試。
-- PDF、對話記錄或其他大型附件：不自動帶入，先判斷是否有 v2 使用價值。
+**整體納入 source checkout：**
 
-**明確排除：**
+- `docs/` 整個目錄都搬入 peforth v2；內容可供使用者和開發者共同參考。之後再修正產品名稱、repo 路徑、安裝說明與文件索引；保留具歷史/開發價值的文件，不預設只留 user guide。
+- `skills/` 和 `plugins/` 是自我開發流程的重要 components，隨 source 一起放在 `~/.peforth` checkout。首階段不自動把它們複製到 Codex、OpenCode 或其他 AI CLI 的全域目錄；如需註冊或連結，再作為獨立且可測試的功能設計。
 
-- `.env`、`.ai_session.json`、任何 API key/token/secret。
-- `__pycache__`、暫存檔、測試產物、build/cache/egg-info。
+**排除：**
+
+- `.env`、`.ai_session.json`、API key、token、secret 和其他個人狀態。
+- `__pycache__/`、暫存檔、build/cache/egg-info、測試產物。
 - Project K 未提交的 `log.txt` 修改及任何未核准的工作樹變更。
 
-## 3. Package、命令與使用者資料設計
+若 Git-tracked `docs/` 中含 PDF、對話紀錄、暫停紀錄或舊計畫，依「整個 docs 搬入」先保留在 source tree，再以目錄/索引標示其用途；不得把秘密或個人 runtime state 混入文件。
 
-### Python package 與 `f` 命令
+## 3. Source、安裝環境與 Git 工作方式
 
-- distribution 名稱使用 `peforth`；新 Python import package 使用 `peforth`。
-- 將共用 `projectk.py`、REPL、AI 模組和 Forth 資源收進合理的 package 佈局。`projectk.py` 代表共用 Kernel，不做無差別全域改名。
-- 在 `pyproject.toml` 設定 build metadata 和 console script entry point，建立命令 `f`。實際 entry point module/function 依搬移後程式結構決定。
-- 確保 `f` 從任何目前工作目錄都可啟動，Forth 資源可從安裝後的 package 位置載入，而不依賴 repo checkout 或 site-packages 可寫。
-- v2 不以維持 v1 的 `import peforth` 行為或相容 API 為目標；只提供 v2 自身需要的 Python package API。
+### 可寫的 `~/.peforth` source
 
-### API key、設定與 session state
+- Ubuntu／WSL checkout：`~/.peforth`。
+- Windows checkout：`$HOME\.peforth`，即 `%USERPROFILE%\.peforth`。
+- 兩邊各有獨立 checkout、Python 環境、`f` command 和使用者設定；不共用 Windows/WSL venv 或狀態。
+- `f` 必須執行 checkout 中的程式；修改 `~/.peforth` source 後，`f` 應直接反映修改，不需手動複製程式。
+- `docs/`、`skills/`、`plugins/` 跟著 source checkout；此決定是 source-tree 內容規則，不代表安裝器會把它們部署到其他 AI CLI 的目錄。
 
-Project K 目前把 `.env`、`.ai_session.json` 放在 source root；這不適合作為 pipx/site-packages 的可寫位置。遷移時：
+### 初期開發者安裝模型（不採 pipx）
 
-1. 將 API key 設定、session index、使用者設定及自訂 skills/state 放到明確的使用者可寫位置，或提供穩定的環境變數覆寫方式。
-2. 確認 Windows 和 Linux/WSL 各自的使用者資料路徑；不可混用不同作業系統的 Python 環境或狀態路徑。
-3. 提供不含秘密的設定範例；任何真實 `.env`、session state 和 secrets 都不得進 package、wheel、sdist 或 Git。
-4. 不要求 site-packages 可寫，也不覆蓋使用者資料。
+目前主要使用者是開發者，且 peforth v2 還在初期，因此本階段不採用 pipx。目標仍是讓安裝簡單，並讓 `f` 直接執行使用者可修改的 `~/.peforth` source。
 
-### `pipx` 與 `pip`
+1. Windows PowerShell 和 Ubuntu/WSL Bash 各提供原生 bootstrap；clone 固定的 Project K/peforth v2 source 到各自的 `~/.peforth`。已存在目錄時先檢查 remote、branch 和 dirty state，不覆蓋使用者修改。
+2. 在 `~/.peforth` 下建立各平台自己的 Python venv，安裝專案依賴並以 editable install 安裝 checkout，使 `f` 直接載入可寫 source。
+3. 以使用者可呼叫的 `f` launcher/hook 指向該 venv 的 Python 和 checkout entry point；Linux 與 Windows 分別處理執行檔、PATH 和參數轉送。
+4. 若實際 package entry point 可由 venv 正確提供 `f` 並滿足 PATH 需求，優先使用它；否則用簡單、可檢查的薄 launcher。兩平台的實作以實測結果為準。
+5. 提供開發者使用的更新、修改、測試和 Git commit 指引；source 保持在 `~/.peforth`，不複製到 site-packages，也不由安裝器自動 commit/push。
+6. 穩定安裝文件日後再固定至已測試的 v2 release tag；開發初期可指定明確 branch/commit，避免不知情地追蹤移動中的來源。
 
-- 一般 CLI 使用者優先推薦 `pipx`：隔離建立 Python 環境並暴露 `f` 命令。
-- 進階使用者可在自己選定的 venv 用 `python -m pip install`；說明 `f` 只會裝在該環境的 Scripts/bin，需確保該目錄在 PATH。
-- Windows PowerShell 和 Ubuntu/WSL 必須各自安裝一次。
-- 初期可用 GitHub VCS URL 安裝測試版；正式指令必須固定到已測試的 v2 tag，不指向移動中的 branch。PyPI 發布不列為初版必要條件。
-- 若 pipx 在任一支援平台無法滿足安裝需求，先用實測描述缺口，再決定是否補自訂包裝器；不要預先多維護兩份 installer。
+此方案不依賴 pipx。可先用 `venv + pip install -e` 實現隔離環境和 source-linked 命令；是否需要自訂 bootstrap/launcher，由 Windows 與 Ubuntu/WSL 的實測結果決定。
 
-## 4. 遷移行動計畫
+### 使用者設定與 commit
 
-### Phase 0：保存計畫並安全重建 orphan branch
+- API key、session index、設定及自訂 runtime state 放在各自 OS 的 `~/.peforth` 之下，與應用 source 清楚分區；Windows 和 WSL 各一份。
+- `.gitignore` 必須排除 `.env`、session state、secret、runtime data、venv、cache 和 build artifacts；提供不含秘密的範例設定。
+- 程式不依賴 site-packages 可寫，也不把 runtime 狀態當作 source commit。
+- 使用者在自己的 `~/.peforth` checkout 修改後，可建立本機 branch/commit。bootstrap 和更新流程不得自動 commit、reset、stash 或 push。
+- 遠端協作建議使用個人 fork/remote 和個人 branch，再視需要向官方 repo 提交 PR；不要假設所有使用者對 `hcchengithub/peforth` 有 push 權限，也不自動推送到 upstream。README/開發指南需提供清楚的 status、branch、commit、remote 操作方式。
+- 更新前檢查 dirty state；若有修改，不覆蓋、不 reset，應停止並指引使用者先 commit/備份或自行處理 rebase。
 
-**目標：** 把現有 `v2-migration` 換成真正的 orphan branch，安全保留本計畫，不帶入 v1 commit lineage。
+## 4. 行動計畫
 
-1. 確認 peforth 目前 branch、HEAD、working tree、`v1.33-final`、remote URL，並確認 GitHub 上沒有同名遠端 `v2-migration` branch。
-2. 確認 `docs/v2-migration-plan.md` 是最新完整版本；先保存其內容與校驗值，避免 branch 操作遺失未追蹤文件。
-3. 建立暫用名稱的 orphan branch。將核准的遷移計畫放進 orphan tree 作為計畫文件；建立首個 v2 planning commit 後，驗證此 commit 沒有 v1 ancestor，且計畫文件內容一致。
-4. 驗證新 orphan branch 與計畫文件完整後，才移除舊的本機普通 `v2-migration` branch ref，並將 orphan branch 改為 `v2-migration`。
-5. 若任何檢查失敗，停止並保留舊 branch/計畫文件；不以 `-D` 或清空工作目錄強行繼續。
-6. 本階段只改本機 branch/commit；不 push、不刪遠端 refs、不改 GitHub default branch。
+### Phase 1：唯讀鎖定來源與 manifest
 
-**驗收：** 本機 `v2-migration` 有獨立的新歷史，首個 commit 不以 v1 為祖先；計畫文件存在且完整；v1 tag/branch 未更動；遠端未變。
+**目標：** 確認 Project K 的來源快照、檔案清單與 LICENSE 依據。
 
-### Phase 1：確認 Project K 來源快照和搬移 manifest
+1. 唯讀檢查 Project K `v2-migration` 的 remote、HEAD、tracked/untracked/modified 狀態，記錄來源 commit SHA。
+2. 僅搬該 commit 的已提交檔案；預設排除未提交 `log.txt` 及其他工作樹修改。
+3. 列出搬入核心、整體 `docs/`、`skills/`、`plugins/`、測試、範例和排除的敏感/暫存項目。
+4. 核對 Project K MIT LICENSE 和 peforth 舊 LICENSE，按已同意方向更新授權/attribution 文本。
 
-**目標：** 確定實際搬移來源與每個檔案的處理方式。
+**驗收：** 來源 SHA、檔案 manifest 和 LICENSE 文本可審查；沒有 secrets 或未核准的工作樹變更。
 
-1. 檢查 Project K `v2-migration` branch 的 HEAD、已提交/未提交變更與檔案狀態，選定並記錄來源 commit SHA。
-2. 預設不帶入未提交的 `log.txt`；其他未提交變更也一律排除，除非使用者逐項核准。
-3. 建立 `納入／改寫後納入／排除` 檔案 manifest，套用上述核心範圍與排除規則。
-4. 查明來源 LICENSE 和 peforth v2 的授權/attribution，取得使用者確認後才加入 LICENSE。
+### Phase 2：建立全新的 peforth v2 source tree
 
-**驗收：** 有可審查的來源 SHA 與檔案 manifest；敏感資料、暫存物和未核准工作樹修改不會混入。
+**目標：** 在 orphan branch 建立乾淨的 v2 專案骨架，再手動搬入核准來源。
 
-### Phase 2：建立全新的 peforth v2 package 骨架
+1. 保留現有 orphan branch 名稱 `v2-migration-orphan-bootstrap`；不再安排重建、改名或刪除 branch。確認其 planning commit 和已審閱的計畫內容。
+2. 從 Project K 固定來源 commit 手動 copy 核准檔案到 peforth v2 tree，排除 secrets、cache、build output 和未提交修改；記錄來源 SHA。
+3. 建立新的 `.gitignore`、MIT LICENSE、README、`pyproject.toml`、測試結構和文件索引；舊版 `setup.py` 不沿用。
+4. 整個搬入 `docs/`、`skills/`、`plugins/`，修正必要路徑和品牌；保留它們在 source tree 的用途。
+5. 定義 package/import 結構與 `f` entry point，讓開發模式從 `~/.peforth` source 載入程式及 Forth resources。
+6. 把 `.env`、session index 等設定/狀態遷移到 `~/.peforth` 下明確且被 ignore 的位置。
+7. 在 README、安裝文件和命令入口加入明顯的 v2 重大不相容通知，說明 v1 使用者需另行安裝 v1.33。
 
-**目標：** 在 orphan tree 建立乾淨、可建置的 v2 專案，不帶舊產品目錄。
+**驗收：** 初始 v2 tree 沒有舊 peforth package/產品目錄；共用 Kernel、核心程式、文件、skills/plugins 和授權均在預期位置；沒有私有資料；重大變更通知明確。
 
-1. 建立新的 `pyproject.toml`、`peforth` package、版本 metadata 與 build 設定；不沿用舊 `setup.py`。
-2. 建立新的 `.gitignore`、README、安裝文件和已核准的 LICENSE。
-3. 設定 Python 支援版本、runtime dependencies、distribution metadata、`f` console script entry point。
-4. 加入最小 package/build smoke test。
+### Phase 3：建立 bootstrap 與 source-linked `f`
 
-**驗收：** 乾淨環境可建置骨架；安裝後 `f` 的 smoke command 可執行；新版 metadata 和文件齊全。
+**目標：** 讓 Windows PowerShell、Ubuntu/WSL 使用者各自一行安裝，且 `f` 執行可寫 source。
 
-### Phase 3：搬入共用 Kernel、AI REPL 與 Forth 資源
+1. 在 Linux/WSL 和 Windows 分別驗證以 `venv` 建立環境，並以 `pip install -e` 將 `~/.peforth` checkout editable-install 的流程。
+2. 設計各平台 bootstrap：檢查 Python/Git 前置條件，clone 指定的 v2 source，建立 checkout 內 venv、安裝依賴並暴露 `f`。
+3. 測試 venv 安裝產生的 entry-point wrapper 是否能直接從 PATH 使用；若不行，實作薄 launcher/hook 指向 venv Python 和 checkout entry point。
+4. 對已存在 checkout 檢查 repo remote、branch 和 dirty state；有本機修改時不可覆蓋或 reset。
+5. 提供更新、解除安裝、PATH、source 修改與 Git commit 指引；安裝器不自動 sudo、不刪資料、不自動 commit/push。
 
-**目標：** 將核准的 Project K 程式整合為 peforth v2，同時保留共用 Kernel 精神。
+**驗收：** 兩平台安裝後的 `f` 都執行各自的 `~/.peforth` source；修改 source 即可生效；dirty checkout 時更新安全停止。
 
-1. 搬入 `projectk.py`、核准的 REPL/AI 模組和 Forth runtime 資源；按 package 結構調整 import。
-2. 將 Forth 資源包進 distribution，從安裝後位置可靠載入。
-3. 完成 `f` entry point，驗證互動/非互動輸入、參數、stdin/stdout、退出碼及 repo 外 cwd。
-4. 將使用者可見的 Project K 名稱和舊路徑改成 peforth v2；保留核心模組識別、API protocol 名稱、必要 attribution，不做盲目全域取代。
-5. 將 API key、session index、自訂設定移至使用者可寫位置；不把狀態寫進 package 目錄。
-6. 只納入核准的 v2 文件和測試；不帶入 peforth v1 debugger/Jupyter/舊 API。
+### Phase 4：測試與安裝安全驗證
 
-**驗收：** source tree 和安裝後皆可啟動 `f`；共用 Kernel、AI/Forth 功能與 package resource 正常；repo 外工作目錄仍能使用。
+**目標：** 驗證 Kernel/AI/REPL、文件元件、Forth 資源、source-linked install 及資料保護。
 
-### Phase 4：驗證 package build 和 Windows/Ubuntu 安裝
+1. 執行 Project K 共用 Kernel/REPL 測試並建立 peforth v2 CLI、AI、Forth resource 測試。
+2. 測 package metadata/build（若 v2 使用 wheel/sdist）及 `venv + pip install -e`；驗證安裝方式不會取代或隱藏 `~/.peforth` 的 source tree。
+3. 在乾淨 Windows PowerShell 和 Ubuntu/WSL 各自執行 bootstrap、`f`、repo 外工作目錄、source 修改後重啟、更新和解除安裝測試。
+4. 測含空白路徑、無 API key、有 API key、互動 stdin/stdout/退出碼，以及 Forth resource 載入。
+5. 確認 docs/skills/plugins 隨 checkout 存在但不會被自動散佈至未核准的 AI CLI 目錄。
+6. 確認 `.env`、session、個人設定、cache 不會進 commit/build、不被更新覆寫；驗證 dirty checkout 保護。
+7. 在 README/安裝入口檢查重大不相容通知清楚可見。
 
-**目標：** 實證 `pipx`/`pip` 可達成使用者要的全域 `f` 體驗。
+**驗收：** Windows 和 Ubuntu/WSL 均有可重現的安裝及功能測試記錄；`f` 從任意 cwd 使用可寫 source；更新保護和資料隔離通過。
 
-1. 建置 wheel/sdist，檢查包含必要模組與 Forth 資源，不包含 secrets、session、cache 或 build 環境產物。
-2. 在乾淨 Ubuntu/WSL 環境，以 pipx 從固定測試 tag 安裝；測 `f` 在 repo 外目錄啟動、更新和解除安裝指引。
-3. 在乾淨 Windows PowerShell 環境執行相同測試，檢查命令 wrapper、含空白路徑、互動輸入輸出和退出碼。
-4. 在使用者指定的 venv 另測 `pip` 安裝，驗證 `f` 所在 Scripts/bin 與 PATH 說明。
-5. 測試 API key 缺失時的錯誤提示，以及設定/session 資料在升級後不被覆寫。
-6. 加入可重現測試與 Windows/Linux package build/install smoke CI。
+### Phase 5：文件審閱、發布與主線切換
 
-**驗收：** 兩平台各自從乾淨環境完成安裝、啟動、資源載入與設定路徑測試；`pipx` 和 `pip` 的適用情境清楚。
+**目標：** 完成 peforth v2 發布，保留 v1.33 作為可獨立安裝的舊版。
 
-### Phase 5：完成使用者文件與發布準備
+1. 建立全新 README、AI/REPL 使用指南、開發/commit 指南、Windows/Ubuntu 安裝與更新/解除安裝說明。
+2. 清楚說明 `~/.peforth` 是 source checkout，`f` 執行該 checkout，`docs/skills/plugins` 也位於其中；說明如何在自己的 branch/fork commit 和同步。
+3. 安裝流程 pin 到已測試的 v2 tag；初版先採 GitHub source bootstrap，PyPI 發布另行決策。
+4. 測試通過並經使用者審閱後，才另行確認 push branch、建立 v2 tag/release、GitHub default branch 切換等遠端操作。
+5. Release notes 和安裝入口明確通知重大不相容變更，並提供 v1.33 安裝方式。
 
-**目標：** 將 v2 作為新的 major version 發布，讓需要 v1 的使用者仍能取得 v1.33。
+**驗收：** Windows/Ubuntu 使用者按文件可安裝並從任意目錄執行 `f`；source 可寫、可修改、可 commit；重大變更通知清楚；v1.33 可獨立取得。
 
-1. 撰寫全新 README、AI/REPL 指南、Windows 和 Ubuntu/WSL 安裝說明、設定與解除安裝說明。
-2. 安裝命令固定到已測試的 v2 tag，不指向開發 branch。
-3. 初版可先使用 GitHub 固定 tag/VCS 安裝；PyPI 發布待後續另行決定，不是本次遷移的前置條件。
-4. 通過測試與使用者審閱後，才確認 v2 tag/release、是否切換 GitHub default branch。這些遠端操作屆時逐項確認。
-5. 驗證 v2 branch 無 v1 ancestry；v1.33 tag 仍可用，但不屬於 v2 runtime/package 的相容範圍。
+## 5. 已確認事項與後續需審閱項目
 
-**驗收：** 新手依文件可在 Windows 或 Ubuntu/WSL 安裝並使用 `f`；發布指向已測試的 commit；v1.33 仍可單獨安裝。
+使用者已確認：
 
-## 5. 需要使用者協助的決策
+- peforth v2 採用 Project K MIT 授權方向，並更新適當 attribution；LICENSE 可沿用舊 peforth 文件的簡潔形式稍作調整。
+- v2 使用 orphan history；目前接受 `v2-migration-orphan-bootstrap` 名稱，不再為改名而操作。
+- 不帶入 Project K 未提交的 `log.txt` 或其他未核准工作樹狀態。
+- `docs/`、`skills/`、`plugins/` 隨 source 放在 `~/.peforth`；後兩者不因此自動散佈到其他 AI CLI 的目錄。
+- v2 不保留 v1 舊功能，並須讓使用者看見重大不相容通知。
+- `projectk.py` 可從確認後的 Project K source commit 手動 copy，無需先造自動同步工具。
 
-進入搬移程式前，只需要使用者確認以下事項：
+待下一輪計畫審閱時確認：
 
-1. **授權決定：** 是否核准 peforth v2 採用 Project K 的 MIT 授權，並在新 LICENSE 中保留正確 copyright/attribution？建議採用來源專案實際授權並明確標註，但須由專案擁有者確認。
-2. **核准 Phase 0/1：** 是否同意我先在本機安全重建 orphan `v2-migration`、保存本計畫作為 orphan branch 的首個 planning commit，然後唯讀檢查 Project K 來源 SHA 和檔案 manifest？這不會 push、刪除 GitHub 遠端 branch/tag 或更改 default branch。
-3. **Project K 未提交變更：** 預設排除目前已知的 `log.txt` 修改及所有其他未提交/未追蹤狀態；如需納入，請指出具體檔案和內容。否則不需使用者手動處理。
+1. 本計畫是否核准進入 source manifest 與檔案搬移階段；核准範圍不包含 push、GitHub default branch 修改、release 或 PyPI upload。
+2. Git 協作建議採個人 branch/commit，必要時推到有權限的個人 fork/remote；使用者可在之後決定是否指定自己的 fork。
+3. 安裝環境採 checkout 內的 Python venv 與 `pip install -e`；若 entry-point wrapper 在任一平台不能直接提供可呼叫的 `f`，採平台專用薄 launcher。
 
-使用者目前不需要執行安裝命令、手動搬檔或提供 PyPI credentials。PyPI 是否發布可等 package 及 GitHub tag 路線驗證後再決定。
+使用者目前不需要手動搬檔、手動整理 `~/.peforth` 或提供 PyPI credentials。外部寫入與正式發布會另行詢問確認。
 
 ## 6. 技術參考
 
 - Python Packaging User Guide：console script entry points — https://packaging.python.org/en/latest/specifications/entry-points/
 - Python Packaging User Guide：CLI packaging — https://packaging.python.org/en/latest/guides/creating-command-line-tools/
 - pip VCS installs — https://pip.pypa.io/en/stable/topics/vcs-support/
-- pipx — https://pipx.pypa.io/stable/
+- Python `venv` / editable install (`pip install -e`) — https://pip.pypa.io/en/stable/topics/local-project-installs/
