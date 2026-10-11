@@ -1,0 +1,6 @@
+{
+  "name": "peforth-forth",
+  "description": "peforth Forth language guidance for the Python CLI agent.",
+  "version": "2.0.0",
+  "skills": "./skills/"
+}

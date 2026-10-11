@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peforth"
+version = "2.0.0.dev0"
+description = "An AI-first Forth environment and shared Python-hosted kernel"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "H.C. Chen" }]
+dependencies = ["prompt_toolkit>=3.0.52,<4"]
+
+[project.scripts]
+f = "peforth.repl:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["peforth*"]
+
+[tool.setuptools.package-data]
+peforth = ["data/*.f"]
