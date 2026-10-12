@@ -4,6 +4,8 @@ import importlib.util
 import io
 import math
 import pathlib
+import tempfile
+import json
 import unittest
 from unittest.mock import patch
 
@@ -53,31 +55,73 @@ class KernelTests(unittest.TestCase):
         self.assertEqual(source.read(), 'tail')
         self.assertIsNone(source.read())
 
-    def test_input_tib_itib_and_pad(self):
-        # 1. Normal single-string input initially has tib=[string], itib=0
+    def test_input_uses_one_string_and_character_offset(self):
         source = Input(": square dup * ; 5 square")
-        self.assertEqual(source.tib, [": square dup * ; 5 square"])
+        original_tib = source.tib
+        self.assertIsInstance(source.tib, str)
         self.assertEqual(source.itib, 0)
 
-        # 2. Reading triggers dynamic split into consumed tib[0] and pending tib[1] (itib=1)
         self.assertEqual(source.read(), ":")
+        self.assertEqual(source.tib, original_tib)
         self.assertEqual(source.itib, 1)
-        self.assertEqual(source.tib[0], ":")
-        self.assertTrue(source.tib[1].startswith(" square"))
-
-        # Consume up to '5'
-        while source.read() != "5":
-            pass
-
-        # 3. Dynamic PAD injection behind itib: tib[2]
-        source.tib.append(". cr")
-        self.assertEqual(len(source.tib), 3)
-
-        # 4. Finish current element, then seamlessly advance into PAD
         self.assertEqual(source.read(), "square")
-        self.assertEqual(source.read(), ".")
-        self.assertEqual(source.read(), "cr")
+        self.assertGreater(source.itib, 1)
+
+    def test_input_append_at_tail_is_read_after_existing_text(self):
+        source = Input("1 2")
+        self.assertEqual(source.read(), "1")
+        source.append(" 3 4")
+
+        self.assertEqual([source.read(), source.read(), source.read()], ["2", "3", "4"])
         self.assertIsNone(source.read())
+
+    def test_paused_task_can_append_input_and_resume(self):
+        vm = VM()
+        vm.define("pause", lambda v: v.pause())
+        task = vm.dictate("1 pause 2")
+        self.assertEqual(task.status, "paused")
+
+        task.append_input(" 3")
+        self.assertEqual(task.resume().status, "done")
+        self.assertEqual(vm.stack, [1, 2, 3])
+
+    def test_t_stack_words_are_task_private(self):
+        vm = _f_mod.create_vm()
+        first = vm.dictate("11 >t t@ t>")
+        self.assertEqual(vm.stack, [11, 11])
+        self.assertEqual(first.tstack, [])
+
+        vm.define("pause", lambda v: v.pause())
+        paused = vm.dictate("22 >t pause")
+        self.assertEqual(paused.status, "paused")
+        self.assertEqual(paused.tstack, [22])
+
+        other = vm.dictate("33 >t")
+        self.assertEqual(other.tstack, [33])
+        self.assertEqual(paused.tstack, [22])
+
+    def test_t_stack_words_report_underflow(self):
+        vm = _f_mod.create_vm()
+        with self.assertRaisesRegex(ForthError, "T-stack underflow"):
+            vm.dictate("t@")
+        with self.assertRaisesRegex(ForthError, "T-stack underflow"):
+            vm.dictate("t>")
+
+    def test_tib_append_word_adds_source_during_execution(self):
+        vm = _f_mod.create_vm()
+
+        task = vm.dictate('s" 42" tib.append 7')
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.stack, [7, 42])
+        self.assertEqual(task.inputs, [])
+
+    def test_task_append_after_end_of_input_does_not_revive_done_task(self):
+        vm = VM()
+        task = vm.dictate("1")
+        self.assertEqual(task.status, "done")
+        with self.assertRaisesRegex(ForthError, "Cannot append input to a done task"):
+            task.append_input(" 2")
+        self.assertEqual(vm.stack, [1])
 
     def test_composition_and_capture(self):
         vm = self.boot()
@@ -274,6 +318,20 @@ class ReplBootstrapTests(unittest.TestCase):
     def setUp(self):
         self.vm = _f_mod.create_vm()
 
+    def test_forth_sources_are_loaded_from_f_package(self):
+        self.assertEqual(_f_mod.FORTH_SOURCE_ROOT.name, "f")
+        self.assertEqual(_f_mod.BASE_F_PATH.name, "base.f")
+        self.assertEqual(_f_mod.AI_F_PATH.name, "ai.f")
+        self.assertEqual(_f_mod.AUXILIARY_F_PATH.name, "auxiliary.f")
+        package_dir = pathlib.Path(_f_mod.__file__).resolve().parent
+        self.assertFalse((package_dir / "base.f").exists())
+        self.assertFalse((package_dir / "ai.f").exists())
+        self.assertFalse((package_dir / "auxiliary.f").exists())
+
+    def test_question_dup_is_loaded_from_bootstrap(self):
+        self.vm.dictate("0 ?dup 1 ?dup")
+        self.assertEqual(self.vm.stack, [0, 1, 1])
+
     def test_auxiliary_stringify_is_defined_directly_in_forth_source(self):
         stringify = self.vm.tick("stringify")
         self.assertIsNotNone(stringify)
@@ -342,12 +400,24 @@ class ReplBootstrapTests(unittest.TestCase):
             _f_mod._farewell(self.vm)
         refresh.assert_called_once_with(self.vm)
         self.assertIn('To resume it in a future Forth run, enter: s" sess_current_12345678" ai-use', output.getvalue())
-        self.assertIn('s" sess_current_12345678" ai-use', output.getvalue())
 
         self.vm.host["ai_trusted"] = True
         with contextlib.redirect_stdout(io.StringIO()):
             self.vm.dictate("ai-confirm")
         self.assertNotIn("ai_trusted", self.vm.host)
+
+    def test_session_files_follow_config_dir(self):
+        bridge = _f_mod.ai_bridge
+        with tempfile.TemporaryDirectory() as directory:
+            config_dir = pathlib.Path(directory) / "user config"
+            with patch.dict("os.environ", {"PEFORTH_CONFIG_DIR": str(config_dir)}), \
+                patch.object(bridge, "SESSION_FILE", config_dir / ".ai_session.json"):
+                bridge._write_session_index([{"id": "sess_config", "title": "Local"}])
+                self.assertEqual(
+                    json.loads((config_dir / ".ai_session.json").read_text(encoding="utf-8")),
+                    {"sessions": [{"id": "sess_config", "title": "Local"}]},
+                )
+                self.assertEqual(bridge._session_titles(), {"sess_config": "Local"})
 
     def test_session_title_reader_ignores_legacy_fields(self):
         bridge = _f_mod.ai_bridge
@@ -382,6 +452,37 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("Started:", rendered)
         self.assertIn("Last active:", rendered)
         self.assertEqual(saved, [{"id": "sess_full_12345678", "title": "Design chat"}])
+
+    def test_agent_tool_names_are_peforth_branded_and_package_skill_is_found(self):
+        import json
+        from peforth import ai_bridge
+
+        vm = _f_mod.create_vm()
+        captured = {}
+
+        def create_session(payload):
+            captured.update(payload)
+            return iter([
+                {"type": "agent.session.created", "session": {"id": "sess_new_12345678"}},
+                {"type": "agent.session.turn.output_text.done", "text": "ok"},
+                {"type": "agent.session.turn.completed"},
+            ])
+
+        with patch.object(ai_bridge, "_create_session", side_effect=create_session), \
+                patch.object(ai_bridge, "_saved_session", return_value=None), \
+                patch.object(ai_bridge, "load_dotenv"), \
+                patch.dict("os.environ", {"OPENAI_API_KEY": "test-only"}):
+            vm.push("hello")
+            vm.push(False)
+            vm.execute(vm.tick("(ai)"))
+
+        functions = captured["agent"]["tools"]
+        self.assertEqual([tool["name"] for tool in functions],
+                         ["peforth_search_words", "peforth_run_forth"])
+        instructions = captured["agent"]["instructions"]
+        self.assertIn("peforth Forth", instructions)
+        self.assertNotIn("Project K", instructions)
+        self.assertEqual(captured["environment"], {"type": "none"})
 
     def test_ai_words_have_visible_source_and_help(self):
         ai_line = self.vm.tick("ai:")
@@ -442,6 +543,24 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.dictate("run_curl")
             self.assertEqual(self.vm.pop(), result)
             run_process.assert_called_with(["curl.exe", "-sS", "https://example.test"])
+
+    def test_ai_model_value_is_initialized_from_system_info_and_can_change(self):
+        info = {"config": {"PEFORTH_AI_MODEL": "gpt-6-luna"}}
+        with patch.object(_f_mod.ai_bridge, "load_dotenv"):
+            with patch.object(_f_mod, "_detect_system_info", return_value=info) as detect:
+                vm = _f_mod.create_vm()
+        detect.assert_called_once_with()
+        vm.dictate("aiModel")
+        self.assertEqual(vm.pop(), "gpt-6-luna")
+        vm.dictate('s" gpt-6-mini" to aiModel aiModel')
+        self.assertEqual(vm.pop(), "gpt-6-mini")
+
+    def test_ai_model_uses_luna_when_config_is_empty(self):
+        with patch.object(_f_mod.ai_bridge, "load_dotenv"):
+            with patch.object(_f_mod, "_detect_system_info", return_value={"config": {"PEFORTH_AI_MODEL": ""}}):
+                vm = _f_mod.create_vm()
+        vm.dictate("aiModel")
+        self.assertEqual(vm.pop(), "gpt-6-luna")
 
     def test_run_http_word_validates_in_forth_and_uses_python_transport(self):
         from peforth import ai_tools
@@ -1104,7 +1223,10 @@ class ReplBootstrapTests(unittest.TestCase):
         dup_output = buf.getvalue().strip()
         expected_dup = (
             "dup ( x -- x x ) Duplicate the top item on the data stack.\n"
-            "    Push a duplicate of TOS (top-of-stack) onto the data stack."
+            "    Push a duplicate of TOS (top-of-stack) onto the data stack.\n\n"
+            "?dup ( x -- x x | x ) Duplicate TOS if it is logically true.\n"
+            "    Tests TOS using Python truthiness. If true, leaves two copies of x;\n"
+            "    if false, leaves x unchanged."
         )
         self.assertEqual(dup_output, expected_dup)
 

@@ -15,7 +15,7 @@ from . import ai_bridge, ai_tools
 from .projectk import VM, ForthError
 
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
-DATA_ROOT = files("peforth.data")
+FORTH_SOURCE_ROOT = files("peforth.f")
 FORTH_HOST_MODULES = {"ai_bridge": ai_bridge, "ai_tools": ai_tools}
 
 try:
@@ -81,14 +81,13 @@ def _run_process(argv, input_text=None, timeout=_PROCESS_TIMEOUT):
             "timed_out": False, "truncated": stdout_truncated or stderr_truncated}
 
 
-BASE_F_PATH = DATA_ROOT.joinpath("base.f")
-AI_F_PATH = DATA_ROOT.joinpath("ai.f")
-AUXILIARY_F_PATH = DATA_ROOT.joinpath("auxiliary.f")
+BASE_F_PATH = FORTH_SOURCE_ROOT.joinpath("base.f")
+AI_F_PATH = FORTH_SOURCE_ROOT.joinpath("ai.f")
+AUXILIARY_F_PATH = FORTH_SOURCE_ROOT.joinpath("auxiliary.f")
 
 
 def _comment_line(vm: VM) -> None:
-    vm.input._ensure_split()
-    curr = vm.input.tib[vm.input.itib] if vm.input.itib < len(vm.input.tib) else ""
+    curr = vm.input.remaining
     pos = curr.find("\n")
     if pos < 0:
         vm.input.consume(len(curr))

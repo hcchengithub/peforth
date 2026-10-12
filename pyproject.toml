@@ -22,4 +22,4 @@ include-package-data = true
 include = ["peforth*"]
 
 [tool.setuptools.package-data]
-peforth = ["data/*.f"]
+peforth = ["f/*.f"]

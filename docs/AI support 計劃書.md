@@ -12,7 +12,7 @@
 
 ## 2. 設計原則
 
-peforth 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充沿用這種分工：Forth 使用者介面放在 `peforth/ai.f`，API 與工具交握由 Python Host 處理；保留 `peforth/projectk.py` 共用 kernel。
+peforth 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充沿用這種分工：Forth 使用者介面放在 `peforth/f/ai.f`，API 與工具交握由 Python Host 處理；保留 `peforth/projectk.py` 共用 kernel。
 
 AI 以 Agents API session 保存多輪對話；AI 學習 peforth 的 Forth 規則則用 Agent Skills 表達。本機檔案、Forth VM 與操作結果只透過明確定義的工具提供。
 
@@ -75,7 +75,7 @@ API key 僅用於本機 Host 向 OpenAI API 驗證，不放入 skill、plugin ZI
 
 | 檔案 | 預計職責 |
 | --- | --- |
-| `peforth/ai.f` | 使用者可見的 Forth words、stack effect、session 操作、turn flow、工具交握與本機核准流程 |
+| `peforth/f/ai.f` | 使用者可見的 Forth words、stack effect、session 操作、turn flow、工具交握與本機核准流程 |
 | `peforth/ai_bridge.py` | 標準函式庫 HTTP/SSE、API 傳輸、session index 檔案、skill 載入及本機 Forth 輸出擷取等基礎功能 |
 | `skills/peforth-forth/SKILL.md` | AI 使用 Forth、查詢字典與提交程式的技能說明 |
 | `skills/peforth-forth/references/` | Forth 操作與語言說明 |

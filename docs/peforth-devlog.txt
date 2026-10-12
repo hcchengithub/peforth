@@ -1,3 +1,46 @@
 
+[💡] 16:35 2026-10-12 程式在 peforth repo 裡面改過以後 ~/.peforth/peforth 並不會自動更新，要從 repo 複製過去把它改掉。
+
 [ ] 14:02 2026-10-12 這東西因為還沒有 TIB flow control ([if][else][then]) 所以暫時允許它存在，晚一點應該要把它置換掉。
     initial-ai-model
+    [ ] 15:50 2026-10-12 先前多事，把 TIB 由簡單的 string 改成 string array，這下找麻煩了。
+        因為 flow control 這樣搞很不利，而且當初這樣做是為了 PAD。 請問我們把 TIB 簡化回去 as a string 以後，
+        們可以在 TIB 的尾巴給它加字串上去嗎？在 runtime 的時候，程式一邊跑一邊給它加字串上去可以嗎？
+        
+        實作 >t t@ t>，應把 T-stack 定義為 Task-private；每一個 dictate 就是一個新的 task，所以這個 tstack 就是 task stack. 
+        
+        > Task-private；但其項目是否只存整數 offset，還是也需標記所屬 Input context
+        Input context 就是 TIB，那每個 task 只有一個啊，那何必標記呢？應該不用了，所以這個問題考慮太多了，是不存在的問題。
+        
+        > 若允許跨巢狀 evaluate() 保存後再取回，就需要明確的 context 規則。
+        不會有這種情形，不需要考慮那麼多
+        
+        > REPL 的等待佇列則維持 host/UI 層責任，不應藉由追加到當前 TIB 來實現。
+        Task 開始跑起來以後，跟 REPL 應該就沒關係了。
+        我還是希望 Task 跑起來以後，還是可以操作 TIB，在尾巴加東西進去讓 dictate()  接著執行。
+        我感覺這個跟 REPL 應該沒有關係，因為 REPL 已經離手了。
+        
+        -- 
+        16:34 2026-10-12 GPT-6 luna，已經受理，開始工作一段時間了
+        
+[ ] 18:03 2026-10-12 AI uses forth word 需要批准。
+    目前有 trust、yes、no 跟 cancel，我在想有沒有那種批准一段時間的做法？可不可以批准一段時間？
+    --
+    可以 --> LCH3 WSL hermes Session ID: 20261012_082846_2e6d67
+
+    [ ] 18:10 2026-10-12 每個 Word 都有 Trusted Flag 可以設定。 如果是 Trusted，就不用再問了。
+        到底這個 word 算不算 trusted？可以請 AI 幫忙評定
+    
+[ ] 18:13 2026-10-12 Kernel code projectk.py 有改過，要倒回去
+    TIB 恢復用簡單的 string，不要搞那麼複雜
+    增加 tstack private stack, general-purpose 的 stack 但主要可以拿來做 dictate level 的 flow control。
+    
+[ ]
+[ ]
+[X]
+
+🦞（龍蝦） 📖 NotebookLM ⚛️ OpenAI ✨ Gemini
+🌞 🌈 💡 Bulb ❌ Canceled 🎉 Party 🤗 Hugging Face ⚠️ Warning ✅ Checked 🌟 Stars
+🦀（螃蟹）💫 🪐 🌠
+
+        

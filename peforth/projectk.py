@@ -46,109 +46,68 @@ _MISSING = object()
 
 @dataclass
 class Input:
-    """A consumable source: read a name, a line, or an arbitrary region.
+    """One mutable TIB string and the offset of its next unread character."""
 
-    tib: list of string buffers (Terminal Input Buffer).
-    itib: index of the current active buffer to read from (TIB array index).
-    In the normal single-string case, execution dynamically splits the buffer:
-      tib[0] holds consumed history, and tib[1] holds the pending input (itib = 1).
-    Any subsequent items (tib[itib+1 ...]) represent queued PAD inputs.
-    """
-
-    tib: list[str] = None
+    tib: str = ""
     itib: int = 0
 
     def __init__(self, tib=None, itib=0, text=None):
         if text is not None and tib is None:
             tib = text
-        if isinstance(tib, str):
-            self.tib = [tib]
-        elif tib is None:
-            self.tib = []
-        else:
-            self.tib = list(tib)
+        if tib is None:
+            tib = ""
+        if not isinstance(tib, str):
+            raise ForthError("TIB must be a string")
+        self.tib = tib
         self.itib = itib
 
-    def _ensure_split(self):
-        if self.itib == 0:
-            if not self.tib:
-                self.tib = ["", ""]
-            else:
-                self.tib = ["", self.tib[0]] + self.tib[1:]
-            self.itib = 1
+    @property
+    def remaining(self) -> str:
+        return self.tib[self.itib:]
+
+    def append(self, text: str) -> None:
+        """Append source text at the TIB tail without moving the input cursor."""
+        if not isinstance(text, str):
+            raise ForthError("Appended TIB text must be a string")
+        self.tib += text
 
     def consume(self, count: int) -> str:
-        """Consume count characters from the active buffer and append to tib[0]."""
-        self._ensure_split()
-        if self.itib >= len(self.tib):
-            return ""
-        curr = self.tib[self.itib]
-        part = curr[:count]
-        self.tib[0] += part
-        self.tib[self.itib] = curr[count:]
+        """Advance over and return count characters from the current TIB offset."""
+        if not isinstance(count, int) or count < 0:
+            raise ForthError("Input character count must be a nonnegative integer")
+        part = self.tib[self.itib:self.itib + count]
+        self.itib += len(part)
         return part
 
     def read(self, until=None):
-        self._ensure_split()
-        while self.itib < len(self.tib):
-            curr = self.tib[self.itib]
-            if until is None:
-                match = re.search(r"\S+", curr)
-                if match is None:
-                    self.tib[0] += curr
-                    self.tib[self.itib] = ""
-                    if self.itib + 1 < len(self.tib):
-                        self.itib += 1
-                        continue
-                    return None
-                consumed = curr[:match.end()]
-                self.tib[0] += consumed
-                self.tib[self.itib] = curr[match.end():]
-                return match.group()
-            elif isinstance(until, str):
-                if not until:
-                    raise ForthError("An input boundary cannot be empty")
-                start = curr.find(until)
-                if start < 0:
-                    if self.itib + 1 < len(self.tib):
-                        self.tib[0] += curr
-                        self.tib[self.itib] = ""
-                        self.itib += 1
-                        continue
-                    raise ForthError(f"Expected input boundary {until!r}")
-                end = start + len(until)
-                value = curr[:start]
-                consumed = curr[:end]
-                self.tib[0] += consumed
-                self.tib[self.itib] = curr[end:]
-                return value
-            else:
-                match = until.search(curr)
-                start, end = match.span() if match else (-1, -1)
-                if start == end and start >= 0:
-                    raise ForthError("An input boundary must consume text")
-                if start < 0:
-                    if self.itib + 1 < len(self.tib):
-                        self.tib[0] += curr
-                        self.tib[self.itib] = ""
-                        self.itib += 1
-                        continue
-                    raise ForthError(f"Expected input boundary {until!r}")
-                value = curr[:start]
-                consumed = curr[:end]
-                self.tib[0] += consumed
-                self.tib[self.itib] = curr[end:]
-                return value
-        return None
+        remaining = self.remaining
+        if until is None:
+            match = re.search(r"\S+", remaining)
+            if match is None:
+                self.itib = len(self.tib)
+                return None
+            self.itib += match.end()
+            return match.group()
+        if isinstance(until, str):
+            if not until:
+                raise ForthError("An input boundary cannot be empty")
+            start = remaining.find(until)
+            if start < 0:
+                raise ForthError(f"Expected input boundary {until!r}")
+            end = start + len(until)
+        else:
+            match = until.search(remaining)
+            start, end = match.span() if match else (-1, -1)
+            if start == end and start >= 0:
+                raise ForthError("An input boundary must consume text")
+            if start < 0:
+                raise ForthError(f"Expected input boundary {until!r}")
+        value = remaining[:start]
+        self.itib += end
+        return value
 
     def rest(self):
-        self._ensure_split()
-        if self.itib >= len(self.tib):
-            return ""
-        remaining = "".join(self.tib[self.itib:])
-        self.tib[0] += remaining
-        for i in range(self.itib, len(self.tib)):
-            self.tib[i] = ""
+        remaining = self.remaining
         self.itib = len(self.tib)
         return remaining
 
@@ -241,7 +200,17 @@ class Task:
         self.vm, self._steps = vm, steps
         self.inputs = []
         self.rstack = []
+        self.tstack = []
         self.status, self.error = "ready", None
+
+    def append_input(self, text):
+        """Append source text to this task's active TIB."""
+        if self.status in {"done", "aborted", "failed"}:
+            raise ForthError(f"Cannot append input to a {self.status} task")
+        if not self.inputs:
+            raise ForthError("Task has no active input")
+        self.inputs[-1].append(text)
+        return self
 
     def resume(self):
         if self.status not in ("ready", "paused"):
@@ -365,6 +334,12 @@ class VM:
         if not self._active:
             raise ForthError("No active task")
         return self._active[-1].rstack
+
+    @property
+    def tstack(self):
+        if not self._active:
+            raise ForthError("No active task")
+        return self._active[-1].tstack
 
     @property
     def compiling(self):
@@ -606,8 +581,7 @@ class VM:
     def _read_code(self):
         # Let Python's lexer distinguish a terminator from text in a string.
         source = self.input
-        source._ensure_split()
-        remaining = source.tib[source.itib] if source.itib < len(source.tib) else ""
+        remaining = source.remaining
         start_pos, end_pos = self._find_code_terminator(remaining)
         if start_pos is not None:
             body = remaining[:start_pos]
