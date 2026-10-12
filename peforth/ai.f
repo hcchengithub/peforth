@@ -36,22 +36,16 @@ end-code
 // ( -- ) Switch the REPL to Forth input.
 /// In Forth mode, the prompt is > and submitted buffers are evaluated as Forth source.
 
-code system_info
-    from peforth import ai_tools
-    from pathlib import Path
+: system_info
+    py> system_info
+;
+// ( -- info ) Return the startup System Info prepared by the Python runtime.
 
-    word = vm.words["system_info"]
-    info = word.properties.get("system_info")
-    if info is None:
-        info = ai_tools._detect_system_info()
-
-    info["source_path"] = info.get("source_path") or str(Path(ai_tools.__file__).resolve().parent.parent)
-    word.properties["system_info"] = info
-    vm.push(info)
-end-code
-// ( -- info ) Return cached host, Python venv, peforth source, WSL, and shell details.
-/// source_path points to the peforth source checkout.
-/// Host details and paths are cached on this word object's properties for this VM lifetime.
+: initial-ai-model
+    system_info :> ["config"] :> ["PEFORTH_AI_MODEL"]
+    dup 0= if drop s" gpt-6-luna" then ;
+initial-ai-model value aiModel
+// ( -- model-name ) Current AI model. Change with: s" model-name" to aiModel.
 
 code (ai-tool-error)
     message = vm.pop()
@@ -231,7 +225,7 @@ code (ai)
         if len(instructions.encode("utf-8")) > 100_000:
             raise RuntimeError("peforth runtime capability instructions are too large.")
         payload = {
-            "agent": {"model": os.environ.get("PEFORTH_AI_MODEL", "gpt-6-astra"),
+            "agent": {"model": vm.tick("aiModel").value,
                       "tools": tools, "instructions": instructions},
             "environment": {"type": "none"}, "input": prompt, "stream": True,
         }

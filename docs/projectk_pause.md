@@ -102,7 +102,7 @@ Task 持有最外層 generator，因此持有這段尚未完成的 execution。
 
 > 舞台沒有拆，演員也沒有離場；只是大幕暫時落下，所有人維持走位，等下一次開幕。
 
-### 在 Project K 裡，訊號如何傳出去？
+### 在 Forth kernel 裡，訊號如何傳出去？
 
 這條路徑很直接：
 
@@ -364,7 +364,7 @@ task.cancel()
 
 沒有萬用 parameter list，也沒有把所有將來的需求預埋進 kernel。polling 與 event-driven 使用同一個 word；差異只在 resume policy，不在 pause mechanism。
 
-這正是 Project K 的精神：
+這正是共用 Forth kernel 的精神：
 
 > 核心提供生長的能力；系統的豐富性由後續定義逐步長出來。
 

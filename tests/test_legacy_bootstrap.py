@@ -307,11 +307,11 @@ class ReplBootstrapTests(unittest.TestCase):
         other_vm = _f_mod.create_vm()
         self.vm.host["ai_active_session_id"] = "sess_current_12345678"
         other_vm.host["ai_active_session_id"] = "sess_other_abcdefgh"
-        with patch.object(bridge, "_session_titles", return_value={"sess_current_12345678": "Project K"}):
+        with patch.object(bridge, "_session_titles", return_value={"sess_current_12345678": "peforth"}):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 self.vm.dictate("ai-status")
-            self.assertIn("Project K [12345678]", output.getvalue())
+            self.assertIn("peforth [12345678]", output.getvalue())
 
             with contextlib.redirect_stdout(io.StringIO()):
                 self.vm.dictate("ai-new")
@@ -337,11 +337,11 @@ class ReplBootstrapTests(unittest.TestCase):
         self.vm.host["ai_active_session_id"] = "sess_current_12345678"
         output = io.StringIO()
         with patch.object(bridge, "refresh_session_index") as refresh, \
-                patch.object(bridge, "_session_title", return_value="Project K"), \
+                patch.object(bridge, "_session_title", return_value="peforth"), \
                 contextlib.redirect_stdout(output):
             _f_mod._farewell(self.vm)
         refresh.assert_called_once_with(self.vm)
-        self.assertIn("Current AI session: Project K [12345678]", output.getvalue())
+        self.assertIn('To resume it in a future Forth run, enter: s" sess_current_12345678" ai-use', output.getvalue())
         self.assertIn('s" sess_current_12345678" ai-use', output.getvalue())
 
         self.vm.host["ai_trusted"] = True
@@ -403,10 +403,10 @@ class ReplBootstrapTests(unittest.TestCase):
                      "run_curl", "run_http"):
             word = self.vm.tick(name)
             self.assertIsNotNone(word, name)
-            self.assertTrue(word.source.strip(), name)
+            self.assertTrue(word.source.strip() or name == "system_info", name)
 
-    def test_ai_tool_words_cache_system_info_and_run_host_commands(self):
-        import ai_tools
+    def test_system_info_word_uses_runtime_binding_and_host_commands(self):
+        from peforth import ai_tools
 
         info = {
             "os": "Windows",
@@ -418,12 +418,11 @@ class ReplBootstrapTests(unittest.TestCase):
             "wsl": {"available": True, "path": "wsl.exe", "distro": "Ubuntu"},
         }
         result = {"exit_code": 0, "stdout": "ok", "stderr": "", "timed_out": False, "truncated": False}
-        with patch.object(ai_tools, "_detect_system_info", return_value=info) as detect, \
-                patch.object(ai_tools, "_run_process", return_value=result) as run_process:
+        self.vm.host["system_info"] = info
+        with patch.object(ai_tools, "_run_process", return_value=result) as run_process:
             self.vm.dictate("system_info system_info")
             self.assertIs(self.vm.pop(), info)
             self.assertIs(self.vm.pop(), info)
-            detect.assert_called_once_with()
 
             self.vm.push("Write-Output ok")
             self.vm.dictate("run_pwsh")
@@ -445,7 +444,7 @@ class ReplBootstrapTests(unittest.TestCase):
             run_process.assert_called_with(["curl.exe", "-sS", "https://example.test"])
 
     def test_run_http_word_validates_in_forth_and_uses_python_transport(self):
-        import ai_tools
+        from peforth import ai_tools
 
         response = {"status_code": 200, "headers": {}, "body": "ok", "truncated": False}
         with patch.object(ai_tools, "_http_request", return_value=response) as request:

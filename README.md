@@ -6,30 +6,24 @@
 
 ## Current availability
 
-The v2 source is currently available only in the `v2-migration-orphan-bootstrap` branch's local checkout; the corresponding GitHub branch does not yet contain the package or CLI files. Do not use `pip install -e .` against a remote clone of that branch until those files have been pushed. The commands below install the existing local checkout, not a fresh remote clone.
+peforth is developed continuously from the `v2-migration-orphan-bootstrap` branch. Clone that branch to use the current development version; this repository is not a published PyPI release.
 
-## Bootstrap from a writable local checkout
+## Installation (Windows and Ubuntu/WSL)
 
-These platform-specific bootstraps create/reuse only the checkout-local `.venv` and install the current source in editable mode. They validate the checkout's origin and migration branch, never fetch/checkout/reset or overwrite source, and never commit or push. They may install Python package dependencies into `.venv`; inspect the script before running it. Run them from this local repo checkout (not from a remote clone that lacks the migration files):
-
-- WSL/Linux: `bash ./bootstrap.sh`
-- Windows PowerShell: `./bootstrap.ps1`
-
-Neither script modifies PATH. Add `.venv/bin` (WSL/Linux) or `.venv\\Scripts` (Windows) yourself if you want bare `f` in new terminals.
-
-## Development install (Windows and Ubuntu/WSL)
-
-The checkout is the editable source tree. Windows and WSL have separate checkouts and Python environments; install separately in each environment where you want `f`.
+Install `uv` first by following the official instructions at `https://docs.astral.sh/uv/getting-started/installation/`, then verify with `uv --version`. The checkout is the editable source tree. Windows and WSL have separate checkouts and Python environments; install separately in each environment where you want `f`.
 
 ### Ubuntu / WSL
 
 ```bash
-cd /path/to/your/writable/peforth-checkout
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
+uv --version
+git clone --branch v2-migration-orphan-bootstrap https://github.com/hcchengithub/peforth.git ~/.peforth
+cd ~/.peforth
+uv venv
+uv pip install -e .
+export PATH="$HOME/.peforth/.venv/bin:$PATH"
 ```
 
-Add `~/.peforth/.venv/bin` to `PATH` if it is not already available. From any directory, run:
+From any directory, run:
 
 ```bash
 f
@@ -38,12 +32,23 @@ f
 ### Windows PowerShell
 
 ```powershell
-Set-Location 'C:\path\to\your\writable\peforth-checkout'
-py -3 -m venv .venv
-& .\.venv\Scripts\python.exe -m pip install -e .
+uv --version
+git clone --branch v2-migration-orphan-bootstrap https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
+Set-Location "$HOME\.peforth"
+uv venv
+uv pip install -e .
+$env:PATH = "$HOME\.peforth\.venv\Scripts;$env:PATH"
 ```
 
-Add `<checkout>\.venv\Scripts` to the user `PATH`, then open a new terminal and run `f` from any directory.
+If the package download fails with `invalid peer certificate: UnknownIssuer` on a corporate network, retry the install with native Windows TLS certificate handling:
+
+```powershell
+uv --native-tls pip install -e .
+```
+
+Do not disable TLS certificate verification. Open a new terminal if you want to use `f` from any directory. Windows and WSL require separate checkouts and `.venv` directories.
+
+For WSL/Linux, keep the checkout in the WSL filesystem, such as `~/.peforth`; do not run the Linux install from a Windows-mounted `/mnt/c/...` checkout. For Windows, use the Windows checkout from PowerShell. Do not share a checkout or `.venv` between Windows and WSL.
 
 ## Configuration
 
@@ -51,7 +56,7 @@ Put `OPENAI_API_KEY` in `~/.peforth/.env` (Windows: `$HOME\.peforth\.env`) or in
 
 ```dotenv
 OPENAI_API_KEY=
-PEFORTH_AI_MODEL=gpt-6-astra
+PEFORTH_AI_MODEL=gpt-6-luna
 PEFORTH_WSL_DISTRO=Ubuntu
 ```
 
@@ -59,6 +64,6 @@ AI sessions and local configuration live under `~/.peforth`, separate from the p
 
 ## Updating and contributing
 
-Inspect `git status` before updating. Keep local work on a personal branch; commit locally as needed. To push contributions, use a fork or another remote where you have write access. The bootstrap/install flow must not reset, overwrite a dirty checkout, commit, or push automatically.
+Inspect `git status` before updating. Keep local work on a personal branch; commit locally as needed. To push contributions, use a fork or another remote where you have write access. The install flow does not reset, overwrite a dirty checkout, commit, or push automatically.
 
 See `docs/` for user and developer documentation. The v2 migration plan is in `docs/v2-migration-plan.md`.

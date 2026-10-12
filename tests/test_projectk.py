@@ -448,9 +448,9 @@ class ReplBootstrapTests(unittest.TestCase):
                      "run_curl", "run_http"):
             word = self.vm.tick(name)
             self.assertIsNotNone(word, name)
-            self.assertTrue(word.source.strip(), name)
+            self.assertTrue(word.source.strip() or name == "system_info", name)
 
-    def test_ai_tool_words_cache_system_info_and_run_host_commands(self):
+    def test_system_info_word_uses_runtime_binding_and_host_commands(self):
         from peforth import ai_tools
 
         info = {
@@ -463,12 +463,11 @@ class ReplBootstrapTests(unittest.TestCase):
             "wsl": {"available": True, "path": "wsl.exe", "distro": "Ubuntu"},
         }
         result = {"exit_code": 0, "stdout": "ok", "stderr": "", "timed_out": False, "truncated": False}
-        with patch.object(ai_tools, "_detect_system_info", return_value=info) as detect, \
-                patch.object(ai_tools, "_run_process", return_value=result) as run_process:
+        self.vm.host["system_info"] = info
+        with patch.object(ai_tools, "_run_process", return_value=result) as run_process:
             self.vm.dictate("system_info system_info")
             self.assertIs(self.vm.pop(), info)
             self.assertIs(self.vm.pop(), info)
-            detect.assert_called_once_with()
 
             self.vm.push("Write-Output ok")
             self.vm.dictate("run_pwsh")
@@ -488,6 +487,24 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.dictate("run_curl")
             self.assertEqual(self.vm.pop(), result)
             run_process.assert_called_with(["curl.exe", "-sS", "https://example.test"])
+
+    def test_ai_model_value_is_initialized_from_system_info_and_can_change(self):
+        info = {"config": {"PEFORTH_AI_MODEL": "gpt-6-luna"}}
+        with patch.object(_f_mod.ai_bridge, "load_dotenv"):
+            with patch.object(_f_mod, "_detect_system_info", return_value=info) as detect:
+                vm = _f_mod.create_vm()
+        detect.assert_called_once_with()
+        vm.dictate("aiModel")
+        self.assertEqual(vm.pop(), "gpt-6-luna")
+        vm.dictate('s" gpt-6-mini" to aiModel aiModel')
+        self.assertEqual(vm.pop(), "gpt-6-mini")
+
+    def test_ai_model_uses_luna_when_config_is_empty(self):
+        with patch.object(_f_mod.ai_bridge, "load_dotenv"):
+            with patch.object(_f_mod, "_detect_system_info", return_value={"config": {"PEFORTH_AI_MODEL": ""}}):
+                vm = _f_mod.create_vm()
+        vm.dictate("aiModel")
+        self.assertEqual(vm.pop(), "gpt-6-luna")
 
     def test_run_http_word_validates_in_forth_and_uses_python_transport(self):
         from peforth import ai_tools

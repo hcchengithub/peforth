@@ -12,7 +12,7 @@
 
 ## 2. 設計原則
 
-peforth 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充沿用這種分工：Forth 使用者介面放在 ai.f，API 與工具交握由 Python Host 處理；保留 projectk.py 的小型核心。
+peforth 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充沿用這種分工：Forth 使用者介面放在 `peforth/ai.f`，API 與工具交握由 Python Host 處理；保留 `peforth/projectk.py` 共用 kernel。
 
 AI 以 Agents API session 保存多輪對話；AI 學習 peforth 的 Forth 規則則用 Agent Skills 表達。本機檔案、Forth VM 與操作結果只透過明確定義的工具提供。
 

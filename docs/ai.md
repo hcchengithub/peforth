@@ -8,13 +8,13 @@ The bridge reads `~/.peforth/.env` (Windows: `$HOME\.peforth\.env`) when an AI r
 
 ```dotenv
 OPENAI_API_KEY=your-platform-api-key
-PEFORTH_AI_MODEL=gpt-6-astra
+PEFORTH_AI_MODEL=gpt-6-luna
 PEFORTH_AI_SKILLS_DIR=skills
 PEFORTH_CONFIG_DIR=~/.peforth
 PEFORTH_WSL_DISTRO=Ubuntu
 ```
 
-`PEFORTH_AI_MODEL` selects the Agents API model. `PEFORTH_AI_SKILLS_DIR` points to the directory containing `peforth-forth/SKILL.md`; relative paths resolve from the peforth source checkout. The default is `<checkout>/skills`. New sessions include the skill and Forth reference in their instructions; they do not provision an OpenAI-hosted sandbox/container. Existing sessions retain their original configuration.
+`PEFORTH_AI_MODEL` is read at VM startup into the Forth `aiModel` value. The value is the current model used by new AI sessions and can be changed immediately with `s" model-name" to aiModel`; inspect it with `aiModel`.
 
 Keep `.env` private. The local bridge sends the API key only as an HTTPS bearer credential. It does not put the key into the plugin, conversation, or tool result. Prompts and resulting conversation are sent to OpenAI according to the account's API data controls.
 
@@ -50,4 +50,4 @@ Approved code runs in the active local VM with the user's permissions; Python br
 - Invalid API access/model: check the Platform project, model access, and API limits.
 - Network interruption: inspect `ai-status`; use `ai-new` only when deliberately starting a new conversation.
 
-`ai.f` owns Forth words and AI flow. It imports `ai_tools.py` for OS/process/HTTP helpers. `ai_bridge.py` provides Agents API transport, response helpers, session-index operations, skill loading, and local output capture. No OpenAI SDK is required. Model usage is billed at the selected model's API rate.
+`ai.f` owns Forth words and AI flow. It imports `ai_tools.py` for process and HTTP helpers; `repl.py` prepares runtime host information before loading the Forth AI dictionary. `ai_bridge.py` provides Agents API transport, response helpers, session-index operations, skill loading, and local output capture. No OpenAI SDK is required. Model usage is billed at the selected model's API rate.

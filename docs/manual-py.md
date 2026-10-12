@@ -2,7 +2,7 @@
 
 > **版本**：16:32 2026-10-08
 > **適用環境**：Python 3.10+ / Linux, WSL, Windows  
-> **核心代碼**：`projectk.py`, `repl.py`, `base.f`
+> **核心代碼**：`peforth/projectk.py`, `peforth/repl.py`, `peforth/data/base.f`
 
 ---
 
@@ -17,8 +17,8 @@
 
 > [!TIP]
 > **想直接動手跑起來？**  
-若您希望立即在終端機操作、執行互動 REPL 或設定 checkout 的 `f` entry point，請參閱專門指南 [`setup.md`](setup.md)（如何執行指南）。
-> 本手冊（Manual）與執行指南（Setup Guide）分開撰寫的根本原因在於：**本手冊記錄的是 peforth 歷久彌新的架構設計理念，而如何執行與環境配置方式則會隨著作業系統、命令列工具或安裝方案的演進而隨時迭代更新**。讀者只需參閱 `setup.md` 前兩三行指令，即可保證在 3 秒內最簡啟動。
+若您希望立即在終端機操作、執行互動 REPL 或設定 checkout 的 `f` entry point，請參閱 repository 根目錄的 `README.md`（如何執行指南）。
+> 本手冊（Manual）聚焦 peforth 的架構設計理念；安裝與環境配置請以 repository 根目錄的 `README.md` 為準。
 
 ---
 
@@ -131,11 +131,11 @@ flowchart TD
 
 | 組件檔案 | 定位 | 職責與邊界 |
 | :--- | :--- | :--- |
-| `projectk.py` | 核心 VM 引擎 | 包含 `Input` 串流解析器、`_Word` 核心結構、`Task` 狀態機、`VM` 容器，以及原生 Python 代碼塊 (`code ... end-code`) 的語彙編譯機制。不預載任何高階 Forth 詞彙，純粹、輕量且原生支援 Coroutines。 |
-| `base.f` | Bootstrap 字典 | 以 Forth 撰寫的核心字典，包含控制結構、字串家族、Defining Words、`does>`、三階段 `see` 與 Python Host Bridge。 |
-| `auxiliary.f` | 輔助字典 | Forth 優先的非核心工具 words，例如 `cls` 和 `stringify`。 |
-| `ai.f` / `ai_bridge.py` / `ai_tools.py` | AI 擴充 | `ai.f` 以 Forth code words 與 colon words 實作 AI 介面、主要流程及本機工具 words；`ai_bridge.py` 保留 Agents API 傳輸與 session 檔案功能；`ai_tools.py` 僅提供程序執行、主機偵測及 HTTP 傳輸等 Python 專屬功能。 |
-| `repl.py` | 執行期與 REPL | 負責環境裝配、載入 `base.f`、安裝 host primitives、載入 `auxiliary.f` 與 `ai.f`，以及 REPL 輸入處理。 |
+| `peforth/projectk.py` | 共用 Forth Kernel | 包含 `Input` 串流解析器、`_Word` 核心結構、`Task` 狀態機、`VM` 容器，以及原生 Python 代碼塊 (`code ... end-code`) 的語彙編譯機制。不預載任何高階 Forth 詞彙，純粹、輕量且原生支援 Coroutines。 |
+| `peforth/data/base.f` | Bootstrap 字典 | 以 Forth 撰寫的核心字典，包含控制結構、字串家族、Defining Words、`does>`、三階段 `see` 與 Python Host Bridge。 |
+| `peforth/data/auxiliary.f` | 輔助字典 | Forth 優先的非核心工具 words，例如 `cls` 和 `stringify`。 |
+| `peforth/ai.f` / `peforth/ai_bridge.py` / `peforth/ai_tools.py` | AI 擴充 | `ai.f` 以 Forth code words 與 colon words 實作 AI 介面、主要流程及本機工具 words；`ai_bridge.py` 保留 Agents API 傳輸與 session 檔案功能；`ai_tools.py` 提供程序執行及 HTTP 傳輸等 Python 專屬功能。 |
+| `peforth/repl.py` | 執行期與 REPL | 負責環境裝配、啟動時偵測 host/System Info、載入 package resources、安裝 host primitives、載入輔助與 AI Forth 字典，以及 REPL 輸入處理。 |
 
 ---
 
@@ -143,7 +143,7 @@ flowchart TD
 
 ### 2.1 輸入串流模型 (Input Stream Architecture)
 
-在 `projectk.py` 中，輸入源被抽象為一個狀態化的消耗型物件 `Input`：
+在 `peforth/projectk.py` 中，輸入源被抽象為一個狀態化的消耗型物件 `Input`：
 
 ```python
 @dataclass
@@ -519,7 +519,7 @@ peforth 給出的答案是：**以編譯期 Control Stack 實現典雅的抽象�
 
 ### 5.1 字典模型與 Word 結構
 
-peforth 的字典是由 Word 物件組成的動態集合。每個 Word 均被封裝為 `projectk.py` 中的 `_Word` 資料類別：
+peforth 的字典是由 Word 物件組成的動態集合。每個 Word 均被封裝為 `peforth/projectk.py` 中的 `_Word` 資料類別：
 
 ```python
 @dataclass
@@ -1102,13 +1102,13 @@ peforth 的代碼組織貫徹高內聚、低耦合原則：
 ```
 
 > [!NOTE]
-> 具體的最速啟動指令、`-e` 單行測試、全域 `f` 命令配置與常見排錯 SOP，均已收錄於獨立文檔 [`setup.md`](setup.md)。本章聚焦於背後的系統架構設計與跨平台路徑解析機制。
+> 具體的最速啟動指令、`-e` 單行測試、全域 `f` 命令配置與常見排錯 SOP，均已收錄於獨立文檔 README.md。本章聚焦於背後的系統架構設計與跨平台路徑解析機制。
 
 ---
 
 ### 9.2 全域環境部署機制：動態路徑轉發
 
-`f` 是 `pyproject.toml` 定義的 Python entry point；editable install 後由目前 checkout 的 venv 執行。開發安裝命令與 Windows/WSL 分開設定方式請見 [`setup.md`](setup.md)。
+`f` 是 `pyproject.toml` 定義的 Python entry point；editable install 後由目前 checkout 的 venv 執行。開發安裝命令與 Windows/WSL 分開設定方式請見 README.md。
 
 ---
 ### 9.3 跨平台路徑與換行相容性

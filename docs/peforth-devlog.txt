@@ -1,0 +1,3 @@
+
+[ ] 14:02 2026-10-12 這東西因為還沒有 TIB flow control ([if][else][then]) 所以暫時允許它存在，晚一點應該要把它置換掉。
+    initial-ai-model

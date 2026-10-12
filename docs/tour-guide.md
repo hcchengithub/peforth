@@ -6,7 +6,7 @@
 
 ## 1. 啟動 Forth
 
-先依 [`setup.md`](setup.md) 完成目前 checkout 的 editable install，之後可在任意工作目錄啟動 `f`：
+先依 repository 根目錄 `README.md` 完成 editable install，之後可在任意工作目錄啟動 `f`：
 
 ```bash
 f
@@ -245,7 +245,7 @@ Forth 的 `pause` 可讓目前 Task 暫停，之後由 Python host 呼叫同一�
 - `!` 或 `@` 順序錯誤：記得 `!` 是 `value address !`，`@` 是 `address @`。
 - 想重新開始一輪運算但不想重啟 REPL：輸入 `dropall` 清空資料 stack；已定義的 words 仍會保留。
 
-更多啟動方式與環境設定請看 [`setup.md`](setup.md)；深入核心設計請看 [`manual-py.md`](manual-py.md)。如果你想驗證整套 Python 實作，可在專案根目錄執行：
+更多啟動方式與環境設定請看 repository 根目錄的 `README.md`；深入核心設計請看 [`manual-py.md`](manual-py.md)。如果你想驗證整套 Python 實作，可在專案根目錄執行：
 
 ```bash
 # Linux / WSL
