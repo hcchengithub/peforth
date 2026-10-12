@@ -353,6 +353,52 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.dictate("cls")
         self.assertEqual(output.getvalue(), "\x1b[2J\x1b[H")
 
+    def test_bracket_conditionals_select_arms_and_handle_nested_skips(self):
+        self.vm.dictate("1 [if] 11 [else] 22 [then]")
+        self.vm.dictate("0 [if] 33 [else] 44 [then]")
+        self.assertEqual(self.vm.stack, [11, 44])
+
+        # The skipped outer arm contains a nested conditional; its [else] must
+        # not be mistaken for the outer [else].
+        self.vm.dictate("0 [if] 1 [if] 55 [else] 66 [then] [else] 77 [then]")
+        self.assertEqual(self.vm.pop(), 77)
+
+    def test_bracket_conditional_skip_ignores_markers_in_strings_and_comments(self):
+        source = ('0 [if] s" [else] [then]" // [else] [then]'
+                  + chr(10) + '42 [else] 99 [then]')
+        self.vm.dictate(source)
+        # [else] belongs to the skipped outer arm; the comment consumes the
+        # remainder of that physical line, including the following [then].
+        self.assertEqual(self.vm.stack, [99])
+
+    def test_bracket_conditionals_report_unmatched_groups(self):
+        with self.assertRaisesRegex(ForthError, "Unmatched conditional"):
+            self.vm.dictate("0 [if] 1")
+
+    def test_bracket_until_and_again_rewind_interpretation_input(self):
+        self.vm.dictate("0 [begin] 1+ dup 3 >= [until]")
+        self.assertEqual(self.vm.stack, [3])
+
+        self.vm.dictate("0 [begin] 1+ dup 3 < [if] [again] [then]")
+        self.assertEqual(self.vm.stack, [3, 3])
+
+    def test_bracket_for_next_counts_nested_and_zero_iteration_case(self):
+        self.vm.dictate("0 3 [for] 1+ [next]")
+        self.vm.dictate("0 0 [for] 1+ [next]")
+        self.vm.dictate("0 2 [for] 2 [for] 1+ [next] [next]")
+        self.assertEqual(self.vm.stack, [3, 1, 4])
+
+    def test_bracket_interpretation_loops_reject_compilation_mode(self):
+        for source in (": bad-begin [begin] ;", ": bad-until [until] ;",
+                       ": bad-for [for] ;", ": bad-next [next] ;"):
+            with self.subTest(source=source):
+                with self.assertRaisesRegex(ForthError, "only be used while interpreting"):
+                    self.vm.dictate(source)
+
+        # Each failed dictate task cleans up its own interpretation T-stack.
+        self.vm.dictate("1 [if] 2 [then]")
+        self.assertEqual(self.vm.stack, [2])
+
     def test_ai_local_control_words_are_defined_and_work_from_ai_f(self):
         for name in ("ai-new", "ai-status", "ai-confirm"):
             self.assertIsNotNone(self.vm.tick(name))
