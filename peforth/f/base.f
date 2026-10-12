@@ -138,6 +138,7 @@ code >t
     vm.tstack.append(vm.pop())
 end-code
 // ( x -- ) ( T: -- x ) Move the top data-stack item to this Task's T-stack.
+/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code t@
     if not vm.tstack:
@@ -145,6 +146,7 @@ code t@
     vm.push(vm.tstack[-1])
 end-code
 // ( -- x ) ( T: x -- x ) Copy the top item from this Task's T-stack.
+/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code t>
     if not vm.tstack:
@@ -152,6 +154,7 @@ code t>
     vm.push(vm.tstack.pop())
 end-code
 // ( -- x ) ( T: x -- ) Move the top item from this Task's T-stack to data stack.
+/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code *
     b, a = vm.pop(), vm.pop()

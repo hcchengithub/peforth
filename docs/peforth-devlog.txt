@@ -3,7 +3,7 @@
 
 [ ] 14:02 2026-10-12 這東西因為還沒有 TIB flow control ([if][else][then]) 所以暫時允許它存在，晚一點應該要把它置換掉。
     initial-ai-model
-    [ ] 15:50 2026-10-12 先前多事，把 TIB 由簡單的 string 改成 string array，這下找麻煩了。
+    [X] 15:50 2026-10-12 先前多事，把 TIB 由簡單的 string 改成 string array，這下找麻煩了。
         因為 flow control 這樣搞很不利，而且當初這樣做是為了 PAD。 請問我們把 TIB 簡化回去 as a string 以後，
         們可以在 TIB 的尾巴給它加字串上去嗎？在 runtime 的時候，程式一邊跑一邊給它加字串上去可以嗎？
         
@@ -22,20 +22,29 @@
         
         -- 
         16:34 2026-10-12 GPT-6 luna，已經受理，開始工作一段時間了
+        22:35 2026-10-12 Done
         
 [ ] 18:03 2026-10-12 AI uses forth word 需要批准。
-    目前有 trust、yes、no 跟 cancel，我在想有沒有那種批准一段時間的做法？可不可以批准一段時間？
-    --
-    可以 --> LCH3 WSL hermes Session ID: 20261012_082846_2e6d67
+    [ ] 目前有 trust、yes、no 跟 cancel，我在想有沒有那種批准一段時間的做法？可不可以批准一段時間？
+        可以 --> LCH3 WSL hermes Session ID: 20261012_082846_2e6d67
+    [ ] 把 trust 做成 one-shot，過一段時間，它又需要 confirm。
+    [ ] yes 用某種成長的方式，讓連續短間隔內的 yes 用來打 auto yes n 次
+    [ ] 延長批准 timeout 的時間。我覺得批准的 timeout 應該不設限才對。
 
     [ ] 18:10 2026-10-12 每個 Word 都有 Trusted Flag 可以設定。 如果是 Trusted，就不用再問了。
         到底這個 word 算不算 trusted？可以請 AI 幫忙評定
     
-[ ] 18:13 2026-10-12 Kernel code projectk.py 有改過，要倒回去
+    
+[X] 18:13 2026-10-12 Kernel code projectk.py 有改過，要倒回去
     TIB 恢復用簡單的 string，不要搞那麼複雜
     增加 tstack private stack, general-purpose 的 stack 但主要可以拿來做 dictate level 的 flow control。
+    22:12 2026-10-12 done [ ] commit
     
-[ ]
+[ ] 18:18 2026-10-12 檢查 .py 裡面有沒有做了一些 .f 的事情。
+    words 的定義都應該要到 .f 裡面來做，.py 只是提供 low level function 而已。
+    AI 常常弄錯。
+
+
 [ ]
 [X]
 

@@ -29,3 +29,99 @@ end-code
 // ( object -- pretty-string ) Convert a Python value to indented JSON text.
 /// String input is parsed as JSON or a Python literal when possible; other text is quoted as JSON.
 /// Unsupported nested values are represented with repr.
+
+\ ---- Task T-stack based interpretation-time flow control ------------------
+
+code (itib@)
+    vm.push(vm.input.itib)
+end-code
+
+code (itib!)
+    offset = vm.pop()
+    if not isinstance(offset, int) or isinstance(offset, bool) or not 0 <= offset <= len(vm.input.tib):
+        raise ForthError("Invalid TIB input offset")
+    vm.input.itib = offset
+end-code
+
+code (interpret-only)
+    if vm.compiling:
+        raise ForthError("This flow-control word can only be used while interpreting")
+end-code
+
+code (skip-conditional)
+    stop_at_else = bool(vm.pop())
+    vm.tstack.append(1)
+    try:
+        while True:
+            token = vm.input.read()
+            if token is None:
+                end = "[else] or [then]" if stop_at_else else "[then]"
+                raise ForthError(f"Unmatched conditional; expected {end}")
+            quoted = vm.tick(token)
+            if quoted is not None and getattr(quoted, "type", "") == "string-quote":
+                vm.input.read(until=quoted.value)
+                continue
+            if token == "(":
+                vm.input.read(until=")")
+                continue
+            if token in ("\\", "//", "///"):
+                if "\n" in vm.input.remaining:
+                    vm.input.read(until="\n")
+                else:
+                    vm.input.rest()
+                continue
+            if token == "[if]":
+                vm.tstack[-1] += 1
+            elif token == "[then]":
+                vm.tstack[-1] -= 1
+                if vm.tstack[-1] == 0:
+                    return
+            elif token == "[else]" and stop_at_else and vm.tstack[-1] == 1:
+                return
+    finally:
+        vm.tstack.pop()
+end-code
+
+code [if]
+    if not vm.pop():
+        vm.push(True)
+        yield from vm.call(vm.tick("(skip-conditional)"))
+end-code immediate
+// ( flag -- ) Interpret the true arm; skip to the matching [else] or [then] when false.
+// Nested [if] groups are tracked on this Task's T-stack.
+
+code [else]
+    vm.push(False)
+    yield from vm.call(vm.tick("(skip-conditional)"))
+end-code immediate
+// ( -- ) Skip the false arm of the matching [if] group.
+
+: [then] ; immediate
+// ( -- ) End a bracketed conditional group.
+
+: [begin] (interpret-only) (itib@) >t ; immediate
+// ( -- ) Save this input position as the start of an interpretation-time loop.
+
+: [again] (interpret-only) t@ (itib!) ; immediate
+// ( -- ) Repeat the current [begin] loop unconditionally.
+
+: [until]
+    (interpret-only)
+    if t> drop else t@ (itib!) then
+; immediate
+// ( flag -- ) Repeat the current [begin] loop while flag is false.
+
+: [for] (interpret-only) (itib@) >t >t ; immediate
+// ( count -- ) Start an interpretation-time counted loop; [next] checks after each pass.
+// Like for ... next, a zero count still enters the body once.
+
+: [next]
+    (interpret-only)
+    t> 1- dup >t 0 >
+    if
+        t> t> dup (itib!) >t >t
+    else
+        t> t> drop drop
+    then
+; immediate
+// ( -- ) Decrement the current [for] count; rewind to its body or discard its state.
