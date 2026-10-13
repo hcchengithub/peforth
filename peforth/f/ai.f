@@ -215,6 +215,8 @@ code (ai)
                 "wsl": runtime_info.get("wsl"),
                 "shells": runtime_info.get("shells"),
                 "source_path": runtime_info.get("source_path"),
+                "runtime_path": runtime_info.get("runtime_path"),
+                "runtime_latest": runtime_info.get("runtime_latest"),
             },
         }
         instructions = (

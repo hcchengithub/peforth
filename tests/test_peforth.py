@@ -1,5 +1,7 @@
 import contextlib
+from datetime import datetime
 import importlib.machinery
+import os
 import importlib.util
 import io
 import math
@@ -528,6 +530,15 @@ class ReplBootstrapTests(unittest.TestCase):
         instructions = captured["agent"]["instructions"]
         self.assertIn("peforth Forth", instructions)
         self.assertNotIn("Project K", instructions)
+        inventory_text = instructions.split("## Runtime capability inventory\n", 1)[1]
+        inventory = json.loads(inventory_text)
+        self.assertEqual(
+            inventory["host"]["runtime_latest"],
+            _f_mod._latest_runtime_file_info(pathlib.Path(_f_mod.__file__).resolve().parent),
+        )
+        self.assertEqual(inventory["host"]["runtime_path"], str(pathlib.Path(_f_mod.__file__).resolve().parent))
+        self.assertNotIn("source_latest", inventory["host"])
+        self.assertNotIn("runtime_source_path", inventory["host"])
         self.assertEqual(captured["environment"], {"type": "none"})
 
     def test_ai_words_have_visible_source_and_help(self):
@@ -551,6 +562,64 @@ class ReplBootstrapTests(unittest.TestCase):
             word = self.vm.tick(name)
             self.assertIsNotNone(word, name)
             self.assertTrue(word.source.strip() or name == "system_info", name)
+
+    def test_latest_runtime_file_info_uses_newest_f_or_py_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            older = root / "projectk.py"
+            newest = root / "f" / "auxiliary.f"
+            ignored = root / "notes.txt"
+            newest.parent.mkdir()
+            older.write_text("# old", encoding="utf-8")
+            newest.write_text("\\ newest", encoding="utf-8")
+            ignored.write_text("ignore", encoding="utf-8")
+            os.utime(older, (100, 100))
+            os.utime(newest, (200, 200))
+
+            info = _f_mod._latest_runtime_file_info(root)
+
+        self.assertEqual(info["file"], "f/auxiliary.f")
+        self.assertEqual(info["modified"], datetime.fromtimestamp(200).strftime("%Y-%m-%d %H:%M:%S"))
+
+    def test_latest_runtime_file_info_is_unavailable_when_no_runtime_files_exist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            info = _f_mod._latest_runtime_file_info(pathlib.Path(directory))
+        self.assertIsNone(info)
+
+    def test_repl_greeting_includes_latest_runtime_file_info_time(self):
+        info = {"runtime_latest": {"file": "f/auxiliary.f", "modified": "2026-10-12 23:37:29"}}
+        self.assertEqual(
+            _f_mod._greeting_line(info),
+            "peforth v2 Forth REPL | Latest runtime file modified: 2026-10-12 23:37:29",
+        )
+        self.assertEqual(_f_mod._greeting_line({}), "peforth v2 Forth REPL")
+
+    def test_reported_source_path_expands_windows_userprofile_placeholder(self):
+        configured = r"%USERPROFILE%\OneDrive\Documents\GitHub\peforth"
+        userprofile = r"C:\Users\TestUser"
+        with patch.dict("os.environ", {
+            "PEFORTH_SOURCE_PATH": configured,
+            "USERPROFILE": userprofile,
+        }):
+            self.assertEqual(
+                _f_mod._reported_source_path(),
+                userprofile + r"\OneDrive\Documents\GitHub\peforth",
+            )
+
+    def test_detect_system_info_includes_runtime_metadata(self):
+        latest = {"file": "f/auxiliary.f", "modified": "2026-10-12 23:37:29"}
+        repo_path = r"C:\Users\8304018\OneDrive\Documents\GitHub\peforth"
+        with patch.dict("os.environ", {"PEFORTH_SOURCE_PATH": repo_path}):
+            with patch.object(_f_mod, "_latest_runtime_file_info", return_value=latest):
+                with patch.object(_f_mod, "_program_info", return_value={"available": False, "path": None, "version": None}):
+                    with patch.object(_f_mod, "_windows_wsl_info", return_value={"available": False, "distros": []}):
+                        detected = _f_mod._detect_system_info()
+        self.assertEqual(detected["source_path"], repo_path)
+        self.assertEqual(detected["config"]["PEFORTH_SOURCE_PATH"], repo_path)
+        self.assertEqual(detected["runtime_latest"], latest)
+        self.assertEqual(detected["runtime_path"], str(pathlib.Path(_f_mod.__file__).resolve().parent))
+        self.assertNotIn("source_latest", detected)
+        self.assertNotIn("runtime_source_path", detected)
 
     def test_system_info_word_uses_runtime_binding_and_host_commands(self):
         from peforth import ai_tools

@@ -58,7 +58,10 @@ Put `OPENAI_API_KEY` in `~/.peforth/.env` (Windows: `$HOME\.peforth\.env`) or in
 OPENAI_API_KEY=
 PEFORTH_AI_MODEL=gpt-6-luna
 PEFORTH_WSL_DISTRO=Ubuntu
+PEFORTH_SOURCE_PATH=/path/to/peforth-repository
 ```
+
+Set `PEFORTH_SOURCE_PATH` when the runtime package is separate from the local repository clone. It controls the repository path reported as `source_path` in System Info; it does not change which Python package is loaded. On Windows, `%USERPROFILE%` placeholders are expanded at runtime.
 
 AI sessions and local configuration live under `~/.peforth`, separate from the packaged Forth resources. The `docs/`, `skills/`, and `plugins/` directories are part of the editable checkout and are not automatically installed into other AI CLIs' global directories.
 

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-SOURCE_ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_ROOT = Path(__file__).resolve().parent.parent
 USER_HOME = Path.home() / ".peforth"
 API = "https://api.openai.com/v1/agents"
 
@@ -39,7 +39,7 @@ def _session_file():
 
 def _source_skills_dir():
     configured = os.environ.get("PEFORTH_SKILLS_DIR")
-    return Path(configured).expanduser() if configured else SOURCE_ROOT / "skills"
+    return Path(configured).expanduser() if configured else RUNTIME_ROOT / "skills"
 
 
 def load_dotenv():
@@ -192,7 +192,7 @@ def refresh_session_index(vm=None):
 def _agent_instructions():
     skills_root = _source_skills_dir()
     if not skills_root.is_absolute():
-        skills_root = (SOURCE_ROOT / skills_root).resolve()
+        skills_root = (RUNTIME_ROOT / skills_root).resolve()
     skill = skills_root / "peforth-forth"
     skill_file = skill / "SKILL.md"
     if not skill_file.is_file():

@@ -8,15 +8,69 @@ import shutil
 import subprocess
 import sys
 from collections import deque
+from datetime import datetime
 from importlib.resources import files
 from pathlib import Path
 
 from . import ai_bridge, ai_tools
 from .projectk import VM, ForthError
 
-SOURCE_ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_PATH = Path(__file__).resolve().parent
 FORTH_SOURCE_ROOT = files("peforth.f")
 FORTH_HOST_MODULES = {"ai_bridge": ai_bridge, "ai_tools": ai_tools}
+
+
+def _latest_runtime_file_info(runtime_path: Path = RUNTIME_PATH) -> dict | None:
+    """Return the newest .f/.py file under the runtime package path."""
+    root = Path(runtime_path).resolve()
+    newest: tuple[float, str] | None = None
+    try:
+        for candidate in root.rglob("*"):
+            if candidate.suffix.casefold() not in {".f", ".py"}:
+                continue
+            try:
+                if not candidate.is_file():
+                    continue
+                modified = candidate.stat().st_mtime
+            except OSError:
+                continue
+            relative = candidate.relative_to(root).as_posix()
+            if (newest is None or modified > newest[0]
+                    or (modified == newest[0] and relative < newest[1])):
+                newest = (modified, relative)
+    except OSError:
+        return None
+    if newest is None:
+        return None
+    modified, relative = newest
+    return {
+        "file": relative,
+        "modified": datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def _greeting_line(system_info: dict) -> str:
+    """Render the concise REPL banner using runtime file metadata."""
+    latest = system_info.get("runtime_latest")
+    modified = latest.get("modified") if isinstance(latest, dict) else None
+    if isinstance(modified, str) and modified:
+        return f"peforth v2 Forth REPL | Latest runtime file modified: {modified}"
+    return "peforth v2 Forth REPL"
+
+
+def _reported_source_path() -> str:
+    """Return the checkout path separately from the installed runtime path."""
+    configured = os.environ.get("PEFORTH_SOURCE_PATH", "").strip()
+    if not configured:
+        return str(RUNTIME_ROOT)
+    configured = os.path.expandvars(configured)
+    return re.sub(
+        r"%([^%]+)%",
+        lambda match: os.environ.get(match.group(1), match.group(0)),
+        configured,
+    )
+
 
 try:
     from prompt_toolkit import PromptSession
@@ -162,7 +216,9 @@ def _detect_system_info():
         curl = _program_info("curl", ["--version"])
     return {
         "os": platform.system(), "platform": sys.platform,
-        "source_path": str(SOURCE_ROOT),
+        "source_path": _reported_source_path(),
+        "runtime_path": str(RUNTIME_PATH),
+        "runtime_latest": _latest_runtime_file_info(RUNTIME_PATH),
         "python": {"executable": sys.executable, "version": platform.python_version()},
         "venv": {"active": venv_active, "path": sys.prefix if venv_active else None},
         "wsl": {"active": is_wsl, "available": wsl.get("available", False),
@@ -172,6 +228,7 @@ def _detect_system_info():
         "config": {
             "PEFORTH_AI_MODEL": os.environ.get("PEFORTH_AI_MODEL", ""),
             "PEFORTH_CONFIG_DIR": os.environ.get("PEFORTH_CONFIG_DIR", ""),
+            "PEFORTH_SOURCE_PATH": os.environ.get("PEFORTH_SOURCE_PATH", ""),
             "PEFORTH_AI_SKILLS_DIR": os.environ.get("PEFORTH_AI_SKILLS_DIR", ""),
             "PEFORTH_WSL_DISTRO": os.environ.get("PEFORTH_WSL_DISTRO", ""),
         },
@@ -357,7 +414,7 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
     confirmation_session = PromptSession(multiline=False)
 
     if show_greeting:
-        print("peforth Forth REPL")
+        print(_greeting_line(vm.host.get("system_info") or {}))
         print("Enter submits; Ctrl+J or Esc then Enter adds a line. Shift+Enter depends on terminal support.")
         print("Type 'chat' for direct AI chat, 'forth' for Forth, or 'bye'/Ctrl-D to exit.\n")
 
