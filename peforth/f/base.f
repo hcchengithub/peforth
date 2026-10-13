@@ -265,10 +265,10 @@ end-code
 /// Print TOS to stdout with flush=True and without automatic spacing.
 
 code .s
-    print(vm.stack)
+    print([(x, type(x)) for x in vm.stack])
 end-code
 // ( -- ) Print the contents of the data stack.
-/// Display the current data stack list representation to stdout.
+/// Display each data stack value paired with its Python type.
 
 code cr
     print()

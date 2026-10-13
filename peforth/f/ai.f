@@ -24,6 +24,55 @@ code ai-confirm
 end-code
 // ( -- ) Require approval for each AI Forth program again.
 
+code (ai-approve-input)
+    from peforth.repl import read_numbered_choice
+
+    proposal = vm.pop()
+    if not isinstance(proposal, dict):
+        raise RuntimeError("ai-approve expects a proposal mapping.")
+    purpose = proposal.get("purpose")
+    source = proposal.get("source")
+    if not isinstance(purpose, str) or not isinstance(source, str):
+        raise RuntimeError("ai-approve proposal requires string purpose and source fields.")
+
+    def terminal_safe(text):
+        return "".join(
+            char if char in "\n\t" or 32 <= ord(char) != 127 else f"\\x{ord(char):02x}"
+            for char in text
+        )
+
+    purpose = terminal_safe(purpose)
+    source = terminal_safe(source)
+    cyan = "\x1b[96m"
+    reset = "\x1b[0m"
+    print(
+        f"\n{cyan}AI requests permission to run this Forth action:\n"
+        f"Purpose: {purpose}\n---\n{source}\n---\n"
+        "1. Allow Once (or press Enter)\n"
+        "2. Trust throughout this AI response (this task)\n"
+        "3. Deny\n"
+        f"4. Cancel\n{reset}",
+        end="",
+        flush=True,
+    )
+    choice = read_numbered_choice(f"{cyan}Choose 1-4: {reset}", default="1")
+    vm.push(choice)
+end-code
+// ( proposal -- choice ) Display a proposal and read one key; this word is test-only and is not wired into AI execution.
+
+: ai-approve ( proposal -- decision )
+    (ai-approve-input)
+    dup s" 1" = if drop s" allow_once" else
+    dup s" 2" = if drop s" trust_task" else
+    dup s" 3" = if drop s" deny" else
+    drop s" cancel"
+    then then then
+;
+// ( proposal -- decision ) Test the AI Forth approval prompt independently.
+/// Proposal mapping requires string fields purpose and source.
+/// Decision is allow_once, trust_task, deny, or cancel; Enter means allow_once.
+/// This word only returns a decision. It does not execute code or change approval state.
+
 code chat
     vm.host["repl_mode"] = "chat"
 end-code

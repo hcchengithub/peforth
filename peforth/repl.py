@@ -385,6 +385,40 @@ def _make_multiline_key_bindings(bindings_type=None):
     return bindings
 
 
+def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1", *, input=None, output=None) -> str:
+    """Return immediately when a permitted single-character choice is pressed."""
+    if PromptSession is None or KeyBindings is None:
+        raise RuntimeError("Single-key choices require prompt_toolkit.")
+    choices = tuple(choices)
+    if (not choices or any(not isinstance(choice, str) or len(choice) != 1 for choice in choices)
+            or len(set(choices)) != len(choices)):
+        raise ValueError("choices must be distinct single-character strings.")
+    if default not in choices:
+        raise ValueError("default must be one of the permitted choices.")
+
+    bindings = KeyBindings()
+
+    @bindings.add("c-m", eager=True)
+    def _enter(event):
+        event.app.exit(result=default)
+
+    for choice in choices:
+        def _select(event, selected=choice):
+            event.app.exit(result=selected)
+        bindings.add(choice, eager=True)(_select)
+
+    session_options = {"multiline": False, "key_bindings": bindings}
+    if input is not None:
+        session_options["input"] = input
+    if output is not None:
+        session_options["output"] = output
+    formatted_prompt = prompt
+    if "\x1b[" in prompt:
+        from prompt_toolkit.formatted_text import ANSI
+        formatted_prompt = ANSI(prompt)
+    return PromptSession(**session_options).prompt(formatted_prompt)
+
+
 def _map_extended_enter_sequences(sequence_map, newline_key):
     if sequence_map is None or newline_key is None:
         return
