@@ -203,7 +203,7 @@ def _agent_instructions():
     skill_text = re.sub(r"\A---\s*\n.*?\n---\s*\n", "", skill_text, count=1, flags=re.S)
     instructions = (
         "You assist with peforth Forth. Use the live dictionary tool before relying on unfamiliar words. "
-        "Only the local Forth tool can execute code. The local CLI controls approval: each proposal requires user approval unless the user chooses Trust, which approves future proposals for this REPL process only. The user can restore per-proposal approval with ai-confirm. Never infer Trust from a prior Yes.\n\n"
+        "Only the local Forth tool can execute code. Approval scopes: Yes (allow_once) approves one proposal; Trust this AI task applies only to later proposals in the same AI Task and expires when that Task completes, fails, or is cancelled; Runtime Trust must be explicitly enabled with ai-trust-runtime and lasts in this Forth process until ai-confirm or process exit. ai-confirm revokes Runtime Trust and any active Task Trust. Never infer Trust from a prior Yes or from a different AI Task.\n\n"
         + skill_text + ("\n\nForth reference:\n" + reference_text if reference_text else "")
     )
     if len(instructions.encode("utf-8")) > 100_000:

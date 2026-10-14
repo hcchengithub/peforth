@@ -402,7 +402,7 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertEqual(self.vm.stack, [2])
 
     def test_ai_local_control_words_are_defined_and_work_from_ai_f(self):
-        for name in ("ai-new", "ai-status", "ai-confirm"):
+        for name in ("ai-new", "ai-status", "ai-confirm", "ai-trust-runtime"):
             self.assertIsNotNone(self.vm.tick(name))
             self.assertTrue(self.vm.tick(name).source.strip())
         self.assertIn('pop("ai_active_session_id"', self.vm.tick("ai-new").source)
@@ -530,6 +530,8 @@ class ReplBootstrapTests(unittest.TestCase):
         instructions = captured["agent"]["instructions"]
         self.assertIn("peforth Forth", instructions)
         self.assertNotIn("Project K", instructions)
+        self.assertIn("Trust this AI task", instructions)
+        self.assertIn("ai-trust-runtime", instructions)
         inventory_text = instructions.split("## Runtime capability inventory\n", 1)[1]
         inventory = json.loads(inventory_text)
         self.assertEqual(

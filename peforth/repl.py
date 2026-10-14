@@ -419,6 +419,53 @@ def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1",
     return PromptSession(**session_options).prompt(formatted_prompt)
 
 
+_AI_APPROVAL_DECISIONS = {"allow_once", "trust_task", "deny", "cancel"}
+_TERMINAL_TASK_STATES = {"done", "aborted", "failed"}
+
+
+def _expire_ai_task_trust(state):
+    task = state.get("trusted_ai_task")
+    if task is not None and task.status in _TERMINAL_TASK_STATES:
+        state["trusted_ai_task"] = None
+
+
+def _resolve_ai_approval_decision(vm: VM, state: dict, task, proposal: dict) -> str:
+    """Resolve a pending proposal through Runtime Trust, Task Trust, or ai-approve."""
+    _expire_ai_task_trust(state)
+    if vm.host.get("ai_trusted") or (task is not None and state.get("trusted_ai_task") is task):
+        return "allow_once"
+    if task is None:
+        raise ForthError("An AI approval proposal has no active Task.")
+    approval_word = vm.tick("ai-approve")
+    if approval_word is None:
+        raise ForthError("The ai-approve Forth word is not defined.")
+
+    stack_depth = len(vm.stack)
+    vm.push(proposal)
+    try:
+        approval_task = vm.execute(approval_word)
+        if approval_task.status != "done":
+            if approval_task.status in {"ready", "paused"}:
+                approval_task.cancel()
+            raise ForthError("The ai-approve word must finish without pausing.")
+        if len(vm.stack) != stack_depth + 1:
+            raise ForthError("The ai-approve word must return one decision.")
+        decision = vm.pop()
+    finally:
+        del vm.stack[stack_depth:]
+
+    if decision not in _AI_APPROVAL_DECISIONS:
+        raise ForthError(f"ai-approve returned an invalid decision: {decision!r}")
+    if decision == "trust_task":
+        state["trusted_ai_task"] = task
+    return decision
+
+
+def _clear_ai_task_trust(state, task=None):
+    if task is None or state.get("trusted_ai_task") is task:
+        state["trusted_ai_task"] = None
+
+
 def _map_extended_enter_sequences(sequence_map, newline_key):
     if sequence_map is None or newline_key is None:
         return
@@ -454,9 +501,18 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
 
     vm.host.setdefault("repl_mode", "forth")
     state = {"in_code_block": False, "code_buffer": [], "ai_task": initial_task,
-             "queued": deque(), "displayed_approval": None}
+             "queued": deque(), "trusted_ai_task": None}
+    previous_task_trust_clear = vm.host.get("ai_clear_task_trust")
+
+    def clear_ai_task_trust():
+        _clear_ai_task_trust(state)
+        if callable(previous_task_trust_clear):
+            previous_task_trust_clear()
+
+    vm.host["ai_clear_task_trust"] = clear_ai_task_trust
 
     while True:
+        _expire_ai_task_trust(state)
         try:
             pending = vm.host.get("ai_pending_approval")
             cleanup = vm.host.get("ai_cleanup_pending")
@@ -469,17 +525,54 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     print(f"Could not refresh the local AI session list: {err}", file=sys.stderr)
                 break
             if pending:
-                call_id = pending["action"].get("call_id")
-                if state["displayed_approval"] != call_id:
-                    print("\nAI requests permission to run this Forth action:")
+                try:
+                    if task is None:
+                        raise ForthError("An AI approval request has no active Task.")
+                    decision = _resolve_ai_approval_decision(vm, state, task, pending)
+                except Exception as err:
+                    print(f"AI approval failed; cancelling the task: {err}")
+                    try:
+                        ai_bridge.cancel_turn(vm)
+                    except Exception as cancel_err:
+                        print(f"Could not cancel remote turn: {cancel_err}")
+                    if task is not None and task.status in {"ready", "paused"}:
+                        task.cancel()
+                    state["ai_task"] = None
+                    vm.host.pop("ai_pending_approval", None)
+                    vm.host.pop("ai_approval_result", None)
+                    _clear_ai_task_trust(state, task)
+                    continue
+                if state.get("trusted_ai_task") is task and decision == "allow_once":
+                    print("\nAI Forth proposal auto-approved for this AI task:")
                     print(f"Purpose: {pending['purpose']}\n---\n{pending['source']}\n---")
-                    state["displayed_approval"] = call_id
-                print("Trust: run this action and automatically approve future AI-requested Forth actions for this Forth run.")
-                print("Yes (press Enter): run this action once.")
-                print("No: decline this action.")
-                print("Cancel: cancel this AI request.")
-                prompt = "Run this action? Press Enter for yes, or type trust, no, or cancel: "
-            elif cleanup:
+                if decision in {"allow_once", "trust_task"}:
+                    vm.host["ai_approval_result"] = True
+                elif decision == "deny":
+                    vm.host["ai_approval_result"] = False
+                elif decision == "cancel":
+                    try:
+                        ai_bridge.cancel_turn(vm)
+                    except Exception as err:
+                        print(f"Could not cancel remote turn: {err}")
+                    task.cancel()
+                    state["ai_task"] = None
+                    vm.host.pop("ai_pending_approval", None)
+                    vm.host.pop("ai_approval_result", None)
+                    _clear_ai_task_trust(state, task)
+                    print("AI task cancelled locally.")
+                    continue
+                else:
+                    raise ForthError(f"Invalid AI approval decision: {decision!r}")
+                vm.host.pop("ai_pending_approval", None)
+                state["ai_task"] = None
+                task.resume()
+                if task.status == "paused" and (vm.host.get("ai_pending_approval") or vm.host.get("ai_cleanup_pending")):
+                    state["ai_task"] = task
+                elif task.status == "done":
+                    print(" ok")
+                _expire_ai_task_trust(state)
+                continue
+            if cleanup:
                 prompt = (f"Delete session {cleanup['index']} ({ai_bridge._short_id(cleanup['session_id'])})? "
                           "Type delete or cancel: ")
             elif state["queued"]:
@@ -493,14 +586,13 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     prompt = "chat> "
                 else:
                     prompt = "> "
-            active_prompt = confirmation_session if pending or cleanup else prompt_session
+            active_prompt = confirmation_session if cleanup else prompt_session
             raw_input = active_prompt.prompt(prompt)
 
-            clean_input = raw_input.replace("\r\n", "\n").replace("\r", "\n")
+            clean_input = raw_input.replace(chr(13) + chr(10), chr(10)).replace(chr(13), chr(10))
 
-            pending = vm.host.get("ai_pending_approval")
             cleanup = vm.host.get("ai_cleanup_pending")
-            if cleanup and not pending:
+            if cleanup:
                 choice = clean_input.strip().casefold()
                 if choice == "delete":
                     vm.host["ai_cleanup_result"] = True
@@ -520,41 +612,6 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     elif task.status == "done":
                         print(" ok")
                 vm.host.pop("ai_cleanup_result", None)
-                continue
-            if pending:
-                choice = clean_input.strip().casefold()
-                if choice in {"", "trust", "yes", "y"}:
-                    vm.host["ai_approval_result"] = "trust" if choice == "trust" else True
-                elif choice in {"no", "n"}:
-                    vm.host["ai_approval_result"] = False
-                elif choice in {"cancel", "ai-cancel"}:
-                    task = state.get("ai_task")
-                    try:
-                        ai_bridge.cancel_turn(vm)
-                    except Exception as err:
-                        print(f"Could not cancel remote turn: {err}")
-                    if task:
-                        task.cancel()
-                    state["ai_task"] = None
-                    vm.host.pop("ai_pending_approval", None)
-                    vm.host.pop("ai_approval_result", None)
-                    state["displayed_approval"] = None
-                    print("AI task cancelled locally.")
-                    continue
-                else:
-                    if clean_input.strip():
-                        state["queued"].append(clean_input)
-                    continue
-                vm.host.pop("ai_pending_approval", None)
-                state["displayed_approval"] = None
-                task = state.get("ai_task")
-                state["ai_task"] = None
-                if task:
-                    task.resume()
-                    if task.status == "paused" and vm.host.get("ai_pending_approval"):
-                        state["ai_task"] = task
-                    elif task.status == "done":
-                        print(" ok")
                 continue
             if state["queued"]:
                 state["queued"].append(clean_input)
@@ -578,12 +635,12 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                 task = state.get("ai_task")
                 if task:
                     task.cancel()
+                _clear_ai_task_trust(state, task)
                 state["ai_task"] = None
                 vm.host.pop("ai_pending_approval", None)
                 vm.host.pop("ai_approval_result", None)
                 vm.host.pop("ai_cleanup_pending", None)
                 vm.host.pop("ai_cleanup_result", None)
-                state["displayed_approval"] = None
             state["in_code_block"] = False
             state["code_buffer"] = []
             if vm.compiling:
@@ -591,6 +648,13 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
         except (EOFError, SystemExit):
             _farewell(vm)
             break
+
+    _clear_ai_task_trust(state)
+    if vm.host.get("ai_clear_task_trust") is clear_ai_task_trust:
+        if previous_task_trust_clear is None:
+            vm.host.pop("ai_clear_task_trust", None)
+        else:
+            vm.host["ai_clear_task_trust"] = previous_task_trust_clear
 
 
 def _print_cli_help(file=None) -> None:

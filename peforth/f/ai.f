@@ -20,9 +20,18 @@ end-code
 
 code ai-confirm
     vm.host.pop("ai_trusted", None)
+    clear_task_trust = vm.host.get("ai_clear_task_trust")
+    if callable(clear_task_trust):
+        clear_task_trust()
     print("AI Forth programs will require approval again.")
 end-code
-// ( -- ) Require approval for each AI Forth program again.
+// ( -- ) Revoke Runtime Trust and the current AI Task's Trust.
+
+code ai-trust-runtime
+    vm.host["ai_trusted"] = True
+    print("AI Forth programs are trusted for this Forth process. Use ai-confirm to revoke.")
+end-code
+// ( -- ) Enable Runtime Trust for this Forth process until ai-confirm or process exit.
 
 code (ai-approve-input)
     from peforth.repl import read_numbered_choice
@@ -49,16 +58,16 @@ code (ai-approve-input)
         f"\n{cyan}AI requests permission to run this Forth action:\n"
         f"Purpose: {purpose}\n---\n{source}\n---\n"
         "1. Allow Once (or press Enter)\n"
-        "2. Trust throughout this AI response (this task)\n"
-        "3. Deny\n"
-        f"4. Cancel\n{reset}",
+        "2. Trust this AI task only\n"
+        "3. Deny this proposal\n"
+        f"4. Cancel this AI task\n{reset}",
         end="",
         flush=True,
     )
     choice = read_numbered_choice(f"{cyan}Choose 1-4: {reset}", default="1")
     vm.push(choice)
 end-code
-// ( proposal -- choice ) Display a proposal and read one key; this word is test-only and is not wired into AI execution.
+// ( proposal -- choice ) Display a proposal and read one key for the live REPL approval flow.
 
 : ai-approve ( proposal -- decision )
     (ai-approve-input)
@@ -68,10 +77,10 @@ end-code
     drop s" cancel"
     then then then
 ;
-// ( proposal -- decision ) Test the AI Forth approval prompt independently.
+// ( proposal -- decision ) Request a decision for a pending AI Forth proposal.
 /// Proposal mapping requires string fields purpose and source.
 /// Decision is allow_once, trust_task, deny, or cancel; Enter means allow_once.
-/// This word only returns a decision. It does not execute code or change approval state.
+/// The REPL applies Task Trust and resumes or cancels the pending AI Task.
 
 code chat
     vm.host["repl_mode"] = "chat"

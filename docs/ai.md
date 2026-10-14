@@ -39,7 +39,7 @@ Keep `.env` private. The local bridge sends the API key only as an HTTPS bearer 
 
 ## Local Forth tools and approval
 
-The AI can search the current dictionary. To run Forth it must request `peforth_run_forth`; the REPL displays the complete source and purpose, then enforces the approval mode: `trust` approves later AI programs for this Forth process, `yes` approves only this proposal, `no` declines, and `cancel` cancels the AI task. `ai-confirm` restores per-proposal approval. Trust resets when the process exits. If API submission fails after local execution, inspect the VM before retrying.
+The AI can search the current dictionary. To run Forth it must request `peforth_run_forth`; the REPL routes pending proposals through the editable `ai-approve` Forth word. `allow_once` approves one proposal; `trust_task` covers later proposals in the same AI Task only and expires when that Task completes, fails, or is cancelled; `deny` declines; and `cancel` cancels the AI Task. Runtime-wide Trust is enabled explicitly with `ai-trust-runtime` and revoked with `ai-confirm`, which also clears any active Task Trust. Runtime Trust ends at `ai-confirm` or process exit. If API submission fails after local execution, inspect the VM before retrying.
 
 Approved code runs in the active local VM with the user's permissions; Python bridges can access files, processes, and network. Review every proposal. Network requests currently run synchronously, so the REPL cannot queue input while waiting for an API response; queueing is available at the local approval prompt.
 
