@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import uuid
 from contextlib import redirect_stderr, redirect_stdout
 import urllib.error
@@ -65,32 +66,275 @@ def load_dotenv():
         os.environ.setdefault(key, value)
 
 
-def _request(method, path, payload=None, stream=False):
+def _diagnostic_event(context, event_type, *, payload=None, remote_turn_id=None,
+                      call_id=None, content_id=None, http_method=None, url=None,
+                      http_status=None, local_request_id=None,
+                      provider_request_id=None, elapsed_ms=None, error=None):
+    if not context:
+        return
+    logger = context.get("logger")
+    runtime_id = context.get("runtime_id")
+    if logger is None or runtime_id is None:
+        return
+    try:
+        logger.append_event(
+            runtime_id, context.get("turn_id"), event_type,
+            session_id=context.get("session_id"), remote_turn_id=remote_turn_id,
+            call_id=call_id, operation=context.get("operation"),
+            http_method=http_method, url=url, http_status=http_status,
+            local_request_id=local_request_id,
+            provider_request_id=provider_request_id, elapsed_ms=elapsed_ms,
+            content_id=content_id if content_id is not None else context.get("content_id"),
+            payload=payload,
+            error_type=type(error).__name__ if error is not None else None,
+            error_message=str(error) if error is not None else None,
+        )
+    except Exception as exc:
+        print(f"AI diagnostic write failed: {exc}", file=sys.stderr)
+
+
+def _diagnostic_context(vm, turn_id):
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None or turn_id is None:
+        return None
+    return {
+        "logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+        "session_id": vm.host.get("ai_active_session_id"),
+        "mode": vm.host.get("diagnostic_log_mode", "normal"),
+    }
+
+
+def _header_value(headers, *names):
+    for name in names:
+        value = headers.get(name) if hasattr(headers, "get") else None
+        if value:
+            return str(value)
+    return None
+
+
+def _safe_headers(headers):
+    if not hasattr(headers, "items"):
+        return {}
+    sensitive = {"authorization", "cookie", "set-cookie", "x-api-key", "api-key"}
+    return {str(name): ("[REDACTED]" if str(name).casefold() in sensitive else str(value))
+            for name, value in headers.items()}
+
+
+class _LoggedResponse:
+    def __init__(self, response, diagnostic, *, method, path, operation,
+                 started_ns, request_id, provider_request_id, status, stream):
+        self._response = response
+        self._diagnostic = diagnostic
+        self._method = method
+        self._path = path
+        self._operation = operation
+        self._started_ns = started_ns
+        self._request_id = request_id
+        self._provider_request_id = provider_request_id
+        self._status = status
+        self._stream = stream
+        self._verbose = diagnostic.get("mode") == "verbose"
+        self._response_payload = bytearray()
+        self._closed = False
+
+    def __getattr__(self, name):
+        return getattr(self._response, name)
+
+    @property
+    def closed(self):
+        return self._closed or bool(getattr(self._response, "closed", False))
+
+    def __iter__(self):
+        return iter(self._response)
+
+    def read(self, size=-1):
+        value = self._response.read(size)
+        if self._verbose and not self._stream and value:
+            self._response_payload.extend(
+                value.encode("utf-8") if isinstance(value, str) else value
+            )
+        return value
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def close(self):
+        if self._closed:
+            return
+        try:
+            self._response.close()
+        finally:
+            self._closed = True
+            elapsed_ms = (time.monotonic_ns() - self._started_ns) / 1_000_000
+            if self._response_payload:
+                content_text = self._response_payload.decode("utf-8", "replace")
+                content_id = _diagnostic_store_content(
+                    self._diagnostic, "http_response_payload", content_text
+                )
+                _diagnostic_event(
+                    self._diagnostic, "http_response_payload",
+                    content_id=content_id,
+                    payload={"content_length": len(self._response_payload)},
+                    http_method=self._method, url=self._path,
+                    http_status=self._status, local_request_id=self._request_id,
+                    provider_request_id=self._provider_request_id,
+                    elapsed_ms=elapsed_ms,
+                )
+            _diagnostic_event(
+                self._diagnostic, "http_request_closed", http_method=self._method,
+                url=self._path, http_status=self._status,
+                local_request_id=self._request_id,
+                provider_request_id=self._provider_request_id, elapsed_ms=elapsed_ms,
+            )
+
+
+def _request(method, path, payload=None, stream=False, *, diagnostic=None, operation=None):
     load_dotenv()
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not key:
         raise RuntimeError("Set OPENAI_API_KEY in ~/.peforth/.env or the process environment to use AI.")
-    body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode()
+    method = method.upper()
+    operation = operation or path.split("?", 1)[0].strip("/") or "request"
+    request_id = str(uuid.uuid4())
+    started_ns = time.monotonic_ns()
+    request_text = None if payload is None else json.dumps(payload, ensure_ascii=False)
+    body = request_text.encode() if request_text is not None else None
     request = urllib.request.Request(API + path, data=body, method=method, headers={
         "Authorization": "Bearer " + key, "Content-Type": "application/json",
         "OpenAI-Beta": "agents=v1",
         "Accept": "text/event-stream" if stream else "application/json"})
+    context = dict(diagnostic or {})
+    context["operation"] = operation
+    verbose = context.get("mode") == "verbose"
+    request_details: dict[str, object] = {"stream": bool(stream)}
+    request_payload_content_id = None
+    if verbose:
+        if request_text is not None:
+            request_payload_content_id = _diagnostic_store_content(
+                context, "http_request_payload", request_text
+            )
+            request_details["request_payload_content_id"] = request_payload_content_id
+        request_details["request_headers"] = _safe_headers(dict(request.header_items()))
+    _diagnostic_event(
+        context, "http_request_started", payload=request_details,
+        content_id=request_payload_content_id,
+        http_method=method, url=path, local_request_id=request_id,
+    )
+    if stream:
+        _diagnostic_event(
+            context, "sse_open_started", payload={"stream": True},
+            http_method=method, url=path, local_request_id=request_id,
+        )
     try:
-        return urllib.request.urlopen(request, timeout=300)
+        response = urllib.request.urlopen(request, timeout=300)
     except urllib.error.HTTPError as exc:
-        detail = exc.read(4096).decode("utf-8", "replace")
-        raise RuntimeError(f"Agents API HTTP {exc.code}: {detail}") from None
+        elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+        provider_request_id = _header_value(exc.headers, "x-request-id", "request-id", "openai-request-id")
+        response_details: dict[str, object] = {"stream": bool(stream)}
+        if verbose:
+            response_details["response_headers"] = _safe_headers(exc.headers)
+        _diagnostic_event(
+            context, "http_response_received", payload=response_details,
+            http_method=method, url=path, http_status=exc.code,
+            local_request_id=request_id, provider_request_id=provider_request_id,
+            elapsed_ms=elapsed_ms,
+        )
+        detail_bytes = exc.read(4096)
+        detail = detail_bytes.decode("utf-8", "replace")
+        if verbose and detail_bytes:
+            content_id = _diagnostic_store_content(
+                context, "http_response_payload", detail
+            )
+            _diagnostic_event(
+                context, "http_response_payload", content_id=content_id,
+                payload={"content_length": len(detail_bytes)},
+                http_method=method, url=path, http_status=exc.code,
+                local_request_id=request_id, provider_request_id=provider_request_id,
+                elapsed_ms=elapsed_ms,
+            )
+        error = RuntimeError(f"Agents API HTTP {exc.code}: {detail}")
+        _diagnostic_event(
+            context, "http_request_failed", payload={"stream": bool(stream)},
+            http_method=method, url=path, http_status=exc.code,
+            local_request_id=request_id, provider_request_id=provider_request_id,
+            elapsed_ms=elapsed_ms, error=error,
+        )
+        try:
+            exc.close()
+        except Exception as close_error:
+            _diagnostic_event(
+                context, "http_response_close_failed", payload={"stream": bool(stream)},
+                http_method=method, url=path, http_status=exc.code,
+                local_request_id=request_id, provider_request_id=provider_request_id,
+                elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
+                error=close_error,
+            )
+        finally:
+            _diagnostic_event(
+                context, "http_request_closed", http_method=method, url=path,
+                http_status=exc.code, local_request_id=request_id,
+                provider_request_id=provider_request_id,
+                elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
+            )
+        raise error from None
     except urllib.error.URLError as exc:
-        raise RuntimeError(f"Agents API connection failed: {exc.reason}") from None
+        elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+        error = RuntimeError(f"Agents API connection failed: {exc.reason}")
+        _diagnostic_event(
+            context, "http_request_failed", payload={"stream": bool(stream)},
+            http_method=method, url=path, local_request_id=request_id,
+            elapsed_ms=elapsed_ms, error=error,
+        )
+        raise error from None
+    except Exception as exc:
+        elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+        _diagnostic_event(
+            context, "http_request_failed", payload={"stream": bool(stream)},
+            http_method=method, url=path, local_request_id=request_id,
+            elapsed_ms=elapsed_ms, error=exc,
+        )
+        raise
+
+    status = getattr(response, "status", None)
+    if status is None and hasattr(response, "getcode"):
+        status = response.getcode()
+    headers = getattr(response, "headers", {})
+    provider_request_id = _header_value(headers, "x-request-id", "request-id", "openai-request-id")
+    response_details: dict[str, object] = {"stream": bool(stream)}
+    if verbose:
+        response_details["response_headers"] = _safe_headers(headers)
+    elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+    _diagnostic_event(
+        context, "http_response_received", payload=response_details,
+        http_method=method, url=path, http_status=status,
+        local_request_id=request_id, provider_request_id=provider_request_id,
+        elapsed_ms=elapsed_ms,
+    )
+    if stream:
+        _diagnostic_event(
+            context, "sse_opened", payload={"stream": True, "http_status": status},
+            http_method=method, url=path, http_status=status,
+            local_request_id=request_id, provider_request_id=provider_request_id,
+            elapsed_ms=elapsed_ms,
+        )
+    return _LoggedResponse(
+        response, context, method=method, path=path, operation=operation,
+        started_ns=started_ns, request_id=request_id,
+        provider_request_id=provider_request_id, status=status, stream=stream,
+    )
 
 
-def _api_get(path):
-    with _request("GET", path) as response:
+def _api_get(path, *, diagnostic=None, operation=None):
+    with _request("GET", path, diagnostic=diagnostic, operation=operation) as response:
         return json.load(response)
 
 
-def _api_delete(path):
-    with _request("DELETE", path) as response:
+def _api_delete(path, *, diagnostic=None, operation=None):
+    with _request("DELETE", path, diagnostic=diagnostic, operation=operation) as response:
         return json.load(response)
 
 
@@ -213,54 +457,234 @@ def _agent_instructions():
     return instructions
 
 
-def _create_session(payload):
-    return _event_stream(_request("POST", "/sessions", payload, stream=True))
+def _sse_diagnostic_event(context, response, event_type, *, payload=None,
+                          content_id=None, remote_turn_id=None, call_id=None,
+                          error=None, elapsed_ms=None):
+    context = dict(context or {})
+    if content_id is not None:
+        context["content_id"] = content_id
+    _diagnostic_event(
+        context, event_type, payload=payload, remote_turn_id=remote_turn_id,
+        call_id=call_id,
+        http_method=getattr(response, "_method", None),
+        url=getattr(response, "_path", None),
+        http_status=getattr(response, "_status", None),
+        local_request_id=getattr(response, "_request_id", None),
+        provider_request_id=getattr(response, "_provider_request_id", None),
+        elapsed_ms=elapsed_ms, error=error,
+    )
 
 
-def _event_stream(response):
+def _diagnostic_store_content(context, content_type, text):
+    if not context:
+        return None
+    logger = context.get("logger")
+    if logger is None:
+        return None
     try:
-        data = []
+        return logger.store_content(content_type, text)
+    except Exception as exc:
+        print(f"AI diagnostic write failed: {exc}", file=sys.stderr)
+        return None
+
+
+def _create_session(payload, *, diagnostic=None):
+    response = _request(
+        "POST", "/sessions", payload, stream=True, diagnostic=diagnostic,
+        operation="create_session",
+    )
+    return _event_stream(response, diagnostic=diagnostic, operation="create_session")
+
+
+def _event_stream(response, *, diagnostic=None, operation=None):
+    context = diagnostic if isinstance(diagnostic, dict) else dict(diagnostic or {})
+    if operation is not None:
+        context["operation"] = operation
+    verbose = context.get("mode") == "verbose"
+    stream_started_ns = time.monotonic_ns()
+    last_read_ns = None
+    last_event_ns = None
+    output_length = 0
+    data = []
+    event_name = None
+
+    def timing(now_ns):
+        return {
+            "elapsed_ms": (now_ns - stream_started_ns) / 1_000_000,
+            "since_last_read_ms": ((now_ns - last_read_ns) / 1_000_000
+                                   if last_read_ns is not None else None),
+            "since_last_event_ms": ((now_ns - last_event_ns) / 1_000_000
+                                    if last_event_ns is not None else None),
+        }
+
+    def decode_event(joined, now_ns):
+        nonlocal output_length, last_event_ns
+        if joined == "[DONE]":
+            _sse_diagnostic_event(context, response, "sse_done_received",
+                                  payload=timing(now_ns))
+            last_event_ns = now_ns
+            return None
+        try:
+            event = json.loads(joined)
+        except json.JSONDecodeError as exc:
+            _sse_diagnostic_event(
+                context, response, "sse_parse_failed",
+                payload={**timing(now_ns), "data_length": len(joined)}, error=exc,
+            )
+            raise
+        if not isinstance(event, dict):
+            event_type = event_name or "unknown"
+            payload = {**timing(now_ns), "event_type": event_type,
+                       "data_length": len(joined)}
+            if verbose:
+                payload["data"] = event
+            _sse_diagnostic_event(context, response, "sse_event_received", payload=payload)
+            last_event_ns = now_ns
+            return event
+
+        kind = event.get("type") or event_name or "unknown"
+        session_id = _session_id_from_event(event)
+        if session_id:
+            context["session_id"] = session_id
+            response_context = getattr(response, "_diagnostic", None)
+            if isinstance(response_context, dict):
+                response_context["session_id"] = session_id
+        remote_turn = event.get("turn_id")
+        if not remote_turn and isinstance(event.get("turn"), dict):
+            remote_turn = event["turn"].get("id")
+        call_id = event.get("call_id")
+        event_context = dict(context)
+        delta = event.get("delta") if kind.endswith("output_text.delta") else None
+        if isinstance(delta, str):
+            output_length += len(delta)
+        payload = {
+            **timing(now_ns), "event_type": kind,
+            "data_length": len(joined),
+        }
+        if session_id:
+            payload["session_id"] = session_id
+        if remote_turn:
+            payload["remote_turn_id"] = remote_turn
+        if call_id:
+            payload["call_id"] = call_id
+        if isinstance(delta, str):
+            payload["delta_length"] = len(delta)
+            payload["output_length"] = output_length
+            if verbose:
+                payload["delta"] = delta
+        elif verbose:
+            payload["data"] = event
+        else:
+            for key in ("status", "sequence_number"):
+                if key in event:
+                    payload[key] = event[key]
+        _sse_diagnostic_event(
+            event_context, response, "sse_event_received", payload=payload,
+            remote_turn_id=remote_turn, call_id=call_id,
+        )
+        last_event_ns = now_ns
+        return event
+
+    try:
         for raw in response:
-            line = raw.decode("utf-8", "replace").rstrip("\r\n")
-            if line.startswith("data:"):
+            now_ns = time.monotonic_ns()
+            raw_bytes = raw if isinstance(raw, bytes) else str(raw).encode("utf-8")
+            line = raw_bytes.decode("utf-8", "replace").rstrip(chr(13) + chr(10))
+            line_timing = timing(now_ns)
+            if verbose:
+                content_id = _diagnostic_store_content(context, "sse_raw_line", line)
+                _sse_diagnostic_event(
+                    context, response, "sse_line_received",
+                    payload={**line_timing, "line_length": len(raw_bytes)},
+                    content_id=content_id, elapsed_ms=line_timing["elapsed_ms"],
+                )
+            last_read_ns = now_ns
+
+            if line.startswith(":"):
+                _sse_diagnostic_event(
+                    context, response, "sse_heartbeat_received",
+                    payload={**line_timing, "line_length": len(raw_bytes)},
+                )
+            elif line.startswith("event:"):
+                event_name = line[6:].strip()
+            elif line.startswith("data:"):
                 data.append(line[5:].lstrip())
-            elif not line and data:
-                joined = "\n".join(data)
-                data.clear()
-                if joined != "[DONE]":
+            elif not line:
+                if data:
+                    joined = "\n".join(data)
+                    data.clear()
                     try:
-                        yield json.loads(joined)
+                        event = decode_event(joined, now_ns)
                     except json.JSONDecodeError:
-                        pass
-        if data and "\n".join(data) != "[DONE]":
-            yield json.loads("\n".join(data))
+                        # Match the existing parser contract: malformed delimited
+                        # records are skipped, but remain visible in diagnostics.
+                        event_name = None
+                        continue
+                    event_name = None
+                    if event is not None:
+                        yield event
+                else:
+                    event_name = None
+        if data:
+            joined = "\n".join(data)
+            event = decode_event(joined, time.monotonic_ns())
+            if event is not None:
+                yield event
+        _sse_diagnostic_event(
+            context, response, "sse_stream_ended",
+            payload={"elapsed_ms": (time.monotonic_ns() - stream_started_ns) / 1_000_000},
+        )
+    except Exception as exc:
+        _sse_diagnostic_event(
+            context, response, "sse_stream_failed",
+            payload={"elapsed_ms": (time.monotonic_ns() - stream_started_ns) / 1_000_000},
+            error=exc,
+        )
+        raise
     finally:
-        response.close()
+        try:
+            response.close()
+        finally:
+            _sse_diagnostic_event(
+                context, response, "sse_stream_closed",
+                payload={"elapsed_ms": (time.monotonic_ns() - stream_started_ns) / 1_000_000},
+            )
 
 
-def _stream(session_id, event):
+def _stream(session_id, event, *, diagnostic=None):
     encoded_id = urllib.parse.quote(session_id, safe="")
-    response = _request("GET", f"/sessions/{encoded_id}/events?stream=true", stream=True)
+    operation = "continue_session"
+    response = _request(
+        "GET", f"/sessions/{encoded_id}/events?stream=true", stream=True,
+        diagnostic=diagnostic, operation=operation,
+    )
     try:
-        with _request("POST", f"/sessions/{encoded_id}/events", {"events": [event]}) as accepted:
+        with _request(
+                "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
+                diagnostic=diagnostic, operation="submit_session_event") as accepted:
             accepted.read()
-        yield from _event_stream(response)
+        yield from _event_stream(response, diagnostic=diagnostic, operation=operation)
     finally:
         if not response.closed:
             response.close()
 
 
-def _tool_result(session_id, action, success, output="", error=""):
+def _tool_result(session_id, action, success, output="", error="", *, diagnostic=None):
     event = {"type": "agent.session.input.tool_result", "turn_id": action["turn_id"],
              "call_id": action["call_id"], "success": success}
     event["output" if success else "error"] = output if success else error
     encoded_id = urllib.parse.quote(session_id, safe="")
-    with _request("POST", f"/sessions/{encoded_id}/events", {"events": [event]}) as response:
+    with _request(
+            "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
+            diagnostic=diagnostic, operation="submit_tool_result") as response:
         response.read()
 
 
-def _current_actions(session_id):
-    session = _api_get(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+def _current_actions(session_id, *, diagnostic=None):
+    session = _api_get(
+        f"/sessions/{urllib.parse.quote(session_id, safe='')}",
+        diagnostic=diagnostic, operation="get_current_actions",
+    )
     return session.get("status"), session.get("required_actions") or []
 
 

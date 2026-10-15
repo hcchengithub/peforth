@@ -308,7 +308,11 @@ class DiagnosticLog:
 
     def append_event(self, runtime_id: str, turn_id: str | None, event_type: str,
                      *, payload: dict | None = None, session_id: str | None = None,
-                     call_id: str | None = None, operation: str | None = None,
+                     remote_turn_id: str | None = None, call_id: str | None = None,
+                     operation: str | None = None, http_method: str | None = None,
+                     url: str | None = None, http_status: int | None = None,
+                     local_request_id: str | None = None,
+                     provider_request_id: str | None = None, elapsed_ms: float | None = None,
                      content_id: int | None = None, error_type: str | None = None,
                      error_message: str | None = None) -> int:
         sequence_no = self._sequence + 1
@@ -316,11 +320,14 @@ class DiagnosticLog:
             cursor = self.connection.execute(
                 """INSERT INTO timeline
                 (runtime_id, turn_id, recorded_at, monotonic_ns, sequence_no,
-                 event_type, session_id, call_id, operation, content_id,
-                 payload_json, error_type, error_message)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 event_type, session_id, remote_turn_id, call_id, operation, http_method, url,
+                 http_status, local_request_id, provider_request_id, elapsed_ms,
+                 content_id, payload_json, error_type, error_message)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (runtime_id, turn_id, _now(), time.monotonic_ns(), sequence_no,
-                 event_type, session_id, call_id, operation, content_id,
+                 event_type, session_id, remote_turn_id, call_id, operation, http_method, url,
+                 http_status, local_request_id, provider_request_id, elapsed_ms,
+                 content_id,
                  json.dumps(payload, ensure_ascii=False, sort_keys=True) if payload is not None else None,
                  error_type, error_message),
             )

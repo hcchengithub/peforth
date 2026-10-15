@@ -90,6 +90,30 @@ class DiagnosticLogTests(unittest.TestCase):
             self.assertEqual(tuple(row), ("test_event", '{"ok": true}'))
             log.close()
 
+    def test_timeline_event_stores_http_and_request_timing_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = DiagnosticLog(Path(tmp) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = log.start_runtime(process_id=203)
+            event_id = log.append_event(
+                runtime_id, None, "http_response_received",
+                operation="create_session", http_method="POST", url="/sessions",
+                http_status=201, local_request_id="req-local",
+                provider_request_id="req-provider", elapsed_ms=12.5,
+                remote_turn_id="turn-remote", call_id="call-1",
+            )
+
+            row = log.connection.execute(
+                "SELECT operation, http_method, url, http_status, local_request_id, "
+                "provider_request_id, elapsed_ms, remote_turn_id, call_id "
+                "FROM timeline WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+            self.assertEqual(tuple(row), (
+                "create_session", "POST", "/sessions", 201,
+                "req-local", "req-provider", 12.5, "turn-remote", "call-1",
+            ))
+            log.close()
+
     def test_write_deadline_bounds_wait_for_database_lock(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "diagnostics.sqlite3"

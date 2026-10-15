@@ -566,7 +566,7 @@ class ReplBootstrapTests(unittest.TestCase):
         vm = _f_mod.create_vm()
         captured = {}
 
-        def create_session(payload):
+        def create_session(payload, *, diagnostic=None):
             captured.update(payload)
             return iter([
                 {"type": "agent.session.created", "session": {"id": "sess_new_12345678"}},
@@ -876,7 +876,7 @@ class ReplBootstrapTests(unittest.TestCase):
         state = {"in_code_block": False, "code_buffer": [], "ai_task": None}
         received = []
 
-        def fake_create(payload):
+        def fake_create(payload, *, diagnostic=None):
             received.append(payload["input"])
             yield {"type": "agent.session.created", "session": {"id": "sess_new"}}
             yield {"type": "agent.session.turn.output_text.delta", "delta": "First line.\nSecond line."}
@@ -1056,6 +1056,278 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("-i, --interactive", output.getvalue())
         self.assertIn("-new, --new-session", output.getvalue())
 
+    def test_http_request_records_lifecycle_timing_and_request_ids(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=508)
+            turn_id = logger.start_turn(runtime_id)
+            diagnostic = {
+                "logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                "mode": "normal",
+            }
+
+            class FakeResponse:
+                status = 201
+                headers = {"x-request-id": "provider-123"}
+                closed = False
+
+                def close(self):
+                    self.closed = True
+
+            response = FakeResponse()
+            with patch.object(ai_bridge, "load_dotenv"), \
+                    patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
+                    patch.object(ai_bridge.urllib.request, "urlopen", return_value=response):
+                result = ai_bridge._request(
+                    "POST", "/sessions", {"input": "hello"}, stream=True,
+                    diagnostic=diagnostic, operation="create_session",
+                )
+                result.close()
+
+            rows = logger.connection.execute(
+                "SELECT event_type, operation, http_method, url, http_status, "
+                "local_request_id, provider_request_id, elapsed_ms "
+                "FROM timeline WHERE turn_id = ? ORDER BY event_id", (turn_id,),
+            ).fetchall()
+            self.assertEqual([row[0] for row in rows], [
+                "http_request_started", "sse_open_started", "http_response_received",
+                "sse_opened", "http_request_closed",
+            ])
+            self.assertTrue(all(row[1] == "create_session" for row in rows))
+            self.assertTrue(all(row[2] == "POST" and row[3] == "/sessions" for row in rows))
+            self.assertEqual(rows[2][4:7], (201, rows[0][5], "provider-123"))
+            self.assertGreaterEqual(rows[-1][7], 0)
+            self.assertTrue(response.closed)
+            logger.close()
+
+    def test_http_error_records_response_payload_and_closure(self):
+        from email.message import Message
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=509)
+            turn_id = logger.start_turn(runtime_id)
+            diagnostic = {
+                "logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                "mode": "verbose",
+            }
+            headers = Message()
+            headers["x-request-id"] = "provider-error-1"
+            headers["Set-Cookie"] = "secret-cookie"
+            http_error = ai_bridge.urllib.error.HTTPError(
+                "https://api.example/sessions", 400, "Bad Request",
+                headers,
+                io.BytesIO(b'{"error":"bad request"}'),
+            )
+            with patch.object(ai_bridge, "load_dotenv"), \
+                    patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
+                    patch.object(ai_bridge.urllib.request, "urlopen", side_effect=http_error):
+                with self.assertRaisesRegex(RuntimeError, "Agents API HTTP 400"):
+                    ai_bridge._request(
+                        "POST", "/sessions", {"input": "hello"},
+                        diagnostic=diagnostic, operation="create_session",
+                    )
+
+            rows = logger.connection.execute(
+                "SELECT event_type, content_id, payload_json, http_status, "
+                "provider_request_id FROM timeline WHERE turn_id = ? ORDER BY event_id",
+                (turn_id,),
+            ).fetchall()
+            self.assertEqual([row[0] for row in rows], [
+                "http_request_started", "http_response_received", "http_response_payload",
+                "http_request_failed", "http_request_closed",
+            ])
+            self.assertEqual(rows[1][3:], (400, "provider-error-1"))
+            self.assertEqual(rows[4][3:], (400, "provider-error-1"))
+            self.assertEqual(logger.connection.execute(
+                "SELECT content_text FROM contents WHERE content_id = ?",
+                (rows[2][1],),
+            ).fetchone()[0], '{"error":"bad request"}')
+            response_headers = json.loads(rows[1][2])["response_headers"]
+            self.assertEqual(response_headers["Set-Cookie"], "[REDACTED]")
+            logger.close()
+
+    def test_verbose_http_request_persists_payloads_with_secret_redaction(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=505)
+            turn_id = logger.start_turn(runtime_id)
+            diagnostic = {
+                "logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                "mode": "verbose",
+            }
+
+            class FakeResponse:
+                status = 200
+                headers = {"x-request-id": "provider-read-1"}
+                closed = False
+
+                def read(self, size=-1):
+                    return b'{"result":"ok"}'
+
+                def close(self):
+                    self.closed = True
+
+            response = FakeResponse()
+            with patch.object(ai_bridge, "load_dotenv"), \
+                    patch.dict(os.environ, {"OPENAI_API_KEY": "do-not-log"}), \
+                    patch.object(ai_bridge.urllib.request, "urlopen", return_value=response):
+                logged = ai_bridge._request(
+                    "POST", "/inspect", {"prompt": "hello"},
+                    diagnostic=diagnostic, operation="inspect",
+                )
+                self.assertEqual(logged.read(), b'{"result":"ok"}')
+                logged.close()
+
+            rows = logger.connection.execute(
+                "SELECT event_type, content_id, payload_json FROM timeline "
+                "WHERE turn_id = ? ORDER BY event_id", (turn_id,),
+            ).fetchall()
+            request_event = next(row for row in rows if row[0] == "http_request_started")
+            started = json.loads(request_event[2])
+            self.assertEqual(started["request_payload_content_id"], request_event[1])
+            self.assertEqual(logger.connection.execute(
+                "SELECT content_text FROM contents WHERE content_id = ?",
+                (request_event[1],),
+            ).fetchone()[0], '{"prompt": "hello"}')
+            self.assertEqual(started["request_headers"]["Authorization"], "[REDACTED]")
+            body_event = next(row for row in rows if row[0] == "http_response_payload")
+            self.assertEqual(logger.connection.execute(
+                "SELECT content_text FROM contents WHERE content_id = ?", (body_event[1],)
+            ).fetchone()[0], '{"result":"ok"}')
+            self.assertNotIn("do-not-log", repr([row[2] for row in rows]))
+            logger.close()
+
+    def test_sse_stream_records_timing_and_respects_logging_mode(self):
+        from peforth import ai_bridge
+
+        raw_lines = [
+            b'data: {"type":"agent.session.turn.output_text.delta","delta":"Hi"}\n',
+            b"\n", b": keepalive\n", b"\n", b"data: [DONE]\n", b"\n",
+        ]
+
+        class FakeResponse:
+            def __init__(self):
+                self.closed = False
+
+            def __iter__(self):
+                return iter(raw_lines)
+
+            def close(self):
+                self.closed = True
+
+        for mode in ("normal", "verbose"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+                runtime_id = logger.start_runtime(process_id=507)
+                turn_id = logger.start_turn(runtime_id)
+                diagnostic = {
+                    "logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                    "mode": mode,
+                }
+                response = FakeResponse()
+                events = list(ai_bridge._event_stream(
+                    response, diagnostic=diagnostic, operation="create_session",
+                ))
+
+                self.assertEqual(events, [{"type": "agent.session.turn.output_text.delta", "delta": "Hi"}])
+                rows = logger.connection.execute(
+                    "SELECT event_type, content_id, payload_json FROM timeline "
+                    "WHERE turn_id = ? ORDER BY event_id", (turn_id,),
+                ).fetchall()
+                event_types = [row[0] for row in rows]
+                self.assertIn("sse_event_received", event_types)
+                self.assertIn("sse_heartbeat_received", event_types)
+                self.assertIn("sse_done_received", event_types)
+                self.assertIn("sse_stream_ended", event_types)
+                self.assertIn("sse_stream_closed", event_types)
+                delta = next(json.loads(row[2]) for row in rows
+                             if row[0] == "sse_event_received")
+                self.assertEqual((delta["delta_length"], delta["output_length"]), (2, 2))
+                self.assertEqual("delta" in delta, mode == "verbose")
+                line_rows = [row for row in rows if row[0] == "sse_line_received"]
+                self.assertEqual(bool(line_rows), mode == "verbose")
+                if line_rows:
+                    self.assertIsNotNone(line_rows[0][1])
+                    raw_line = logger.connection.execute(
+                        "SELECT content_text FROM contents WHERE content_id = ?",
+                        (line_rows[0][1],),
+                    ).fetchone()[0]
+                    self.assertIn('"delta":"Hi"', raw_line)
+                self.assertTrue(response.closed)
+                logger.close()
+
+    def test_live_ai_turn_wires_http_and_sse_diagnostics(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=506)
+            self.vm.host["diagnostic_log"] = logger
+            self.vm.host["diagnostic_runtime_id"] = runtime_id
+            self.vm.host["diagnostic_log_mode"] = "normal"
+            stream_events = [
+                {"type": "agent.session.created", "session": {"id": "sess_live"}},
+                {"type": "agent.session.turn.output_text.delta", "delta": "Hello"},
+                {"type": "agent.session.turn.output_text.done", "text": "Hello"},
+                {"type": "agent.session.turn.completed"},
+            ]
+            raw_lines = []
+            for event in stream_events:
+                raw_lines.extend((b"data: " + json.dumps(event).encode() + b"\n", b"\n"))
+
+            class FakeResponse:
+                status = 201
+                headers = {"x-request-id": "live-provider-req"}
+
+                def __init__(self):
+                    self.closed = False
+
+                def __iter__(self):
+                    return iter(raw_lines)
+
+                def close(self):
+                    self.closed = True
+
+            response = FakeResponse()
+            with patch.object(ai_bridge, "load_dotenv"), \
+                    patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                    patch.dict(os.environ, {"OPENAI_API_KEY": "test-only"}), \
+                    patch.object(ai_bridge.urllib.request, "urlopen", return_value=response), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.vm.push("Say hello")
+                self.vm.push(False)
+                self.vm.dictate("(ai)")
+
+            turn = logger.connection.execute(
+                "SELECT turn_id, remote_session_id, status FROM turns"
+            ).fetchone()
+            self.assertEqual(tuple(turn[1:]), ("sess_live", "completed"))
+            rows = logger.connection.execute(
+                "SELECT event_type, session_id, http_method, url, http_status, "
+                "provider_request_id, payload_json FROM timeline WHERE turn_id = ? ORDER BY event_id",
+                (turn[0],),
+            ).fetchall()
+            event_types = [row[0] for row in rows]
+            self.assertIn("http_request_started", event_types)
+            self.assertIn("sse_opened", event_types)
+            self.assertIn("sse_event_received", event_types)
+            self.assertIn("sse_stream_closed", event_types)
+            self.assertEqual(next(row[5] for row in rows if row[0] == "http_response_received"),
+                             "live-provider-req")
+            session_event = next(row for row in rows if row[0] == "sse_event_received")
+            self.assertEqual(session_event[1], "sess_live")
+            http_closed = next(row for row in rows if row[0] == "http_request_closed")
+            self.assertEqual(http_closed[1], "sess_live")
+            self.assertFalse(any(row[0] == "sse_line_received" for row in rows))
+            self.assertTrue(response.closed)
+            logger.close()
+
     def test_ai_turn_records_prompt_and_completed_output(self):
         with tempfile.TemporaryDirectory() as directory:
             logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
@@ -1063,7 +1335,7 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.host["diagnostic_log"] = logger
             self.vm.host["diagnostic_runtime_id"] = runtime_id
 
-            def fake_create(payload):
+            def fake_create(payload, *, diagnostic=None):
                 yield {"type": "agent.session.created", "session": {"id": "sess_diag"}}
                 yield {"type": "agent.session.turn.output_text.delta", "delta": "Hello"}
                 yield {"type": "agent.session.turn.output_text.done", "text": "Hello"}
@@ -1106,7 +1378,7 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.host["diagnostic_log"] = logger
             self.vm.host["diagnostic_runtime_id"] = runtime_id
 
-            def fake_create(payload):
+            def fake_create(payload, *, diagnostic=None):
                 yield {"type": "agent.session.created", "session": {"id": "sess_partial"}}
                 yield {"type": "agent.session.turn.output_text.delta", "delta": "Part"}
                 raise RuntimeError("stream broke")
@@ -1138,7 +1410,7 @@ class ReplBootstrapTests(unittest.TestCase):
         self.vm.host["diagnostic_log"] = FailingDiagnosticLog()
         self.vm.host["diagnostic_runtime_id"] = "runtime-test"
 
-        def fake_create(payload):
+        def fake_create(payload, *, diagnostic=None):
             yield {"type": "agent.session.created", "session": {"id": "sess_error"}}
             raise RuntimeError("Agents API failed")
 
@@ -1153,7 +1425,7 @@ class ReplBootstrapTests(unittest.TestCase):
                 self.vm.dictate("(ai)")
 
     def test_stack_ai_word_returns_assistant_text(self):
-        def fake_create(payload):
+        def fake_create(payload, *, diagnostic=None):
             yield {"type": "agent.session.created", "session": {"id": "sess_stack"}}
             yield {"type": "agent.session.turn.output_text.delta", "delta": "Hello"}
             yield {"type": "agent.session.turn.output_text.done", "text": "Hello"}

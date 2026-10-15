@@ -254,7 +254,8 @@ code (ai)
     if session_id:
         diagnostic_turn_id = ai_bridge._diagnostic_start_turn(vm, prompt, session_id=session_id)
         ai_bridge._diagnostic_update_session(vm, diagnostic_turn_id, session_id)
-        events = ai_bridge._stream(session_id, message)
+        diagnostic_context = ai_bridge._diagnostic_context(vm, diagnostic_turn_id)
+        events = ai_bridge._stream(session_id, message, diagnostic=diagnostic_context)
     else:
         yield from vm.call(vm.tick("system_info"))
         runtime_info = vm.pop()
@@ -296,8 +297,9 @@ code (ai)
         diagnostic_turn_id = ai_bridge._diagnostic_start_turn(
             vm, prompt, instructions=instructions
         )
+        diagnostic_context = ai_bridge._diagnostic_context(vm, diagnostic_turn_id)
         try:
-            events = ai_bridge._create_session(payload)
+            events = ai_bridge._create_session(payload, diagnostic=diagnostic_context)
         except Exception as exc:
             output_status = "partial" if answer else "failed_before_output"
             ai_bridge._diagnostic_finish_turn(
@@ -338,7 +340,9 @@ code (ai)
                     ai_started = False
                     ai_line_start = True
             elif kind == "agent.session.requires_action":
-                session_status, actions = ai_bridge._current_actions(session_id)
+                session_status, actions = ai_bridge._current_actions(
+                    session_id, diagnostic=diagnostic_context
+                )
                 if session_status != "requires_action":
                     raise RuntimeError(
                         f"Agents API signaled required action but session status is {session_status!r}."
@@ -362,8 +366,11 @@ code (ai)
                                                 "immediate": bool(word.immediate)})
                             if len(matches) >= 30:
                                 break
-                        ai_bridge._tool_result(session_id, action, True,
-                                               json.dumps(matches, ensure_ascii=False))
+                        ai_bridge._tool_result(
+                            session_id, action, True,
+                            json.dumps(matches, ensure_ascii=False),
+                            diagnostic=diagnostic_context,
+                        )
                     elif name == "peforth_run_forth":
                         proposal = {"kind": "approval", "action": action,
                                     "source": str(arguments.get("source", "")),
@@ -382,7 +389,9 @@ code (ai)
                             else:
                                 approved = bool(approval)
                         if approved:
-                            status, still_pending = ai_bridge._current_actions(session_id)
+                            status, still_pending = ai_bridge._current_actions(
+                                session_id, diagnostic=diagnostic_context
+                            )
                             if status != "requires_action" or not any(
                                     pending.get("call_id") == action.get("call_id")
                                     for pending in still_pending):
@@ -392,7 +401,10 @@ code (ai)
                                 )
                             execution = ai_bridge._run(vm, proposal["source"])
                             try:
-                                ai_bridge._tool_result(session_id, action, True, execution)
+                                ai_bridge._tool_result(
+                                    session_id, action, True, execution,
+                                    diagnostic=diagnostic_context,
+                                )
                             except Exception as exc:
                                 raise RuntimeError(
                                     "The approved Forth program has already run locally, but the Agents API "
@@ -400,11 +412,17 @@ code (ai)
                                     f"Execution result: {execution}"
                                 ) from None
                         else:
-                            ai_bridge._tool_result(session_id, action, False,
-                                                   error="User declined execution.")
+                            ai_bridge._tool_result(
+                                session_id, action, False,
+                                error="User declined execution.",
+                                diagnostic=diagnostic_context,
+                            )
                     else:
-                        ai_bridge._tool_result(session_id, action, False,
-                                               error=f"Unknown function: {name}")
+                        ai_bridge._tool_result(
+                            session_id, action, False,
+                            error=f"Unknown function: {name}",
+                            diagnostic=diagnostic_context,
+                        )
             elif kind in ("error", "agent.session.failed", "agent.session.environment.failed",
                           "agent.session.turn.failed"):
                 detail = event.get("error") or event.get("turn", {}).get("error") or event
