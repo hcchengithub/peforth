@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """peforth v2 AI-first Forth REPL."""
 
+import atexit
 import os
 import platform
 import re
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from . import ai_bridge, ai_tools
 from .projectk import VM, ForthError
+from .diagnostic_log import DiagnosticLog
 
 RUNTIME_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_PATH = Path(__file__).resolve().parent
@@ -235,11 +237,64 @@ def _detect_system_info():
     }
 
 
+def _diagnostic_log_mode() -> str:
+    mode = os.environ.get("PEFORTH_AI_LOG_MODE", "normal").strip().casefold()
+    if mode not in {"disabled", "normal", "verbose"}:
+        raise ValueError("PEFORTH_AI_LOG_MODE must be disabled, normal, or verbose")
+    return mode
+
+
+def _diagnostic_environment(system_info: dict) -> str:
+    if os.name == "nt":
+        return "windows"
+    if (system_info.get("wsl") or {}).get("active"):
+        return "wsl"
+    raise RuntimeError("AI diagnostics supports Windows and WSL runtimes only")
+
+
+def _close_diagnostic_log(logger: DiagnosticLog, runtime_id: str | None = None) -> None:
+    if runtime_id is not None:
+        try:
+            logger.finish_runtime(runtime_id)
+        except Exception as exc:
+            print(f"Could not finish AI diagnostic runtime: {exc}", file=sys.stderr)
+    try:
+        logger.close()
+    except Exception as exc:
+        print(f"Could not close AI diagnostic log: {exc}", file=sys.stderr)
+
+
 def create_vm(base_file: str | None = None) -> VM:
     ai_bridge.load_dotenv()
     system_info = _detect_system_info()
+    diagnostic_mode = _diagnostic_log_mode()
+    config = system_info.setdefault("config", {})
+    config["PEFORTH_AI_LOG_MODE"] = diagnostic_mode
+    diagnostic_log = None
+    diagnostic_runtime_id = None
+    if diagnostic_mode != "disabled":
+        try:
+            environment = _diagnostic_environment(system_info)
+            database_path = ai_bridge._runtime_config_path() / "ai-diagnostics.sqlite3"
+            diagnostic_log = DiagnosticLog(database_path, environment=environment)
+            diagnostic_runtime_id = diagnostic_log.start_runtime(
+                source_path=system_info.get("source_path"),
+                runtime_path=system_info.get("runtime_path"),
+                runtime_version=system_info.get("python", {}).get("version"),
+            )
+            atexit.register(_close_diagnostic_log, diagnostic_log, diagnostic_runtime_id)
+        except Exception as exc:
+            if diagnostic_log is not None:
+                _close_diagnostic_log(diagnostic_log)
+            diagnostic_log = None
+            diagnostic_runtime_id = None
+            print(f"AI diagnostics unavailable: {exc}", file=sys.stderr)
     vm = VM(host={"Constant": Constant, "Value": Value, "ForthError": ForthError,
              "system_info": system_info})
+    vm.host["diagnostic_log_mode"] = diagnostic_mode
+    if diagnostic_log is not None:
+        vm.host["diagnostic_log"] = diagnostic_log
+        vm.host["diagnostic_runtime_id"] = diagnostic_runtime_id
     vm.host.update(FORTH_HOST_MODULES)
     vm.host.update({
         "vm": vm,

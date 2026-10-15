@@ -6,7 +6,9 @@ import io
 import json
 import os
 import re
+import sys
 import tempfile
+import uuid
 from contextlib import redirect_stderr, redirect_stdout
 import urllib.error
 import urllib.parse
@@ -287,6 +289,75 @@ def _session_id_from_event(event):
 
 def _saved_session(vm):
     return vm.host.get("ai_active_session_id") or ""
+
+
+def _diagnostic_start_turn(vm, prompt, *, instructions=None, session_id=None):
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None:
+        return None
+    try:
+        prompt_content_id = logger.store_content("prompt", prompt)
+        instructions_content_id = (
+            logger.store_content("agent_instructions", instructions)
+            if instructions is not None else None
+        )
+        turn_id = str(uuid.uuid4())
+        logger.start_turn(
+            runtime_id, prompt_content_id=prompt_content_id,
+            instructions_content_id=instructions_content_id,
+            remote_session_id=session_id, turn_id=turn_id,
+        )
+        logger.append_event(
+            runtime_id, turn_id, "ai_turn_started", session_id=session_id,
+            payload={"stream": True},
+        )
+        return turn_id
+    except Exception as exc:
+        print(f"AI diagnostic write failed: {exc}", file=sys.stderr)
+        return None
+
+
+def _diagnostic_update_session(vm, turn_id, session_id, *, created=False):
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None or turn_id is None:
+        return
+    try:
+        logger.set_turn_session(turn_id, session_id)
+        logger.append_event(
+            runtime_id, turn_id,
+            "ai_session_created" if created else "ai_session_selected",
+            session_id=session_id,
+        )
+    except Exception as exc:
+        print(f"AI diagnostic write failed: {exc}", file=sys.stderr)
+
+
+def _diagnostic_finish_turn(vm, turn_id, output_text, *, output_status, status, error=None):
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None or turn_id is None:
+        return
+    try:
+        logger.finish_turn(
+            turn_id, output_text=output_text, output_status=output_status,
+            status=status,
+            error_type=type(error).__name__ if error is not None else None,
+            error_message=str(error) if error is not None else None,
+        )
+        event_type = {
+            "completed": "ai_turn_completed",
+            "cancelled": "ai_turn_cancel_requested",
+        }.get(status, "ai_turn_failed")
+        logger.append_event(
+            runtime_id, turn_id, event_type,
+            session_id=vm.host.get("ai_active_session_id"),
+            error_type=type(error).__name__ if error is not None else None,
+            error_message=str(error) if error is not None else None,
+        )
+    except Exception as exc:
+        print(f"AI diagnostic write failed: {exc}", file=sys.stderr)
 
 
 def cancel_turn(vm):

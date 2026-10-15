@@ -2,92 +2,115 @@
 
 ## 目標
 
-為 peforth 的 AI transport、SSE stream、tool call 與 approval flow 建立可供 debug 的診斷記錄，讓多個 runtime instance 可以同時寫入並在事後重建事件時序。
+為 peforth 的 AI transport、SSE stream、tool call 與 approval flow 建立可查詢的診斷記錄，支援多個 runtime 同時執行，並能重建每次 AI request 的完整 output 與事件時序。
 
-Windows 與 WSL 各自使用 SQLite database，不使用一般文字 log file。
-
-本計劃只定義 logging 的資料模型、寫入方式、事件內容與驗證方式；不在本階段修正 timeout、`in_progress` race 或其他 runtime bug。
+Windows 與 WSL 各自使用一個 SQLite database：同一 environment 的所有 runtime 共用該 environment 的 database；Windows 與 WSL 不共用 live database。
 
 ---
 
-## 1. 設計決策
+## 1. 名詞與儲存範圍
 
-### 1.1 Windows 與 WSL 分開儲存
+### 1.1 Runtime
 
-建立兩個 execution environment 各自管理的 SQLite log database：
+`runtime` 指一個 peforth application process。每個 runtime 啟動時產生一個固定的 `runtime_id`，直到該 process 結束。
 
-- Windows runtime：寫入 Windows 使用者的 peforth config directory
-- WSL runtime：寫入 WSL 使用者的 peforth config directory
+同一 environment 可以同時存在多個 runtime。所有 Windows runtime 寫入 Windows database；所有 WSL runtime 寫入 WSL database。
 
-預設位置沿用目前的 `PEFORTH_CONFIG_DIR`；例如：
+Remote Agents API session ID 不取代 `runtime_id`。一個 runtime 可能使用多個 remote session，多個 runtime 也可能使用同一個 remote session。
+
+### 1.2 Database 位置
+
+沿用 `PEFORTH_CONFIG_DIR`；未設定時使用各 environment 的預設 peforth config directory：
 
 ```text
 Windows: %USERPROFILE%\\.peforth\\ai-diagnostics.sqlite3
 WSL:     ~/.peforth/ai-diagnostics.sqlite3
 ```
 
-若設定 `PEFORTH_CONFIG_DIR`，database 放在該 directory 下。不要讓 Windows 與 WSL 共用同一個 mounted database file，避免跨 OS SQLite locking、filesystem semantics 與同步問題。
+同一 environment 的所有 runtime 寫入同一個 database。Windows database 與 WSL database 分開；跨 environment 比較時使用 read-only 查詢或複製後分析。
 
-跨 environment 比較時，透過 database export、SQLite attach/read-only 或複製後分析，不在 runtime 期間共用 database。
+---
 
-### 1.2 多 instance 共用同一個 environment database
+## 2. 記錄原則
 
-同一台 Windows 或同一個 WSL environment 內的多個 peforth process 寫入同一個 SQLite database。
+1. 每次 AI turn 都保留一筆 occurrence，即使 prompt 或 output 與其他 turn 完全相同。
+2. 完整文字內容以 hash 去重，同一內容只在 `contents` 保存一次。
+3. Prompt、instructions、tool arguments、tool result、output 與 partial output 都保存完整內容。
+4. SSE timeline 記錄事件與時間，但不保存每次累積 output 的副本。
+5. Runtime 維護 output accumulator；AI turn 結束或失敗時保存當時完整 output，若中途 timeout 則保存已收到的 partial output。
+6. 正常與 verbose logging 都保存完整 prompt、instructions、tool content、final output 與 partial output；兩者差異只在串流中間事件的詳細程度。
+7. 每筆資料即時寫入 SQLite，不等待 runtime 結束。
+8. Logging 每次寫入有明確的最大等待時間，不得無界阻塞 SSE reader 或 AI flow。
+9. Logging 不得覆蓋原本的 AI、network、SSE 或 Forth error。
 
-SQLite 只允許一個 writer，但會序列化短時間 transaction；每個 event 使用獨立、短小的 insert transaction，不讓 network read、approval wait 或其他長操作包在 database transaction 內。
+---
 
-啟用：
+## 3. Content 去重
+
+### 3.1 `contents` table
+
+完整文字只保存一次；同一 `content_type` 與 hash 只建立一筆資料。
 
 ```sql
-PRAGMA journal_mode = WAL;
-PRAGMA busy_timeout = 5000;
-PRAGMA synchronous = NORMAL;
+CREATE TABLE IF NOT EXISTS contents (
+    content_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_hash TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    content_text TEXT NOT NULL,
+    content_size INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(content_type, content_hash)
+);
 ```
 
-啟動時應設定並驗證這些 pragma。讀取診斷資料時使用 read-only connection 或一般獨立 connection，不阻塞 runtime writer。
+`content_type` 至少支援：
 
-### 1.3 不限制診斷內容
+```text
+prompt
+agent_instructions
+output
+partial_output
+tool_arguments
+tool_result
+forth_source
+forth_stdout
+forth_stderr
+```
 
-本診斷 database 的目標是保留完整 debug 現場。第一版不對 prompt、tool arguments、request/response body、錯誤內容或其他欄位做敏感資訊刪除、遮罩或摘要化。
+### 3.2 去重寫入
 
-仍須保留資料型別與長度界線，避免單一異常 response 無限制佔用 database；這是穩定性與可查詢性的限制，不是資訊洩漏政策。
-
----
-
-## 2. Instance identity
-
-每個 peforth process 啟動時建立一個 `instance_id`，在該 process 生命週期內固定不變。
-
-每筆 log 至少包含：
-
-- `instance_id`：process 唯一識別值，建議 UUID
-- `process_id`
-- `parent_process_id`（若可取得）
-- `environment`：`windows` 或 `wsl`
-- `os_name`
-- `hostname`
-- `username`
-- `working_directory`
-- `source_path`
-- `runtime_path`
-- `runtime_version` 或 git revision（若可取得）
-- `process_started_at`
-
-`instance_id` 不使用 remote Agents API session ID 取代。多個 local process 可能使用同一個 remote session，而同一個 process 也可能在不同時間使用不同 remote session。
-
-SQLite database 內保留 `instances` table，讓 event 可透過 `instance_id` 還原來源。
-
----
-
-## 3. Database schema
-
-### 3.1 `instances`
-
-記錄每一個 runtime process。
+使用 SQLite unique constraint 處理多 runtime 同時寫入相同內容：
 
 ```sql
-CREATE TABLE IF NOT EXISTS instances (
-    instance_id TEXT PRIMARY KEY,
+INSERT INTO contents
+    (content_hash, content_type, content_text, content_size, created_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(content_type, content_hash) DO NOTHING;
+```
+
+insert-or-ignore 後取得既有的 `content_id`，再由 occurrence row reference 該 ID。整個流程使用短 transaction。
+
+### 3.3 Occurrence 與 Content 的區別
+
+相同 prompt 只保存一份文字，但每次實際送出仍建立不同的 turn：
+
+```text
+turn A -> prompt_content_id = 12
+turn B -> prompt_content_id = 12
+turn C -> prompt_content_id = 12
+```
+
+三個 turn 的 runtime、remote session、時間、狀態與 output 仍可不同。
+
+---
+
+## 4. Database schema
+
+### 4.1 `runtimes`
+
+```sql
+CREATE TABLE IF NOT EXISTS runtimes (
+    runtime_id TEXT PRIMARY KEY,
     process_id INTEGER NOT NULL,
     parent_process_id INTEGER,
     environment TEXT NOT NULL,
@@ -99,149 +122,162 @@ CREATE TABLE IF NOT EXISTS instances (
     runtime_path TEXT,
     runtime_version TEXT,
     git_revision TEXT,
-    process_started_at TEXT NOT NULL,
-    process_finished_at TEXT,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
     exit_status TEXT,
     metadata_json TEXT
 );
 ```
 
-`environment` 僅允許目前定義的值：
+`environment` 的值為 `windows` 或 `wsl`。
 
-```text
-windows
-wsl
-```
+### 4.2 `turns`
 
-### 3.2 `operations`
-
-記錄一次可追蹤的高階 operation，例如一次 AI turn、一次 API request 或一次 SSE stream。
+每次 AI prompt/response 為一筆 occurrence。
 
 ```sql
-CREATE TABLE IF NOT EXISTS operations (
-    operation_id TEXT PRIMARY KEY,
-    instance_id TEXT NOT NULL,
-    parent_operation_id TEXT,
-    operation_type TEXT NOT NULL,
-    started_at TEXT NOT NULL,
-    ended_at TEXT,
-    started_monotonic_ns INTEGER NOT NULL,
-    ended_monotonic_ns INTEGER,
-    status TEXT,
+CREATE TABLE IF NOT EXISTS turns (
+    turn_id TEXT PRIMARY KEY,
+    runtime_id TEXT NOT NULL,
     remote_session_id TEXT,
     remote_turn_id TEXT,
-    request_id TEXT,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    prompt_content_id INTEGER,
+    instructions_content_id INTEGER,
+    output_content_id INTEGER,
+    output_status TEXT,
+    status TEXT,
     error_type TEXT,
     error_message TEXT,
     metadata_json TEXT,
-    FOREIGN KEY (instance_id) REFERENCES instances(instance_id),
-    FOREIGN KEY (parent_operation_id) REFERENCES operations(operation_id)
+    FOREIGN KEY (runtime_id) REFERENCES runtimes(runtime_id),
+    FOREIGN KEY (prompt_content_id) REFERENCES contents(content_id),
+    FOREIGN KEY (instructions_content_id) REFERENCES contents(content_id),
+    FOREIGN KEY (output_content_id) REFERENCES contents(content_id)
 );
 ```
 
-建議的 `operation_type`：
+`output_status` 的值為：
 
-- `ai_turn`
-- `http_request`
-- `sse_stream`
-- `tool_call`
-- `approval_wait`
-- `local_forth_execution`
+```text
+complete
+partial
+empty
+failed_before_output
+```
 
-### 3.3 `events`
+`turn.status` 的值為：
 
-事件表是主要的 append-only timeline。
+```text
+completed
+failed
+partial
+cancelled
+```
+
+只有收到 `turn.completed` 且 stream 正常結束時，`turn.status` 才可為 `completed`。
+
+### 4.3 `timeline`
+
+記錄每個 turn 的事件；大型完整文字透過 `content_id` reference 保存，不在每個 event 重複嵌入。
 
 ```sql
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS timeline (
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    instance_id TEXT NOT NULL,
-    operation_id TEXT,
+    runtime_id TEXT NOT NULL,
+    turn_id TEXT,
     recorded_at TEXT NOT NULL,
     monotonic_ns INTEGER NOT NULL,
     sequence_no INTEGER NOT NULL,
     event_type TEXT NOT NULL,
-    direction TEXT,
-    remote_session_id TEXT,
+    session_id TEXT,
     remote_turn_id TEXT,
     call_id TEXT,
-    event_name TEXT,
+    operation TEXT,
     http_method TEXT,
     url TEXT,
     http_status INTEGER,
+    local_request_id TEXT,
+    provider_request_id TEXT,
     elapsed_ms REAL,
+    content_id INTEGER,
     payload_json TEXT,
     error_type TEXT,
     error_message TEXT,
-    FOREIGN KEY (instance_id) REFERENCES instances(instance_id),
-    FOREIGN KEY (operation_id) REFERENCES operations(operation_id)
+    FOREIGN KEY (runtime_id) REFERENCES runtimes(runtime_id),
+    FOREIGN KEY (turn_id) REFERENCES turns(turn_id),
+    FOREIGN KEY (content_id) REFERENCES contents(content_id)
 );
 ```
 
-`sequence_no` 由每個 instance 在 memory 中遞增；database 的 `event_id` 則提供跨 instance 的 SQLite insertion order。分析時主要依 `recorded_at`、`monotonic_ns`、`event_id` 與 instance identity 判斷，不把不同 process 的 monotonic clock 直接互相比較。
+### 4.4 Schema version 與 indexes
 
-### 3.4 常用 indexes
+使用 SQLite `PRAGMA user_version` 管理 schema version。啟動時依序執行向前 migration；migration 失敗時不得以未完成 schema 繼續寫入，並將錯誤回報給 runtime。
+
+每一條 SQLite connection 建立後都必須設定：
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_events_instance_time
-    ON events(instance_id, recorded_at, event_id);
+PRAGMA foreign_keys = ON;
+```
 
-CREATE INDEX IF NOT EXISTS idx_events_operation_time
-    ON events(operation_id, recorded_at, event_id);
+建立 indexes：
 
-CREATE INDEX IF NOT EXISTS idx_events_session_time
-    ON events(remote_session_id, recorded_at, event_id);
-
-CREATE INDEX IF NOT EXISTS idx_events_type_time
-    ON events(event_type, recorded_at, event_id);
-
-CREATE INDEX IF NOT EXISTS idx_operations_instance_time
-    ON operations(instance_id, started_at, operation_id);
+```sql
+CREATE INDEX IF NOT EXISTS idx_turns_runtime_time
+    ON turns(runtime_id, started_at, turn_id);
+CREATE INDEX IF NOT EXISTS idx_turns_session_time
+    ON turns(remote_session_id, started_at, turn_id);
+CREATE INDEX IF NOT EXISTS idx_timeline_runtime_time
+    ON timeline(runtime_id, recorded_at, event_id);
+CREATE INDEX IF NOT EXISTS idx_timeline_turn_time
+    ON timeline(turn_id, recorded_at, event_id);
+CREATE INDEX IF NOT EXISTS idx_timeline_session_time
+    ON timeline(session_id, recorded_at, event_id);
+CREATE INDEX IF NOT EXISTS idx_timeline_type_time
+    ON timeline(event_type, recorded_at, event_id);
 ```
 
 ---
 
-## 4. Timestamp 規則
+## 5. Timestamp 與 identity
 
-每筆 record 同時保存兩種時間：
+每筆 runtime、turn 與 timeline record 保存：
 
-### 4.1 Wall-clock time
+- timezone-aware ISO 8601 wall-clock time
+- runtime 內用於計算 elapsed time 的 `monotonic_ns`
+- `runtime_id`、`process_id` 與 `environment`
+- `remote_session_id`、`remote_turn_id`、`call_id`
 
-`recorded_at`、`started_at`、`ended_at` 使用 timezone-aware ISO 8601 字串，保留 offset。
-
-用途：
-
-- 跨 process、跨 Windows/WSL database 比較
-- 人類閱讀
-- 對照外部 API 或 terminal 時間
-
-### 4.2 Monotonic time
-
-`monotonic_ns` 使用 process 內的 monotonic clock。
-
-用途：
-
-- 計算 request、stream、approval wait 的 elapsed time
-- 避免系統時間調整造成 duration 錯誤
-
-跨 process 不直接比較 monotonic value；跨 environment 的排序以 wall-clock 與 database event ordering 為主。
+不同 runtime 的 `monotonic_ns` 不直接互相比較；跨 runtime 排序使用 wall-clock、`event_id` 與 runtime identity。
 
 ---
 
-## 5. 必須記錄的事件
+## 6. 必須記錄的事件
 
-### 5.1 Process lifecycle
+### 6.1 Runtime lifecycle
 
 ```text
-instance_started
-instance_finished
+runtime_started
+runtime_finished
 ```
 
-`instance_started` 必須在任何 AI request 前寫入；`instance_finished` 應在正常退出時寫入。異常退出無法保證寫入，因此分析工具必須能依未結束 instance 判斷可能是 crash 或強制終止。
+沒有 `runtime_finished` 的 runtime 視為可能異常終止或尚未結束。
 
-### 5.2 HTTP request
+### 6.2 AI turn
 
-每次 `_request()` 建立或完成 request 時記錄：
+```text
+ai_turn_started
+ai_session_selected
+ai_session_created
+ai_turn_completed
+ai_turn_failed
+ai_turn_cancel_requested
+```
+
+`ai_turn_started` reference prompt 與 instructions content；完成或失敗時 reference final/partial output content。
+
+### 6.3 HTTP request
 
 ```text
 http_request_started
@@ -250,30 +286,22 @@ http_request_failed
 http_request_closed
 ```
 
-欄位至少包含：
+記錄 method、URL/path、stream flag、status、elapsed time、headers、request/response payload，以及 `local_request_id` 與 API response 提供的 `provider_request_id`（若有）。每筆 request 應 reference 對應的 turn 或 timeline operation。
 
-- operation ID
-- parent operation ID
-- HTTP method
-- URL/path
-- `stream` flag
-- response status
-- request start/end time
-- elapsed time
-- exception type/message
-- response headers（若取得）
-- request/response payload
+### 6.4 SSE stream
 
-Authorization credential 不需在 logging 層特別遮罩；payload 與 headers 的保存規則依本計劃採完整診斷記錄。
+Logging mode 有兩種：
 
-### 5.3 SSE stream
+- `normal`：記錄 SSE event type、timestamp、session/turn/call ID、delta length、累積 output length、read timing、錯誤與完整 final/partial output。
+- `verbose`：在 `normal` 之上記錄 raw SSE line、完整 delta、詳細 headers 與 request/response payload。
+
+兩種 mode 都保存完整 prompt、instructions、tool content、final output 與 partial output。`verbose` 只增加串流中間資料，不改變 turn 的完整內容保存契約。
 
 每個 SSE stream 記錄：
 
 ```text
 sse_open_started
 sse_opened
-sse_bytes_received
 sse_line_received
 sse_event_received
 sse_heartbeat_received
@@ -282,40 +310,29 @@ sse_stream_failed
 sse_stream_closed
 ```
 
-` sse_bytes_received` 不必每個 byte 一筆 row；以每次 `readline()` 或每個完整 raw line 為一筆即可。
+reader 是逐行或逐 buffer 取得資料，因此第一版只宣稱：
 
-每個 stream event 至少保留：
+- `last_read_at`：最後一次從 response iterator 取得 raw line/buffer 的時間。
+- `last_event_at`：最後一次解析出完整 SSE event 的時間。
 
-- raw line 或完整 SSE data block
-- parsed event type
-- session ID
-- turn ID
-- call ID
-- received timestamp
-- bytes/line length
-- accumulated event count
-- since-last-byte milliseconds
-- since-last-event milliseconds
+不宣稱 application layer 能精確觀察最後一個 socket byte 的時間。
 
-這是 PowerShell timeout investigation 的核心資料。
+每個 SSE event 記錄 event type、session/turn/call ID、timestamp、length，以及 since-last-read 和 since-last-event elapsed time。verbose mode 另保存 raw SSE data 或 parsed payload。
 
-### 5.4 AI turn
+不保存每次 output delta 的完整累積文字；完整 output 在 turn record 的 `output_content_id` 保存一次。可記錄每次 delta 的長度與累積長度。
+
+### 6.5 AI output
 
 ```text
-ai_turn_started
-ai_session_selected
-ai_session_created
-ai_turn_output_delta
-ai_turn_output_done
-ai_requires_action_received
-ai_turn_completed
-ai_turn_failed
-ai_turn_cancel_requested
+ai_output_delta
+ai_output_done
 ```
 
-`ai_turn_output_delta` 可逐 delta 記錄完整內容；不應只記最後累積字串，否則無法知道最後一次 output 的時間。
+Runtime 必須維護 output accumulator。`ai_output_delta` 在 normal mode 保存時間、delta 長度與累積長度；verbose mode 可保存完整 delta。`ai_output_done` 或 turn failure 時保存完整 accumulated output。
 
-### 5.5 Tool call
+若 stream 在 `turn.completed` 前 EOF、timeout、network error、parser error 或其他 exception 結束，不得標記 turn 為成功；應保存目前 accumulator 並標示 `partial` 或相應 failure status。
+
+### 6.6 Tool call
 
 ```text
 tool_call_received
@@ -327,38 +344,22 @@ tool_result_submitted
 tool_result_submit_failed
 ```
 
-至少包含：
+完整 arguments、local result 與 result submission response 透過 `contents` 或 `payload_json` 保存，並保留 tool name、session ID、turn ID、call ID。
 
-- tool name
-- arguments
-- call ID
-- turn ID
-- session ID
-- local execution operation ID
-- result
-- result submission response
-
-### 5.6 Approval flow
+### 6.7 Approval
 
 ```text
 approval_requested
 approval_wait_started
 approval_decision_received
 approval_wait_ended
-approval_expired
 approval_cancelled
+approval_expired
 ```
 
-至少包含：
+保存 proposal purpose、Forth source、decision、session/turn/call ID 與 approval wait duration。Forth source 可 reference `contents`。
 
-- AI Task identity
-- session/turn/call ID
-- proposal purpose
-- proposed Forth source
-- decision：`allow_once`、`trust_task`、`deny`、`cancel`
-- approval wait duration
-
-### 5.7 Local Forth execution
+### 6.8 Local Forth execution
 
 ```text
 forth_execution_started
@@ -366,323 +367,180 @@ forth_execution_completed
 forth_execution_failed
 ```
 
-記錄 source、stdout、stderr、stack snapshot、Task status 與 elapsed time。
+保存 source、stdout、stderr、stack snapshot、Task status 與 elapsed time。大型文字使用 `contents` 去重。
 
 ---
 
-## 6. 兩個目前 debug case 的必要查詢能力
+## 7. 兩個 debug case 的查詢需求
 
-### 6.1 PowerShell SSE read timeout
+### 7.1 PowerShell SSE read timeout
 
-分析查詢必須能依 instance 與 operation 顯示：
+依 `runtime_id` 與 `turn_id` 顯示 runtime start、AI turn start、HTTP request、SSE events、最後 output delta、stream failure 與 AI turn failure。
 
-```text
-instance_started
-ai_turn_started
-sse_opened
-所有 sse_event_received
-最後 sse_bytes_received
-最後 sse_event_received
-approval_wait_started / ended（若有）
-sse_stream_failed
-ai_turn_failed
-```
+報告至少包含：runtime、process、environment、remote session、turn、stream start、last byte、last event、failure time、idle durations、exception type/message、output status 與 output content reference。
 
-最重要的報告欄位：
+`output_content_id` 必須能還原 timeout 前已收到的完整 partial output。
+
+### 7.2 WSL `requires_action` / `in_progress`
+
+依 `runtime_id` 與 `turn_id` 依序顯示：
 
 ```text
-environment
-instance_id
-process_id
-remote_session_id
-operation_id
-stream_started_at
-last_byte_at
-last_event_at
-failure_at
-idle_since_last_byte_ms
-idle_since_last_event_ms
-exception_type
-exception_message
-```
-
-### 6.2 WSL `requires_action` / `in_progress`
-
-分析查詢必須能把下列事件依序列出：
-
-```text
-sse_event_received(type=agent.session.requires_action)
+sse_event_received(event_type=agent.session.requires_action)
 current_actions_request_started
 current_actions_response_received(status=...)
 current_actions_payload
 approval_requested
 ```
 
-至少比較：
-
-- event 的 session ID 與 GET 使用的 session ID
-- event 的 call ID 與 GET response 中的 call ID
-- event timestamp 與 GET response timestamp
-- GET response status
-- GET response required actions
-- 是否存在 retry
-- process/environment/instance identity
-
-不能只保存最後錯誤文字，否則無法判斷是 API eventual consistency、session mismatch、重複 event 或 client ordering 問題。
+查詢結果必須可比較 SSE event 與後續 request 的 session ID、call ID、timestamp、response status、required actions，以及 runtime、process 與 environment identity。
 
 ---
 
-## 7. SQLite writer 設計
+## 8. SQLite writer
 
-### 7.1 Connection policy
+每個 runtime 建立自己的 SQLite connection，但連線指向該 environment 的共用 database。不同 runtime 不共用 Python connection object。
 
-每個 process 建立自己的 SQLite connection；不跨 process 共用 Python connection object。
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 5000;
+PRAGMA synchronous = NORMAL;
+PRAGMA foreign_keys = ON;
+```
 
-連線設定：
+`busy_timeout` 是上限設定，不代表每筆 logging 都可以等待五秒。每次 logging write 都必須有更短的 logger-level deadline；超過 deadline 即放棄該筆 diagnostic write，並不得阻塞 SSE reader 或 AI flow。retry/backoff 只能在該 deadline 內進行。
 
-- `check_same_thread` 依實際 thread model 決定；若 logger 只在同一 thread 使用，維持預設。
-- 每次寫入使用短 transaction。
-- 使用 parameterized SQL。
-- 以 `busy_timeout` 處理其他 instance 短暫持有 writer lock。
-- 不在 exception handler 中無限 retry。
-- 若 database 暫時 busy，採有限次數、短暫 backoff；最終失敗時要將 logger failure 寫到 stderr，不能讓 AI runtime 因 logging failure 崩潰。
+每次 content、turn 或 timeline 寫入使用短 transaction。不得讓 network read、SSE iteration、approval wait 或 Forth execution 包在 SQLite transaction 內。
 
-### 7.2 Logger failure isolation
+逐行 SSE logging 僅在 `verbose` mode 啟用。normal mode 只記錄必要的 event、timing、delta 長度與完整 final/partial output。
 
-Diagnostic logging 是觀測功能，不得成為 AI runtime 的必要依賴。
+對短暫 database busy 採有限次數 retry/backoff；logger 失敗不得覆蓋原始 runtime error。已 commit 的資料必須保留；尚未 commit 的最後一筆資料可以遺失。
 
-下列情況不得覆蓋原始 AI error：
+### 8.1 Partial-output checkpoint
 
-- SQLite database locked
-- disk full
-- database directory 不可寫
-- schema migration 失敗
-- JSON serialization 失敗
-- connection error
+為降低 hard crash 造成的 output 遺失，runtime 可依固定 delta 數量或時間間隔保存 partial-output checkpoint；checkpoint policy 必須有上限，不得每個 output delta 都強制 commit。
 
-logger 應回報自身錯誤，並讓原本的 network、SSE、approval 或 Forth exception 照常傳遞。
+若 process 在最近一次 checkpoint 後被強制終止，checkpoint 後尚未 commit 的 output 可能遺失。正常 timeout、EOF、network error 或 parser error 路徑則必須在 exception handling 中保存當時 accumulator 的完整 partial output。
 
-### 7.3 Crash resilience
+### 8.2 Snapshot 限制
 
-每個 event 寫入後即可被其他 connection 讀取；不要累積到 process 結束才 flush。
-
-對於 process 被強制終止的 case：
-
-- 已 commit 的 event 必須保留。
-- 尚未 commit 的最後一筆 event 可以遺失。
-- analysis 工具應把沒有 `instance_finished` 的 instance 標示為 incomplete。
+stack snapshot 必須有明確大小上限。超過上限時保存截斷內容，並記錄 `stack_truncated = true` 與原始估計大小；不得因 stack 中含大型 object 而無界增加 log payload。
 
 ---
 
-## 8. 讀取與分析工具
+## 9. 查詢與分析
 
-第一版至少需要一個 read-only CLI 或 Python utility，支援：
+提供 read-only 查詢工具或既有 CLI command，至少支援：
 
 ```text
-list instances
-show instance timeline
-show operation timeline
+list runtimes
+show runtime timeline
+show turn timeline
 show remote session timeline
 find failed streams
 find read timeouts
 find requires_action followed by in_progress
-export selected timeline to JSON or Markdown
+show complete prompt/output by turn
+export selected turn timeline
 ```
 
-建議查詢輸出必須帶有：
-
-```text
-recorded_at
-environment
-instance_id
-process_id
-operation_id
-event_type
-remote_session_id
-remote_turn_id
-call_id
-elapsed_ms
-error_type
-error_message
-```
-
-分析工具可以讀 Windows database 或 WSL database，但不應在 runtime writer 正在使用時直接搬動 database；使用 SQLite read-only connection，或先建立一致性 snapshot。
+查詢工具可以讀 Windows 或 WSL database；runtime writer 仍在使用時使用 read-only connection。需要搬移 database 時，先建立一致性 snapshot。
 
 ---
 
-## 9. 實作範圍與檔案規劃
+## 10. 實作檔案規劃
 
-### 第一階段：logger 基礎層
-
-預計新增：
+新增：
 
 ```text
 peforth/diagnostic_log.py
+tools/ai_diagnostics.py
+tests/test_diagnostic_log.py
+tests/test_ai_diagnostics.py
 ```
-
-責任：
-
-- resolve database path
-- open/configure SQLite connection
-- initialize schema
-- register instance
-- create/finish operation
-- append event
-- close instance
-- handle logger failures
-
-不在這一層加入 AI-specific interpretation。
-
-### 第二階段：AI bridge instrumentation
 
 修改：
 
 ```text
 peforth/ai_bridge.py
-```
-
-加入：
-
-- HTTP request lifecycle events
-- SSE raw line/event timing
-- stream close/failure events
-- session/turn/call correlation fields
-
-### 第三階段：Forth AI flow instrumentation
-
-修改：
-
-```text
 peforth/f/ai.f
-```
-
-加入：
-
-- AI turn lifecycle
-- requires_action event
-- tool execution
-- tool result submission
-- local Forth execution
-- output delta/completion
-
-### 第四階段：REPL approval instrumentation
-
-修改：
-
-```text
 peforth/repl.py
 ```
 
-加入：
+`diagnostic_log.py` 負責 database path、schema、runtime identity、content 去重、turn occurrence、timeline event 與 logger failure isolation。
 
-- approval request
-- approval wait start/end
-- decision
-- cancellation
-- approval failure
-
-### 第五階段：分析工具與測試
-
-預計新增：
-
-```text
-tools/ai_diagnostics.py
-```
-
-測試：
-
-```text
-tests/test_diagnostic_log.py
-tests/test_ai_diagnostics.py
-```
-
-以上是 implementation plan，不代表本階段已修改這些檔案。
+`ai_bridge.py` 負責 HTTP request、SSE line/event、stream close/failure 與 timing 記錄；`ai.f` 與 `repl.py` 負責 AI turn、tool、Forth execution 與 approval 記錄。
 
 ---
 
-## 10. 測試計劃
+## 11. 測試計劃
 
-### 10.1 SQLite concurrency
+### 11.1 Content deduplication
 
-建立多個 process 同時 append events，驗證：
+驗證相同內容只產生一筆 `contents`，相同內容的多次 turn 各自保留 occurrence，不同 runtime 同時 insert 相同 content 不產生 duplicate。
 
-- 所有 process 的 events 都保留。
-- `instance_id` 不重複。
-- event payload 不交錯或損壞。
-- database 不因正常 contention 產生 `database is locked` 未處理錯誤。
-- WAL database 可同時讀取與寫入。
+### 11.2 Multi-runtime SQLite write
 
-### 10.2 Crash handling
+建立多個 process 同時寫入同一 environment database，驗證所有 runtime 與 timeline rows 都保留、payload 不損壞、正常 contention 不產生未處理的 `database is locked`，且 WAL database 可同時讀取與寫入。
 
-模擬 process 在 event write 前後終止，驗證：
+### 11.3 Complete and partial output
 
-- 已 commit 的 row 可讀取。
-- incomplete instance 可辨識。
-- logger failure 不會改寫原始 runtime exception。
+驗證正常 `output_done` 保存完整 output；stream timeout 保存已收到的完整 partial output；沒有 output 時標記 `failed_before_output`；重複 output 只保存一份 content，但每次 turn 均可還原。
 
-### 10.3 SSE instrumentation
+### 11.4 SSE instrumentation
 
-用 fake response 產生：
+使用 fake response 驗證 output delta、heartbeat、requires_action、`[DONE]`、socket read timeout、malformed JSON 與 response close，每種情況都產生相應 timeline event。
 
-- 多個 SSE lines
-- comment heartbeat
-- output delta
-- requires_action
-- `[DONE]`
-- socket read timeout
-- malformed JSON
-- response close
+### 11.5 Case correlation
 
-驗證每個關鍵時序都有對應 event。
+建立 Windows 與 WSL、多個 runtime、多個 remote session 的 fixture，驗證查詢不會依 remote session ID 錯誤合併 local runtime。
 
-### 10.4 Cross-instance correlation
+### 11.6 Logging overhead 與 lock contention
 
-建立 Windows/WSL 格式不同的 instance metadata fixture，確認查詢可以依：
+驗證：
 
-- environment
-- instance_id
-- process_id
-- remote session ID
-- operation ID
+- logging disabled、normal、verbose 三種 mode 的 AI turn 與 SSE event processing elapsed time。
+- logger-level maximum wait time 在 database busy 時仍有上限。
+- 多個 process 同時寫入同一 environment database。
+- 多個 runtime 同時 insert 相同 content。
+- 大量 timeline events 與 read-only query 同時執行。
+- logger write 失敗時原始 AI flow 仍可回報原始 error。
 
-正確分組，不把兩個 application 的事件合併成同一條 local process flow。
-
-### 10.5 完整回歸
-
-執行：
+### 11.7 回歸
 
 ```bash
 pytest -q
 ```
 
-Logging disabled、database 不可寫、database locked、正常 AI flow 都必須有明確測試結果。
+並測試 database 不可寫、logger exception、正常 AI flow 與既有 Forth flow。
 
 ---
 
-## 11. 驗收標準
+## 12. 驗收標準
 
-1. Windows 與 WSL 各有自己的 SQLite diagnostic database。
-2. 同一 environment 的多個 peforth process 可以同時寫入同一 database。
-3. 每筆 event 可追溯到明確的 `instance_id`、process、environment 與 operation。
-4. HTTP、SSE、AI turn、tool call、approval、local Forth execution 都有可查詢的 lifecycle events。
-5. SSE 每次有效 event 與 read failure 都保存 timing。
-6. 可以重建 PowerShell case 的最後一次 SSE activity 到 timeout 的時間線。
-7. 可以重建 WSL case 的 `requires_action` 到 `_current_actions()` 回覆 `in_progress` 的時間線。
-8. logger failure 不會取代或吞掉原始 runtime error。
-9. 強制終止後，已 commit 的 events 保留，未完成 instance 可辨識。
-10. 提供 read-only timeline 查詢與 export 能力。
-11. 本階段只加入 logging，不改變 timeout、retry、API status 判斷或 approval 行為。
+1. Windows 所有 runtime 可同時寫入 Windows SQLite database。
+2. WSL 所有 runtime 可同時寫入 WSL SQLite database。
+3. 每筆資料可追溯到 runtime、process、environment 與 turn。
+4. 相同完整文字只保存一次；每次實際使用仍有獨立 occurrence。
+5. 每次 AI turn 都可還原完整 prompt 與完整或 partial output。
+6. HTTP、SSE、AI turn、tool call、approval 與 Forth execution 的關鍵時序可查詢。
+7. 可以重建 PowerShell case 的 SSE activity 到 read timeout 的時間線。
+8. 可以重建 WSL case 的 `requires_action` 到 `in_progress` response 的時間線。
+9. logger failure 不會取代或吞掉原始 runtime error。
+10. 已 commit 的 log 在 runtime crash 後仍保留。
+11. 提供 read-only timeline、turn 與完整 content 查詢。
+12. normal 與 verbose mode 的 logging wait time 有明確上限，且 verbose mode 的中間 SSE 詳細度高於 normal mode。
+13. schema version、foreign-key enforcement、request ID 與 stack snapshot 大小限制均可驗證。
 
 ---
 
-## 12. 本計劃明確不做的事
+## 13. 不包含的行為變更
 
-- 不在 logging implementation 中修正 300 秒 SSE timeout。
-- 不在 logging implementation 中對 `in_progress` 做 retry 或重新判斷。
-- 不把 Windows 與 WSL database 合併成單一 live database。
-- 不使用一般文字 log file 作為主要儲存。
-- 不依賴 process 結束時才寫入 log。
-- 不讓 logging transaction 包住 network request 或 approval wait。
-- 不把不同 instance 僅依 remote session ID 合併。
-- 不以 logging 自動重試 AI request、tool call 或 Forth execution。
-- 不在本計劃內改動 AI API contract。
+本計劃只加入診斷記錄與查詢，不改變：
+
+- SSE timeout 設定
+- network retry policy
+- `in_progress` 狀態處理
+- Agents API request contract
+- approval decision semantics
+- Forth execution semantics

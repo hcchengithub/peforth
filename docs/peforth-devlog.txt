@@ -140,7 +140,7 @@
     兩邊都已 clone README 指定分支、建立 Python venv、安裝 peforth，並測試 f -e "1 2 + .s" 成功輸出 [3]。也設定了命令路徑，.env 已填好非機密設定；OPENAI_API_KEY= 留白，等你補上。
     ╰───────────────────    
 
-[ ] 06:01 2026-10-13 重複反推 SPEC
+[ ] (06:01 2026-10-13) 重複反推 SPEC
     - 用現在的 projectk.py 反推 SPEC.
     - 用現在的 peforth 反推 SPEC
     
@@ -473,6 +473,16 @@
     help 要改良、否則跟 Word 一樣，每次 Help 出來會一大堆，需要精確。
     11:10 2026-10-14 /home/hcchen/.peforth/docs/peforth tab completion 計劃書.md <-- ready
 
+[ ]
+
+[ ] 10:33 2026-10-15 正在跟 GPT 6.1 討論 Project K 的最新 implementation
+    (https://app.notion.com/p/ChatGPT-gpt-6-1-sol-Project-K-Spec-3f9e3eb16f938057a384e59f40923eed?v=24b1a909923244f790fea831bbdd3704&source=copy_link)。
+    我發現 user 可以直接跟 AI 討論這個 GitHub repo。也就是說，它全部的 knowledge 根本不需要手冊，user 就可以直接透過 AI 來了解它。
+    同樣的道理，公司的 project 應該可以透過 Columbus 跟 GitLab 來討論。那也就是說 ChatLKK 做成 CLI，AI 可以充分地了解它, 自己就可
+    以解釋自己
+
+[ ]
+[ ]
 [ ]
 [ ]
 [ ]

@@ -247,9 +247,13 @@ code (ai)
                         "required": ["source", "purpose"], "additionalProperties": False}},
     ]
     session_id = ai_bridge._saved_session(vm)
+    answer = []
+    turn_completed = False
     message = {"type": "agent.session.input.message", "input": [{"role": "user", "content": [
         {"type": "input_text", "text": prompt}]}]}
     if session_id:
+        diagnostic_turn_id = ai_bridge._diagnostic_start_turn(vm, prompt, session_id=session_id)
+        ai_bridge._diagnostic_update_session(vm, diagnostic_turn_id, session_id)
         events = ai_bridge._stream(session_id, message)
     else:
         yield from vm.call(vm.tick("system_info"))
@@ -289,8 +293,18 @@ code (ai)
                       "tools": tools, "instructions": instructions},
             "environment": {"type": "none"}, "input": prompt, "stream": True,
         }
-        events = ai_bridge._create_session(payload)
-    answer = []
+        diagnostic_turn_id = ai_bridge._diagnostic_start_turn(
+            vm, prompt, instructions=instructions
+        )
+        try:
+            events = ai_bridge._create_session(payload)
+        except Exception as exc:
+            output_status = "partial" if answer else "failed_before_output"
+            ai_bridge._diagnostic_finish_turn(
+                vm, diagnostic_turn_id, "".join(answer) if answer else None,
+                output_status=output_status, status="failed", error=exc,
+            )
+            raise
     ai_started = False
     ai_line_start = True
     try:
@@ -299,9 +313,13 @@ code (ai)
                 session_id = ai_bridge._session_id_from_event(event)
                 if session_id:
                     vm.host["ai_active_session_id"] = session_id
+                    ai_bridge._diagnostic_update_session(
+                        vm, diagnostic_turn_id, session_id, created=True
+                    )
             kind = event.get("type", "")
             if kind == "agent.session.turn.output_text.delta":
                 text = event.get("delta", "")
+                answer.append(text)
                 if stream_response:
                     if text and not ai_started:
                         print()
@@ -311,16 +329,14 @@ code (ai)
                             print("🤖 ", end="")
                         print(part, end="", flush=True)
                         ai_line_start = part.endswith("\n") or part.endswith("\r")
-                else:
-                    answer.append(text)
             elif kind == "agent.session.turn.output_text.done":
+                final_text = event.get("text", "")
+                answer[:] = [final_text]
                 if stream_response:
                     if ai_started and not ai_line_start:
                         print()
                     ai_started = False
                     ai_line_start = True
-                else:
-                    answer[:] = [event.get("text", "")]
             elif kind == "agent.session.requires_action":
                 session_status, actions = ai_bridge._current_actions(session_id)
                 if session_status != "requires_action":
@@ -394,15 +410,47 @@ code (ai)
                 detail = event.get("error") or event.get("turn", {}).get("error") or event
                 raise RuntimeError(f"Agents API {kind}: {detail}")
             elif kind == "agent.session.turn.completed":
+                turn_completed = True
                 break
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as exc:
         try:
             ai_bridge.cancel_turn(vm)
         except Exception:
             pass
+        output_status = "partial" if answer else "failed_before_output"
+        ai_bridge._diagnostic_finish_turn(
+            vm, diagnostic_turn_id, "".join(answer) if answer else None,
+            output_status=output_status, status="cancelled", error=exc,
+        )
+        raise
+    except Exception as exc:
+        output_status = "partial" if answer else "failed_before_output"
+        ai_bridge._diagnostic_finish_turn(
+            vm, diagnostic_turn_id, "".join(answer) if answer else None,
+            output_status=output_status, status="failed", error=exc,
+        )
         raise
     if not session_id:
-        raise RuntimeError("Agents API stream ended without returning the new session ID.")
+        error = RuntimeError("Agents API stream ended without returning the new session ID.")
+        ai_bridge._diagnostic_finish_turn(
+            vm, diagnostic_turn_id, "".join(answer) if answer else None,
+            output_status="partial" if answer else "failed_before_output",
+            status="failed", error=error,
+        )
+        raise error
+    if turn_completed:
+        output_text = "".join(answer)
+        output_status = "complete" if output_text else "empty"
+        ai_bridge._diagnostic_finish_turn(
+            vm, diagnostic_turn_id, output_text if output_text else None,
+            output_status=output_status, status="completed",
+        )
+    else:
+        output_status = "partial" if answer else "failed_before_output"
+        ai_bridge._diagnostic_finish_turn(
+            vm, diagnostic_turn_id, "".join(answer) if answer else None,
+            output_status=output_status, status="partial",
+        )
     if not stream_response:
         vm.push("".join(answer))
 end-code

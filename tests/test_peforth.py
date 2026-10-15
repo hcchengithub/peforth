@@ -8,9 +8,11 @@ import math
 import pathlib
 import tempfile
 import json
+import sqlite3
 import unittest
 from unittest.mock import patch
 
+from peforth.diagnostic_log import DiagnosticLog
 from peforth.projectk import VM, Input, ForthError, DEMO
 from peforth import repl as _f_mod
 Constant = _f_mod.Constant
@@ -18,6 +20,11 @@ Value = _f_mod.Value
 
 
 class KernelTests(unittest.TestCase):
+    def setUp(self):
+        self._diagnostics_patch = patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"})
+        self._diagnostics_patch.start()
+        self.addCleanup(self._diagnostics_patch.stop)
+
     def boot(self):
         vm = VM(host={'ForthError': ForthError})
         with contextlib.redirect_stdout(io.StringIO()):
@@ -318,7 +325,58 @@ class KernelTests(unittest.TestCase):
 
 class ReplBootstrapTests(unittest.TestCase):
     def setUp(self):
+        self._diagnostics_patch = patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"})
+        self._diagnostics_patch.start()
+        self.addCleanup(self._diagnostics_patch.stop)
         self.vm = _f_mod.create_vm()
+
+    def test_diagnostic_log_mode_defaults_to_normal_and_accepts_verbose(self):
+        with patch.dict(os.environ):
+            os.environ.pop("PEFORTH_AI_LOG_MODE", None)
+            self.assertEqual(_f_mod._diagnostic_log_mode(), "normal")
+            os.environ["PEFORTH_AI_LOG_MODE"] = "verbose"
+            self.assertEqual(_f_mod._diagnostic_log_mode(), "verbose")
+
+    def test_create_vm_starts_diagnostic_runtime_in_normal_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {
+                    "PEFORTH_AI_LOG_MODE": "normal",
+                    "PEFORTH_CONFIG_DIR": directory,
+            }), patch.object(_f_mod.ai_bridge, "load_dotenv"), \
+                    patch.object(_f_mod, "_detect_system_info", return_value={"config": {"PEFORTH_AI_MODEL": ""}, "wsl": {"active": True}}), \
+                    patch.object(_f_mod.atexit, "register") as register_exit:
+                vm = _f_mod.create_vm()
+
+            logger = vm.host["diagnostic_log"]
+            runtime_id = vm.host["diagnostic_runtime_id"]
+            self.assertEqual(vm.host["diagnostic_log_mode"], "normal")
+            self.assertIsInstance(logger, DiagnosticLog)
+            self.assertEqual(logger.connection.execute(
+                "SELECT environment FROM runtimes WHERE runtime_id = ?", (runtime_id,)
+            ).fetchone()[0], "windows" if os.name == "nt" else "wsl")
+            self.assertEqual(vm.host["system_info"]["config"]["PEFORTH_AI_LOG_MODE"], "normal")
+            register_exit.assert_called_once_with(_f_mod._close_diagnostic_log, logger, runtime_id)
+            _f_mod._close_diagnostic_log(logger, runtime_id)
+            connection = sqlite3.connect(pathlib.Path(directory) / "ai-diagnostics.sqlite3")
+            try:
+                self.assertIsNotNone(connection.execute(
+                    "SELECT finished_at FROM runtimes WHERE runtime_id = ?", (runtime_id,)
+                ).fetchone()[0])
+            finally:
+                connection.close()
+
+    def test_create_vm_disables_diagnostics_without_creating_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {
+                    "PEFORTH_AI_LOG_MODE": "disabled",
+                    "PEFORTH_CONFIG_DIR": directory,
+            }), patch.object(_f_mod.ai_bridge, "load_dotenv"), \
+                    patch.object(_f_mod, "_detect_system_info", return_value={"config": {"PEFORTH_AI_MODEL": ""}, "wsl": {"active": True}}):
+                vm = _f_mod.create_vm()
+
+            self.assertEqual(vm.host["diagnostic_log_mode"], "disabled")
+            self.assertNotIn("diagnostic_log", vm.host)
+            self.assertFalse((pathlib.Path(directory) / "ai-diagnostics.sqlite3").exists())
 
     def test_forth_sources_are_loaded_from_f_package(self):
         self.assertEqual(_f_mod.FORTH_SOURCE_ROOT.name, "f")
@@ -997,6 +1055,102 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("-e <Forth tokens...>", output.getvalue())
         self.assertIn("-i, --interactive", output.getvalue())
         self.assertIn("-new, --new-session", output.getvalue())
+
+    def test_ai_turn_records_prompt_and_completed_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=509)
+            self.vm.host["diagnostic_log"] = logger
+            self.vm.host["diagnostic_runtime_id"] = runtime_id
+
+            def fake_create(payload):
+                yield {"type": "agent.session.created", "session": {"id": "sess_diag"}}
+                yield {"type": "agent.session.turn.output_text.delta", "delta": "Hello"}
+                yield {"type": "agent.session.turn.output_text.done", "text": "Hello"}
+                yield {"type": "agent.session.turn.completed"}
+
+            with patch.object(_f_mod.ai_bridge, "_create_session", side_effect=fake_create), \
+                    patch.object(_f_mod.ai_bridge, "_agent_instructions", return_value="instructions"), \
+                    patch.object(_f_mod.ai_bridge, "load_dotenv"), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.vm.push("Say hello")
+                self.vm.push(False)
+                self.vm.dictate("(ai)")
+
+            turn = logger.connection.execute(
+                "SELECT turn_id, prompt_content_id, instructions_content_id, output_content_id, "
+                "remote_session_id, status, output_status FROM turns"
+            ).fetchone()
+            self.assertEqual((turn[4], turn[5], turn[6]), ("sess_diag", "completed", "complete"))
+            expected_content = ((turn[1], "Say hello"), (turn[2], "instructions"), (turn[3], "Hello"))
+            for content_id, expected_text in expected_content:
+                actual_text = logger.connection.execute(
+                    "SELECT content_text FROM contents WHERE content_id = ?", (content_id,)
+                ).fetchone()[0]
+                if expected_text == "instructions":
+                    self.assertTrue(actual_text.startswith("instructions\n\n## Runtime capability inventory"))
+                else:
+                    self.assertEqual(actual_text, expected_text)
+            event_types = [row[0] for row in logger.connection.execute(
+                "SELECT event_type FROM timeline WHERE turn_id = ? ORDER BY event_id", (turn[0],)
+            )]
+            self.assertIn("ai_turn_started", event_types)
+            self.assertIn("ai_session_created", event_types)
+            self.assertIn("ai_turn_completed", event_types)
+            logger.close()
+
+    def test_ai_turn_failure_preserves_partial_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=510)
+            self.vm.host["diagnostic_log"] = logger
+            self.vm.host["diagnostic_runtime_id"] = runtime_id
+
+            def fake_create(payload):
+                yield {"type": "agent.session.created", "session": {"id": "sess_partial"}}
+                yield {"type": "agent.session.turn.output_text.delta", "delta": "Part"}
+                raise RuntimeError("stream broke")
+
+            with patch.object(_f_mod.ai_bridge, "_create_session", side_effect=fake_create), \
+                    patch.object(_f_mod.ai_bridge, "_agent_instructions", return_value="instructions"), \
+                    patch.object(_f_mod.ai_bridge, "load_dotenv"), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.vm.push("Say something")
+                self.vm.push(False)
+                with self.assertRaisesRegex(ForthError, "stream broke"):
+                    self.vm.dictate("(ai)")
+
+            turn = logger.connection.execute(
+                "SELECT output_content_id, status, output_status, error_type "
+                "FROM turns"
+            ).fetchone()
+            self.assertEqual(tuple(turn[1:]), ("failed", "partial", "RuntimeError"))
+            self.assertEqual(logger.connection.execute(
+                "SELECT content_text FROM contents WHERE content_id = ?", (turn[0],)
+            ).fetchone()[0], "Part")
+            logger.close()
+
+    def test_diagnostic_failure_does_not_replace_ai_error(self):
+        class FailingDiagnosticLog:
+            def store_content(self, *args, **kwargs):
+                raise OSError("disk full")
+
+        self.vm.host["diagnostic_log"] = FailingDiagnosticLog()
+        self.vm.host["diagnostic_runtime_id"] = "runtime-test"
+
+        def fake_create(payload):
+            yield {"type": "agent.session.created", "session": {"id": "sess_error"}}
+            raise RuntimeError("Agents API failed")
+
+        with patch.object(_f_mod.ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(_f_mod.ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(_f_mod.ai_bridge, "load_dotenv"), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.vm.push("Say hello")
+            self.vm.push(False)
+            with self.assertRaisesRegex(ForthError, "Agents API failed"):
+                self.vm.dictate("(ai)")
 
     def test_stack_ai_word_returns_assistant_text(self):
         def fake_create(payload):
