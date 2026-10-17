@@ -224,6 +224,7 @@ code (ai)
     from peforth import ai_bridge
     import json
     import os
+    import time
 
     stream_response = vm.pop()
     prompt = vm.pop()
@@ -349,9 +350,42 @@ code (ai)
                     )
                 for action in actions:
                     name = action.get("name")
-                    arguments = action.get("arguments", {})
-                    if isinstance(arguments, str):
-                        arguments = json.loads(arguments)
+                    call_started_ns = time.monotonic_ns()
+                    raw_arguments = action.get("arguments", {})
+                    raw_arguments_text = (
+                        raw_arguments if isinstance(raw_arguments, str)
+                        else json.dumps(raw_arguments, ensure_ascii=False, sort_keys=True, default=str)
+                    )
+                    raw_arguments_id = ai_bridge._diagnostic_store_content(
+                        diagnostic_context, "tool_arguments", raw_arguments_text
+                    )
+                    ai_bridge._diagnostic_action_event(
+                        diagnostic_context, "tool_call_received", action,
+                        content_id=raw_arguments_id,
+                    )
+                    try:
+                        arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
+                        if not isinstance(arguments, dict):
+                            raise TypeError("tool arguments must be a JSON object")
+                    except Exception as exc:
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "tool_call_failed", action,
+                            error=exc, payload={"stage": "arguments_parse"},
+                        )
+                        raise
+                    parsed_arguments_text = json.dumps(
+                        arguments, ensure_ascii=False, sort_keys=True, default=str
+                    )
+                    parsed_arguments_id = ai_bridge._diagnostic_store_content(
+                        diagnostic_context, "tool_arguments", parsed_arguments_text
+                    )
+                    ai_bridge._diagnostic_action_event(
+                        diagnostic_context, "tool_call_arguments_parsed", action,
+                        content_id=parsed_arguments_id,
+                    )
+                    ai_bridge._diagnostic_action_event(
+                        diagnostic_context, "tool_call_started", action,
+                    )
                     if name == "peforth_search_words":
                         terms = str(arguments.get("query", "")).casefold().split()
                         matches = []
@@ -366,28 +400,76 @@ code (ai)
                                                 "immediate": bool(word.immediate)})
                             if len(matches) >= 30:
                                 break
+                        tool_result_text = json.dumps(matches, ensure_ascii=False)
+                        tool_result_id = ai_bridge._diagnostic_store_content(
+                            diagnostic_context, "tool_result", tool_result_text
+                        )
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "tool_call_completed", action,
+                            content_id=tool_result_id,
+                            elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                        )
                         ai_bridge._tool_result(
-                            session_id, action, True,
-                            json.dumps(matches, ensure_ascii=False),
+                            session_id, action, True, tool_result_text,
                             diagnostic=diagnostic_context,
                         )
                     elif name == "peforth_run_forth":
                         proposal = {"kind": "approval", "action": action,
                                     "source": str(arguments.get("source", "")),
                                     "purpose": str(arguments.get("purpose", ""))}
+                        proposal["source_content_id"] = ai_bridge._diagnostic_store_content(
+                            diagnostic_context, "forth_source", proposal["source"]
+                        )
+                        approval_started_ns = time.monotonic_ns()
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "approval_requested", action,
+                            content_id=proposal["source_content_id"],
+                            payload={"purpose": proposal["purpose"]},
+                        )
                         if vm.host.get("ai_trusted", False):
                             print("\n🤖 AI proposes this Forth program (auto-approved for this Forth run):")
                             print(f"Purpose: {proposal['purpose']}\n---\n{proposal['source']}\n---")
                             approved = True
+                            approval_decision = "runtime_trust"
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_decision_received", action,
+                                content_id=proposal["source_content_id"],
+                                payload={"decision": approval_decision},
+                            )
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_wait_ended", action,
+                                content_id=proposal["source_content_id"], elapsed_ms=0,
+                                payload={"decision": approval_decision},
+                            )
                         else:
+                            proposal["diagnostic_context"] = diagnostic_context
+                            proposal["approval_started_ns"] = approval_started_ns
                             vm.host["ai_pending_approval"] = proposal
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_wait_started", action,
+                                content_id=proposal["source_content_id"],
+                            )
                             yield vm.pause()
                             approval = vm.host.pop("ai_approval_result", False)
                             if isinstance(approval, str) and approval.casefold() == "trust":
                                 vm.host["ai_trusted"] = True
                                 approved = True
+                                approval_decision = "runtime_trust"
                             else:
                                 approved = bool(approval)
+                                approval_decision = "approved" if approved else "denied"
+                            approval_elapsed_ms = (time.monotonic_ns() - approval_started_ns) / 1_000_000
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_decision_received", action,
+                                content_id=proposal["source_content_id"],
+                                payload={"decision": approval_decision},
+                            )
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_wait_ended", action,
+                                content_id=proposal["source_content_id"],
+                                elapsed_ms=approval_elapsed_ms,
+                                payload={"decision": approval_decision},
+                            )
                         if approved:
                             status, still_pending = ai_bridge._current_actions(
                                 session_id, diagnostic=diagnostic_context
@@ -395,11 +477,59 @@ code (ai)
                             if status != "requires_action" or not any(
                                     pending.get("call_id") == action.get("call_id")
                                     for pending in still_pending):
+                                ai_bridge._diagnostic_action_event(
+                                    diagnostic_context, "approval_expired", action,
+                                    content_id=proposal["source_content_id"],
+                                )
                                 raise RuntimeError(
                                     "This approval request expired before execution. "
                                     "The Forth program was not run; please ask AI to propose it again."
                                 )
+                            execution_started_ns = time.monotonic_ns()
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "forth_execution_started", action,
+                                content_id=proposal["source_content_id"],
+                            )
                             execution = ai_bridge._run(vm, proposal["source"])
+                            execution_result = json.loads(execution)
+                            stdout_content_id = ai_bridge._diagnostic_store_content(
+                                diagnostic_context, "forth_stdout", execution_result.get("stdout", "")
+                            )
+                            stderr_content_id = ai_bridge._diagnostic_store_content(
+                                diagnostic_context, "forth_stderr", execution_result.get("stderr", "")
+                            )
+                            stack_snapshot = str(execution_result.get("stack", ""))
+                            stack_bytes = stack_snapshot.encode("utf-8")
+                            stack_size = len(stack_bytes)
+                            stack_truncated = stack_size > 4096
+                            if stack_truncated:
+                                stack_snapshot = stack_bytes[:4096].decode("utf-8", "ignore")
+                            execution_payload = {
+                                "task_status": execution_result.get("status"),
+                                "stdout_content_id": stdout_content_id,
+                                "stderr_content_id": stderr_content_id,
+                                "stack_snapshot": stack_snapshot,
+                                "stack_truncated": stack_truncated,
+                                "stack_original_size": stack_size,
+                            }
+                            execution_elapsed_ms = (
+                                time.monotonic_ns() - execution_started_ns
+                            ) / 1_000_000
+                            execution_succeeded = execution_result.get("status") != "error"
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context,
+                                "forth_execution_completed" if execution_succeeded else "forth_execution_failed",
+                                action, elapsed_ms=execution_elapsed_ms,
+                                payload=execution_payload,
+                                error=(RuntimeError(str(execution_result.get("error")))
+                                       if not execution_succeeded else None),
+                            )
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context,
+                                "tool_call_completed" if execution_succeeded else "tool_call_failed",
+                                action, elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                                payload={"stage": "local_forth_execution"},
+                            )
                             try:
                                 ai_bridge._tool_result(
                                     session_id, action, True, execution,
@@ -412,12 +542,21 @@ code (ai)
                                     f"Execution result: {execution}"
                                 ) from None
                         else:
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "tool_call_completed", action,
+                                elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                                payload={"approved": False},
+                            )
                             ai_bridge._tool_result(
                                 session_id, action, False,
                                 error="User declined execution.",
                                 diagnostic=diagnostic_context,
                             )
                     else:
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "tool_call_failed", action,
+                            error=RuntimeError(f"Unknown function: {name}"),
+                        )
                         ai_bridge._tool_result(
                             session_id, action, False,
                             error=f"Unknown function: {name}",

@@ -586,6 +586,9 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     decision = _resolve_ai_approval_decision(vm, state, task, pending)
                 except Exception as err:
                     print(f"AI approval failed; cancelling the task: {err}")
+                    ai_bridge._diagnostic_cancel_approval(
+                        pending, reason="approval_resolution_failed"
+                    )
                     try:
                         ai_bridge.cancel_turn(vm)
                     except Exception as cancel_err:
@@ -605,6 +608,9 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                 elif decision == "deny":
                     vm.host["ai_approval_result"] = False
                 elif decision == "cancel":
+                    ai_bridge._diagnostic_cancel_approval(
+                        pending, reason="user_cancel"
+                    )
                     try:
                         ai_bridge.cancel_turn(vm)
                     except Exception as err:
@@ -682,6 +688,9 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
         except KeyboardInterrupt:
             print("\n<interrupted>")
             if vm.host.get("ai_pending_approval"):
+                ai_bridge._diagnostic_cancel_approval(
+                    vm.host["ai_pending_approval"], reason="keyboard_interrupt"
+                )
                 try:
                     ai_bridge.cancel_turn(vm)
                 except Exception as err:

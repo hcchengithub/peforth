@@ -1,4 +1,5 @@
 import multiprocessing
+import queue
 import sqlite3
 import tempfile
 import time
@@ -6,6 +7,25 @@ import unittest
 from pathlib import Path
 
 from peforth.diagnostic_log import DiagnosticLog
+
+
+def _diagnostic_writer_worker(path, worker_index, writes, error_queue):
+    log = None
+    try:
+        log = DiagnosticLog(path, environment="wsl")
+        runtime_id = log.start_runtime(process_id=9000 + worker_index)
+        for index in range(writes):
+            content_id = log.store_content("tool_result", f"shared result {index}")
+            log.append_event(
+                runtime_id, None, "tool_result_submitted",
+                call_id=f"worker-{worker_index}-call-{index}", content_id=content_id,
+            )
+    except BaseException as exc:
+        error_queue.put(f"worker {worker_index}: {type(exc).__name__}: {exc}")
+        raise
+    finally:
+        if log is not None:
+            log.close()
 
 
 class DiagnosticLogTests(unittest.TestCase):
@@ -113,6 +133,60 @@ class DiagnosticLogTests(unittest.TestCase):
                 "req-local", "req-provider", 12.5, "turn-remote", "call-1",
             ))
             log.close()
+
+    def test_multiple_processes_write_shared_database_without_losing_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "diagnostics.sqlite3"
+            initializer = DiagnosticLog(path, environment="wsl")
+            initializer.close()
+
+            context = multiprocessing.get_context("spawn")
+            errors = context.Queue()
+            worker_count = 4
+            writes_per_worker = 12
+            processes = [
+                context.Process(
+                    target=_diagnostic_writer_worker,
+                    args=(str(path), worker, writes_per_worker, errors),
+                )
+                for worker in range(worker_count)
+            ]
+            for process in processes:
+                process.start()
+            for process in processes:
+                process.join(20)
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+            failures = [process.exitcode for process in processes if process.exitcode != 0]
+            error_messages = []
+            try:
+                while True:
+                    error_messages.append(errors.get(timeout=0.05))
+            except queue.Empty:
+                pass
+            finally:
+                errors.close()
+                errors.join_thread()
+
+            self.assertEqual(failures, [], error_messages)
+            connection = sqlite3.connect(path)
+            try:
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM runtimes").fetchone()[0],
+                    worker_count,
+                )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM timeline WHERE event_type = 'tool_result_submitted'").fetchone()[0],
+                    worker_count * writes_per_worker,
+                )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM contents").fetchone()[0],
+                    writes_per_worker,
+                )
+                self.assertEqual(connection.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+            finally:
+                connection.close()
 
     def test_write_deadline_bounds_wait_for_database_lock(self):
         with tempfile.TemporaryDirectory() as tmp:

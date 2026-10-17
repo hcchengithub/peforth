@@ -669,23 +669,107 @@ def _stream(session_id, event, *, diagnostic=None):
             response.close()
 
 
+def _diagnostic_action_event(context, event_type, action, *, payload=None,
+                             content_id=None, error=None, elapsed_ms=None):
+    payload = {"tool_name": action.get("name"), **(payload or {})}
+    _diagnostic_event(
+        context, event_type, payload=payload,
+        remote_turn_id=action.get("turn_id"), call_id=action.get("call_id"),
+        content_id=content_id, elapsed_ms=elapsed_ms, error=error,
+    )
+
+
+def _diagnostic_cancel_approval(pending, *, reason):
+    action = pending.get("action") or {}
+    diagnostic = pending.get("diagnostic_context")
+    content_id = pending.get("source_content_id")
+    _diagnostic_action_event(
+        diagnostic, "approval_cancelled", action,
+        content_id=content_id, payload={"reason": reason},
+    )
+    started_ns = pending.get("approval_started_ns")
+    elapsed_ms = (
+        (time.monotonic_ns() - started_ns) / 1_000_000
+        if isinstance(started_ns, int) else None
+    )
+    _diagnostic_action_event(
+        diagnostic, "approval_wait_ended", action,
+        content_id=content_id, elapsed_ms=elapsed_ms,
+        payload={"decision": "cancelled", "reason": reason},
+    )
+
+
 def _tool_result(session_id, action, success, output="", error="", *, diagnostic=None):
+    result_text = output if success else error
+    result_content_id = _diagnostic_store_content(diagnostic, "tool_result", result_text)
     event = {"type": "agent.session.input.tool_result", "turn_id": action["turn_id"],
              "call_id": action["call_id"], "success": success}
-    event["output" if success else "error"] = output if success else error
+    event["output" if success else "error"] = result_text
     encoded_id = urllib.parse.quote(session_id, safe="")
-    with _request(
-            "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
-            diagnostic=diagnostic, operation="submit_tool_result") as response:
-        response.read()
+    started_ns = time.monotonic_ns()
+    try:
+        with _request(
+                "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
+                diagnostic=diagnostic, operation="submit_tool_result") as response:
+            response.read()
+    except Exception as exc:
+        _diagnostic_action_event(
+            diagnostic, "tool_result_submit_failed", action,
+            content_id=result_content_id, error=exc,
+            elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
+            payload={"success": success},
+        )
+        raise
+    _diagnostic_action_event(
+        diagnostic, "tool_result_submitted", action, content_id=result_content_id,
+        elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
+        payload={"success": success},
+    )
 
 
 def _current_actions(session_id, *, diagnostic=None):
-    session = _api_get(
-        f"/sessions/{urllib.parse.quote(session_id, safe='')}",
-        diagnostic=diagnostic, operation="get_current_actions",
+    event_context = dict(diagnostic or {})
+    event_context["session_id"] = session_id
+    event_context["operation"] = "get_current_actions"
+    started_ns = time.monotonic_ns()
+    _diagnostic_event(
+        event_context, "current_actions_request_started",
+        payload={"operation": "get_current_actions"},
     )
-    return session.get("status"), session.get("required_actions") or []
+    try:
+        session = _api_get(
+            f"/sessions/{urllib.parse.quote(session_id, safe='')}",
+            diagnostic=diagnostic, operation="get_current_actions",
+        )
+        status = session.get("status")
+        actions = session.get("required_actions") or []
+    except Exception as exc:
+        _diagnostic_event(
+            event_context, "current_actions_request_failed",
+            elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
+            error=exc,
+        )
+        raise
+
+    payload_text = json.dumps(session, ensure_ascii=False, sort_keys=True, default=str)
+    payload_content_id = _diagnostic_store_content(
+        event_context, "current_actions_payload", payload_text
+    )
+    first_action = actions[0] if actions else {}
+    elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+    _diagnostic_event(
+        event_context, "current_actions_response_received",
+        remote_turn_id=first_action.get("turn_id"),
+        call_id=first_action.get("call_id"), elapsed_ms=elapsed_ms,
+        payload={"status": status, "required_action_count": len(actions)},
+    )
+    _diagnostic_event(
+        event_context, "current_actions_payload",
+        remote_turn_id=first_action.get("turn_id"),
+        call_id=first_action.get("call_id"), content_id=payload_content_id,
+        elapsed_ms=elapsed_ms, payload={"status": status},
+    )
+    return status, actions
 
 
 def _run(vm, source):

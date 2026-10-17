@@ -1328,6 +1328,239 @@ class ReplBootstrapTests(unittest.TestCase):
             self.assertTrue(response.closed)
             logger.close()
 
+    def test_current_actions_response_and_payload_are_recorded(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=507)
+            turn_id = logger.start_turn(runtime_id, remote_session_id="sess_actions")
+            diagnostic = {"logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                          "session_id": "sess_actions", "mode": "normal"}
+            response = {"status": "in_progress", "required_actions": [
+                {"turn_id": "remote-actions", "call_id": "call-actions",
+                 "name": "peforth_run_forth", "arguments": {"source": "42 ."}}
+            ]}
+            with patch.object(ai_bridge, "_api_get", return_value=response):
+                status, actions = ai_bridge._current_actions("sess_actions", diagnostic=diagnostic)
+
+            self.assertEqual(status, "in_progress")
+            self.assertEqual(actions[0]["call_id"], "call-actions")
+            rows = logger.connection.execute(
+                "SELECT event_type, operation, payload_json, content_id FROM timeline "
+                "WHERE turn_id = ? ORDER BY event_id", (turn_id,)
+            ).fetchall()
+            self.assertEqual([row[0] for row in rows], [
+                "current_actions_request_started", "current_actions_response_received",
+                "current_actions_payload",
+            ])
+            self.assertEqual(json.loads(rows[1][2])["status"], "in_progress")
+            self.assertEqual(rows[2][1], "get_current_actions")
+            self.assertIn("call-actions", logger.connection.execute(
+                "SELECT content_text FROM contents WHERE content_id = ?", (rows[2][3],)
+            ).fetchone()[0])
+            logger.close()
+
+    def test_tool_result_submission_failure_is_recorded_without_masking_error(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=508)
+            turn_id = logger.start_turn(runtime_id)
+            diagnostic = {"logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                          "session_id": "sess_failure", "mode": "normal"}
+            action = {"turn_id": "remote-tool-fail", "call_id": "call-fail",
+                      "name": "peforth_search_words"}
+            with patch.object(ai_bridge, "_request", side_effect=OSError("network down")):
+                with self.assertRaisesRegex(OSError, "network down"):
+                    ai_bridge._tool_result(
+                        "sess_failure", action, True, "tool output", diagnostic=diagnostic
+                    )
+            event = logger.connection.execute(
+                "SELECT event_type, call_id, error_type, error_message, content_id "
+                "FROM timeline WHERE turn_id = ?", (turn_id,)
+            ).fetchone()
+            self.assertEqual(tuple(event[:4]), (
+                "tool_result_submit_failed", "call-fail", "OSError", "network down"
+            ))
+            self.assertEqual(logger.connection.execute(
+                "SELECT content_type, content_text FROM contents WHERE content_id = ?",
+                (event[4],),
+            ).fetchone()[1], "tool output")
+            logger.close()
+
+    def test_ai_tool_call_records_arguments_execution_and_result(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=509)
+            self.vm.host["diagnostic_log"] = logger
+            self.vm.host["diagnostic_runtime_id"] = runtime_id
+            action = {
+                "turn_id": "remote-turn-tool",
+                "call_id": "call-search-1",
+                "name": "peforth_search_words",
+                "arguments": {"query": "dup"},
+            }
+
+            class FakeResponse:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+                def read(self):
+                    return b"{}"
+
+            def fake_create(payload, *, diagnostic=None):
+                yield {"type": "agent.session.created", "session": {"id": "sess_tool"}}
+                yield {"type": "agent.session.requires_action", "call_id": "call-search-1",
+                       "turn_id": "remote-turn-tool"}
+                yield {"type": "agent.session.turn.output_text.delta", "delta": "Done"}
+                yield {"type": "agent.session.turn.output_text.done", "text": "Done"}
+                yield {"type": "agent.session.turn.completed"}
+
+            with (patch.object(ai_bridge, "_create_session", side_effect=fake_create),
+                  patch.object(ai_bridge, "_current_actions", return_value=("requires_action", [action])),
+                  patch.object(ai_bridge, "_request", return_value=FakeResponse()),
+                  patch.object(ai_bridge, "_agent_instructions", return_value="instructions"),
+                  patch.object(ai_bridge, "load_dotenv"),
+                  contextlib.redirect_stdout(io.StringIO())):
+                self.vm.push("Search dup")
+                self.vm.push(False)
+                self.vm.dictate("(ai)")
+
+            turn_id = logger.connection.execute("SELECT turn_id FROM turns").fetchone()[0]
+            rows = logger.connection.execute(
+                "SELECT event_type, call_id, content_id, payload_json FROM timeline "
+                "WHERE turn_id = ? ORDER BY event_id", (turn_id,)
+            ).fetchall()
+            by_type = {row[0]: row for row in rows}
+            for event_type in ("tool_call_received", "tool_call_arguments_parsed",
+                               "tool_call_started", "tool_call_completed", "tool_result_submitted"):
+                self.assertIn(event_type, by_type)
+                self.assertEqual(by_type[event_type][1], "call-search-1")
+            arguments_id = by_type["tool_call_arguments_parsed"][2]
+            arguments = logger.connection.execute(
+                "SELECT content_type, content_text FROM contents WHERE content_id = ?",
+                (arguments_id,),
+            ).fetchone()
+            self.assertEqual(tuple(arguments), ("tool_arguments", '{"query": "dup"}'))
+            result_id = by_type["tool_result_submitted"][2]
+            result = logger.connection.execute(
+                "SELECT content_type, content_text FROM contents WHERE content_id = ?",
+                (result_id,),
+            ).fetchone()
+            self.assertEqual(result[0], "tool_result")
+            self.assertIn('"name": "dup"', result[1])
+            logger.close()
+
+    def test_ai_approval_and_local_forth_execution_are_logged(self):
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=510)
+            self.vm.host["diagnostic_log"] = logger
+            self.vm.host["diagnostic_runtime_id"] = runtime_id
+            action = {
+                "turn_id": "remote-turn-forth",
+                "call_id": "call-forth-1",
+                "name": "peforth_run_forth",
+                "arguments": {"source": "42 . cr", "purpose": "print a test value"},
+            }
+
+            class FakeResponse:
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+                def read(self):
+                    return b"{}"
+
+            def fake_create(payload, *, diagnostic=None):
+                yield {"type": "agent.session.created", "session": {"id": "sess_approval"}}
+                yield {"type": "agent.session.requires_action", "call_id": "call-forth-1",
+                       "turn_id": "remote-turn-forth"}
+                yield {"type": "agent.session.turn.output_text.delta", "delta": "Done"}
+                yield {"type": "agent.session.turn.output_text.done", "text": "Done"}
+                yield {"type": "agent.session.turn.completed"}
+
+            with (patch.object(ai_bridge, "_create_session", side_effect=fake_create),
+                  patch.object(ai_bridge, "_current_actions", side_effect=[
+                      ("requires_action", [action]), ("requires_action", [action])
+                  ]),
+                  patch.object(ai_bridge, "_request", return_value=FakeResponse()),
+                  patch.object(ai_bridge, "_agent_instructions", return_value="instructions"),
+                  patch.object(ai_bridge, "load_dotenv"),
+                  contextlib.redirect_stdout(io.StringIO())):
+                self.vm.push("Run local code")
+                self.vm.push(False)
+                task = self.vm.dictate("(ai)")
+                self.assertEqual(task.status, "paused")
+                self.vm.host.pop("ai_pending_approval")
+                self.vm.host["ai_approval_result"] = True
+                task.resume()
+                self.assertEqual(task.status, "done")
+
+            turn_id = logger.connection.execute("SELECT turn_id FROM turns").fetchone()[0]
+            rows = logger.connection.execute(
+                "SELECT event_type, call_id, content_id, elapsed_ms, payload_json "
+                "FROM timeline WHERE turn_id = ? ORDER BY event_id", (turn_id,)
+            ).fetchall()
+            by_type = {row[0]: row for row in rows}
+            for event_type in ("approval_requested", "approval_wait_started",
+                               "approval_decision_received", "approval_wait_ended",
+                               "forth_execution_started", "forth_execution_completed"):
+                self.assertIn(event_type, by_type)
+                self.assertEqual(by_type[event_type][1], "call-forth-1")
+            self.assertIsNotNone(by_type["approval_wait_ended"][3])
+            source = logger.connection.execute(
+                "SELECT content_type, content_text FROM contents WHERE content_id = ?",
+                (by_type["forth_execution_started"][2],),
+            ).fetchone()
+            self.assertEqual(tuple(source), ("forth_source", "42 . cr"))
+            stdout_id = json.loads(by_type["forth_execution_completed"][4])["stdout_content_id"]
+            stdout = logger.connection.execute(
+                "SELECT content_type, content_text FROM contents WHERE content_id = ?",
+                (stdout_id,),
+            ).fetchone()
+            self.assertEqual(tuple(stdout), ("forth_stdout", "42\n"))
+            logger.close()
+
+    def test_ai_approval_cancel_records_event_and_wait_duration(self):
+        import time
+        from peforth import ai_bridge
+
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            runtime_id = logger.start_runtime(process_id=511)
+            turn_id = logger.start_turn(runtime_id)
+            context = {"logger": logger, "runtime_id": runtime_id, "turn_id": turn_id,
+                       "session_id": "sess_cancel", "mode": "normal"}
+            action = {"turn_id": "remote-cancel", "call_id": "call-cancel",
+                      "name": "peforth_run_forth"}
+            pending = {"action": action, "diagnostic_context": context,
+                       "approval_started_ns": time.monotonic_ns() - 2_000_000,
+                       "source_content_id": logger.store_content("forth_source", "42 .")}
+
+            ai_bridge._diagnostic_cancel_approval(pending, reason="user_cancel")
+
+            events = logger.connection.execute(
+                "SELECT event_type, elapsed_ms, payload_json FROM timeline "
+                "WHERE turn_id = ? ORDER BY event_id", (turn_id,)
+            ).fetchall()
+            self.assertEqual([row[0] for row in events],
+                             ["approval_cancelled", "approval_wait_ended"])
+            self.assertGreaterEqual(events[1][1], 0)
+            self.assertIn('"decision": "cancelled"', events[1][2])
+            logger.close()
+
     def test_ai_turn_records_prompt_and_completed_output(self):
         with tempfile.TemporaryDirectory() as directory:
             logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
