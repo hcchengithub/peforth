@@ -1,72 +1,164 @@
 # peforth v2
 
-**peforth v2 is an AI-first, Python-hosted Forth environment.** Its primary interface is the `f` command, backed by a shared Forth kernel and an AI-assisted REPL.
+**peforth is an AI-first Forth environment hosted by Python.** It combines a small extensible Forth kernel, direct access to Python, and an optional AI-assisted terminal REPL in the single `f` command.
 
-> **Breaking change:** v2 is a major rewrite and does not retain peforth v1 debugger, Jupyter integrations, `peforth.ok()`, or other v1 APIs. If you need the frozen v1.33 behavior, install the v1.33 release instead.
+**Version 2 is now the mainline implementation on `master`.** The migration from v1 has been completed; the previous migration branch is no longer required for installation.
 
-## Current availability
+## Highlights
 
-peforth is developed continuously from the `v2-migration-orphan-bootstrap` branch. Clone that branch to use the current development version; this repository is not a published PyPI release.
+- **Forth + Python:** Define Forth words and embed host-side Python through `code ... end-code`. Use Python libraries without a separate foreign-function runtime.
+- **Project K kernel:** A Python-hosted Forth VM supporting cooperative Task pause/resume, input streams, dictionary introspection, and extensible words.
+- **Interactive REPL:** Enter Forth directly, define your own words, inspect the dictionary, and switch between `forth` and `chat` modes.
+- **Optional AI assistant:** The OpenAI Agents API integration provides conversational help and can propose Forth actions in the active VM, subject to local approval.
+- **Transparent sources:** Core Forth vocabulary is in `peforth/f/`; host runtime and integrations live in `peforth/*.py`.
 
-## Installation (Windows and Ubuntu/WSL)
+> **Compatibility:** peforth v2 is a major rewrite, not a drop-in replacement for v1. Legacy features such as the v1 debugger, Jupyter integration, and `peforth.ok()` are not supported. Use the v1.33 release if your application depends on those interfaces.
 
-Install `uv` first by following the official instructions at `https://docs.astral.sh/uv/getting-started/installation/`, then verify with `uv --version`. The checkout is the editable source tree. Windows and WSL have separate checkouts and Python environments; install separately in each environment where you want `f`.
+## Requirements
+
+- Python **3.10 or newer**
+- Git
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (recommended for installation)
+- An OpenAI Platform API key **only if you want AI features**. Ordinary Forth execution works without one.
+
+The development installation is sourced from this repository; it is not presented here as a published PyPI release.
+
+## Install
+
+Windows and Ubuntu/WSL should use **separate checkouts and virtual environments**.
 
 ### Ubuntu / WSL
 
 ```bash
-uv --version
-git clone --branch v2-migration-orphan-bootstrap https://github.com/hcchengithub/peforth.git ~/.peforth
+git clone https://github.com/hcchengithub/peforth.git ~/.peforth
 cd ~/.peforth
 uv venv
 uv pip install -e .
-export PATH="$HOME/.peforth/.venv/bin:$PATH"
+~/.peforth/.venv/bin/f
 ```
 
-From any directory, run:
+To invoke `f` by name from other directories in the current shell:
 
 ```bash
+export PATH="$HOME/.peforth/.venv/bin:$PATH"
 f
 ```
+
+For WSL, keep this Linux checkout inside its Linux filesystem (for example, `~/.peforth`), not under `/mnt/c`.
 
 ### Windows PowerShell
 
 ```powershell
-uv --version
-git clone --branch v2-migration-orphan-bootstrap https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
+git clone https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
 Set-Location "$HOME\.peforth"
 uv venv
 uv pip install -e .
-$env:PATH = "$HOME\.peforth\.venv\Scripts;$env:PATH"
+& "$HOME\.peforth\.venv\Scripts\f.exe"
 ```
 
-If the package download fails with `invalid peer certificate: UnknownIssuer` on a corporate network, retry the install with native Windows TLS certificate handling:
+To invoke `f` by name from other directories in the current PowerShell session:
+
+```powershell
+$env:PATH = "$HOME\.peforth\.venv\Scripts;$env:PATH"
+f
+```
+
+If `uv` reports `invalid peer certificate: UnknownIssuer` on a managed Windows network, use native Windows certificate handling:
 
 ```powershell
 uv --native-tls pip install -e .
 ```
 
-Do not disable TLS certificate verification. Open a new terminal if you want to use `f` from any directory. Windows and WSL require separate checkouts and `.venv` directories.
+Do not disable TLS certificate verification.
 
-For WSL/Linux, keep the checkout in the WSL filesystem, such as `~/.peforth`; do not run the Linux install from a Windows-mounted `/mnt/c/...` checkout. For Windows, use the Windows checkout from PowerShell. Do not share a checkout or `.venv` between Windows and WSL.
+## Quick start
 
-## Configuration
+Start `f` and enter ordinary Forth:
 
-Put `OPENAI_API_KEY` in `~/.peforth/.env` (Windows: `$HOME\.peforth\.env`) or in the process environment. Never commit the `.env` file. Optional settings include:
-
-```dotenv
-OPENAI_API_KEY=
-PEFORTH_AI_MODEL=gpt-6-luna
-PEFORTH_WSL_DISTRO=Ubuntu
-PEFORTH_SOURCE_PATH=/path/to/peforth-repository
+```forth
+1 2 + . cr
+: square dup * ;
+5 square . cr
+words
 ```
 
-Set `PEFORTH_SOURCE_PATH` when the runtime package is separate from the local repository clone. It controls the repository path reported as `source_path` in System Info; it does not change which Python package is loaded. On Windows, `%USERPROFILE%` placeholders are expanded at runtime.
+Define a Forth word directly in Python:
 
-AI sessions and local configuration live under `~/.peforth`, separate from the packaged Forth resources. The `docs/`, `skills/`, and `plugins/` directories are part of the editable checkout and are not automatically installed into other AI CLIs' global directories.
+```forth
+code double
+    vm.push(vm.pop() * 2)
+end-code
 
-## Updating and contributing
+21 double . cr
+```
 
-Inspect `git status` before updating. Keep local work on a personal branch; commit locally as needed. To push contributions, use a fork or another remote where you have write access. The install flow does not reset, overwrite a dirty checkout, commit, or push automatically.
+The host Python code runs in the same process as the Forth VM, so it has the normal permissions of your local user account.
 
-See `docs/` for user and developer documentation. The v2 migration plan is in `docs/v2-migration-plan.md`.
+To leave the REPL, enter `bye` or press Ctrl-D. For Forth definitions, introspection, parsing, control structures, and more Python integration examples, see [peforth manual](docs/peforth%20manual.md).
+
+## Optional AI assistant
+
+Set `OPENAI_API_KEY` in the process environment or in `~/.peforth/.env` (Windows: `$HOME\.peforth\.env`). Keep it private and never commit it.
+
+Example local configuration:
+
+```dotenv
+OPENAI_API_KEY=your-platform-api-key
+# Set this to a model supported by your API project:
+# PEFORTH_AI_MODEL=your-model-id
+PEFORTH_AI_SKILLS_DIR=skills
+```
+
+Inside the REPL:
+
+```forth
+ai: Explain what a Forth defining word is.
+chat
+```
+
+In `chat` mode, subsequent input goes to the selected AI session. Enter `forth` to return to Forth mode. Other commands include `ai-status`, `ai-sessions`, `ai-new`, and `ai-confirm`.
+
+**Local execution is permissioned:** When the assistant proposes Forth code via `peforth_run_forth`, peforth asks for approval. You can approve once, trust only the current AI task, deny, or cancel. Approved code executes in the **live local VM** and can use its Python bridge; review proposals before approving them. See [AI support](docs/ai.md) for details about approvals, sessions, configuration, and troubleshooting.
+
+AI API usage is optional and billed according to your OpenAI Platform account and selected model.
+
+## Project layout
+
+| Location | Purpose |
+| --- | --- |
+| `peforth/projectk.py` | Core Forth VM and Task execution |
+| `peforth/f/base.f` | Base vocabulary, defining words, and compiler-level constructs |
+| `peforth/f/auxiliary.f` | Auxiliary Forth words |
+| `peforth/f/ai.f` | Forth-facing AI words and control flow |
+| `peforth/repl.py` | Terminal REPL and runtime initialization |
+| `peforth/ai_bridge.py`, `peforth/ai_tools.py` | AI transport, session helpers, and host tools |
+| `docs/` | User manual, AI guide, design documents, and historical migration plan |
+| `skills/`, `plugins/` | Repository-owned AI skill and plugin assets |
+| `tests/` | Automated tests |
+
+The `skills/` and `plugins/` source directories are not automatically installed into external AI CLIs.
+
+## Updating and developing
+
+This is an **editable source checkout**. To update, inspect your local changes and pull from `master`:
+
+```bash
+cd ~/.peforth
+git status
+git pull --ff-only
+uv pip install -e .
+```
+
+Run the test suite from the checkout using your environment's Python; for example:
+
+```bash
+.venv/bin/python -m unittest discover -s tests
+```
+
+On Windows, use `.venv\Scripts\python.exe` instead.
+
+Do not run `git pull` over uncommitted modifications without reviewing them first. The historical [V2 migration plan](docs/v2-migration-plan.md) is retained as background, not as the current installation guide.
+
+## License
+
+[MIT](LICENSE)
