@@ -1,7 +1,7 @@
 # peforth v2 共用 Forth Kernel 技術手冊與架構設計理念
 
 > **版本**：16:32 2026-10-08
-> **適用環境**：Python 3.10+ / Linux, WSL, Windows  
+> **適用環境**：Python 3.10+ / Linux, WSL, Windows
 > **核心代碼**：`peforth/projectk.py`, `peforth/repl.py`, `peforth/f/base.f`
 
 ---
@@ -10,17 +10,17 @@
 
 在電腦科學的演進史中，Forth 代表著一種登峰造極的極簡美學：以 stack 為核心的虛擬機、零語法開銷、純粹的後綴表示法，以及完全開放編譯器內部狀態的 Metaprogramming 威力。然而，傳統 16-bit 與裸機 (Bare-metal) 時代的 Forth 體系，在現代軟體工程中卻逐漸陷入孤島困局——封閉的平坦位元組記憶體空間、薄弱的原生資料結構、缺乏現代型別系統，以及無法直接調用海量第三方軟體庫的窘境。
 
-**peforth (Python Edition)** 的誕生，並非為了在現代作業系統中復刻一套 1980 年代的經典模擬器，而是為了探索一個全新的架構範式：  
+**peforth (Python Edition)** 的誕生，並非為了在現代作業系統中復刻一套 1980 年代的經典模擬器，而是為了探索一個全新的架構範式：
 **當 Forth 的多 Stack 拓撲與 Metaprogramming 靈魂，直接運行於 Python 這種具備豐富物件生態與動態特性的 Host Language 之上，會帶來何種可能？**
 
 本手冊是 peforth 的系統架構指南與設計理念記錄。本手冊**不做**傳統 Forth 語法的入門字典（各 Word 本身已內建 `help` 與 `comment` 自我文檔），而是深入剖析 peforth 如何用一個僅數百行程式碼的微核心，在動態物件世界中重建純粹的 Forth 哲學，並徹底解構傳統非同步編程的沉重枷鎖。
 
 > [!TIP]
-> **想直接動手跑起來？**  
+> **想直接動手跑起來？**
 若您希望立即在終端機操作、執行互動 REPL 或設定 checkout 的 `f` entry point，請參閱 repository 根目錄的 `README.md`（如何執行指南）。
 > 本手冊（Manual）聚焦 peforth 的架構設計理念；安裝與環境配置請以 repository 根目錄的 `README.md` 為準。
 >
-> **善用 AI 輔助閱讀**：本手冊已盡力清楚說明設計理念與技術細節，但難免仍有不夠詳盡或不易理解之處。遇到疑問時，歡迎善用瀏覽器的 AI 側邊欄（例如 Chrome 中可使用的 Gemini），直接針對正在閱讀的內容提問，請 AI 補充解釋、舉例，或協助釐清程式碼與概念。AI 的回答也可能有誤，涉及實際行為時，建議再以原始碼及執行結果確認。
+> **善用 AI 輔助閱讀**：本手冊已盡力清楚說明設計理念與技術細節，但難免仍有不夠詳盡或不易理解之處。遇到疑問時，請不要忘記善用瀏覽器的 AI 側邊欄（例如 Chrome 中可使用的 Gemini），直接針對正在閱讀的內容提問，請 AI 補充解釋、舉例，或協助釐清程式碼與概念。
 
 ---
 
@@ -113,16 +113,16 @@ peforth 的 Outer Interpreter 擁有極致簡明的狀態循環：
 flowchart TD
     In["Input Stream (Text / Tokens)"] --> Tokenizer["vm.input.read() Tokenizer"]
     Tokenizer --> CheckDict{"Word 存在於字典？"}
-    
+
     CheckDict -- "是 (Yes)" --> CheckImm{"word.immediate?"}
     CheckImm -- "否 (編譯模式)" --> CompileWord["編譯 Word: vm.comma(word)"]
     CheckImm -- "是 (即時執行)" --> ExecWord["執行 Word: call(word)"]
-    
+
     CheckDict -- "否 (No)" --> TryNum["嘗試數值解析 (int / float)"]
     TryNum --> CheckComp{"編譯狀態 vm.compiling?"}
     CheckComp -- "否 (直譯模式)" --> PushStack["推入 Data Stack: vm.push(val)"]
     CheckComp -- "是 (編譯模式)" --> CompileLit["編譯字面量: vm.literal(val)"]
-    
+
     CompileWord --> NextToken["下一輪 Token 循環"]
     ExecWord --> NextToken
     PushStack --> NextToken
@@ -197,7 +197,7 @@ end-code
 傳統的正則搜尋在掃描到第一行註解 `# ... end-code` 或字串常數時，就會**誤以為代碼塊已結束**，導致後半段程式碼被丟給 Forth 直譯器執行，瞬間引發不可收拾的語法崩潰！
 
 #### Python 原生語彙分析器的降維打擊
-peforth 的破局點在於：**讓 Host 的 Lexer 來審查 Host 的程式碼！**  
+peforth 的破局點在於：**讓 Host 的 Lexer 來審查 Host 的程式碼！**
 在 `VM._find_code_terminator` 中，核心直接引入 Python 標準庫的 `tokenize.generate_tokens`：
 
 ```python
@@ -242,10 +242,10 @@ does> ( -- string )
 
 ### 3.1 告別 Flat Memory：現代物件導向 Data Space
 
-在傳統 Forth 系統中，`here` 是一個指向 RAM 位元組的整數指標，`,` (comma) 是將數值拷貝進實體記憶體。  
+在傳統 Forth 系統中，`here` 是一個指向 RAM 位元組的整數指標，`,` (comma) 是將數值拷貝進實體記憶體。
 在 peforth 裡，這個概念被現代物件模型昇華：
 
-1. **Word 的資料載體是 Python List**：  
+1. **Word 的資料載體是 Python List**：
    由 `create` 建立的 Word，其內部包含一個專屬的 `body = []` 清單。
 2. **`@` (fetch) 與 `!` (store) 的現代多型語義**：
    ```python
@@ -261,8 +261,8 @@ does> ( -- string )
    ```
    * 當 `addr` 是一個 Python `list` 時（例如 Word 的 `body`），`!` 與 `@` 直接讀寫該 list 的第一個元素 `addr[0]`！
    * 這使得 `variable` 與自訂結構不需要計算實體位元組偏移量，直接享有 Python 原生垃圾回收機制維護物件生命週期。
-   * **非首元素存取與切片 (Indexing & Slicing)**：  
-     在傳統 Forth 中，連續存取陣列必須依賴指標算術（如 `addr 1 CELLS + @`）。但在 peforth 中，Word 的 `body` 是真實的 Python `list`，若強行使用數值加法運算（如 `xx 1+ @`）會直接被 Python 攔截型別錯誤。  
+   * **非首元素存取與切片 (Indexing & Slicing)**：
+     在傳統 Forth 中，連續存取陣列必須依賴指標算術（如 `addr 1 CELLS + @`）。但在 peforth 中，Word 的 `body` 是真實的 Python `list`，若強行使用數值加法運算（如 `xx 1+ @`）會直接被 Python 攔截型別錯誤。
      正確且優雅的做法是直接透過 Host Bridge 的 `:>` 享受 Python 原生索引與切片：
      ```forth
      create xx 123 , 456 ,
@@ -299,7 +299,7 @@ Task 暫停時，Host 可呼叫 `task.append_input(text)` 追加原始文字，�
 
 在沒有底層組合語言、沒有平坦機器碼記憶體、指令是一串 Python 物件與 action tuple 的環境下，我們要如何實現經典的 `if else then`、`begin until` 與計數迴圈？
 
-peforth 給出的答案是：**以編譯期 Control Stack 實現典雅的抽象回填。**  
+peforth 給出的答案是：**以編譯期 Control Stack 實現典雅的抽象回填。**
 在外表看來，Forth 代碼保持著純粹經典的書寫風格；但在幕後，直譯器精巧地利用 Control Stack（即編譯期的 Data stack）在指令清單的陣列索引上穿針引線。
 
 ---
@@ -508,7 +508,7 @@ end-code
 
 ### 6.1 嵌入式共生思路 (Symbiotic Design)
 
-傳統語言通常把「呼叫其他語言」視為外部 FFI (Foreign Function Interface)，需要配置型別定義、記憶體封裝與序列化開銷。  
+傳統語言通常把「呼叫其他語言」視為外部 FFI (Foreign Function Interface)，需要配置型別定義、記憶體封裝與序列化開銷。
 在 peforth 中，**Python 不是外部語言，Python 就是執行環境本身！**
 
 Forth 扮演著靈巧、簡潔的宣告式 DSL 與流程編排大腦；Python 則作為運算能量的供應池。兩者在同一個進程、同一個記憶體空間內無縫共生。
@@ -545,7 +545,7 @@ end-code
 要調用已存在於 stack 頂端之 Python 物件的方法或屬性，peforth 設計了一對極簡的操作符號：
 
 #### `::`（無回傳值調用 / Procedure Invocation）
-語法：`<object> :: <member_or_method>`  
+語法：`<object> :: <member_or_method>`
 * 彈出 stack 頂部的 Python 物件，並在其上執行屬性賦值或無返回值方法。
 * 支援索引存取（`[key]`）與方法呼叫：
   ```forth
@@ -553,7 +553,7 @@ end-code
   ```
 
 #### `:>`（有回傳值查詢與調用 / Function Invocation）
-語法：`<object> :> <member_or_method>`  
+語法：`<object> :> <member_or_method>`
 * 彈出 stack 頂部的 Python 物件，執行指定運算，**並自動將其返回值推回 Data stack**！
 * 實例展示：
   ```forth
@@ -848,7 +848,7 @@ peforth 拒絕文檔與代碼分離。透過 `base.f` 內建的註解體系，�
 
 ### 8.3 三階段反編譯器 `see` (Three-Stage Decompiler)
 
-在傳統系統中，反編譯器要麼只能吐出位元組十六進位碼，要麼對動態產生的詞束手無策。  
+在傳統系統中，反編譯器要麼只能吐出位元組十六進位碼，要麼對動態產生的詞束手無策。
 peforth 設計了革命性的**三階段反編譯器 `see`**：
 
 ```text
