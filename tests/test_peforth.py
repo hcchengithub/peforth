@@ -2071,19 +2071,21 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertEqual(buf.getvalue().strip(), '')
 
     def test_help_command(self):
-        # Help on specific word with formatting
+        # A specific name matches exactly, not words containing that name.
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.vm.dictate('help dup')
-        dup_output = buf.getvalue().strip()
         expected_dup = (
             "dup ( x -- x x ) Duplicate the top item on the data stack.\n"
-            "    Push a duplicate of TOS (top-of-stack) onto the data stack.\n\n"
-            "?dup ( x -- x x | x ) Duplicate TOS if it is logically true.\n"
-            "    Tests TOS using Python truthiness. If true, leaves two copies of x;\n"
-            "    if false, leaves x unchanged."
+            "    Push a duplicate of TOS (top-of-stack) onto the data stack."
         )
-        self.assertEqual(dup_output, expected_dup)
+        self.assertEqual(buf.getvalue().strip(), expected_dup)
+
+        # Word lookup is case-insensitive.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.vm.dictate('help DuP')
+        self.assertEqual(buf.getvalue().strip(), expected_dup)
 
         # Help with custom word and multi-line comments
         buf = io.StringIO()
@@ -2097,15 +2099,16 @@ class ReplBootstrapTests(unittest.TestCase):
         )
         self.assertEqual(demo_output, expected_demo)
 
-        # Help with multiple patterns (AND logic)
+        # The name must match exactly; help text and multiple terms are not searched.
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.vm.dictate('help Custom demo')
+        self.assertEqual(buf.getvalue().strip(), "No word named 'Custom demo'.")
+
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.vm.dictate('help for loop')
-        out = buf.getvalue().strip()
-        lines = out.split('\n\n')
-        # Exact/primary word 'for' comes first
-        self.assertTrue(lines[0].startswith('for '))
-        self.assertTrue(any(e.startswith('next ') for e in lines))
+        self.assertEqual(buf.getvalue().strip(), "No word named 'for loop'.")
 
         # Help with no patterns outputs entire dictionary manual
         buf = io.StringIO()

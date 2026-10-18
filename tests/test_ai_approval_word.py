@@ -4,26 +4,55 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from prompt_toolkit.data_structures import Size
 from prompt_toolkit.input import create_pipe_input
 from prompt_toolkit.output import DummyOutput
+from prompt_toolkit.output.vt100 import Vt100_Output
 
 from peforth import repl
 
 
+def _strip_vt100_sequences(text):
+    visible = []
+    index = 0
+    while index < len(text):
+        if text[index] == chr(27) and index + 1 < len(text) and text[index + 1] == "[":
+            index += 2
+            while index < len(text) and not ("@" <= text[index] <= "~"):
+                index += 1
+            index += 1
+        else:
+            visible.append(text[index])
+            index += 1
+    return "".join(visible)
+
+
 class NumberedChoiceTests(unittest.TestCase):
-    def test_digit_returns_without_waiting_for_enter(self):
+    def test_digit_returns_and_echoes_choice_inline(self):
+        display = io.StringIO()
+        output = Vt100_Output(
+            stdout=display, get_size=lambda: Size(rows=24, columns=80),
+            term="xterm", enable_cpr=False)
         with create_pipe_input() as input_stream:
             input_stream.send_text("2")
             result = repl.read_numbered_choice(
-                "Choose: ", input=input_stream, output=DummyOutput())
+                "Choose 1-4: ", input=input_stream, output=output)
+        visible = _strip_vt100_sequences(display.getvalue())
         self.assertEqual(result, "2")
+        self.assertIn("Choose 1-4: 2" + chr(13) + chr(10), visible)
 
-    def test_enter_returns_default_choice(self):
+    def test_enter_returns_and_echoes_default_choice_inline(self):
+        display = io.StringIO()
+        output = Vt100_Output(
+            stdout=display, get_size=lambda: Size(rows=24, columns=80),
+            term="xterm", enable_cpr=False)
         with create_pipe_input() as input_stream:
-            input_stream.send_text("\r")
+            input_stream.send_text(chr(13))
             result = repl.read_numbered_choice(
-                "Choose: ", default="1", input=input_stream, output=DummyOutput())
+                "Choose 1-4: ", default="1", input=input_stream, output=output)
+        visible = _strip_vt100_sequences(display.getvalue())
         self.assertEqual(result, "1")
+        self.assertIn("Choose 1-4: 1" + chr(13) + chr(10), visible)
 
     def test_ai_approve_maps_choices_without_executing_proposal(self):
         vm = repl.create_vm()

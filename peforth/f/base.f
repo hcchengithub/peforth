@@ -946,44 +946,38 @@ end-code
 
 code help
     line = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
-    patterns = [p.lower() for p in line.strip().split() if p.strip()]
-    matched_words = []
-    for name, word in vm.words.items():
-        if patterns:
-            w_h = getattr(word, "help", "") or ""
-            w_c = getattr(word, "comment", "") or ""
-            text = (name + " " + w_h + " " + w_c).lower()
-            if not all(p in text for p in patterns):
-                continue
-        matched_words.append(word)
-    if patterns:
-        def sort_key(w):
-            n = w.name.lower()
-            if any(n == p for p in patterns):
-                return (0, n)
-            if any(n.startswith(p) for p in patterns):
-                return (1, n)
-            if any(p in n for p in patterns):
-                return (2, n)
-            return (3, n)
-        matched_words.sort(key=sort_key)
-    entries = []
-    nl = chr(10)
-    for word in matched_words:
-        w_help = getattr(word, "help", "")
-        header = f"{word.name} {w_help}" if w_help else word.name
-        comment = getattr(word, "comment", "")
-        if comment:
-            indented = nl.join("    " + c_line for c_line in comment.splitlines())
-            entries.append(header + nl + indented)
-        else:
-            entries.append(header)
-    if entries:
-        print((nl + nl).join(entries))
+    pattern = line.strip()
+
+    if pattern:
+        target = pattern.casefold()
+        matched_words = [
+            word for name, word in vm.words.items()
+            if name.casefold() == target
+        ]
+    else:
+        matched_words = list(vm.words.values())
+
+    if pattern and not matched_words:
+        print(f"No word named {pattern!r}.")
+    else:
+        entries = []
+        nl = chr(10)
+        for word in matched_words:
+            w_help = getattr(word, "help", "")
+            header = f"{word.name} {w_help}" if w_help else word.name
+            comment = getattr(word, "comment", "")
+            if comment:
+                indented = nl.join("    " + c_line for c_line in comment.splitlines())
+                entries.append(header + nl + indented)
+            else:
+                entries.append(header)
+        if entries:
+            print((nl + nl).join(entries))
 end-code
-// ( <patterns> -- ) Display help and comments for words.
-/// If no patterns given, display help and comments for all words.
-/// If patterns given, display words whose name, help, or comments match all patterns (case-insensitive AND).
+// ( [word-name] -- ) Display help for an exact word name, case-insensitively.
+/// With no word name, display help and comments for all words.
+/// The provided name must exactly match a dictionary word; help text and comments are not searched.
+/// If no exact word exists, print a not-found message.
 
 code bye
     raise SystemExit(0)

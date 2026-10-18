@@ -428,7 +428,7 @@ def _make_multiline_key_bindings(bindings_type=None):
 
 
 def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1", *, input=None, output=None) -> str:
-    """Return immediately when a permitted single-character choice is pressed."""
+    """Return a permitted single-character choice, displaying it inline."""
     if PromptSession is None or KeyBindings is None:
         raise RuntimeError("Single-key choices require prompt_toolkit.")
     choices = tuple(choices)
@@ -442,11 +442,13 @@ def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1",
 
     @bindings.add("c-m", eager=True)
     def _enter(event):
-        event.app.exit(result=default)
+        event.current_buffer.text = default
+        event.current_buffer.validate_and_handle()
 
     for choice in choices:
         def _select(event, selected=choice):
-            event.app.exit(result=selected)
+            event.current_buffer.text = selected
+            event.current_buffer.validate_and_handle()
         bindings.add(choice, eager=True)(_select)
 
     session_options = {"multiline": False, "key_bindings": bindings}
