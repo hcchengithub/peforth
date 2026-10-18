@@ -94,7 +94,7 @@ end-code
 
 The host Python code runs in the same process as the Forth VM, so it has the normal permissions of your local user account.
 
-To leave the REPL, enter `bye` or press Ctrl-D. For Forth definitions, introspection, parsing, control structures, and more Python integration examples, see [peforth manual](docs/peforth%20manual.md).
+To leave the REPL, enter `bye` or press Ctrl-D. For Forth definitions, introspection, parsing, control structures, and more Python integration examples, see [peforth manual（漂亮字）](docs/peforth%20manual.md) and [peforth manual (English)](docs/peforth%20manual%20%28English%29.md).
 
 ## Optional AI assistant
 
