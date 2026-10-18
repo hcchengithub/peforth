@@ -227,11 +227,14 @@ code (ai)
     import time
 
     stream_response = vm.pop()
+    api_stream = vm.host.pop("ai_transport_stream_once", True)
     prompt = vm.pop()
     if not isinstance(prompt, str):
         raise RuntimeError("(ai) expects a string on the data stack.")
     if not isinstance(stream_response, bool):
         raise RuntimeError("(ai) expects a Boolean output mode after the prompt string.")
+    if not isinstance(api_stream, bool):
+        raise RuntimeError("The one-shot API transport mode must be a Boolean.")
     prompt = prompt.strip()
     if not prompt:
         raise RuntimeError("ai: needs a prompt on the same line.")
@@ -253,10 +256,21 @@ code (ai)
     message = {"type": "agent.session.input.message", "input": [{"role": "user", "content": [
         {"type": "input_text", "text": prompt}]}]}
     if session_id:
-        diagnostic_turn_id = ai_bridge._diagnostic_start_turn(vm, prompt, session_id=session_id)
+        diagnostic_turn_id = ai_bridge._diagnostic_start_turn(
+            vm, prompt, session_id=session_id,
+            terminal_output_stream=stream_response, api_transport_stream=api_stream,
+        )
         ai_bridge._diagnostic_update_session(vm, diagnostic_turn_id, session_id)
         diagnostic_context = ai_bridge._diagnostic_context(vm, diagnostic_turn_id)
-        events = ai_bridge._stream(session_id, message, diagnostic=diagnostic_context)
+        if api_stream:
+            events = ai_bridge._stream(session_id, message, diagnostic=diagnostic_context)
+        else:
+            if diagnostic_context is None:
+                diagnostic_context = {}
+            diagnostic_context["_one_shot_deadline"] = ai_bridge._OneShotDeadline()
+            events = ai_bridge._stream(
+                session_id, message, diagnostic=diagnostic_context, stream=False
+            )
     else:
         yield from vm.call(vm.tick("system_info"))
         runtime_info = vm.pop()
@@ -293,14 +307,24 @@ code (ai)
         payload = {
             "agent": {"model": vm.tick("aiModel").value,
                       "tools": tools, "instructions": instructions},
-            "environment": {"type": "none"}, "input": prompt, "stream": True,
+            "environment": {"type": "none"}, "input": prompt, "stream": api_stream,
         }
         diagnostic_turn_id = ai_bridge._diagnostic_start_turn(
-            vm, prompt, instructions=instructions
+            vm, prompt, instructions=instructions,
+            terminal_output_stream=stream_response, api_transport_stream=api_stream,
         )
         diagnostic_context = ai_bridge._diagnostic_context(vm, diagnostic_turn_id)
+        if not api_stream:
+            if diagnostic_context is None:
+                diagnostic_context = {}
+            diagnostic_context["_one_shot_deadline"] = ai_bridge._OneShotDeadline()
         try:
-            events = ai_bridge._create_session(payload, diagnostic=diagnostic_context)
+            if api_stream:
+                events = ai_bridge._create_session(payload, diagnostic=diagnostic_context)
+            else:
+                events = ai_bridge._create_session(
+                    payload, diagnostic=diagnostic_context, stream=False
+                )
         except Exception as exc:
             output_status = "partial" if answer else "failed_before_output"
             ai_bridge._diagnostic_finish_turn(
@@ -449,7 +473,14 @@ code (ai)
                                 diagnostic_context, "approval_wait_started", action,
                                 content_id=proposal["source_content_id"],
                             )
-                            yield vm.pause()
+                            one_shot_deadline = diagnostic_context.get("_one_shot_deadline")
+                            if one_shot_deadline is not None:
+                                one_shot_deadline.pause()
+                            try:
+                                yield vm.pause()
+                            finally:
+                                if one_shot_deadline is not None:
+                                    one_shot_deadline.resume()
                             approval = vm.host.pop("ai_approval_result", False)
                             if isinstance(approval, str) and approval.casefold() == "trust":
                                 vm.host["ai_trusted"] = True
@@ -563,7 +594,9 @@ code (ai)
                             diagnostic=diagnostic_context,
                         )
             elif kind in ("error", "agent.session.failed", "agent.session.environment.failed",
-                          "agent.session.turn.failed"):
+                          "agent.session.turn.failed", "agent.session.turn.cancelled"):
+                if kind == "agent.session.turn.cancelled":
+                    raise RuntimeError("Agents API turn was cancelled.")
                 detail = event.get("error") or event.get("turn", {}).get("error") or event
                 raise RuntimeError(f"Agents API {kind}: {detail}")
             elif kind == "agent.session.turn.completed":
@@ -614,7 +647,7 @@ end-code
 // ( prompt-string stream? -- [response-string] ) Run one AI turn; stream or return its text.
 /// Local Forth tool calls pause for the REPL's Trust/Yes/No/Cancel approval flow.
 
-/// stream? true prints the reply; false pushes it as a string.
+/// stream? true prints the reply; false pushes it as a string. This controls terminal output, not HTTP/SSE transport.
 
 : ai: s" " word true (ai) ; immediate
 // ( <prompt> -- ) Send the remaining input as a prompt to the current AI session.

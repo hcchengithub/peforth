@@ -397,19 +397,6 @@ def _farewell(vm: VM) -> None:
         print("No AI session is selected in this Forth run.\n")
 
 
-def _latest_idle_session(rows):
-    candidates = []
-    for index, row in enumerate(rows):
-        if row.get("status") not in (None, "idle"):
-            continue
-        try:
-            last_active = float(row.get("last_active_at"))
-        except (TypeError, ValueError, OverflowError):
-            last_active = float("-inf")
-        candidates.append((last_active, -index, row))
-    return max(candidates, default=(None, None, None))[2]
-
-
 def _refresh_quiet_session_index(vm: VM) -> None:
     rows = vm.host.get("ai_session_rows")
     if rows is None:
@@ -722,7 +709,7 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
 
 
 def _print_cli_help(file=None) -> None:
-    print("""Usage: f [-h] [-i] [-e <Forth tokens...> | -c <prompt tokens...> | <file.f>]
+    print("""Usage: f [-h] [-i] [-e <Forth tokens...> | [-id <session-id>] -c <prompt tokens...> | <file.f>]
 
 Run peforth Forth source or start the interactive REPL.
 
@@ -732,8 +719,10 @@ Options:
   -e <tokens...>     Execute all remaining command-line tokens as one TIB,
                      joined with one space between tokens
   -c, --chat         Send all remaining command-line tokens as one prompt to AI,
-                     joined with one space; continue the most recently active idle session
-  -new, --new-session Start a new session instead of continuing one with -c
+                     joined with one space; start a new session unless -id is given
+  -id <session-id>   Continue this existing session; must appear before -c
+
+Each -c run writes SESSION_ID=<session-id> to stderr after completion.
 
 With no source argument, the REPL starts. A .f file is executed as one source
 buffer. Put -i before -e or -c when you want to continue interactively; all
@@ -749,7 +738,7 @@ def main(argv=None) -> int:
     interactive = False
     source = None
     chat_prompt = None
-    force_new_session = False
+    session_id = None
     source_file = None
     index = 0
     while index < len(args):
@@ -761,9 +750,17 @@ def main(argv=None) -> int:
             interactive = True
             index += 1
             continue
-        if arg in ("-new", "--new-session"):
-            force_new_session = True
-            index += 1
+        if arg == "-id":
+            if session_id is not None:
+                print("Error: -id may be specified only once.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                return 2
+            if index + 1 >= len(args) or not args[index + 1] or args[index + 1].startswith("-"):
+                print("Error: -id requires a session ID before -c.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                return 2
+            session_id = args[index + 1]
+            index += 2
             continue
         if arg in ("-e", "--execute"):
             if source_file is not None:
@@ -811,28 +808,17 @@ def main(argv=None) -> int:
             print(f"Could not read {source_file}: {err}", file=sys.stderr)
             return 1
 
-    if force_new_session and chat_prompt is None:
-        print("Error: -new applies only to -c/--chat.", file=sys.stderr)
+    if session_id is not None and chat_prompt is None:
+        print("Error: -id applies only to -c/--chat.", file=sys.stderr)
         _print_cli_help(sys.stderr)
         return 2
 
     vm = create_vm()
     if chat_prompt is not None:
+        vm.host["ai_transport_stream_once"] = False
         vm.host["repl_mode"] = "chat"
-        if not force_new_session:
-            try:
-                sessions = ai_bridge._list_remote_sessions()
-            except RuntimeError as err:
-                print(f"Error: {err}", file=sys.stderr)
-                return 1
-            vm.host["ai_session_rows"] = sessions
-            if sessions:
-                latest = _latest_idle_session(sessions)
-                if latest is None:
-                    print("Error: No idle AI session is available to continue. "
-                          "Use -new -c to start a fresh session.", file=sys.stderr)
-                    return 1
-                vm.host["ai_active_session_id"] = latest["id"]
+        if session_id is not None:
+            vm.host["ai_active_session_id"] = session_id
         try:
             vm.push(chat_prompt)
             vm.push(True)
@@ -841,6 +827,9 @@ def main(argv=None) -> int:
             print(f"Error: {err}", file=sys.stderr)
             return 1
         repl(vm, initial_task=task, exit_when_idle=not interactive, show_greeting=False)
+        active_session_id = ai_bridge._saved_session(vm)
+        if active_session_id:
+            print(f"SESSION_ID={active_session_id}", file=sys.stderr)
         return 0
     if source is None:
         repl(vm)

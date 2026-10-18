@@ -4,8 +4,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import io
 import json
+import math
 import os
 import re
+import socket
 import sys
 import tempfile
 import time
@@ -19,6 +21,103 @@ from pathlib import Path
 RUNTIME_ROOT = Path(__file__).resolve().parent.parent
 USER_HOME = Path.home() / ".peforth"
 API = "https://api.openai.com/v1/agents"
+
+
+def _configured_seconds(name, default):
+    raw = os.environ.get(name)
+    try:
+        seconds = float(raw) if raw is not None else float(default)
+    except (TypeError, ValueError):
+        raise RuntimeError(f"{name} must be a positive number of seconds.") from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise RuntimeError(f"{name} must be a positive number of seconds.")
+    return seconds
+
+
+def _request_timeout():
+    return _configured_seconds("PEFORTH_AI_REQUEST_TIMEOUT", 30)
+
+
+def _stream_timeout():
+    return _configured_seconds("PEFORTH_AI_STREAM_TIMEOUT", 300)
+
+
+def _turn_timeout():
+    return _configured_seconds("PEFORTH_AI_TURN_TIMEOUT", 300)
+
+
+def _poll_interval():
+    return _configured_seconds("PEFORTH_AI_POLL_INTERVAL", 0.5)
+
+
+class _OneShotDeadline:
+    """One-shot wall-clock budget, with explicit pauses for human approval."""
+
+    def __init__(self, timeout=None):
+        self.timeout = _turn_timeout() if timeout is None else _configured_seconds(
+            "turn timeout", timeout
+        )
+        self.deadline = time.monotonic() + self.timeout
+        self.paused_at = None
+        self.prompt_submission_started = False
+        self.prompt_accepted = False
+
+    def remaining(self):
+        now = self.paused_at if self.paused_at is not None else time.monotonic()
+        return max(0.0, self.deadline - now)
+
+    def pause(self):
+        if self.paused_at is None:
+            self.paused_at = time.monotonic()
+
+    def resume(self):
+        if self.paused_at is not None:
+            self.deadline += time.monotonic() - self.paused_at
+            self.paused_at = None
+
+    def mark_submission_started(self):
+        self.prompt_submission_started = True
+
+    def mark_prompt_accepted(self):
+        self.prompt_accepted = True
+
+    def _timeout_error(self, operation):
+        if self.prompt_accepted:
+            outcome = "the prompt was accepted. Check the session before retrying."
+        elif self.prompt_submission_started:
+            outcome = "prompt submission outcome is unknown; check the session before retrying."
+        else:
+            outcome = "the prompt was not submitted."
+        return RuntimeError(
+            f"Agents API one-shot timed out after {self.timeout:g}s during {operation}; {outcome}"
+        )
+
+    def check(self, operation):
+        remaining = self.remaining()
+        if remaining <= 0:
+            raise self._timeout_error(operation)
+        return remaining
+
+    def request_timeout(self, operation):
+        remaining = self.check(operation)
+        return min(_request_timeout(), remaining)
+
+
+def _deadline_from(diagnostic=None, deadline=None):
+    if deadline is not None:
+        return deadline
+    if isinstance(diagnostic, dict):
+        return diagnostic.get("_one_shot_deadline")
+    return None
+
+
+def _ensure_one_shot_deadline(diagnostic):
+    deadline = _deadline_from(diagnostic)
+    if deadline is None:
+        deadline = _OneShotDeadline()
+    if isinstance(diagnostic, dict):
+        diagnostic["_one_shot_deadline"] = deadline
+    return deadline
 
 
 def _runtime_config_path():
@@ -121,9 +220,61 @@ def _safe_headers(headers):
             for name, value in headers.items()}
 
 
+def _response_socket(response):
+    candidates = [
+        getattr(response, "_sock", None),
+        getattr(getattr(response, "fp", None), "_sock", None),
+        getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None),
+    ]
+    return next((candidate for candidate in candidates
+                 if callable(getattr(candidate, "settimeout", None))), None)
+
+
+def _deadline_read(response, size, deadline, *, method, path):
+    """Read a body in bounded chunks, refreshing the socket cap each time."""
+    unlimited = size is None or size < 0
+    target = None if unlimited else size
+    chunks = []
+    total = 0
+    reader = getattr(response, "read1", None)
+    if not callable(reader):
+        reader = getattr(getattr(response, "fp", None), "read1", None)
+    while target is None or total < target:
+        request_cap = deadline.request_timeout(f"reading response body for {method} {path}")
+        remaining_size = 64 * 1024 if target is None else min(64 * 1024, target - total)
+        sock = _response_socket(response)
+        if sock is not None:
+            sock.settimeout(request_cap)
+        read_size = remaining_size if callable(reader) else size
+        try:
+            chunk = reader(remaining_size) if callable(reader) else response.read(read_size)
+        except (TimeoutError, socket.timeout) as exc:
+            if deadline.remaining() <= 0:
+                raise deadline._timeout_error(f"reading response body for {method} {path}") from exc
+            outcome = ("; POST outcome may be unknown; check the session before retrying"
+                       if method == "POST" else "")
+            raise RuntimeError(
+                f"Agents API response body timed out after {request_cap:g}s: "
+                f"{method} {path}{outcome}"
+            ) from exc
+        deadline.check(f"reading response body for {method} {path}")
+        if not isinstance(chunk, (bytes, str)):
+            raise TypeError("HTTP response body must be bytes or text")
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if not callable(reader):
+            break
+    if chunks and isinstance(chunks[0], str):
+        return "".join(chunks)
+    return b"".join(chunks)
+
+
 class _LoggedResponse:
     def __init__(self, response, diagnostic, *, method, path, operation,
-                 started_ns, request_id, provider_request_id, status, stream):
+                 started_ns, request_id, provider_request_id, status, stream,
+                 deadline=None):
         self._response = response
         self._diagnostic = diagnostic
         self._method = method
@@ -134,6 +285,7 @@ class _LoggedResponse:
         self._provider_request_id = provider_request_id
         self._status = status
         self._stream = stream
+        self._deadline = deadline
         self._verbose = diagnostic.get("mode") == "verbose"
         self._response_payload = bytearray()
         self._closed = False
@@ -149,7 +301,13 @@ class _LoggedResponse:
         return iter(self._response)
 
     def read(self, size=-1):
-        value = self._response.read(size)
+        if self._deadline is None:
+            value = self._response.read(size)
+        else:
+            value = _deadline_read(
+                self._response, size, self._deadline,
+                method=self._method, path=self._path,
+            )
         if self._verbose and not self._stream and value:
             self._response_payload.extend(
                 value.encode("utf-8") if isinstance(value, str) else value
@@ -192,21 +350,32 @@ class _LoggedResponse:
             )
 
 
-def _request(method, path, payload=None, stream=False, *, diagnostic=None, operation=None):
+def _request(method, path, payload=None, stream=False, *, diagnostic=None,
+             operation=None, timeout=None, headers=None, deadline=None,
+             prompt_submission=False):
     load_dotenv()
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not key:
         raise RuntimeError("Set OPENAI_API_KEY in ~/.peforth/.env or the process environment to use AI.")
+    deadline = _deadline_from(diagnostic, deadline)
+    timeout = _request_timeout() if timeout is None else _configured_seconds(
+        "request timeout", timeout
+    )
     method = method.upper()
     operation = operation or path.split("?", 1)[0].strip("/") or "request"
     request_id = str(uuid.uuid4())
     started_ns = time.monotonic_ns()
     request_text = None if payload is None else json.dumps(payload, ensure_ascii=False)
     body = request_text.encode() if request_text is not None else None
-    request = urllib.request.Request(API + path, data=body, method=method, headers={
+    request_headers = {
         "Authorization": "Bearer " + key, "Content-Type": "application/json",
         "OpenAI-Beta": "agents=v1",
-        "Accept": "text/event-stream" if stream else "application/json"})
+        "Accept": "text/event-stream" if stream else "application/json"}
+    if headers:
+        request_headers.update({str(name): str(value) for name, value in headers.items()})
+    request = urllib.request.Request(
+        API + path, data=body, method=method, headers=request_headers
+    )
     context = dict(diagnostic or {})
     context["operation"] = operation
     verbose = context.get("mode") == "verbose"
@@ -230,7 +399,11 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None, opera
             http_method=method, url=path, local_request_id=request_id,
         )
     try:
-        response = urllib.request.urlopen(request, timeout=300)
+        if deadline is not None:
+            timeout = min(timeout, deadline.request_timeout(operation))
+            if prompt_submission:
+                deadline.mark_submission_started()
+        response = urllib.request.urlopen(request, timeout=timeout)
     except urllib.error.HTTPError as exc:
         elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
         provider_request_id = _header_value(exc.headers, "x-request-id", "request-id", "openai-request-id")
@@ -243,8 +416,17 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None, opera
             local_request_id=request_id, provider_request_id=provider_request_id,
             elapsed_ms=elapsed_ms,
         )
-        detail_bytes = exc.read(4096)
-        detail = detail_bytes.decode("utf-8", "replace")
+        detail_read_error = None
+        try:
+            detail_bytes = (
+                _deadline_read(exc, 4096, deadline, method=method, path=path)
+                if deadline is not None else exc.read(4096)
+            )
+        except Exception as body_error:
+            detail_bytes = b""
+            detail_read_error = body_error
+        detail = (detail_bytes.decode("utf-8", "replace")
+                  if isinstance(detail_bytes, bytes) else str(detail_bytes))
         if verbose and detail_bytes:
             content_id = _diagnostic_store_content(
                 context, "http_response_payload", detail
@@ -256,7 +438,7 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None, opera
                 local_request_id=request_id, provider_request_id=provider_request_id,
                 elapsed_ms=elapsed_ms,
             )
-        error = RuntimeError(f"Agents API HTTP {exc.code}: {detail}")
+        error = detail_read_error or RuntimeError(f"Agents API HTTP {exc.code}: {detail}")
         _diagnostic_event(
             context, "http_request_failed", payload={"stream": bool(stream)},
             http_method=method, url=path, http_status=exc.code,
@@ -281,9 +463,29 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None, opera
                 elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
             )
         raise error from None
+    except (TimeoutError, socket.timeout) as exc:
+        elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
+        outcome = (" (request outcome may be unknown; check session state before retrying)"
+                   if method == "POST" else "")
+        error = RuntimeError(
+            f"Agents API request timed out after {timeout:g}s: {method} {path}{outcome}"
+        )
+        _diagnostic_event(
+            context, "http_request_failed", payload={"stream": bool(stream)},
+            http_method=method, url=path, local_request_id=request_id,
+            elapsed_ms=elapsed_ms, error=error,
+        )
+        raise error from exc
     except urllib.error.URLError as exc:
         elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
-        error = RuntimeError(f"Agents API connection failed: {exc.reason}")
+        if isinstance(exc.reason, (TimeoutError, socket.timeout)):
+            outcome = (" (request outcome may be unknown; check session state before retrying)"
+                       if method == "POST" else "")
+            error = RuntimeError(
+                f"Agents API request timed out after {timeout:g}s: {method} {path}{outcome}"
+            )
+        else:
+            error = RuntimeError(f"Agents API connection failed: {exc.reason}")
         _diagnostic_event(
             context, "http_request_failed", payload={"stream": bool(stream)},
             http_method=method, url=path, local_request_id=request_id,
@@ -325,11 +527,15 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None, opera
         response, context, method=method, path=path, operation=operation,
         started_ns=started_ns, request_id=request_id,
         provider_request_id=provider_request_id, status=status, stream=stream,
+        deadline=deadline,
     )
 
 
-def _api_get(path, *, diagnostic=None, operation=None):
-    with _request("GET", path, diagnostic=diagnostic, operation=operation) as response:
+def _api_get(path, *, diagnostic=None, operation=None, deadline=None):
+    deadline = _deadline_from(diagnostic, deadline)
+    with _request(
+            "GET", path, diagnostic=diagnostic, operation=operation,
+            deadline=deadline) as response:
         return json.load(response)
 
 
@@ -488,15 +694,180 @@ def _diagnostic_store_content(context, content_type, text):
         return None
 
 
-def _create_session(payload, *, diagnostic=None):
-    response = _request(
-        "POST", "/sessions", payload, stream=True, diagnostic=diagnostic,
-        operation="create_session",
+def _latest_turn(session_id, *, diagnostic=None, deadline=None):
+    deadline = _deadline_from(diagnostic, deadline)
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    query = urllib.parse.urlencode({"limit": 1, "order": "desc"})
+    page = _api_get(
+        f"/sessions/{encoded_id}/turns?{query}", diagnostic=diagnostic,
+        operation="list_session_turns", deadline=deadline,
     )
-    return _event_stream(response, diagnostic=diagnostic, operation="create_session")
+    rows = page.get("data") or []
+    return rows[0] if rows and isinstance(rows[0], dict) else None
 
 
-def _event_stream(response, *, diagnostic=None, operation=None):
+def _session_turn_output_text(session_id, turn_id, *, diagnostic=None, deadline=None):
+    deadline = _deadline_from(diagnostic, deadline)
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    items = []
+    after = None
+    while True:
+        query = {"limit": 100, "order": "asc"}
+        if after:
+            query["after"] = after
+        page = _api_get(
+            f"/sessions/{encoded_id}/items?{urllib.parse.urlencode(query)}",
+            diagnostic=diagnostic, operation="list_session_items",
+            deadline=deadline,
+        )
+        items.extend(page.get("data") or [])
+        last_id = page.get("last_id")
+        if not page.get("has_more") or not last_id or last_id == after:
+            break
+        after = last_id
+
+    messages = []
+    for item in items:
+        if (not isinstance(item, dict) or item.get("turn_id") != turn_id
+                or item.get("type") != "message" or item.get("role") != "assistant"):
+            continue
+        text = "".join(
+            part.get("text", "") for part in item.get("content", [])
+            if isinstance(part, dict) and part.get("type") == "output_text"
+            and isinstance(part.get("text"), str)
+        )
+        if text:
+            messages.append((item.get("phase"), text))
+    final_messages = [text for phase, text in messages if phase == "final_answer"]
+    return "".join(final_messages or [text for _, text in messages])
+
+
+def _poll_deadline_check(deadline, diagnostic, operation, turn_id):
+    try:
+        return deadline.check(operation)
+    except RuntimeError as error:
+        _diagnostic_event(
+            diagnostic, "session_poll_timed_out",
+            payload={"timeout_seconds": deadline.timeout, "turn_id": turn_id,
+                     "operation": operation},
+            elapsed_ms=(deadline.timeout - deadline.remaining()) * 1000,
+            error=error,
+        )
+        raise
+
+
+def _poll_session_events(session_id, previous_turn_id=None, *, diagnostic=None,
+                         deadline=None):
+    """Poll saved session state/items under the caller's one-shot deadline."""
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    context = dict(diagnostic or {})
+    context["session_id"] = session_id
+    deadline = _ensure_one_shot_deadline(context) if deadline is None else deadline
+    context["_one_shot_deadline"] = deadline
+    interval = _poll_interval()
+    target_turn_id = None
+    action_signature = None
+
+    while True:
+        _poll_deadline_check(deadline, context, "polling session state", target_turn_id)
+        session = _api_get(
+            f"/sessions/{encoded_id}", diagnostic=context,
+            operation="poll_session_state", deadline=deadline,
+        )
+        _poll_deadline_check(deadline, context, "polling session turns", target_turn_id)
+        latest = _latest_turn(session_id, diagnostic=context, deadline=deadline)
+        if (latest and isinstance(latest.get("id"), str)
+                and latest["id"] != previous_turn_id):
+            target_turn_id = latest["id"]
+
+        status = session.get("status")
+        if status == "requires_action":
+            actions = session.get("required_actions") or []
+            signature = tuple(sorted(
+                tuple(str(action.get(key) or "")
+                      for key in ("type", "call_id", "request_id"))
+                for action in actions if isinstance(action, dict)
+            ))
+            if signature != action_signature:
+                if target_turn_id is None:
+                    target_turn_id = next((
+                        action.get("turn_id") for action in actions
+                        if isinstance(action, dict) and action.get("turn_id")
+                    ), None)
+                yield {"type": "agent.session.requires_action", "session": session}
+                action_signature = signature
+        else:
+            action_signature = None
+
+        if status == "failed":
+            error = session.get("error") or "The session failed."
+            raise RuntimeError(f"Agents API session failed: {error}")
+
+        if latest and latest.get("id") == target_turn_id:
+            turn_status = latest.get("status")
+            if turn_status == "completed":
+                output = _session_turn_output_text(
+                    session_id, target_turn_id, diagnostic=context, deadline=deadline
+                )
+                _poll_deadline_check(
+                    deadline, context, "retrieving the final answer", target_turn_id
+                )
+                if output:
+                    yield {"type": "agent.session.turn.output_text.delta", "delta": output}
+                yield {"type": "agent.session.turn.output_text.done", "text": output}
+                yield {
+                    "type": "agent.session.turn.completed", "session_id": session_id,
+                    "turn_id": target_turn_id, "turn": latest,
+                }
+                return
+            if turn_status in {"failed", "cancelled", "incomplete"}:
+                kind = ("agent.session.turn.cancelled" if turn_status == "cancelled"
+                        else "agent.session.turn.failed")
+                yield {"type": kind, "session_id": session_id,
+                       "turn_id": target_turn_id, "turn": latest}
+                return
+
+        remaining = _poll_deadline_check(
+            deadline, context, "polling session state", target_turn_id
+        )
+        time.sleep(min(interval, remaining))
+
+
+def _create_session(payload, *, diagnostic=None, stream=True):
+    request_payload = {**payload, "stream": bool(stream)}
+    if stream:
+        response = _request(
+            "POST", "/sessions", request_payload, stream=True,
+            diagnostic=diagnostic, operation="create_session", timeout=_stream_timeout(),
+        )
+        yield from _event_stream(
+            response, diagnostic=diagnostic, operation="create_session",
+            timeout=_stream_timeout(),
+        )
+        return
+
+    deadline = _ensure_one_shot_deadline(diagnostic)
+    with _request(
+            "POST", "/sessions", request_payload, diagnostic=diagnostic,
+            operation="create_session", timeout=_request_timeout(),
+            deadline=deadline, prompt_submission=True) as response:
+        session = json.load(response)
+    deadline.mark_prompt_accepted()
+    deadline.check("processing session creation response")
+    session_id = session.get("id") if isinstance(session, dict) else None
+    if not isinstance(session_id, str) or not session_id:
+        raise RuntimeError("Agents API created a session without returning its ID.")
+    context = dict(diagnostic or {})
+    context["session_id"] = session_id
+    context["_one_shot_deadline"] = deadline
+    yield {"type": "agent.session.created", "session": session}
+    yield from _poll_session_events(session_id, diagnostic=context, deadline=deadline)
+
+
+def _event_stream(response, *, diagnostic=None, operation=None, timeout=None):
+    timeout = _stream_timeout() if timeout is None else _configured_seconds(
+        "stream timeout", timeout
+    )
     context = diagnostic if isinstance(diagnostic, dict) else dict(diagnostic or {})
     if operation is not None:
         context["operation"] = operation
@@ -634,6 +1005,16 @@ def _event_stream(response, *, diagnostic=None, operation=None):
             context, response, "sse_stream_ended",
             payload={"elapsed_ms": (time.monotonic_ns() - stream_started_ns) / 1_000_000},
         )
+    except (TimeoutError, socket.timeout) as exc:
+        error = RuntimeError(
+            f"Agents API SSE stream timed out after {timeout:g}s without data."
+        )
+        _sse_diagnostic_event(
+            context, response, "sse_stream_failed",
+            payload={"elapsed_ms": (time.monotonic_ns() - stream_started_ns) / 1_000_000},
+            error=error,
+        )
+        raise error from exc
     except Exception as exc:
         _sse_diagnostic_event(
             context, response, "sse_stream_failed",
@@ -651,19 +1032,43 @@ def _event_stream(response, *, diagnostic=None, operation=None):
             )
 
 
-def _stream(session_id, event, *, diagnostic=None):
+def _stream(session_id, event, *, diagnostic=None, stream=True):
     encoded_id = urllib.parse.quote(session_id, safe="")
     operation = "continue_session"
+    if not stream:
+        deadline = _ensure_one_shot_deadline(diagnostic)
+        previous_turn = _latest_turn(
+            session_id, diagnostic=diagnostic, deadline=deadline
+        )
+        previous_turn_id = previous_turn.get("id") if previous_turn else None
+        with _request(
+                "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
+                diagnostic=diagnostic, operation="submit_session_event",
+                timeout=_request_timeout(), headers={"Idempotency-Key": str(uuid.uuid4())},
+                deadline=deadline, prompt_submission=True) as accepted:
+            accepted.read()
+        deadline.mark_prompt_accepted()
+        context = dict(diagnostic or {})
+        context["session_id"] = session_id
+        context["_one_shot_deadline"] = deadline
+        yield from _poll_session_events(
+            session_id, previous_turn_id, diagnostic=context, deadline=deadline
+        )
+        return
+
     response = _request(
         "GET", f"/sessions/{encoded_id}/events?stream=true", stream=True,
-        diagnostic=diagnostic, operation=operation,
+        diagnostic=diagnostic, operation=operation, timeout=_stream_timeout(),
     )
     try:
         with _request(
                 "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
                 diagnostic=diagnostic, operation="submit_session_event") as accepted:
             accepted.read()
-        yield from _event_stream(response, diagnostic=diagnostic, operation=operation)
+        yield from _event_stream(
+            response, diagnostic=diagnostic, operation=operation,
+            timeout=_stream_timeout(),
+        )
     finally:
         if not response.closed:
             response.close()
@@ -799,7 +1204,8 @@ def _saved_session(vm):
     return vm.host.get("ai_active_session_id") or ""
 
 
-def _diagnostic_start_turn(vm, prompt, *, instructions=None, session_id=None):
+def _diagnostic_start_turn(vm, prompt, *, instructions=None, session_id=None,
+                           terminal_output_stream=True, api_transport_stream=True):
     logger = vm.host.get("diagnostic_log")
     runtime_id = vm.host.get("diagnostic_runtime_id")
     if logger is None or runtime_id is None:
@@ -818,7 +1224,10 @@ def _diagnostic_start_turn(vm, prompt, *, instructions=None, session_id=None):
         )
         logger.append_event(
             runtime_id, turn_id, "ai_turn_started", session_id=session_id,
-            payload={"stream": True},
+            payload={
+                "terminal_output_stream": bool(terminal_output_stream),
+                "api_transport_stream": bool(api_transport_stream),
+            },
         )
         return turn_id
     except Exception as exc:

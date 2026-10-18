@@ -600,6 +600,7 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertNotIn("source_latest", inventory["host"])
         self.assertNotIn("runtime_source_path", inventory["host"])
         self.assertEqual(captured["environment"], {"type": "none"})
+        self.assertTrue(captured["stream"])
 
     def test_ai_words_have_visible_source_and_help(self):
         ai_line = self.vm.tick("ai:")
@@ -932,7 +933,45 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertEqual(vm.sources, ["1 2 + ."])
         interactive_repl.assert_called_once_with(vm)
 
-    def test_cli_chat_joins_prompt_and_invokes_ai_word(self):
+    def test_cli_chat_defaults_to_new_session_and_returns_id_on_stderr(self):
+        class RecordingVM:
+            def __init__(self):
+                self.host = {}
+                self.stack = []
+                self.task = object()
+                self.executed = None
+
+            def push(self, value):
+                self.stack.append(value)
+
+            def tick(self, name):
+                return name
+
+            def execute(self, word):
+                self.executed = (word, self.stack[:])
+                self.stack.clear()
+                self.host["ai_active_session_id"] = "sess_created_here"
+                return self.task
+
+        vm = RecordingVM()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with patch.object(_f_mod, "create_vm", return_value=vm), \
+                patch.object(_f_mod.ai_bridge, "_list_remote_sessions") as list_sessions, \
+                patch.object(_f_mod, "repl") as interactive_repl, \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = _f_mod.main(["--chat", "Hello", "from", "CLI"])
+        self.assertEqual(result, 0)
+        self.assertEqual(vm.executed, ("(ai)", ["Hello from CLI", True]))
+        self.assertEqual(vm.host["repl_mode"], "chat")
+        self.assertFalse(vm.host["ai_transport_stream_once"])
+        list_sessions.assert_not_called()
+        self.assertNotIn("SESSION_ID=", stdout.getvalue())
+        self.assertIn("SESSION_ID=sess_created_here", stderr.getvalue())
+        interactive_repl.assert_called_once_with(
+            vm, initial_task=vm.task, exit_when_idle=True, show_greeting=False)
+
+    def test_cli_chat_with_id_continues_only_the_explicit_session(self):
         class RecordingVM:
             def __init__(self):
                 self.host = {}
@@ -952,21 +991,45 @@ class ReplBootstrapTests(unittest.TestCase):
                 return self.task
 
         vm = RecordingVM()
-        sessions = [
-            {"id": "sess_created_latest", "status": "idle", "last_active_at": 100},
-            {"id": "sess_active_latest", "status": "idle", "last_active_at": 250},
-        ]
+        stdout = io.StringIO()
+        stderr = io.StringIO()
         with patch.object(_f_mod, "create_vm", return_value=vm), \
-                patch.object(_f_mod.ai_bridge, "_list_remote_sessions", return_value=sessions), \
-                patch.object(_f_mod, "repl") as interactive_repl:
-            result = _f_mod.main(["--chat", "Hello", "from", "CLI"])
+                patch.object(_f_mod.ai_bridge, "_list_remote_sessions") as list_sessions, \
+                patch.object(_f_mod, "repl") as interactive_repl, \
+                contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            result = _f_mod.main(["-id", "sess_explicit", "-c", "Hello", "from", "CLI"])
         self.assertEqual(result, 0)
         self.assertEqual(vm.executed, ("(ai)", ["Hello from CLI", True]))
-        self.assertEqual(vm.host["repl_mode"], "chat")
-        self.assertEqual(vm.host["ai_active_session_id"], "sess_active_latest")
-        self.assertIs(vm.host["ai_session_rows"], sessions)
+        self.assertEqual(vm.host["ai_active_session_id"], "sess_explicit")
+        self.assertFalse(vm.host["ai_transport_stream_once"])
+        list_sessions.assert_not_called()
+        self.assertNotIn("SESSION_ID=", stdout.getvalue())
+        self.assertIn("SESSION_ID=sess_explicit", stderr.getvalue())
         interactive_repl.assert_called_once_with(
             vm, initial_task=vm.task, exit_when_idle=True, show_greeting=False)
+
+    def test_cli_id_requires_chat_and_value(self):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            result = _f_mod.main(["-id"])
+        self.assertEqual(result, 2)
+        self.assertIn("-id requires a session ID", stderr.getvalue())
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            result = _f_mod.main(["-id", "sess_explicit"])
+        self.assertEqual(result, 2)
+        self.assertIn("-id applies only to -c", stderr.getvalue())
+
+    def test_cli_new_option_is_removed(self):
+        stderr = io.StringIO()
+        with patch.object(_f_mod, "create_vm") as create_vm, \
+                patch.object(_f_mod, "repl"), contextlib.redirect_stderr(stderr):
+            result = _f_mod.main(["-new", "-c", "Hello"])
+        self.assertEqual(result, 2)
+        self.assertIn("Unknown option: -new", stderr.getvalue())
+        create_vm.assert_not_called()
+
 
     def test_cli_chat_interactive_flag_must_precede_prompt(self):
         class RecordingVM:
@@ -997,7 +1060,7 @@ class ReplBootstrapTests(unittest.TestCase):
         interactive_repl.assert_called_once_with(
             vm, initial_task=vm.task, exit_when_idle=False, show_greeting=False)
 
-    def test_cli_new_chat_skips_session_lookup(self):
+    def test_cli_chat_without_id_skips_session_lookup(self):
         class RecordingVM:
             def __init__(self):
                 self.host = {}
@@ -1019,7 +1082,7 @@ class ReplBootstrapTests(unittest.TestCase):
         with patch.object(_f_mod, "create_vm", return_value=vm), \
                 patch.object(_f_mod.ai_bridge, "_list_remote_sessions") as list_sessions, \
                 patch.object(_f_mod, "repl") as interactive_repl:
-            result = _f_mod.main(["-new", "-c", "A", "fresh", "chat"])
+            result = _f_mod.main(["-c", "A", "fresh", "chat"])
         self.assertEqual(result, 0)
         self.assertEqual(vm.executed, ("(ai)", ["A fresh chat", True]))
         self.assertNotIn("ai_active_session_id", vm.host)
@@ -1054,7 +1117,9 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertIn("-e <Forth tokens...>", output.getvalue())
         self.assertIn("-i, --interactive", output.getvalue())
-        self.assertIn("-new, --new-session", output.getvalue())
+        self.assertIn("-id <session-id>", output.getvalue())
+        self.assertIn("SESSION_ID=<session-id>", output.getvalue())
+        self.assertNotIn("-new", output.getvalue())
 
     def test_http_request_records_lifecycle_timing_and_request_ids(self):
         from peforth import ai_bridge
@@ -1567,8 +1632,11 @@ class ReplBootstrapTests(unittest.TestCase):
             runtime_id = logger.start_runtime(process_id=509)
             self.vm.host["diagnostic_log"] = logger
             self.vm.host["diagnostic_runtime_id"] = runtime_id
+            self.vm.host["ai_transport_stream_once"] = False
+            captured = {}
 
-            def fake_create(payload, *, diagnostic=None):
+            def fake_create(payload, *, diagnostic=None, stream=True):
+                captured.update(payload=payload, stream=stream)
                 yield {"type": "agent.session.created", "session": {"id": "sess_diag"}}
                 yield {"type": "agent.session.turn.output_text.delta", "delta": "Hello"}
                 yield {"type": "agent.session.turn.output_text.done", "text": "Hello"}
@@ -1587,6 +1655,17 @@ class ReplBootstrapTests(unittest.TestCase):
                 "remote_session_id, status, output_status FROM turns"
             ).fetchone()
             self.assertEqual((turn[4], turn[5], turn[6]), ("sess_diag", "completed", "complete"))
+            self.assertEqual(self.vm.host["ai_active_session_id"], "sess_diag")
+            self.assertFalse(captured["payload"]["stream"])
+            self.assertFalse(captured["stream"])
+            started_payload = logger.connection.execute(
+                "SELECT payload_json FROM timeline WHERE turn_id = ? AND event_type = ?",
+                (turn[0], "ai_turn_started"),
+            ).fetchone()[0]
+            self.assertEqual(json.loads(started_payload), {
+                "terminal_output_stream": False,
+                "api_transport_stream": False,
+            })
             expected_content = ((turn[1], "Say hello"), (turn[2], "instructions"), (turn[3], "Hello"))
             for content_id, expected_text in expected_content:
                 actual_text = logger.connection.execute(
