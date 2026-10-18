@@ -10,6 +10,7 @@ import tempfile
 import json
 import sqlite3
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from peforth.diagnostic_log import DiagnosticLog
@@ -681,6 +682,63 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertEqual(detected["runtime_path"], str(pathlib.Path(_f_mod.__file__).resolve().parent))
         self.assertNotIn("source_latest", detected)
         self.assertNotIn("runtime_source_path", detected)
+
+    def _detect_wsl_system_info(self, env, program_info):
+        fake_os = SimpleNamespace(name="posix", environ=os.environ, path=os.path)
+        with patch.dict(os.environ, {"WSL_DISTRO_NAME": "Ubuntu", **env}):
+            with patch.object(_f_mod, "os", fake_os):
+                with patch.object(_f_mod, "_program_info", side_effect=program_info):
+                    return _f_mod._detect_system_info()
+
+    def test_wsl_system_info_prefers_detected_windows_pwsh_exe(self):
+        detected_path = "/mnt/c/Program Files/PowerShell/7/pwsh.exe"
+        configured_path = "/custom/pwsh.exe"
+        calls = []
+
+        def program_info(name, _version_args):
+            calls.append(name)
+            if name == "pwsh.exe":
+                return {"available": True, "path": detected_path, "version": "7.6.7"}
+            return {"available": False, "path": None, "version": None}
+
+        detected = self._detect_wsl_system_info(
+            {"PEFORTH_PWSH_PATH": configured_path}, program_info)
+        pwsh = detected["shells"]["pwsh"]
+
+        self.assertEqual(pwsh, {
+            "available": True,
+            "path": detected_path,
+            "version": "7.6.7",
+            "execution_host": "windows",
+            "source": "path",
+        })
+        self.assertEqual(detected["config"]["PEFORTH_PWSH_PATH"], configured_path)
+        self.assertIn("pwsh.exe", calls)
+        self.assertNotIn("pwsh", calls)
+
+    def test_wsl_system_info_uses_env_pwsh_path_when_detection_fails(self):
+        configured_path = "/custom/pwsh.exe"
+        calls = []
+
+        def program_info(name, _version_args):
+            calls.append(name)
+            if name == configured_path:
+                return {"available": True, "path": configured_path, "version": "7.6.7"}
+            return {"available": False, "path": None, "version": None}
+
+        detected = self._detect_wsl_system_info(
+            {"PEFORTH_PWSH_PATH": configured_path}, program_info)
+        pwsh = detected["shells"]["pwsh"]
+
+        self.assertEqual(pwsh, {
+            "available": True,
+            "path": configured_path,
+            "version": "7.6.7",
+            "execution_host": "windows",
+            "source": "env",
+        })
+        self.assertEqual(calls[:2], ["pwsh.exe", configured_path])
+        self.assertEqual(detected["config"]["PEFORTH_PWSH_PATH"], configured_path)
 
     def test_system_info_word_uses_runtime_binding_and_host_commands(self):
         from peforth import ai_tools

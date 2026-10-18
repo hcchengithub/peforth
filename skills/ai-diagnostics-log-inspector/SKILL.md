@@ -20,6 +20,8 @@ Use this skill to inspect peforth AI diagnostic databases. The agent using the s
 
 First inspect the current runtime inventory and live Forth dictionary. Look up the available shell or process words before relying on them. Run local commands through the exposed peforth execution tool and respect its approval result.
 
+On WSL, `system_info.shells.pwsh` reports the Windows PowerShell executable path, its `execution_host`, and whether it was found on `PATH` or configured by environment. It probes `pwsh.exe` directly, then uses `PEFORTH_PWSH_PATH` from `~/.peforth/.env` if detection fails. `run_pwsh` launches the resolved path directly through `subprocess`; do not route it through `run_bash`.
+
 Use a reader native to the database host when possible:
 
 - For a WSL database, use that WSL Python and Linux database path.

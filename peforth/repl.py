@@ -165,6 +165,35 @@ def _program_info(name, version_args):
     return {"available": True, "path": path, "version": version}
 
 
+def _pwsh_info(is_windows, is_wsl):
+    version_args = [
+        "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+        "$PSVersionTable.PSVersion.ToString()",
+    ]
+    if is_windows:
+        info = _program_info("pwsh.exe", version_args)
+        execution_host = "windows"
+        source = "path"
+    elif is_wsl:
+        execution_host = "windows"
+        info = _program_info("pwsh.exe", version_args)
+        source = "path"
+        if not info.get("available"):
+            configured = os.environ.get("PEFORTH_PWSH_PATH", "").strip()
+            if configured:
+                configured = os.path.expanduser(os.path.expandvars(configured))
+                info = _program_info(configured, version_args)
+                source = "env"
+    else:
+        info = _program_info("pwsh", version_args)
+        execution_host = "linux"
+        source = "path"
+    info = dict(info)
+    info["execution_host"] = execution_host
+    info["source"] = source if info.get("available") else None
+    return info
+
+
 def _windows_wsl_info():
     wsl_path = shutil.which("wsl.exe") or shutil.which("wsl")
     if not wsl_path:
@@ -191,11 +220,7 @@ def _detect_system_info():
     prefix = os.path.normcase(os.path.abspath(sys.prefix))
     base_prefix = os.path.normcase(os.path.abspath(sys.base_prefix))
     venv_active = prefix != base_prefix
-    pwsh_name = "pwsh.exe" if is_windows else "pwsh"
-    pwsh = _program_info(
-        pwsh_name,
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.ToString()"],
-    )
+    pwsh = _pwsh_info(is_windows, is_wsl)
     if is_windows:
         wsl = _windows_wsl_info()
         if wsl.get("available"):
@@ -233,6 +258,7 @@ def _detect_system_info():
             "PEFORTH_SOURCE_PATH": os.environ.get("PEFORTH_SOURCE_PATH", ""),
             "PEFORTH_AI_SKILLS_DIR": os.environ.get("PEFORTH_AI_SKILLS_DIR", ""),
             "PEFORTH_WSL_DISTRO": os.environ.get("PEFORTH_WSL_DISTRO", ""),
+            "PEFORTH_PWSH_PATH": os.environ.get("PEFORTH_PWSH_PATH", ""),
         },
     }
 

@@ -12,7 +12,10 @@ PEFORTH_AI_MODEL=gpt-6-luna
 PEFORTH_AI_SKILLS_DIR=skills
 PEFORTH_CONFIG_DIR=~/.peforth
 PEFORTH_WSL_DISTRO=Ubuntu
+PEFORTH_PWSH_PATH=
 ```
+
+On WSL, PowerShell uses Windows `pwsh.exe`: `system_info` first discovers it on the WSL `PATH`, then uses `PEFORTH_PWSH_PATH` if discovery fails. Set that optional value to a WSL-accessible executable path (for example, `/mnt/c/.../pwsh.exe`). `system_info.shells.pwsh` reports the resolved `path`, `execution_host`, and `source` (`path` or `env`); `run_pwsh` launches that path directly through `subprocess`.
 
 `PEFORTH_AI_MODEL` is read at VM startup into the Forth `aiModel` value. The value is the current model used by new AI sessions and can be changed immediately with `s" model-name" to aiModel`; inspect it with `aiModel`.
 
