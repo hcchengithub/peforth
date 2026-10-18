@@ -6,6 +6,8 @@
 
 This is an **architecture and design manual**, not an exhaustive Forth word reference. The dictionary provides per-word help and comments. For installation, virtual environments, the `f` command, and current compatibility limitations, start with the repository [README](../README.md). For the optional AI assistant, also see [AI support](ai.md).
 
+**Use AI as a reading companion.** We have made every effort to explain the design and technical details clearly, but some passages may still leave questions unanswered. If anything is unclear, consider using an AI sidebar in your browser (for example, Gemini in Chrome) to ask questions about the page you are reading, request additional examples, or explore the code and concepts in greater depth. AI explanations can be mistaken, so verify important technical details against the source code and actual behavior.
+
 ## Preface — Minimalism, Revisited
 
 Forth's enduring appeal lies in its small stack machine, postfix notation, open compiler, and the ability to extend the language from within itself. Re-creating a vintage flat-memory computer inside a modern operating system, however, can isolate Forth from the very facilities that make contemporary software useful.
