@@ -2,14 +2,16 @@
 """peforth v2 AI-first Forth REPL."""
 
 import atexit
+import json
 import os
 import platform
 import re
 import shutil
 import subprocess
 import sys
+import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from importlib.resources import files
 from pathlib import Path
 
@@ -211,7 +213,61 @@ def _windows_wsl_info():
     return info
 
 
-def _detect_system_info():
+def _system_cache_path() -> Path:
+    return ai_bridge._runtime_config_path() / ".system_cache.json"
+
+
+def _system_cache_ttl() -> float:
+    raw = os.environ.get("PEFORTH_CACHE_TTL")
+    if raw is not None:
+        try:
+            return max(0.0, float(raw.strip()))
+        except ValueError:
+            pass
+    return 604800.0  # 7 days
+
+
+def _load_system_cache(cache_path: Path, environment: str, fingerprint: dict, ttl: float) -> dict | None:
+    if ttl <= 0:
+        return None
+    try:
+        if not cache_path.is_file():
+            return None
+        age = time.time() - cache_path.stat().st_mtime
+        if age < 0 or age > ttl:
+            return None
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return None
+        if data.get("schema_version") != 1:
+            return None
+        if data.get("environment") != environment:
+            return None
+        if data.get("config_fingerprint") != fingerprint:
+            return None
+        if not isinstance(data.get("shells"), dict) or not isinstance(data.get("wsl"), dict):
+            return None
+        return data
+    except Exception:
+        return None
+
+
+def _save_system_cache(cache_path: Path, data: dict) -> None:
+    temp_path = None
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = cache_path.with_name(f"{cache_path.name}.tmp.{os.getpid()}")
+        temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        temp_path.replace(cache_path)
+    except Exception:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _detect_system_info(cache_path: Path | None = None) -> dict:
     """Detect base host information before loading Forth AI words."""
     is_windows = os.name == "nt"
     release = platform.release()
@@ -220,27 +276,49 @@ def _detect_system_info():
     prefix = os.path.normcase(os.path.abspath(sys.prefix))
     base_prefix = os.path.normcase(os.path.abspath(sys.base_prefix))
     venv_active = prefix != base_prefix
-    pwsh = _pwsh_info(is_windows, is_wsl)
-    if is_windows:
-        wsl = _windows_wsl_info()
-        if wsl.get("available"):
-            bash_probe = _run_process(
-                            [wsl["path"], "-d", wsl["distro"], "--exec", "bash", "--version"], timeout=10)
-            version_text = bash_probe.get("stdout", "").strip() or bash_probe.get("stderr", "").strip()
-            bash = {
-                "available": bash_probe.get("exit_code") == 0,
-                "path": wsl["path"], "distro": wsl["distro"],
-                "version": next((line.strip() for line in version_text.splitlines() if line.strip()), None),
-            }
-        else:
-            bash = {"available": False, "path": None, "distro": None, "version": None}
+    environment = "windows" if is_windows else ("wsl" if is_wsl else "linux")
+    fingerprint = {
+        "PEFORTH_PWSH_PATH": os.environ.get("PEFORTH_PWSH_PATH", "").strip(),
+        "PEFORTH_WSL_DISTRO": os.environ.get("PEFORTH_WSL_DISTRO", "Ubuntu").strip(),
+    }
+    ttl = _system_cache_ttl()
+    resolved_cache = cache_path if cache_path is not None else _system_cache_path()
+    cached = _load_system_cache(resolved_cache, environment, fingerprint, ttl)
+    if cached is not None:
+        shells = cached.get("shells", {})
+        wsl = cached.get("wsl", {})
     else:
-        wsl = {"available": is_wsl, "path": None, "distro": wsl_distro, "distros": []}
-        bash = _program_info("bash", ["--version"])
-    curl_name = "curl.exe" if is_windows else "curl"
-    curl = _program_info(curl_name, ["--version"])
-    if is_windows and not curl["available"]:
-        curl = _program_info("curl", ["--version"])
+        pwsh = _pwsh_info(is_windows, is_wsl)
+        if is_windows:
+            wsl = _windows_wsl_info()
+            if wsl.get("available"):
+                bash_probe = _run_process(
+                                [wsl["path"], "-d", wsl["distro"], "--exec", "bash", "--version"], timeout=10)
+                version_text = bash_probe.get("stdout", "").strip() or bash_probe.get("stderr", "").strip()
+                bash = {
+                    "available": bash_probe.get("exit_code") == 0,
+                    "path": wsl["path"], "distro": wsl["distro"],
+                    "version": next((line.strip() for line in version_text.splitlines() if line.strip()), None),
+                }
+            else:
+                bash = {"available": False, "path": None, "distro": None, "version": None}
+        else:
+            wsl = {"available": is_wsl, "path": None, "distro": wsl_distro, "distros": []}
+            bash = _program_info("bash", ["--version"])
+        curl_name = "curl.exe" if is_windows else "curl"
+        curl = _program_info(curl_name, ["--version"])
+        if is_windows and not curl["available"]:
+            curl = _program_info("curl", ["--version"])
+        shells = {"pwsh": pwsh, "bash": bash, "curl": curl}
+        if ttl > 0:
+            _save_system_cache(resolved_cache, {
+                "schema_version": 1,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "environment": environment,
+                "config_fingerprint": fingerprint,
+                "shells": shells,
+                "wsl": wsl,
+            })
     return {
         "os": platform.system(), "platform": sys.platform,
         "source_path": _reported_source_path(),
@@ -251,7 +329,7 @@ def _detect_system_info():
         "wsl": {"active": is_wsl, "available": wsl.get("available", False),
                 "distro": wsl.get("distro") or wsl_distro, "path": wsl.get("path"),
                 "distros": wsl.get("distros", [])},
-        "shells": {"pwsh": pwsh, "bash": bash, "curl": curl},
+        "shells": shells,
         "config": {
             "PEFORTH_AI_MODEL": os.environ.get("PEFORTH_AI_MODEL", ""),
             "PEFORTH_CONFIG_DIR": os.environ.get("PEFORTH_CONFIG_DIR", ""),
@@ -259,6 +337,7 @@ def _detect_system_info():
             "PEFORTH_AI_SKILLS_DIR": os.environ.get("PEFORTH_AI_SKILLS_DIR", ""),
             "PEFORTH_WSL_DISTRO": os.environ.get("PEFORTH_WSL_DISTRO", ""),
             "PEFORTH_PWSH_PATH": os.environ.get("PEFORTH_PWSH_PATH", ""),
+            "PEFORTH_CACHE_TTL": os.environ.get("PEFORTH_CACHE_TTL", ""),
         },
     }
 

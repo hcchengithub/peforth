@@ -3,6 +3,10 @@
 .ai_session.tmp
 .ai_session.json.*.tmp
 .env.*.tmp
+.system_cache.json
+.system_cache.json.*.tmp
+.system_cache.json.tmp.*
+ai-diagnostics.sqlite3*
 __pycache__/
 *.py[cod]
 .venv/

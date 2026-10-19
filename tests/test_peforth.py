@@ -671,7 +671,7 @@ class ReplBootstrapTests(unittest.TestCase):
     def test_detect_system_info_includes_runtime_metadata(self):
         latest = {"file": "f/auxiliary.f", "modified": "2026-10-12 23:37:29"}
         repo_path = r"C:\Users\8304018\OneDrive\Documents\GitHub\peforth"
-        with patch.dict("os.environ", {"PEFORTH_SOURCE_PATH": repo_path}):
+        with patch.dict("os.environ", {"PEFORTH_SOURCE_PATH": repo_path, "PEFORTH_CACHE_TTL": "0"}):
             with patch.object(_f_mod, "_latest_runtime_file_info", return_value=latest):
                 with patch.object(_f_mod, "_program_info", return_value={"available": False, "path": None, "version": None}):
                     with patch.object(_f_mod, "_windows_wsl_info", return_value={"available": False, "distros": []}):
@@ -685,7 +685,7 @@ class ReplBootstrapTests(unittest.TestCase):
 
     def _detect_wsl_system_info(self, env, program_info):
         fake_os = SimpleNamespace(name="posix", environ=os.environ, path=os.path)
-        with patch.dict(os.environ, {"WSL_DISTRO_NAME": "Ubuntu", **env}):
+        with patch.dict(os.environ, {"WSL_DISTRO_NAME": "Ubuntu", "PEFORTH_CACHE_TTL": "0", **env}):
             with patch.object(_f_mod, "os", fake_os):
                 with patch.object(_f_mod, "_program_info", side_effect=program_info):
                     return _f_mod._detect_system_info()
