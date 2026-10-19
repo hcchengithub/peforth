@@ -12,7 +12,7 @@ code ai-status
     active_id = vm.host.get("ai_active_session_id")
     if active_id:
         title = ai_bridge._session_title(active_id) or "(untitled)"
-        print(f"Active AI session: {title} [{ai_bridge._short_id(active_id)}]")
+        print(f"Active AI session: {title} [{active_id}]")
     else:
         print("Active AI session: none (next request creates a new session)")
 end-code
@@ -677,7 +677,7 @@ code (ai-sessions-list)
             session_id = row.get("id") or ""
             title = titles.get(session_id) or "(untitled)"
             marker = " *" if session_id == active_id else ""
-            print(f"{index:>3}. {title} [{ai_bridge._short_id(session_id)}]{marker}")
+            print(f"{index:>3}. {title} [{session_id}]{marker}")
             print(f"     Started: {ai_bridge._format_time(row.get('created_at'))}  "
                   f"Last active: {ai_bridge._format_time(row.get('last_active_at'))}")
             print(f"     {row.get('status', 'unknown')}  "
@@ -688,26 +688,24 @@ end-code
     (ai-sessions)
     (ai-sessions-list)
 ;
-// ( session-number -- ) Show remote session details.
+// ( session-number | session-ID -- ) Show remote session details.
 /// Fetches and displays timestamps, status, model, usage, and any API error.
-/// Calls (ai-sessions) to refresh the session snapshot before printing the list.
+/// Uses the snapshot populated by ai-sessions; selectors may be list numbers or full IDs.
 code ai-session
     from peforth import ai_bridge
     import urllib.parse
 
-    index = vm.pop()
+    selector = vm.pop()
     rows = vm.host.get("ai_session_rows")
     if rows is None:
         raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
-    if not isinstance(index, int) or isinstance(index, bool) or index < 1 or index > len(rows):
-        raise RuntimeError(f"No session number {index}; the current list has {len(rows)} entries.")
-    row = rows[index - 1]
+    index, row = ai_bridge._resolve_session_selector(rows, selector)
     detail = ai_bridge._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
     agent = detail.get("agent") or {}
     usage = detail.get("usage") or {}
     session_id = detail.get("id") or row["id"]
     title = ai_bridge._session_title(session_id) or "(untitled)"
-    print(f"Session {index}: {title} [{ai_bridge._short_id(session_id)}]")
+    print(f"Session {index}: {title} [{session_id}]")
     print(f"Created: {ai_bridge._format_time(detail.get('created_at'))}")
     print(f"Last active: {ai_bridge._format_time(detail.get('last_active_at'))}")
     print(f"Status: {detail.get('status', 'unknown')}")
@@ -717,7 +715,7 @@ code ai-session
     if detail.get("error"):
         print(f"Error: {detail['error']}")
 end-code
-// ( session-number -- ) Show remote session details.
+// ( session-number | session-ID -- ) Show remote session details.
 
 code ai-use
     from peforth import ai_bridge
@@ -752,21 +750,20 @@ code ai-use
     ai_bridge._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
     vm.host["ai_active_session_id"] = row["id"]
     title = ai_bridge._session_title(row["id"]) or "(untitled)"
-    print(f"Using session {label}: {title} [{ai_bridge._short_id(row['id'])}]")
+    print(f"Using session {label}: {title} [{row['id']}]")
 end-code
 // ( session-number | session-ID -- ) Select a remote session for follow-up chat.
 
 code ai-cleanup
     from peforth import ai_bridge
     import urllib.parse
-    index = vm.pop()
+    selector = vm.pop()
     rows = vm.host.get("ai_session_rows")
     if rows is None:
         raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
-    if not isinstance(index, int) or isinstance(index, bool) or index < 1 or index > len(rows):
-        raise RuntimeError(f"No session number {index}; the current list has {len(rows)} entries.")
-    session_id = rows[index - 1]["id"]
-    print(f"This permanently deletes session {index}: {ai_bridge._short_id(session_id)} and its conversation.")
+    index, row = ai_bridge._resolve_session_selector(rows, selector)
+    session_id = row["id"]
+    print(f"This permanently deletes session {index}: {session_id} and its conversation.")
     result = ai_bridge._api_delete(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
     if result.get("deleted") is not True:
         raise RuntimeError("Agents API did not confirm session deletion.")
@@ -777,9 +774,9 @@ code ai-cleanup
 
     print("AI session deleted from the API.")
 end-code
-// ( session-number -- ) Delete the selected remote session immediately.
+// ( session-number | session-ID -- ) Delete the selected remote session immediately.
 /// Permanently deletes the selected session and its conversation without prompting.
-/// Run ai-sessions first to refresh the session numbers. Cached session rows and titles are cleared after deletion.
+/// Run ai-sessions first to refresh the session list. Cached session rows and titles are cleared after deletion.
 /// Example: keep the 20 newest sessions (requires more than 20 sessions):
 ///   (ai-sessions)
 ///   py> len(ai_session_rows) (length) 20 - [for]

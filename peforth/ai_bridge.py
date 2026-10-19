@@ -606,6 +606,23 @@ def _short_id(session_id):
     return str(session_id or "")[-8:]
 
 
+def _resolve_session_selector(rows, selector):
+    """Return (1-based index, row) for a numeric index or exact session ID."""
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        if 1 <= selector <= len(rows):
+            return selector, rows[selector - 1]
+        raise RuntimeError(f"No session number {selector}; the current list has {len(rows)} entries.")
+    if isinstance(selector, str) and selector:
+        matches = [(index, row) for index, row in enumerate(rows, 1)
+                   if row.get("id") == selector]
+        if len(matches) == 1:
+            return matches[0]
+        if not matches:
+            raise RuntimeError(f"No session ID matches {selector!r} in the current list.")
+        raise RuntimeError(f"Session ID {selector!r} is duplicated in the current list.")
+    raise RuntimeError("Expected a session number or full session ID.")
+
+
 def _session_title(session_id, titles=None):
     titles = _session_titles() if titles is None else titles
     return titles.get(session_id, "")
