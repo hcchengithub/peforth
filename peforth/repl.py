@@ -14,6 +14,7 @@ from collections import deque
 from datetime import datetime, timezone
 from importlib.resources import files
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import ai_bridge, ai_tools
 from .projectk import VM, ForthError
@@ -23,6 +24,15 @@ RUNTIME_ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_PATH = Path(__file__).resolve().parent
 FORTH_SOURCE_ROOT = files("peforth.f")
 FORTH_HOST_MODULES = {"ai_bridge": ai_bridge, "ai_tools": ai_tools}
+
+if TYPE_CHECKING:
+    from prompt_toolkit.completion import Completer as _CompleterBase
+else:
+    try:
+        from prompt_toolkit.completion import Completer as _CompleterBase
+    except ImportError:
+        class _CompleterBase:
+            pass
 
 
 def _latest_runtime_file_info(runtime_path: Path = RUNTIME_PATH) -> dict | None:
@@ -78,15 +88,53 @@ def _reported_source_path() -> str:
 
 try:
     from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import CompleteEvent, Completion
+    from prompt_toolkit.filters import Condition, has_completions
     from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
-    from prompt_toolkit.key_binding import KeyBindings
+    from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
     from prompt_toolkit.keys import Keys
+    from prompt_toolkit.layout.menus import MultiColumnCompletionMenuControl
+    from prompt_toolkit.shortcuts import CompleteStyle
 except ImportError:
     PromptSession = None
+    CompleteEvent = None
+    Completion = None
+    Condition = None
+    has_completions = None
     ANSI_SEQUENCES = None
     KeyBindings = None
+    merge_key_bindings = None
     Keys = None
+    MultiColumnCompletionMenuControl = None
+    CompleteStyle = None
 
+
+
+class ForthWordCompleter(_CompleterBase):
+    """Complete the current token from the VM's live Forth dictionary."""
+
+    def __init__(self, vm):
+        self.vm = vm
+
+    def get_completions(self, document, complete_event):
+        if Completion is None or self.vm.host.get("repl_mode", "forth") == "chat":
+            return
+
+        text_before_cursor = document.text_before_cursor
+        if not text_before_cursor or text_before_cursor[-1].isspace():
+            return
+        prefix = text_before_cursor.rsplit(None, 1)[-1]
+        if not prefix:
+            return
+
+        folded_prefix = prefix.casefold()
+        for name in self.vm.words:
+            if isinstance(name, str) and name.casefold().startswith(folded_prefix):
+                yield Completion(
+                    name,
+                    start_position=-len(prefix),
+                    display_meta="Arrows move | Space selects | Esc cancels",
+                )
 
 
 class Constant:
@@ -532,6 +580,126 @@ def _make_multiline_key_bindings(bindings_type=None):
     return bindings
 
 
+def _make_completion_key_bindings(vm, bindings_type=None):
+    """Create completion controls that are active only in Forth mode."""
+    bindings_type = bindings_type or KeyBindings
+    if (bindings_type is None or Condition is None or has_completions is None
+            or Keys is None or CompleteEvent is None):
+        raise RuntimeError("Forth completion requires prompt_toolkit.")
+
+    complete_event_type = CompleteEvent
+    bindings = bindings_type()
+    forth_mode = Condition(lambda: vm.host.get("repl_mode", "forth") != "chat")
+    menu_open = has_completions & forth_mode
+
+    def move_vertical(event, step):
+        buffer = event.current_buffer
+        state = buffer.complete_state
+        if state is None or state.complete_index is None:
+            return
+        rows = 1
+        if MultiColumnCompletionMenuControl is not None:
+            for window in event.app.layout.visible_windows:
+                if isinstance(window.content, MultiColumnCompletionMenuControl):
+                    rows = max(1, window.content._rendered_rows)
+                    break
+        current_index = state.complete_index
+        next_index = current_index + step
+        if (0 <= next_index < len(state.completions)
+                and next_index // rows == current_index // rows):
+            buffer.go_to_completion(next_index)
+
+    @bindings.add(Keys.ControlI, filter=forth_mode, eager=True)
+    def _show_completions(event):
+        buffer = event.current_buffer
+        if buffer.complete_state is None:
+            buffer.start_completion(
+                select_first=True,
+                complete_event=complete_event_type(completion_requested=True),
+            )
+
+    @bindings.add(Keys.Up, filter=menu_open, eager=True)
+    def _previous_completion(event):
+        move_vertical(event, -1)
+
+    @bindings.add(Keys.Down, filter=menu_open, eager=True)
+    def _next_completion(event):
+        move_vertical(event, 1)
+
+    @bindings.add(Keys.ControlJ, filter=menu_open, eager=True)
+    def _newline_without_completion(event):
+        buffer = event.current_buffer
+        buffer.cancel_completion()
+        buffer.insert_text("\n")
+
+    @bindings.add(Keys.ControlC, filter=menu_open, eager=True)
+    def _interrupt_with_completion_open(event):
+        event.current_buffer.cancel_completion()
+        event.app.exit(exception=KeyboardInterrupt(), style="class:aborting")
+
+    @bindings.add(Keys.ControlD, filter=menu_open, eager=True)
+    def _delete_forward_with_completion_open(event):
+        buffer = event.current_buffer
+        buffer.cancel_completion()
+        buffer.delete()
+
+    @bindings.add(Keys.ControlM, filter=menu_open, eager=True)
+    def _submit_without_completion(event):
+        buffer = event.current_buffer
+        buffer.cancel_completion()
+        buffer.validate_and_handle()
+
+    @bindings.add(Keys.Backspace, filter=menu_open, eager=True)
+    def _backspace_without_completion(event):
+        buffer = event.current_buffer
+        buffer.cancel_completion()
+        buffer.delete_before_cursor()
+
+    @bindings.add(Keys.Delete, filter=menu_open, eager=True)
+    def _delete_without_completion(event):
+        buffer = event.current_buffer
+        buffer.cancel_completion()
+        buffer.delete()
+
+    @bindings.add(" ", filter=menu_open, eager=True)
+    def _accept_completion(event):
+        buffer = event.current_buffer
+        state = buffer.complete_state
+        completion = state.current_completion if state is not None else None
+        if completion is None:
+            buffer.cancel_completion()
+            buffer.insert_text(" ")
+            return
+        buffer.apply_completion(completion)
+        buffer.insert_text(" ")
+
+    @bindings.add("escape", filter=menu_open, eager=True)
+    def _cancel_completion(event):
+        event.current_buffer.cancel_completion()
+
+    @bindings.add(Keys.Any, filter=menu_open)
+    def _type_without_completion(event):
+        if event.data == " ":
+            _accept_completion(event)
+            return
+        buffer = event.current_buffer
+        buffer.cancel_completion()
+        if event.data.isprintable():
+            buffer.insert_text(event.data)
+
+    return bindings
+
+
+def _make_repl_key_bindings(vm):
+    """Combine line-editor controls with the Forth completion controls."""
+    if merge_key_bindings is None:
+        raise RuntimeError("Interactive REPL requires prompt_toolkit.")
+    return merge_key_bindings([
+        _make_completion_key_bindings(vm),
+        _make_multiline_key_bindings(),
+    ])
+
+
 def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1", *, input=None, output=None) -> str:
     """Return a permitted single-character choice, displaying it inline."""
     if PromptSession is None or KeyBindings is None:
@@ -627,7 +795,7 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
     if vm is None:
         vm = create_vm()
 
-    if PromptSession is None:
+    if PromptSession is None or CompleteStyle is None:
         print("Interactive REPL requires prompt_toolkit. Install it with: "
               f'{sys.executable} -m pip install prompt_toolkit', file=sys.stderr)
         return
@@ -638,7 +806,10 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
 
     prompt_session = PromptSession(
         multiline=True,
-        key_bindings=_make_multiline_key_bindings(),
+        key_bindings=_make_repl_key_bindings(vm),
+        completer=ForthWordCompleter(vm),
+        complete_while_typing=False,
+        complete_style=CompleteStyle.MULTI_COLUMN,
         prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
     )
 

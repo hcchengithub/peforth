@@ -9,9 +9,19 @@ import pathlib
 import tempfile
 import json
 import sqlite3
+import threading
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.data_structures import Size
+from prompt_toolkit.document import Document
+from prompt_toolkit.input import create_pipe_input
+from prompt_toolkit.output import DummyOutput
+from prompt_toolkit.output.vt100 import Vt100_Output
+from prompt_toolkit.shortcuts import CompleteStyle
 
 from peforth.diagnostic_log import DiagnosticLog
 from peforth.projectk import VM, Input, ForthError, DEMO
@@ -322,6 +332,283 @@ class KernelTests(unittest.TestCase):
 
         const_word = vm.define('limit', Constant(100), type='constant')
         self.assertEqual(const_word.value, 100)
+
+
+class ReplCompletionTests(unittest.TestCase):
+    def run_prompt(self, chunks, vm, output=None):
+        with create_pipe_input() as prompt_input:
+            session = PromptSession(
+                multiline=True,
+                completer=_f_mod.ForthWordCompleter(vm),
+                key_bindings=_f_mod._make_repl_key_bindings(vm),
+                complete_style=CompleteStyle.MULTI_COLUMN,
+                complete_while_typing=False,
+                input=prompt_input,
+                output=output or DummyOutput(),
+            )
+
+            def feed_input():
+                for chunk in chunks:
+                    prompt_input.send_text(chunk)
+                    time.sleep(0.08)
+
+            feeder = threading.Thread(target=feed_input)
+            feeder.start()
+            try:
+                return session.prompt()
+            finally:
+                feeder.join()
+
+    def test_forth_completer_matches_case_insensitive_prefix_and_keeps_original_names(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "DUPLICATE": object(), "drop": object()},
+            host={"repl_mode": "forth"},
+        )
+        completer = _f_mod.ForthWordCompleter(vm)
+
+        actual = list(completer.get_completions(
+            Document("dUp"), CompleteEvent(completion_requested=True)))
+
+        self.assertEqual([completion.text for completion in actual], ["dup", "DUPLICATE"])
+
+    def test_completer_uses_current_token_and_preserves_text_after_cursor(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "DUPLICATE": object(), "foo": object()},
+            host={"repl_mode": "forth"},
+        )
+        completer = _f_mod.ForthWordCompleter(vm)
+        document = Document("foo dUpTAIL", cursor_position=len("foo dUp"))
+
+        actual = list(completer.get_completions(
+            document, CompleteEvent(completion_requested=True)))
+
+        self.assertEqual([completion.text for completion in actual], ["dup", "DUPLICATE"])
+        self.assertEqual([completion.start_position for completion in actual], [-3, -3])
+
+    def test_completer_reads_live_dictionary_and_suppresses_empty_or_chat_prefix(self):
+        vm = SimpleNamespace(words={"drop": object()}, host={"repl_mode": "forth"})
+        completer = _f_mod.ForthWordCompleter(vm)
+        event = CompleteEvent(completion_requested=True)
+
+        vm.words["dynamic"] = object()
+        self.assertEqual(
+            [c.text for c in completer.get_completions(Document("dyn"), event)],
+            ["dynamic"],
+        )
+        self.assertEqual(list(completer.get_completions(Document(""), event)), [])
+        self.assertEqual(list(completer.get_completions(Document(" "), event)), [])
+        vm.host["repl_mode"] = "chat"
+        self.assertEqual(list(completer.get_completions(Document("dyn"), event)), [])
+
+    def test_completer_accepts_forth_word_names_with_special_characters(self):
+        names = [".", ".s", "[if]", "ai:", "py:"]
+        vm = SimpleNamespace(words={name: object() for name in names}, host={})
+        completer = _f_mod.ForthWordCompleter(vm)
+        event = CompleteEvent(completion_requested=True)
+
+        for name in names:
+            with self.subTest(name=name):
+                self.assertIn(
+                    name,
+                    [c.text for c in completer.get_completions(Document(name[:1]), event)],
+                )
+
+    def test_arrows_select_and_space_accepts_candidate_with_trailing_space(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", "\t", "\x1b[C", " ", "\r"], vm)
+
+        self.assertEqual(actual, "duplicate ")
+
+    def test_right_arrow_moves_horizontally_to_next_column(self):
+        names = [f"w{index:02}" for index in range(30)]
+        vm = SimpleNamespace(
+            words={name: object() for name in names},
+            host={"repl_mode": "forth"},
+        )
+        transcript = io.StringIO()
+        output = Vt100_Output(
+            transcript, lambda: Size(rows=12, columns=80),
+            term="xterm-256color", enable_cpr=False,
+        )
+
+        actual = self.run_prompt(["w", chr(9), "\x1b[C", " ", chr(13)], vm, output=output)
+
+        self.assertEqual(actual, "w02 ")
+
+    def test_down_at_bottom_of_column_does_not_jump_to_next_column(self):
+        names = [f"w{index:02}" for index in range(30)]
+        vm = SimpleNamespace(
+            words={name: object() for name in names},
+            host={"repl_mode": "forth"},
+        )
+        output = Vt100_Output(
+            io.StringIO(), lambda: Size(rows=12, columns=80),
+            term="xterm-256color", enable_cpr=False,
+        )
+
+        actual = self.run_prompt(
+            ["w", chr(9), "\x1b[B", "\x1b[B", "\x1b[B", " ", chr(13)],
+            vm, output=output,
+        )
+
+        self.assertEqual(actual, "w01 ")
+
+    def test_left_arrow_moves_horizontally_to_previous_column(self):
+        names = [f"w{index:02}" for index in range(12)]
+        vm = SimpleNamespace(
+            words={name: object() for name in names},
+            host={"repl_mode": "forth"},
+        )
+        output = Vt100_Output(
+            io.StringIO(), lambda: Size(rows=12, columns=80),
+            term="xterm-256color", enable_cpr=False,
+        )
+
+        actual = self.run_prompt(
+            ["w", chr(9), "\x1b[C", "\x1b[D", " ", chr(13)],
+            vm, output=output,
+        )
+
+        self.assertEqual(actual, "w00 ")
+
+    def test_up_at_top_of_column_does_not_deselect_or_change_column(self):
+        names = [f"w{index:02}" for index in range(12)]
+        vm = SimpleNamespace(
+            words={name: object() for name in names},
+            host={"repl_mode": "forth"},
+        )
+        output = Vt100_Output(
+            io.StringIO(), lambda: Size(rows=12, columns=80),
+            term="xterm-256color", enable_cpr=False,
+        )
+
+        actual = self.run_prompt(["w", chr(9), "\x1b[A", " ", chr(13)], vm, output=output)
+
+        self.assertEqual(actual, "w00 ")
+
+    def test_completion_menu_shows_key_hint_below_candidates(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+        transcript = io.StringIO()
+        output = Vt100_Output(
+            transcript, lambda: Size(rows=12, columns=80),
+            term="xterm-256color", enable_cpr=False,
+        )
+
+        self.run_prompt(["du", chr(9), chr(27), "x", chr(13)], vm, output=output)
+
+        self.assertIn("Arrows move | Space selects | Esc cancels", transcript.getvalue())
+
+    def test_space_confirms_a_single_candidate(self):
+        vm = SimpleNamespace(words={"dup": object()}, host={"repl_mode": "forth"})
+
+        actual = self.run_prompt(["du", "\t", " ", "\r"], vm)
+
+        self.assertEqual(actual, "dup ")
+
+    def test_tab_renders_all_matches_in_a_multicolumn_menu(self):
+        vm = SimpleNamespace(
+            words={"duplicate": object(), "duplex": object(), "dupe": object()},
+            host={"repl_mode": "forth"},
+        )
+        transcript = io.StringIO()
+        output = Vt100_Output(
+            transcript, lambda: Size(rows=20, columns=80),
+            term="xterm-256color", enable_cpr=False,
+        )
+
+        self.run_prompt(["du", "\t", "\x1b", "x", "\r"], vm, output=output)
+
+        rendered = transcript.getvalue()
+        for candidate in vm.words:
+            with self.subTest(candidate=candidate):
+                self.assertIn(candidate, rendered)
+
+    def test_escape_cancels_preview_and_restores_the_original_token(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", "\t", "\x1b[B", "\x1b", "x", "\r"], vm)
+
+        self.assertEqual(actual, "dux")
+
+    def test_enter_does_not_commit_an_unconfirmed_completion(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", chr(9), chr(13)], vm)
+
+        self.assertEqual(actual, "du")
+
+    def test_typing_while_menu_open_discards_preview_before_inserting(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", chr(9), "x", chr(13)], vm)
+
+        self.assertEqual(actual, "dux")
+
+    def test_backspace_while_menu_open_edits_the_original_token(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", chr(9), chr(127), chr(13)], vm)
+
+        self.assertEqual(actual, "d")
+
+    def test_delete_while_menu_open_edits_the_original_token(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", "\x1b[D", chr(9), chr(4), chr(13)], vm)
+
+        self.assertEqual(actual, "d")
+
+    def test_multiline_newline_does_not_commit_completion_preview(self):
+        vm = SimpleNamespace(
+            words={"dup": object(), "duplicate": object()},
+            host={"repl_mode": "forth"},
+        )
+
+        actual = self.run_prompt(["du", chr(9), chr(10), "x", chr(13)], vm)
+
+        self.assertEqual(actual, "du\nx")
+
+    def test_tab_with_no_candidate_keeps_the_input_unchanged(self):
+        vm = SimpleNamespace(words={"dup": object()}, host={"repl_mode": "forth"})
+
+        actual = self.run_prompt(["zzz", chr(9), chr(13)], vm)
+
+        self.assertEqual(actual, "zzz")
+
+    def test_control_c_still_interrupts_with_completion_menu_open(self):
+        vm = SimpleNamespace(words={"dup": object()}, host={"repl_mode": "forth"})
+
+        with self.assertRaises(KeyboardInterrupt):
+            self.run_prompt(["du", chr(9), chr(3), chr(13)], vm)
+
+    def test_space_without_menu_remains_an_ordinary_input_character(self):
+        vm = SimpleNamespace(words={"dup": object()}, host={"repl_mode": "forth"})
+
+        actual = self.run_prompt(["x", " ", "y", "\r"], vm)
+
+        self.assertEqual(actual, "x y")
 
 
 class ReplBootstrapTests(unittest.TestCase):
@@ -1149,9 +1436,11 @@ class ReplBootstrapTests(unittest.TestCase):
             vm, initial_task=vm.task, exit_when_idle=True, show_greeting=False)
 
     def test_one_shot_chat_exits_without_repl_greeting_or_farewell(self):
+        session_options = {}
+
         class QuietPromptSession:
             def __init__(self, **kwargs):
-                pass
+                session_options.update(kwargs)
 
         class CompletedTask:
             status = "done"
@@ -1165,6 +1454,10 @@ class ReplBootstrapTests(unittest.TestCase):
             _f_mod.repl(self.vm, initial_task=CompletedTask(), exit_when_idle=True,
                         show_greeting=False)
         self.assertEqual(output.getvalue(), "")
+        self.assertIsInstance(session_options["completer"], _f_mod.ForthWordCompleter)
+        self.assertFalse(session_options["complete_while_typing"])
+        self.assertIs(session_options["complete_style"], CompleteStyle.MULTI_COLUMN)
+        self.assertIsNotNone(session_options["key_bindings"])
         refresh.assert_called_once_with(self.vm)
         farewell.assert_not_called()
 
