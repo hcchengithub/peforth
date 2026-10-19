@@ -461,7 +461,7 @@ def _process_one_line(vm: VM, line: str, state: dict) -> None:
 
     task = vm.dictate(line)
     if task.status == "paused":
-        if vm.host.get("ai_pending_approval") or vm.host.get("ai_cleanup_pending"):
+        if vm.host.get("ai_pending_approval"):
             state["ai_task"] = task
         else:
             print("Task: paused")
@@ -641,7 +641,6 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
         key_bindings=_make_multiline_key_bindings(),
         prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
     )
-    confirmation_session = PromptSession(multiline=False)
 
     if show_greeting:
         print(_greeting_line(vm.host.get("system_info") or {}))
@@ -664,9 +663,8 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
         _expire_ai_task_trust(state)
         try:
             pending = vm.host.get("ai_pending_approval")
-            cleanup = vm.host.get("ai_cleanup_pending")
             task = state.get("ai_task")
-            if (exit_when_idle and not pending and not cleanup and not state["queued"]
+            if (exit_when_idle and not pending and not state["queued"]
                     and (task is None or task.status in {"done", "aborted", "failed"})):
                 try:
                     _refresh_quiet_session_index(vm)
@@ -721,16 +719,13 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                 vm.host.pop("ai_pending_approval", None)
                 state["ai_task"] = None
                 task.resume()
-                if task.status == "paused" and (vm.host.get("ai_pending_approval") or vm.host.get("ai_cleanup_pending")):
+                if task.status == "paused" and vm.host.get("ai_pending_approval"):
                     state["ai_task"] = task
                 elif task.status == "done":
                     print(" ok")
                 _expire_ai_task_trust(state)
                 continue
-            if cleanup:
-                prompt = (f"Delete session {cleanup['index']} ({ai_bridge._short_id(cleanup['session_id'])})? "
-                          "Type delete or cancel: ")
-            elif state["queued"]:
+            if state["queued"]:
                 raw_input = state["queued"].popleft()
                 _process_repl_input(vm, raw_input, state)
                 continue
@@ -741,33 +736,10 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     prompt = "chat> "
                 else:
                     prompt = "> "
-            active_prompt = confirmation_session if cleanup else prompt_session
-            raw_input = active_prompt.prompt(prompt)
+            raw_input = prompt_session.prompt(prompt)
 
             clean_input = raw_input.replace(chr(13) + chr(10), chr(10)).replace(chr(13), chr(10))
 
-            cleanup = vm.host.get("ai_cleanup_pending")
-            if cleanup:
-                choice = clean_input.strip().casefold()
-                if choice == "delete":
-                    vm.host["ai_cleanup_result"] = True
-                elif choice == "cancel":
-                    vm.host["ai_cleanup_result"] = False
-                else:
-                    if clean_input.strip():
-                        state["queued"].append(clean_input)
-                    continue
-                vm.host.pop("ai_cleanup_pending", None)
-                task = state.get("ai_task")
-                state["ai_task"] = None
-                if task:
-                    task.resume()
-                    if task.status == "paused" and (vm.host.get("ai_pending_approval") or vm.host.get("ai_cleanup_pending")):
-                        state["ai_task"] = task
-                    elif task.status == "done":
-                        print(" ok")
-                vm.host.pop("ai_cleanup_result", None)
-                continue
             if state["queued"]:
                 state["queued"].append(clean_input)
             else:
@@ -789,7 +761,7 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     ai_bridge.cancel_turn(vm)
                 except Exception as err:
                     print(f"Could not cancel remote turn: {err}")
-            if vm.host.get("ai_pending_approval") or vm.host.get("ai_cleanup_pending"):
+            if vm.host.get("ai_pending_approval"):
                 task = state.get("ai_task")
                 if task:
                     task.cancel()
@@ -797,8 +769,6 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                 state["ai_task"] = None
                 vm.host.pop("ai_pending_approval", None)
                 vm.host.pop("ai_approval_result", None)
-                vm.host.pop("ai_cleanup_pending", None)
-                vm.host.pop("ai_cleanup_result", None)
             state["in_code_block"] = False
             state["code_buffer"] = []
             if vm.compiling:

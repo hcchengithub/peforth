@@ -654,19 +654,26 @@ end-code
 /// The response streams to the terminal. Proposed Forth programs pause for approval.
 /// Trust approves later proposals for this Forth process; ai-confirm restores per-proposal approval.
 
-code ai-sessions
+code (ai-sessions)
     from peforth import ai_bridge
-
     rows = ai_bridge._list_remote_sessions()
     titles = ai_bridge._sync_session_index(rows)
     vm.host["ai_session_rows"] = rows
+    vm.host["ai_session_titles"] = titles
+end-code
+// ( -- ) Refresh the session snapshot silently.
+/// Fetches remote sessions, synchronizes the local title index, and updates the VM snapshot.
+/// Stores session rows and titles in vm.host. Prints nothing and leaves the data stack unchanged.
+code (ai-sessions-list)
+    from peforth import ai_bridge
+    rows = vm.host.get("ai_session_rows")
+    titles = vm.host.get("ai_session_titles") or {}
     if not rows:
         print("No remote sessions found.")
     else:
         active_id = ai_bridge._saved_session(vm)
         print(f"Remote sessions: {len(rows)} (newest first)")
         for index, row in enumerate(rows, 1):
-            env = row.get("environment") or {}
             session_id = row.get("id") or ""
             title = titles.get(session_id) or "(untitled)"
             marker = " *" if session_id == active_id else ""
@@ -674,10 +681,16 @@ code ai-sessions
             print(f"     Started: {ai_bridge._format_time(row.get('created_at'))}  "
                   f"Last active: {ai_bridge._format_time(row.get('last_active_at'))}")
             print(f"     {row.get('status', 'unknown')}  "
-                  f"{(row.get('agent') or {}).get('model', 'unknown')}  env={env.get('type', 'unknown')}")
+                  f"{(row.get('agent') or {}).get('model', 'unknown')}")
 end-code
-// ( -- ) Refresh the local session index and list remote sessions, newest first.
-
+// ( -- ) Print the session snapshot prepared by (ai-sessions).
+: ai-sessions
+    (ai-sessions)
+    (ai-sessions-list)
+;
+// ( session-number -- ) Show remote session details.
+/// Fetches and displays timestamps, status, model, usage, and any API error.
+/// Calls (ai-sessions) to refresh the session snapshot before printing the list.
 code ai-session
     from peforth import ai_bridge
     import urllib.parse
@@ -691,7 +704,6 @@ code ai-session
     row = rows[index - 1]
     detail = ai_bridge._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
     agent = detail.get("agent") or {}
-    env = detail.get("environment") or {}
     usage = detail.get("usage") or {}
     session_id = detail.get("id") or row["id"]
     title = ai_bridge._session_title(session_id) or "(untitled)"
@@ -700,8 +712,6 @@ code ai-session
     print(f"Last active: {ai_bridge._format_time(detail.get('last_active_at'))}")
     print(f"Status: {detail.get('status', 'unknown')}")
     print(f"Model: {agent.get('model', 'unknown')}")
-    print(f"Environment: {env.get('type', 'unknown')} (id={env.get('id', 'none')}, "
-          f"size={env.get('container_size', 'n/a')})")
     print(f"Usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)} "
           f"total={usage.get('total_tokens', 0)} tokens")
     if detail.get("error"):
@@ -746,62 +756,9 @@ code ai-use
 end-code
 // ( session-number | session-ID -- ) Select a remote session for follow-up chat.
 
-code ai-containers
-    from peforth import ai_bridge
-    import urllib.parse
-
-    session_rows = vm.host.get("ai_session_rows")
-    if session_rows is None:
-        raise RuntimeError("Run ai-sessions first to refresh the remote session list.")
-    rows = []
-    for session in session_rows:
-        detail = ai_bridge._api_get(f"/sessions/{urllib.parse.quote(session['id'], safe='')}")
-        env = detail.get("environment") or {}
-        if env.get("type") != "openai_hosted" or not env.get("id"):
-            continue
-        try:
-            env_detail = ai_bridge._api_get(f"/environments/{urllib.parse.quote(env['id'], safe='')}")
-            status = env_detail.get("status", "unknown")
-        except RuntimeError as exc:
-            env_detail = {}
-            status = f"unavailable ({exc})"
-        rows.append({"session_id": session["id"], "environment_id": env["id"],
-                     "container_size": env.get("container_size"), "status": status,
-                     "details": env_detail})
-    vm.host["ai_container_rows"] = rows
-    if not rows:
-        print("No hosted environments are linked to the listed sessions.")
-    else:
-        print(f"Hosted environments linked to sessions: {len(rows)}")
-        for index, row in enumerate(rows, 1):
-            print(f"{index:>3}. env={row['environment_id']}  status={row['status']}  "
-                  f"size={row.get('container_size') or 'unknown'}  "
-                  f"session={ai_bridge._short_id(row['session_id'])}")
-end-code
-// ( -- ) List hosted environments linked to the current remote session snapshot.
-
-code ai-container
-    from peforth import ai_bridge
-    import json
-
-    index = vm.pop()
-    rows = vm.host.get("ai_container_rows")
-    if rows is None:
-        raise RuntimeError("Run ai-containers first to refresh the environment list.")
-    if not isinstance(index, int) or isinstance(index, bool) or index < 1 or index > len(rows):
-        raise RuntimeError(f"Container number must be between 1 and {len(rows)}.")
-    row = rows[index - 1]
-    print(f"Environment {index}: {row['environment_id']}")
-    print(f"Session: {ai_bridge._short_id(row['session_id'])}")
-    print(f"Status: {row['status']}")
-    print(json.dumps(row.get("details") or {}, ensure_ascii=False, indent=2))
-end-code
-// ( container-number -- ) Show hosted environment details.
-
 code ai-cleanup
     from peforth import ai_bridge
     import urllib.parse
-
     index = vm.pop()
     rows = vm.host.get("ai_session_rows")
     if rows is None:
@@ -810,26 +767,25 @@ code ai-cleanup
         raise RuntimeError(f"No session number {index}; the current list has {len(rows)} entries.")
     session_id = rows[index - 1]["id"]
     print(f"This permanently deletes session {index}: {ai_bridge._short_id(session_id)} and its conversation.")
-    print("If it has a hosted sandbox, deletion also requests sandbox cleanup.")
-    print("Type 'delete' to confirm, or 'cancel' to keep the session.")
-    vm.host["ai_cleanup_pending"] = {"index": index, "session_id": session_id}
-    yield vm.pause()
-    approved = bool(vm.host.pop("ai_cleanup_result", False))
-    vm.host.pop("ai_cleanup_pending", None)
-    if not approved:
-        print("AI session kept.")
-    else:
-        result = ai_bridge._api_delete(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
-        if result.get("deleted") is not True:
-            raise RuntimeError("Agents API did not confirm session deletion.")
-        if vm.host.get("ai_active_session_id") == session_id:
-            vm.host.pop("ai_active_session_id", None)
-        vm.host.pop("ai_session_rows", None)
-        vm.host.pop("ai_container_rows", None)
-        print("AI session deleted from the API; physical cleanup may continue asynchronously.")
-end-code
-// ( session-number -- ) Delete a remote session after explicit confirmation.
+    result = ai_bridge._api_delete(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+    if result.get("deleted") is not True:
+        raise RuntimeError("Agents API did not confirm session deletion.")
+    if vm.host.get("ai_active_session_id") == session_id:
+        vm.host.pop("ai_active_session_id", None)
+    vm.host.pop("ai_session_rows", None)
+    vm.host.pop("ai_session_titles", None)
 
+    print("AI session deleted from the API.")
+end-code
+// ( session-number -- ) Delete the selected remote session immediately.
+/// Permanently deletes the selected session and its conversation without prompting.
+/// Run ai-sessions first to refresh the session numbers. Cached session rows and titles are cleared after deletion.
+/// Example: keep the 20 newest sessions (requires more than 20 sessions):
+///   (ai-sessions)
+///   py> len(ai_session_rows) (length) 20 - [for]
+///       t@ . space 21 ai-cleanup (ai-sessions)
+///   [next]
+/// [for] runs once for a zero count, so use the example only when there are more than 20 sessions.
 code ai-cancel
     from peforth import ai_bridge
 

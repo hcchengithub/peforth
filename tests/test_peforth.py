@@ -617,8 +617,8 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("stream? true", ai_stack.comment)
 
     def test_ai_workflow_words_are_defined_in_ai_f(self):
-        for name in ("ai-sessions", "ai-session", "ai-use", "ai-containers",
-                     "ai-container", "ai-cleanup", "ai-cancel", "(ai)",
+        for name in ("ai-sessions", "ai-session", "ai-use", "ai-cleanup",
+                     "ai-cancel", "(ai)",
                      "(ai-context)", "system_info", "run_pwsh", "run_bash",
                      "run_curl", "run_http"):
             word = self.vm.tick(name)

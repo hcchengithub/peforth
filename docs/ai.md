@@ -34,8 +34,7 @@ Transport timeouts are configurable in seconds: `PEFORTH_AI_REQUEST_TIMEOUT` (de
 - `ai-sessions` fetches remote sessions newest-first and refreshes `~/.peforth/.ai_session.json`, preserving local titles. The API provides creation and last-active times; CLI output shows only the final 8 ID characters.
 - `n ai-session` shows details for a listed session. `n ai-use` selects a listed session for this process; alternatively use `s" <last-8-characters>" ai-use` or the full ID.
 - `ai-context n count [chat|json]` returns recent user-initiated turns on the data stack; `chat` returns user/assistant text and `json` includes tool calls/results. `count` must be positive. Run `ai-sessions` before numbered words; print results with `stringify .`.
-- `ai-new` clears this process's selection. `ai-containers` and `n ai-container` inspect hosted environments linked to listed sessions. This is not a billing meter.
-- `n ai-cleanup` requires the exact confirmation `delete` and permanently removes the selected remote session/conversation. If an old hosted sandbox exists, cleanup may continue asynchronously. This cannot be undone.
+- `n ai-cleanup` immediately and permanently removes the selected remote session and conversation without a confirmation prompt. This cannot be undone.
 - `ai-cancel` requests cancellation of an active API turn and can close the locally paused task. Already completed local side effects are not undone.
 
 ## Session state
