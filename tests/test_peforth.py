@@ -1501,6 +1501,7 @@ class ReplBootstrapTests(unittest.TestCase):
             status = "done"
 
         output = io.StringIO()
+        _f_mod._load_prompt_toolkit()
         with patch.object(_f_mod, "PromptSession", QuietPromptSession), \
                 patch.object(_f_mod, "_make_multiline_key_bindings", return_value=None), \
                 patch.object(_f_mod.ai_bridge, "refresh_session_index") as refresh, \

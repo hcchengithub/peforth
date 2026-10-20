@@ -25,16 +25,6 @@ RUNTIME_PATH = Path(__file__).resolve().parent
 FORTH_SOURCE_ROOT = files("peforth.f")
 FORTH_HOST_MODULES = {"ai_bridge": ai_bridge, "ai_tools": ai_tools}
 
-if TYPE_CHECKING:
-    from prompt_toolkit.completion import Completer as _CompleterBase
-else:
-    try:
-        from prompt_toolkit.completion import Completer as _CompleterBase
-    except ImportError:
-        class _CompleterBase:
-            pass
-
-
 def _latest_runtime_file_info(runtime_path: Path = RUNTIME_PATH) -> dict | None:
     """Return the newest .f/.py file under the runtime package path."""
     root = Path(runtime_path).resolve()
@@ -86,28 +76,58 @@ def _reported_source_path() -> str:
     )
 
 
-try:
-    from prompt_toolkit import PromptSession
-    from prompt_toolkit.completion import CompleteEvent, Completion
-    from prompt_toolkit.filters import Condition, has_completions
-    from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
-    from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
-    from prompt_toolkit.keys import Keys
-    from prompt_toolkit.layout.menus import MultiColumnCompletionMenuControl
-    from prompt_toolkit.shortcuts import CompleteStyle
-except ImportError:
-    PromptSession = None
-    CompleteEvent = None
-    Completion = None
-    Condition = None
-    has_completions = None
-    ANSI_SEQUENCES = None
-    KeyBindings = None
-    merge_key_bindings = None
-    Keys = None
-    MultiColumnCompletionMenuControl = None
-    CompleteStyle = None
+PromptSession = None
+CompleteEvent = None
+Completion = None
+Condition = None
+has_completions = None
+ANSI_SEQUENCES = None
+KeyBindings = None
+merge_key_bindings = None
+Keys = None
+MultiColumnCompletionMenuControl = None
+CompleteStyle = None
+_PROMPT_TOOLKIT_LOADED = False
 
+
+def _load_prompt_toolkit() -> bool:
+    """Load interactive terminal support only when a prompt is needed."""
+    global PromptSession, CompleteEvent, Completion, Condition, has_completions
+    global ANSI_SEQUENCES, KeyBindings, merge_key_bindings, Keys
+    global MultiColumnCompletionMenuControl, CompleteStyle, _PROMPT_TOOLKIT_LOADED
+    if _PROMPT_TOOLKIT_LOADED:
+        return True
+    try:
+        from prompt_toolkit import PromptSession as prompt_session
+        from prompt_toolkit.completion import CompleteEvent as complete_event, Completion as completion
+        from prompt_toolkit.filters import Condition as condition, has_completions as completions_filter
+        from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES as ansi_sequences
+        from prompt_toolkit.key_binding import KeyBindings as key_bindings, merge_key_bindings as merge_bindings
+        from prompt_toolkit.keys import Keys as keys
+        from prompt_toolkit.layout.menus import MultiColumnCompletionMenuControl as completion_menu
+        from prompt_toolkit.shortcuts import CompleteStyle as complete_style
+    except ImportError:
+        return False
+    PromptSession = prompt_session
+    CompleteEvent = complete_event
+    Completion = completion
+    Condition = condition
+    has_completions = completions_filter
+    ANSI_SEQUENCES = ansi_sequences
+    KeyBindings = key_bindings
+    merge_key_bindings = merge_bindings
+    Keys = keys
+    MultiColumnCompletionMenuControl = completion_menu
+    CompleteStyle = complete_style
+    _PROMPT_TOOLKIT_LOADED = True
+    return True
+
+
+
+if TYPE_CHECKING:
+    from prompt_toolkit.completion import Completer as _CompleterBase
+else:
+    _CompleterBase = object
 
 
 class ForthWordCompleter(_CompleterBase):
@@ -117,7 +137,14 @@ class ForthWordCompleter(_CompleterBase):
         self.vm = vm
 
     def get_completions(self, document, complete_event):
-        if Completion is None or self.vm.host.get("repl_mode", "forth") == "chat":
+        if self.vm.host.get("repl_mode", "forth") == "chat":
+            return
+        completion_type = Completion
+        if completion_type is None:
+            if not _load_prompt_toolkit():
+                return
+            completion_type = Completion
+        if completion_type is None:
             return
 
         text_before_cursor = document.text_before_cursor
@@ -130,11 +157,15 @@ class ForthWordCompleter(_CompleterBase):
         folded_prefix = prefix.casefold()
         for name in self.vm.words:
             if isinstance(name, str) and name.casefold().startswith(folded_prefix):
-                yield Completion(
+                yield completion_type(
                     name,
                     start_position=-len(prefix),
                     display_meta="Arrows move | Space selects | Esc cancels",
                 )
+
+    async def get_completions_async(self, document, complete_event):
+        for completion in self.get_completions(document, complete_event):
+            yield completion
 
 
 class Constant:
@@ -582,6 +613,7 @@ def _make_multiline_key_bindings(bindings_type=None):
 
 def _make_completion_key_bindings(vm, bindings_type=None):
     """Create completion controls that are active only in Forth mode."""
+    _load_prompt_toolkit()
     bindings_type = bindings_type or KeyBindings
     if (bindings_type is None or Condition is None or has_completions is None
             or Keys is None or CompleteEvent is None):
@@ -692,6 +724,7 @@ def _make_completion_key_bindings(vm, bindings_type=None):
 
 def _make_repl_key_bindings(vm):
     """Combine line-editor controls with the Forth completion controls."""
+    _load_prompt_toolkit()
     if merge_key_bindings is None:
         raise RuntimeError("Interactive REPL requires prompt_toolkit.")
     return merge_key_bindings([
@@ -702,6 +735,7 @@ def _make_repl_key_bindings(vm):
 
 def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1", *, input=None, output=None) -> str:
     """Return a permitted single-character choice, displaying it inline."""
+    _load_prompt_toolkit()
     if PromptSession is None or KeyBindings is None:
         raise RuntimeError("Single-key choices require prompt_toolkit.")
     choices = tuple(choices)
@@ -795,6 +829,7 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
     if vm is None:
         vm = create_vm()
 
+    _load_prompt_toolkit()
     if PromptSession is None or CompleteStyle is None:
         print("Interactive REPL requires prompt_toolkit. Install it with: "
               f'{sys.executable} -m pip install prompt_toolkit', file=sys.stderr)
