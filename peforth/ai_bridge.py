@@ -162,7 +162,8 @@ def load_dotenv():
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
-        os.environ.setdefault(key, value)
+        if not os.environ.get(key, "").strip():
+            os.environ[key] = value
 
 
 def _diagnostic_event(context, event_type, *, payload=None, remote_turn_id=None,

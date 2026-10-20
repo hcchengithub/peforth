@@ -440,5 +440,25 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertIn("A short joke.", output.getvalue())
 
 
+class DotenvEmptyValueTests(unittest.TestCase):
+    def test_empty_process_key_is_filled_from_dotenv(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".env").write_text("OPENAI_API_KEY=key-from-dotenv\n", encoding="utf-8")
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": tmp, "OPENAI_API_KEY": ""}):
+                ai_bridge.load_dotenv()
+                self.assertEqual(os.environ["OPENAI_API_KEY"], "key-from-dotenv")
+
+    def test_nonempty_process_key_is_not_overridden_by_dotenv(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".env").write_text("OPENAI_API_KEY=key-from-dotenv\n", encoding="utf-8")
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": tmp, "OPENAI_API_KEY": "key-from-process"}):
+                ai_bridge.load_dotenv()
+                self.assertEqual(os.environ["OPENAI_API_KEY"], "key-from-process")
+
+
 if __name__ == "__main__":
     unittest.main()
