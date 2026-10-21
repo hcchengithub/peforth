@@ -1934,6 +1934,39 @@ class ReplBootstrapTests(unittest.TestCase):
             self.assertIn('"name": "dup"', result[1])
             logger.close()
 
+    def test_forth_execution_result_normalizes_surrogate_pairs(self):
+        from peforth import ai_bridge
+
+        surrogate_pair = "\ud83d\ude00"
+
+        class SurrogateRepr:
+            def __repr__(self):
+                return "stack:" + ("x" * 16774) + surrogate_pair
+
+        class FakeVM:
+            def __init__(self):
+                self.stack = [SurrogateRepr()]
+
+            def dictate(self, _source):
+                print(("x" * 73) + surrogate_pair)
+                return SimpleNamespace(status="done")
+
+        execution = ai_bridge._run(FakeVM(), "ignored")
+        result = json.loads(execution)
+
+        result["stdout"].encode("utf-8")
+        result["stack"].encode("utf-8")
+        execution.encode("utf-8")
+        self.assertEqual(result["stdout"], ("x" * 73) + "😀\n")
+        self.assertIn("😀", result["stack"])
+        self.assertEqual(ai_bridge._normalize_surrogates("left\ud800right\udc00"), "left�right�")
+        with tempfile.TemporaryDirectory() as directory:
+            logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")
+            logger.store_content("forth_stdout", result["stdout"])
+            logger.store_content("forth_stack", result["stack"])
+            logger.close()
+
+
     def test_ai_approval_and_local_forth_execution_are_logged(self):
         from peforth import ai_bridge
 

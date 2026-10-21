@@ -1310,6 +1310,28 @@ def _reconcile_stream_turn(session_id, turn_id, *, diagnostic=None, attempts=3):
     return status, output
 
 
+def _normalize_surrogates(text):
+    """Convert UTF-16 surrogate code points to valid Unicode scalars."""
+    normalized = []
+    index = 0
+    while index < len(text):
+        codepoint = ord(text[index])
+        if 0xD800 <= codepoint <= 0xDBFF:
+            if index + 1 < len(text):
+                low = ord(text[index + 1])
+                if 0xDC00 <= low <= 0xDFFF:
+                    normalized.append(chr(0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00)))
+                    index += 2
+                    continue
+            normalized.append("\uFFFD")
+        elif 0xDC00 <= codepoint <= 0xDFFF:
+            normalized.append("\uFFFD")
+        else:
+            normalized.append(text[index])
+        index += 1
+    return "".join(normalized)
+
+
 def _run(vm, source):
     stdout, stderr = io.StringIO(), io.StringIO()
     try:
@@ -1323,6 +1345,10 @@ def _run(vm, source):
     except Exception as exc:
         result = {"status": "error", "error": str(exc), "stack": repr(vm.stack),
                   "stdout": stdout.getvalue(), "stderr": stderr.getvalue()}
+    result = {
+        key: _normalize_surrogates(value) if isinstance(value, str) else value
+        for key, value in result.items()
+    }
     return json.dumps(result, ensure_ascii=False)
 
 
