@@ -30,11 +30,11 @@ Keep `.env` private. The local bridge sends the API key only as an HTTPS bearer 
 - `f -c <prompt>` is a one-shot command that starts a new session, submits with the non-streaming Agents API, polls session/turn state, and retrieves the saved final answer. It writes `SESSION_ID=<id>` to stderr after completion. To continue an existing session, put `-id <session-id>` before `-c`, e.g. `f -id sess_... -c <prompt>`. There is no implicit “latest idle session” selection. Interactive `ai:` keeps SSE streaming.
 
 Transport timeouts are configurable in seconds: `PEFORTH_AI_REQUEST_TIMEOUT` (default 30) bounds each HTTP request and response-body read, `PEFORTH_AI_STREAM_TIMEOUT` (default 300) bounds streaming connection/read inactivity, `PEFORTH_AI_TURN_TIMEOUT` (default 300) is the total One Shot budget from prompt submission through session creation/continuation, polling, and all saved-item pages, and `PEFORTH_AI_POLL_INTERVAL` (default 0.5) sets the polling interval. Each One Shot request/body read is capped at the smaller of the request timeout and the remaining total budget. Time awaiting a user's tool approval is excluded. A timed-out prompt POST may have been accepted; its outcome is reported as uncertain, and the command does not retry it. After a timeout, inspect the session before retrying.
-- `ai-status` shows the session selected by this running `f` process. Each new process starts without an active session.
-- `ai-sessions` fetches remote sessions newest-first and refreshes `~/.peforth/.ai_session.json`, preserving local titles. The API provides creation and last-active times; CLI output shows only the final 8 ID characters.
-- `n ai-session` shows details for a listed session. `n ai-use` selects a listed session for this process; alternatively use `s" <last-8-characters>" ai-use` or the full ID.
+- `ai-status` shows the current process's selected session and its full ID. Each new process starts without an active session.
+- `ai-sessions` fetches remote sessions newest-first and refreshes `~/.peforth/.ai_session.json`, preserving local titles. It displays each full Session ID along with creation and last-active times.
+- `n ai-session` shows details for a listed session; it also accepts `s" <full-session-id>" ai-session`. `n ai-use` selects a listed session for this process; it accepts the full ID and retains support for an unambiguous ID suffix.
 - `ai-context n count [chat|json]` returns recent user-initiated turns on the data stack; `chat` returns user/assistant text and `json` includes tool calls/results. `count` must be positive. Run `ai-sessions` before numbered words; print results with `stringify .`.
-- `n ai-cleanup` immediately and permanently removes the selected remote session and conversation without a confirmation prompt. This cannot be undone.
+- `n ai-cleanup` accepts either a list number or full ID and immediately, permanently removes that remote session and conversation without a confirmation prompt. This cannot be undone.
 - `ai-cancel` requests cancellation of an active API turn and can close the locally paused task. Already completed local side effects are not undone.
 
 ## Session state

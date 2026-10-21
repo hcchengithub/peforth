@@ -10,6 +10,7 @@ import re
 import socket
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from contextlib import redirect_stderr, redirect_stdout
@@ -48,6 +49,13 @@ def _turn_timeout():
 
 def _poll_interval():
     return _configured_seconds("PEFORTH_AI_POLL_INTERVAL", 0.5)
+
+
+def _sse_open_grace():
+    return _configured_seconds("PEFORTH_AI_SSE_OPEN_GRACE", 5.0)
+
+
+_SSE_OPEN_STATE = threading.local()
 
 
 class _OneShotDeadline:
@@ -162,7 +170,8 @@ def load_dotenv():
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
             value = value[1:-1]
-        os.environ.setdefault(key, value)
+        if not os.environ.get(key, "").strip():
+            os.environ[key] = value
 
 
 def _diagnostic_event(context, event_type, *, payload=None, remote_turn_id=None,
@@ -350,6 +359,52 @@ class _LoggedResponse:
             )
 
 
+def _urlopen_with_grace(request, timeout, on_blocked):
+    if not callable(on_blocked):
+        return urllib.request.urlopen(request, timeout=timeout)
+    result = {}
+    aborted = False
+    done = threading.Event()
+
+    def open_stream():
+        try:
+            resp = urllib.request.urlopen(request, timeout=timeout)
+            if aborted:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+            result["response"] = resp
+        except BaseException as exc:
+            result["error"] = exc
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=open_stream, daemon=True)
+    worker.start()
+    grace = min(_sse_open_grace(), timeout)
+    if not done.wait(timeout=grace):
+        try:
+            on_blocked()
+        except BaseException:
+            aborted = True
+            done.wait(timeout=min(0.2, timeout))
+            resp = result.get("response")
+            if resp is not None:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+            raise
+        done.wait(timeout=max(0.0, timeout - grace))
+    if "error" in result:
+        raise result["error"]
+    if "response" not in result:
+        aborted = True
+        raise TimeoutError("timed out")
+    return result["response"]
+
+
 def _request(method, path, payload=None, stream=False, *, diagnostic=None,
              operation=None, timeout=None, headers=None, deadline=None,
              prompt_submission=False):
@@ -398,12 +453,17 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None,
             context, "sse_open_started", payload={"stream": True},
             http_method=method, url=path, local_request_id=request_id,
         )
+    on_sse_open_blocked = (
+        getattr(_SSE_OPEN_STATE, "on_blocked", None) if stream else None
+    )
+    if on_sse_open_blocked is not None:
+        _SSE_OPEN_STATE.on_blocked = None
     try:
         if deadline is not None:
             timeout = min(timeout, deadline.request_timeout(operation))
             if prompt_submission:
                 deadline.mark_submission_started()
-        response = urllib.request.urlopen(request, timeout=timeout)
+        response = _urlopen_with_grace(request, timeout, on_sse_open_blocked)
     except urllib.error.HTTPError as exc:
         elapsed_ms = (time.monotonic_ns() - started_ns) / 1_000_000
         provider_request_id = _header_value(exc.headers, "x-request-id", "request-id", "openai-request-id")
@@ -604,6 +664,23 @@ def _sync_session_index(remote_sessions):
 
 def _short_id(session_id):
     return str(session_id or "")[-8:]
+
+
+def _resolve_session_selector(rows, selector):
+    """Return (1-based index, row) for a numeric index or exact session ID."""
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        if 1 <= selector <= len(rows):
+            return selector, rows[selector - 1]
+        raise RuntimeError(f"No session number {selector}; the current list has {len(rows)} entries.")
+    if isinstance(selector, str) and selector:
+        matches = [(index, row) for index, row in enumerate(rows, 1)
+                   if row.get("id") == selector]
+        if len(matches) == 1:
+            return matches[0]
+        if not matches:
+            raise RuntimeError(f"No session ID matches {selector!r} in the current list.")
+        raise RuntimeError(f"Session ID {selector!r} is duplicated in the current list.")
+    raise RuntimeError("Expected a session number or full session ID.")
 
 
 def _session_title(session_id, titles=None):
@@ -1032,6 +1109,32 @@ def _event_stream(response, *, diagnostic=None, operation=None, timeout=None):
             )
 
 
+def _raise_session_event_error(session_id, exc):
+    message = str(exc)
+    if "Agents API HTTP 500" in message and session_id not in message:
+        raise RuntimeError(
+            f"{message}\n"
+            f"Remote session {session_id} returned an internal server error on /events "
+            "and appears corrupted on OpenAI's server. "
+            "Use ai-use to switch to another session, ai-new to start a new session, "
+            "or ai-cleanup to delete this broken session."
+        ) from exc
+    raise exc
+
+
+def _drain_failed_sse_stream(response, *, diagnostic=None, operation=None):
+    sock = _response_socket(response)
+    if sock is None or response.closed:
+        return
+    try:
+        sock.settimeout(0.2)
+        for _ in _event_stream(
+                response, diagnostic=diagnostic, operation=operation, timeout=0.2):
+            pass
+    except Exception:
+        pass
+
+
 def _stream(session_id, event, *, diagnostic=None, stream=True):
     encoded_id = urllib.parse.quote(session_id, safe="")
     operation = "continue_session"
@@ -1041,12 +1144,15 @@ def _stream(session_id, event, *, diagnostic=None, stream=True):
             session_id, diagnostic=diagnostic, deadline=deadline
         )
         previous_turn_id = previous_turn.get("id") if previous_turn else None
-        with _request(
-                "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
-                diagnostic=diagnostic, operation="submit_session_event",
-                timeout=_request_timeout(), headers={"Idempotency-Key": str(uuid.uuid4())},
-                deadline=deadline, prompt_submission=True) as accepted:
-            accepted.read()
+        try:
+            with _request(
+                    "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
+                    diagnostic=diagnostic, operation="submit_session_event",
+                    timeout=_request_timeout(), headers={"Idempotency-Key": str(uuid.uuid4())},
+                    deadline=deadline, prompt_submission=True) as accepted:
+                accepted.read()
+        except RuntimeError as exc:
+            _raise_session_event_error(session_id, exc)
         deadline.mark_prompt_accepted()
         context = dict(diagnostic or {})
         context["session_id"] = session_id
@@ -1056,15 +1162,39 @@ def _stream(session_id, event, *, diagnostic=None, stream=True):
         )
         return
 
-    response = _request(
-        "GET", f"/sessions/{encoded_id}/events?stream=true", stream=True,
-        diagnostic=diagnostic, operation=operation, timeout=_stream_timeout(),
-    )
-    try:
+    submitted = False
+
+    def submit_event():
+        nonlocal submitted
+        if submitted:
+            return
+        submitted = True
         with _request(
                 "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
                 diagnostic=diagnostic, operation="submit_session_event") as accepted:
             accepted.read()
+
+    _SSE_OPEN_STATE.on_blocked = submit_event
+    try:
+        response = _request(
+            "GET", f"/sessions/{encoded_id}/events?stream=true", stream=True,
+            diagnostic=diagnostic, operation=operation, timeout=_stream_timeout(),
+        )
+    except RuntimeError as exc:
+        if submitted:
+            _raise_session_event_error(session_id, exc)
+        raise
+    finally:
+        _SSE_OPEN_STATE.on_blocked = None
+
+    try:
+        try:
+            submit_event()
+        except RuntimeError as exc:
+            _drain_failed_sse_stream(
+                response, diagnostic=diagnostic, operation=operation
+            )
+            _raise_session_event_error(session_id, exc)
         yield from _event_stream(
             response, diagnostic=diagnostic, operation=operation,
             timeout=_stream_timeout(),

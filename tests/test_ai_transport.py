@@ -439,6 +439,91 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertNotIn("ai_transport_stream_once", vm.host)
         self.assertIn("A short joke.", output.getvalue())
 
+    def test_streaming_followup_submits_post_when_sse_open_waits_for_first_event(self):
+        import threading
+
+        post_submitted = threading.Event()
+        post_response = FakeResponse(b"{}")
+
+        class StreamResponse(FakeResponse):
+            status = 200
+
+            def __iter__(self):
+                return iter([
+                    b'data: {"type":"agent.session.turn.output_text.delta","delta":"Hi"}\n',
+                    b"\n",
+                    b'data: {"type":"agent.session.turn.completed"}\n',
+                    b"\n",
+                ])
+
+        sse_response = StreamResponse()
+
+        def fake_urlopen(request, timeout=None):
+            if request.get_method() == "GET" and "events?stream=true" in request.full_url:
+                if not post_submitted.wait(timeout=1.0):
+                    raise TimeoutError("SSE GET was not unblocked by POST")
+                return sse_response
+            if request.get_method() == "POST" and request.full_url.endswith("/events"):
+                post_submitted.set()
+                return post_response
+            self.fail(f"Unexpected request: {request.get_method()} {request.full_url}")
+
+        with patch.dict(os.environ, {
+                "OPENAI_API_KEY": "test-key",
+                "PEFORTH_AI_SSE_OPEN_GRACE": "0.02",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge.urllib.request, "urlopen", side_effect=fake_urlopen):
+            events = list(ai_bridge._stream(
+                "sess-buffered",
+                {"type": "agent.session.input.message", "input": []},
+                stream=True,
+            ))
+
+        self.assertTrue(post_submitted.is_set())
+        self.assertEqual(events[0], {"type": "agent.session.turn.output_text.delta", "delta": "Hi"})
+        self.assertEqual(events[-1], {"type": "agent.session.turn.completed"})
+        self.assertTrue(post_response.closed)
+        self.assertTrue(sse_response.closed)
+
+    def test_corrupted_session_http_500_includes_actionable_recovery_hint(self):
+        sse_response = FakeResponse()
+
+        def fake_request(method, path, payload=None, **kwargs):
+            if method == "GET":
+                return sse_response
+            raise RuntimeError("Agents API HTTP 500: {\"error\":{\"code\":\"internal_error\"}}")
+
+        with patch.object(ai_bridge, "_request", side_effect=fake_request):
+            with self.assertRaisesRegex(
+                    RuntimeError,
+                    r"Agents API HTTP 500[\s\S]*sess-corrupt[\s\S]*ai-use[\s\S]*ai-cleanup"):
+                list(ai_bridge._stream(
+                    "sess-corrupt",
+                    {"type": "agent.session.input.message", "input": []},
+                    stream=True,
+                ))
+        self.assertTrue(sse_response.closed)
+
+
+class DotenvEmptyValueTests(unittest.TestCase):
+    def test_empty_process_key_is_filled_from_dotenv(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".env").write_text("OPENAI_API_KEY=key-from-dotenv\n", encoding="utf-8")
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": tmp, "OPENAI_API_KEY": ""}):
+                ai_bridge.load_dotenv()
+                self.assertEqual(os.environ["OPENAI_API_KEY"], "key-from-dotenv")
+
+    def test_nonempty_process_key_is_not_overridden_by_dotenv(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".env").write_text("OPENAI_API_KEY=key-from-dotenv\n", encoding="utf-8")
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": tmp, "OPENAI_API_KEY": "key-from-process"}):
+                ai_bridge.load_dotenv()
+                self.assertEqual(os.environ["OPENAI_API_KEY"], "key-from-process")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -763,7 +763,7 @@ class ReplBootstrapTests(unittest.TestCase):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 self.vm.dictate("ai-status")
-            self.assertIn("peforth [12345678]", output.getvalue())
+            self.assertIn("peforth [sess_current_12345678]", output.getvalue())
 
             with contextlib.redirect_stdout(io.StringIO()):
                 self.vm.dictate("ai-new")
@@ -783,6 +783,62 @@ class ReplBootstrapTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()):
             self.vm.dictate('s" abcdefgh" ai-use')
         self.assertEqual(self.vm.host["ai_active_session_id"], "sess_selected_abcdefgh")
+
+    def test_ai_use_prints_full_session_id(self):
+        bridge = _f_mod.ai_bridge
+        session_id = "sess_selected_abcdefgh"
+        output = io.StringIO()
+        with patch.object(bridge, "_list_remote_sessions", return_value=[{"id": session_id}]), \
+                patch.object(bridge, "_api_get", return_value={}), \
+                contextlib.redirect_stdout(output):
+            self.vm.push(session_id)
+            self.vm.execute(self.vm.tick("ai-use"))
+        self.assertEqual(self.vm.host["ai_active_session_id"], session_id)
+        self.assertIn(f"[{session_id}]", output.getvalue())
+
+    def test_ai_session_and_cleanup_still_accept_session_numbers(self):
+        bridge = _f_mod.ai_bridge
+        session_id = "sess_number_12345678"
+        self.vm.host["ai_session_rows"] = [{"id": session_id}]
+        detail = {"id": session_id, "created_at": 1791466592,
+                  "last_active_at": 1791470192, "status": "idle",
+                  "agent": {"model": "gpt-test"}, "usage": {}}
+        with patch.object(bridge, "_api_get", return_value=detail) as api_get:
+            self.vm.push(1)
+            self.vm.execute(self.vm.tick("ai-session"))
+        api_get.assert_called_once_with("/sessions/sess_number_12345678")
+
+        self.vm.host["ai_session_rows"] = [{"id": session_id}]
+        with patch.object(bridge, "_api_delete", return_value={"deleted": True}) as api_delete:
+            self.vm.push(1)
+            self.vm.execute(self.vm.tick("ai-cleanup"))
+        api_delete.assert_called_once_with("/sessions/sess_number_12345678")
+
+    def test_ai_session_and_cleanup_accept_full_session_ids(self):
+        bridge = _f_mod.ai_bridge
+        session_id = "sess_full_12345678"
+        self.vm.host["ai_session_rows"] = [{"id": session_id}]
+        detail = {"id": session_id, "created_at": 1791466592,
+                  "last_active_at": 1791470192, "status": "idle",
+                  "agent": {"model": "gpt-test"}, "usage": {}}
+        output = io.StringIO()
+        with patch.object(bridge, "_api_get", return_value=detail) as api_get:
+            with contextlib.redirect_stdout(output):
+                self.vm.push(session_id)
+                self.vm.execute(self.vm.tick("ai-session"))
+        api_get.assert_called_once_with("/sessions/sess_full_12345678")
+        self.assertIn("[sess_full_12345678]", output.getvalue())
+
+        self.vm.host["ai_session_rows"] = [{"id": session_id}]
+        self.vm.host["ai_session_titles"] = {session_id: "Design"}
+        output = io.StringIO()
+        with patch.object(bridge, "_api_delete", return_value={"deleted": True}) as api_delete:
+            with contextlib.redirect_stdout(output):
+                self.vm.push(session_id)
+                self.vm.execute(self.vm.tick("ai-cleanup"))
+        api_delete.assert_called_once_with("/sessions/sess_full_12345678")
+        self.assertIn("sess_full_12345678", output.getvalue())
+        self.assertNotIn("ai_session_rows", self.vm.host)
 
     def test_bye_refreshes_session_index_and_prints_resume_command(self):
         bridge = _f_mod.ai_bridge
@@ -828,7 +884,7 @@ class ReplBootstrapTests(unittest.TestCase):
             self.assertEqual(bridge._session_titles(), {"sess_1": "Design"})
             self.assertEqual(session_file.read_text(encoding="utf-8"), original)
 
-    def test_ai_sessions_display_title_cloud_times_and_short_id(self):
+    def test_ai_sessions_display_title_cloud_times_and_full_id(self):
         bridge = _f_mod.ai_bridge
         remote = [{"id": "sess_full_12345678", "created_at": 1791466592,
                    "last_active_at": 1791470192, "status": "idle",
@@ -841,8 +897,7 @@ class ReplBootstrapTests(unittest.TestCase):
             with contextlib.redirect_stdout(output):
                 self.vm.dictate("ai-sessions")
         rendered = output.getvalue()
-        self.assertIn("Design chat [12345678]", rendered)
-        self.assertNotIn("sess_full_12345678", rendered)
+        self.assertIn("Design chat [sess_full_12345678]", rendered)
         self.assertIn("Started:", rendered)
         self.assertIn("Last active:", rendered)
         self.assertEqual(saved, [{"id": "sess_full_12345678", "title": "Design chat"}])
@@ -910,7 +965,11 @@ class ReplBootstrapTests(unittest.TestCase):
                      "run_curl", "run_http"):
             word = self.vm.tick(name)
             self.assertIsNotNone(word, name)
-            self.assertTrue(word.source.strip() or name == "system_info", name)
+            self.assertTrue(
+                word.source.strip()
+                or isinstance(word.action, tuple),
+                name,
+            )
 
     def test_latest_runtime_file_info_uses_newest_f_or_py_file(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1446,6 +1505,7 @@ class ReplBootstrapTests(unittest.TestCase):
             status = "done"
 
         output = io.StringIO()
+        _f_mod._load_prompt_toolkit()
         with patch.object(_f_mod, "PromptSession", QuietPromptSession), \
                 patch.object(_f_mod, "_make_multiline_key_bindings", return_value=None), \
                 patch.object(_f_mod.ai_bridge, "refresh_session_index") as refresh, \
