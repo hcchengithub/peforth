@@ -984,3 +984,29 @@ code bye
 end-code
 // ( -- ) Exit the Forth process.
 /// Terminate execution immediately via SystemExit(0).
+
+\ (include) ( pathname -- ) reads and evaluates a Forth source file.
+code (include)
+    from pathlib import Path
+    pathname = vm.pop()
+    if not isinstance(pathname, str) or not pathname:
+        raise ValueError('(include) expects a non-empty pathname string.')
+    requested = Path(pathname).expanduser()
+    if requested.is_absolute():
+        candidates = [requested]
+    else:
+        candidates = [Path.cwd() / requested]
+        runtime_path = (vm.host.get('system_info') or {}).get('runtime_path')
+        if isinstance(runtime_path, str) and runtime_path:
+            candidates.append(Path(runtime_path) / 'f' / requested)
+    target = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if target is None:
+        searched = ', '.join(str(candidate) for candidate in candidates)
+        raise FileNotFoundError(
+            f'Forth source file {pathname!r} not found; searched: {searched}')
+    yield from vm.evaluate(target.read_text(encoding='utf-8-sig'))
+end-code
+
+\ include parses the next pathname from the TIB.
+: include BL word (include) ;
+immediate
