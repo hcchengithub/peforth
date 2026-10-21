@@ -334,8 +334,35 @@ code (ai)
             raise
     ai_started = False
     ai_line_start = True
+    remote_turn_id = None
+
+    def reconcile_current_turn():
+        if not remote_turn_id:
+            return None, False
+        status, recovered = ai_bridge._reconcile_stream_turn(
+            session_id, remote_turn_id, diagnostic=diagnostic_context
+        )
+        if status == "completed":
+            had_answer = bool(answer)
+            if recovered:
+                answer[:] = [recovered]
+                if stream_response and not had_answer:
+                    print()
+                    print("🤖 " + recovered)
+            return status, True
+        if status in {"failed", "cancelled", "incomplete"}:
+            raise RuntimeError(
+                f"Agents API turn {remote_turn_id} ended with status {status!r}."
+            )
+        return status, False
+
     try:
         for event in events:
+            event_turn_id = event.get("turn_id")
+            if not event_turn_id and isinstance(event.get("turn"), dict):
+                event_turn_id = event["turn"].get("id")
+            if isinstance(event_turn_id, str) and event_turn_id:
+                remote_turn_id = event_turn_id
             if not session_id:
                 session_id = ai_bridge._session_id_from_event(event)
                 if session_id:
@@ -365,14 +392,43 @@ code (ai)
                     ai_started = False
                     ai_line_start = True
             elif kind == "agent.session.requires_action":
-                session_status, actions = ai_bridge._current_actions(
+                session_status, actions = ai_bridge._wait_for_current_actions(
                     session_id, diagnostic=diagnostic_context
                 )
+                if session_status in {"idle", "completed"} and not actions:
+                    turn_status, completed = reconcile_current_turn()
+                    if completed:
+                        ai_bridge._diagnostic_event(
+                            diagnostic_context, "required_action_reconciled",
+                            payload={"session_status": session_status,
+                                     "turn_status": turn_status,
+                                     "remote_turn_id": remote_turn_id},
+                        )
+                        turn_completed = True
+                        break
+                    ai_bridge._diagnostic_event(
+                        diagnostic_context, "required_action_deferred",
+                        payload={"status": session_status,
+                                 "required_action_count": len(actions),
+                                 "remote_turn_id": remote_turn_id,
+                                 "latest_turn_status": turn_status},
+                    )
+                    continue
+                if (session_status == "in_progress" or
+                        (session_status == "requires_action" and not actions)):
+                    ai_bridge._diagnostic_event(
+                        diagnostic_context, "required_action_deferred",
+                        payload={"status": session_status,
+                                 "required_action_count": len(actions)},
+                    )
+                    continue
                 if session_status != "requires_action":
                     raise RuntimeError(
                         f"Agents API signaled required action but session status is {session_status!r}."
                     )
                 for action in actions:
+                    if isinstance(action.get("turn_id"), str):
+                        remote_turn_id = action["turn_id"]
                     name = action.get("name")
                     call_started_ns = time.monotonic_ns()
                     raw_arguments = action.get("arguments", {})
@@ -614,12 +670,37 @@ code (ai)
         )
         raise
     except Exception as exc:
-        output_status = "partial" if answer else "failed_before_output"
-        ai_bridge._diagnostic_finish_turn(
-            vm, diagnostic_turn_id, "".join(answer) if answer else None,
-            output_status=output_status, status="failed", error=exc,
+        recoverable_sse_timeout = (
+            isinstance(exc, RuntimeError)
+            and str(exc).startswith("Agents API SSE stream timed out")
         )
-        raise
+        if recoverable_sse_timeout:
+            try:
+                _, turn_completed = reconcile_current_turn()
+            except Exception as reconcile_error:
+                exc = reconcile_error
+        if not turn_completed:
+            output_status = "partial" if answer else "failed_before_output"
+            ai_bridge._diagnostic_finish_turn(
+                vm, diagnostic_turn_id, "".join(answer) if answer else None,
+                output_status=output_status, status="failed", error=exc,
+            )
+            raise exc
+    if not turn_completed and remote_turn_id:
+        try:
+            turn_status, turn_completed = reconcile_current_turn()
+            if not turn_completed:
+                raise RuntimeError(
+                    f"Agents API SSE ended before turn {remote_turn_id} reached a terminal status "
+                    f"(current status: {turn_status!r})."
+                )
+        except Exception as exc:
+            output_status = "partial" if answer else "failed_before_output"
+            ai_bridge._diagnostic_finish_turn(
+                vm, diagnostic_turn_id, "".join(answer) if answer else None,
+                output_status=output_status, status="failed", error=exc,
+            )
+            raise
     if not session_id:
         error = RuntimeError("Agents API stream ended without returning the new session ID.")
         ai_bridge._diagnostic_finish_turn(

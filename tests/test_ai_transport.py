@@ -375,6 +375,213 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertTrue(deadline.prompt_submission_started)
         self.assertFalse(deadline.prompt_accepted)
 
+    def test_wait_for_current_actions_retries_transitional_status(self):
+        action = {"call_id": "call-ready", "name": "peforth_search_words"}
+        with patch.object(ai_bridge, "_current_actions", side_effect=[
+                ("in_progress", []), ("requires_action", [action])]) as current, \
+                patch.object(ai_bridge.time, "sleep") as sleep, \
+                patch.object(ai_bridge, "_poll_interval", return_value=0.01):
+            status, actions = ai_bridge._wait_for_current_actions("sess-transition")
+
+        self.assertEqual(status, "requires_action")
+        self.assertEqual(actions, [action])
+        self.assertEqual(current.call_count, 2)
+        sleep.assert_called_once_with(0.01)
+
+    def test_wait_for_current_actions_stops_after_bounded_attempts(self):
+        with patch.object(ai_bridge, "_current_actions", return_value=("in_progress", [])) as current, \
+                patch.object(ai_bridge.time, "sleep"), \
+                patch.object(ai_bridge, "_poll_interval", return_value=0.01):
+            status, actions = ai_bridge._wait_for_current_actions("sess-still-running")
+
+        self.assertEqual(status, "in_progress")
+        self.assertEqual(actions, [])
+        self.assertEqual(current.call_count, 3)
+
+    def test_ai_defers_required_action_event_when_session_is_still_in_progress(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+
+        def fake_create(_payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess-transition"}}
+            yield {"type": "agent.session.requires_action", "session": {"status": "requires_action"}}
+            yield {"type": "agent.session.turn.output_text.delta", "delta": "Done."}
+            yield {"type": "agent.session.turn.output_text.done", "text": "Done."}
+            yield {"type": "agent.session.turn.completed"}
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+                "PEFORTH_AI_POLL_INTERVAL": "0.001",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_current_actions", return_value=("in_progress", [])) as current, \
+                patch.object(ai_bridge.time, "sleep"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("handle a stale action event")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(current.call_count, 3)
+
+    def test_reconcile_stream_turn_retries_until_terminal_status(self):
+        with patch.object(ai_bridge, "_latest_turn", side_effect=[
+                {"id": "turn-check", "status": "in_progress"},
+                {"id": "turn-check", "status": "completed"}]) as latest, \
+                patch.object(ai_bridge, "_session_turn_output_text", return_value="Saved answer.") as output, \
+                patch.object(ai_bridge.time, "sleep") as sleep, \
+                patch.object(ai_bridge, "_poll_interval", return_value=0.01):
+            status, text = ai_bridge._reconcile_stream_turn("sess-check", "turn-check")
+
+        self.assertEqual(status, "completed")
+        self.assertEqual(text, "Saved answer.")
+        self.assertEqual(latest.call_count, 2)
+        output.assert_called_once()
+        sleep.assert_called_once_with(0.01)
+
+    def test_tool_result_then_in_progress_to_idle_reconciles_completed_turn(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+        action = {
+            "type": "function_call", "turn_id": "turn-exact", "call_id": "call-search",
+            "name": "peforth_search_words", "arguments": {"query": "run_pwsh"},
+        }
+
+        def fake_create(_payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess-exact"}}
+            yield {"type": "agent.session.turn.created", "turn": {"id": "turn-exact"}}
+            yield {"type": "agent.session.requires_action", "session": {"status": "requires_action"}}
+            yield {"type": "agent.session.turn.output_text.delta", "delta": "Brightness set to 50%."}
+            yield {"type": "agent.session.turn.output_text.done", "text": "Brightness set to 50%."}
+            yield {"type": "agent.session.requires_action", "session": {"status": "idle"}}
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+                "PEFORTH_AI_POLL_INTERVAL": "0.001",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_current_actions", side_effect=[
+                    ("requires_action", [action]), ("in_progress", []),
+                    ("in_progress", []), ("idle", []),
+                ]), patch.object(ai_bridge, "_reconcile_stream_turn", return_value=("completed", "Brightness set to 50%.") ) as reconcile, \
+                patch.object(ai_bridge, "_tool_result") as tool_result, \
+                patch.object(ai_bridge.time, "sleep"), \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("set brightness")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.pop(), "Brightness set to 50%.")
+        tool_result.assert_called_once()
+        reconcile.assert_called_once()
+
+    def test_idle_required_action_is_reconciled_against_completed_turn(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+
+        def fake_create(_payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess-idle"}}
+            yield {"type": "agent.session.turn.created", "turn": {"id": "turn-done"}}
+            yield {"type": "agent.session.turn.output_text.delta", "delta": "Done."}
+            yield {"type": "agent.session.turn.output_text.done", "text": "Done."}
+            yield {"type": "agent.session.requires_action", "session": {"status": "idle"}}
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_current_actions", return_value=("idle", [])), \
+                patch.object(ai_bridge, "_reconcile_stream_turn", return_value=("completed", "Done.")) as reconcile, \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("reconcile a stale idle action event")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.pop(), "Done.")
+        reconcile.assert_called_once_with(
+            "sess-idle", "turn-done", diagnostic=reconcile.call_args.kwargs["diagnostic"]
+        )
+
+    def test_idle_action_event_defers_until_turn_completed_event(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+
+        def fake_create(_payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess-wait"}}
+            yield {"type": "agent.session.turn.created", "turn": {"id": "turn-wait"}}
+            yield {"type": "agent.session.requires_action", "session": {"status": "idle"}}
+            yield {"type": "agent.session.turn.output_text.delta", "delta": "Done."}
+            yield {"type": "agent.session.turn.completed", "turn_id": "turn-wait"}
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_current_actions", return_value=("idle", [])), \
+                patch.object(ai_bridge, "_reconcile_stream_turn", return_value=("in_progress", None)) as reconcile, \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("wait for authoritative turn completion")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.pop(), "Done.")
+        reconcile.assert_called_once()
+
+    def test_clean_sse_end_reconciles_completed_remote_turn(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+
+        def fake_create(_payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess-end"}}
+            yield {"type": "agent.session.turn.created", "turn": {"id": "turn-end"}}
+            yield {"type": "agent.session.turn.output_text.done", "text": ""}
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_reconcile_stream_turn", return_value=("completed", "Recovered answer.")) as reconcile, \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("recover final answer from completed turn")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.pop(), "Recovered answer.")
+        reconcile.assert_called_once()
+
+    def test_sse_timeout_recovers_completed_turn_from_saved_output(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+
+        def fake_create(_payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess-timeout"}}
+            yield {"type": "agent.session.turn.created", "turn": {"id": "turn-timeout"}}
+            raise RuntimeError("Agents API SSE stream timed out after 1s without data.")
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_reconcile_stream_turn", return_value=("completed", "Recovered answer.")) as reconcile, \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("recover a completed turn after an SSE timeout")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.pop(), "Recovered answer.")
+        reconcile.assert_called_once()
+
     def test_one_shot_deadline_pauses_only_during_manual_approval(self):
         with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
             vm = repl.create_vm()
@@ -439,10 +646,11 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertNotIn("ai_transport_stream_once", vm.host)
         self.assertIn("A short joke.", output.getvalue())
 
-    def test_streaming_followup_submits_post_when_sse_open_waits_for_first_event(self):
-        import threading
+    def test_streaming_followup_submits_post_only_after_sse_headers_open(self):
+        import time
 
-        post_submitted = threading.Event()
+        request_order = []
+        newline = bytes((10,))
         post_response = FakeResponse(b"{}")
 
         class StreamResponse(FakeResponse):
@@ -450,27 +658,27 @@ class NonStreamingTransportTests(unittest.TestCase):
 
             def __iter__(self):
                 return iter([
-                    b'data: {"type":"agent.session.turn.output_text.delta","delta":"Hi"}\n',
-                    b"\n",
-                    b'data: {"type":"agent.session.turn.completed"}\n',
-                    b"\n",
+                    b'data: {"type":"agent.session.turn.output_text.delta","delta":"Hi"}' + newline,
+                    newline,
+                    b'data: {"type":"agent.session.turn.completed"}' + newline,
+                    newline,
                 ])
 
         sse_response = StreamResponse()
 
         def fake_urlopen(request, timeout=None):
             if request.get_method() == "GET" and "events?stream=true" in request.full_url:
-                if not post_submitted.wait(timeout=1.0):
-                    raise TimeoutError("SSE GET was not unblocked by POST")
+                time.sleep(0.02)
+                request_order.append("GET-open")
                 return sse_response
             if request.get_method() == "POST" and request.full_url.endswith("/events"):
-                post_submitted.set()
+                request_order.append("POST-prompt")
                 return post_response
             self.fail(f"Unexpected request: {request.get_method()} {request.full_url}")
 
         with patch.dict(os.environ, {
                 "OPENAI_API_KEY": "test-key",
-                "PEFORTH_AI_SSE_OPEN_GRACE": "0.02",
+                "PEFORTH_AI_SSE_OPEN_GRACE": "0.5",
         }), patch.object(ai_bridge, "load_dotenv"), \
                 patch.object(ai_bridge.urllib.request, "urlopen", side_effect=fake_urlopen):
             events = list(ai_bridge._stream(
@@ -479,9 +687,121 @@ class NonStreamingTransportTests(unittest.TestCase):
                 stream=True,
             ))
 
-        self.assertTrue(post_submitted.is_set())
+        self.assertEqual(request_order, ["GET-open", "POST-prompt"])
         self.assertEqual(events[0], {"type": "agent.session.turn.output_text.delta", "delta": "Hi"})
-        self.assertEqual(events[-1], {"type": "agent.session.turn.completed"})
+        self.assertEqual(events[-1]["type"], "agent.session.turn.completed")
+        self.assertTrue(post_response.closed)
+        self.assertTrue(sse_response.closed)
+
+    def test_sse_handshake_timeout_falls_back_to_single_post_then_poll(self):
+        order = []
+        post_response = FakeResponse(b"{}")
+        events = [{"type": "agent.session.turn.completed", "turn_id": "turn-new"}]
+
+        def fake_request(method, path, payload=None, **kwargs):
+            order.append((method, path))
+            if method == "GET":
+                raise RuntimeError("Agents API request timed out after 0.02s: GET " + path)
+            return post_response
+
+        with patch.dict(os.environ, {
+                "OPENAI_API_KEY": "test-key",
+                "PEFORTH_AI_REQUEST_TIMEOUT": "1",
+                "PEFORTH_AI_TURN_TIMEOUT": "1",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_request", side_effect=fake_request), \
+                patch.object(ai_bridge, "_latest_turn", return_value={"id": "turn-old"}) as latest, \
+                patch.object(ai_bridge, "_poll_session_events", return_value=iter(events)) as poll:
+            result = list(ai_bridge._stream(
+                "sess-fallback", {"type": "agent.session.input.message", "input": []},
+                stream=True,
+            ))
+
+        self.assertEqual([method for method, _ in order], ["GET", "POST"])
+        self.assertEqual(order[-1][1], "/sessions/sess-fallback/events")
+        latest.assert_called_once()
+        poll.assert_called_once()
+        poll_args, poll_kwargs = poll.call_args
+        self.assertEqual(poll_args[:2], ("sess-fallback", "turn-old"))
+        self.assertEqual(poll_kwargs["deadline"], latest.call_args.kwargs["deadline"])
+        self.assertEqual(poll_kwargs["diagnostic"]["session_id"], "sess-fallback")
+        self.assertEqual(result, events)
+        self.assertTrue(post_response.closed)
+
+    def test_sse_http_error_does_not_fallback_or_submit_prompt(self):
+        order = []
+
+        def fake_request(method, path, payload=None, **kwargs):
+            order.append(method)
+            raise RuntimeError("Agents API HTTP 500: internal_error")
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), \
+                patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_request", side_effect=fake_request), \
+                patch.object(ai_bridge, "_latest_turn") as latest:
+            with self.assertRaisesRegex(RuntimeError, "Agents API HTTP 500"):
+                list(ai_bridge._stream(
+                    "sess-http-error", {"type": "agent.session.input.message", "input": []},
+                    stream=True,
+                ))
+
+        self.assertEqual(order, ["GET"])
+        latest.assert_not_called()
+
+    def test_stream_response_timeout_is_restored_after_open_handshake(self):
+        class TimeoutSocket:
+            value = None
+
+            def settimeout(self, value):
+                self.value = value
+
+        response = FakeResponse()
+        response.status = 200
+        response._sock = TimeoutSocket()
+        with patch.dict(os.environ, {
+                "OPENAI_API_KEY": "test-key", "PEFORTH_AI_STREAM_TIMEOUT": "12",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge.urllib.request, "urlopen", return_value=response):
+            with ai_bridge._request(
+                    "GET", "/sessions/sess-timeout/events?stream=true",
+                    stream=True, timeout=0.02) as opened:
+                self.assertEqual(opened.status, 200)
+
+        self.assertEqual(response._sock.value, 12.0)
+
+    def test_reset_after_sse_open_does_not_resubmit_prompt(self):
+        request_order = []
+        post_response = FakeResponse(b"{}")
+        newline = bytes((10,))
+
+        class ResetResponse(FakeResponse):
+            status = 200
+
+            def __iter__(self):
+                raise ConnectionResetError("peer reset")
+                yield newline
+
+        sse_response = ResetResponse()
+
+        def fake_urlopen(request, timeout=None):
+            if request.get_method() == "GET" and "events?stream=true" in request.full_url:
+                request_order.append("GET-open")
+                return sse_response
+            if request.get_method() == "POST" and request.full_url.endswith("/events"):
+                request_order.append("POST-prompt")
+                return post_response
+            self.fail(f"Unexpected request: {request.get_method()} {request.full_url}")
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), \
+                patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge.urllib.request, "urlopen", side_effect=fake_urlopen):
+            with self.assertRaisesRegex(ConnectionResetError, "peer reset"):
+                list(ai_bridge._stream(
+                    "sess-reset", {"type": "agent.session.input.message", "input": []},
+                    stream=True,
+                ))
+
+        self.assertEqual(request_order, ["GET-open", "POST-prompt"])
         self.assertTrue(post_response.closed)
         self.assertTrue(sse_response.closed)
 
