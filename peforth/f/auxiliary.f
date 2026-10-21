@@ -125,3 +125,34 @@ end-code immediate
     then
 ; immediate
 // ( -- ) Decrement the current [for] count; rewind to its body or discard its state.
+
+code lcd-backlight
+    import json
+    level = vm.pop()
+    if isinstance(level, bool) or not isinstance(level, (int, float)) or int(level) != level:
+        raise ValueError("lcd-backlight expects an integer brightness from 0 to 100.")
+    level = int(level)
+    if not 0 <= level <= 100:
+        raise ValueError("lcd-backlight brightness must be from 0 to 100.")
+    script = (
+        "$method = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods; "
+        f"$result = Invoke-CimMethod -InputObject $method -MethodName WmiSetBrightness -Arguments @{{Timeout=1; Brightness={level}}}; "
+        "$current = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness | Select-Object -ExpandProperty CurrentBrightness; "
+        "[pscustomobject]@{CurrentBrightness=$current} | ConvertTo-Json -Compress"
+    )
+    vm.push(script)
+    yield from vm.call(vm.tick("run_pwsh"))
+    result = vm.pop()
+    if not isinstance(result, dict) or result.get("exit_code") != 0:
+        detail = result.get("stderr", repr(result)) if isinstance(result, dict) else repr(result)
+        raise RuntimeError("lcd-backlight failed: " + detail)
+    try:
+        confirmed = json.loads(result.get("stdout", "").strip()).get("CurrentBrightness")
+    except Exception as exc:
+        raise RuntimeError("Could not verify lcd-backlight result: " + str(exc))
+    if confirmed != level:
+        raise RuntimeError(f"Requested {level}%, but Windows reports {confirmed}%.")
+    print(f"LCD backlight set to {confirmed}%.")
+end-code
+// ( n -- ) Set the laptop LCD backlight to an integer percentage from 0 to 100.
+/// Uses Windows WMI and verifies the reported brightness; reports an error if the setting fails.
