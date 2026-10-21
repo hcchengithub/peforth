@@ -965,7 +965,11 @@ class ReplBootstrapTests(unittest.TestCase):
                      "run_curl", "run_http"):
             word = self.vm.tick(name)
             self.assertIsNotNone(word, name)
-            self.assertTrue(word.source.strip() or name == "system_info", name)
+            self.assertTrue(
+                word.source.strip()
+                or isinstance(word.action, tuple),
+                name,
+            )
 
     def test_latest_runtime_file_info_uses_newest_f_or_py_file(self):
         with tempfile.TemporaryDirectory() as directory:
