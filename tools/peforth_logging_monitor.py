@@ -85,7 +85,7 @@ def _time(value: str | None) -> str:
     if not value:
         return "??:??:??"
     try:
-        return datetime.fromisoformat(value).astimezone().strftime("%H:%M:%S")
+        return datetime.fromisoformat(value).astimezone().strftime("%Y-%m-%d %H:%M:%S")
     except ValueError:
         return value
 
