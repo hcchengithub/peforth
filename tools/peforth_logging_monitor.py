@@ -62,14 +62,14 @@ def iter_new_events(connection: sqlite3.Connection, last_event_id: int) -> list[
 
 
 def list_runtime_ids(connection: sqlite3.Connection) -> list[tuple[str, str]]:
-    """Return stable four-character labels and their full runtime UUIDs."""
+    """Return stable eight-character labels and their full runtime UUIDs."""
     rows = connection.execute(
         "SELECT runtime_id FROM runtimes ORDER BY started_at, runtime_id"
     ).fetchall()
     runtime_ids = [row[0] for row in rows]
-    labels = [runtime_id[:4] for runtime_id in runtime_ids]
+    labels = [runtime_id[:8] for runtime_id in runtime_ids]
     if len(labels) != len(set(labels)):
-        raise ValueError("runtime ID prefix collision; use the full UUID to disambiguate")
+        raise ValueError("runtime ID prefix collision among 8-character labels; use full UUIDs to disambiguate")
     return list(zip(labels, runtime_ids))
 
 
@@ -129,8 +129,8 @@ def _description(row: dict) -> str:
 
 def format_event(row: dict) -> str:
     event_type = row.get("event_type") or ""
-    runtime_label = str(row.get("runtime_id") or "????")[:4].ljust(4, "?")
-    return f"[{runtime_label}] {_time(row.get('recorded_at'))} {EMOJI.get(event_type, '🔎')} {_description(row)}"
+    runtime_label = str(row.get("runtime_id") or "????????")[:8].ljust(8, "?")
+    return f"{runtime_label} {_time(row.get('recorded_at'))} {EMOJI.get(event_type, '🔎')} {_description(row)}"
 
 
 def _event_key(row: dict) -> tuple:
@@ -198,7 +198,7 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument(
         "--runtime-map", action="store_true",
-        help="print four-character runtime IDs and full UUIDs, then exit",
+        help="print eight-character runtime IDs and full UUIDs, then exit",
     )
     return result
 
