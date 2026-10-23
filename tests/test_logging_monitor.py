@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -31,12 +32,12 @@ class LoggingMonitorTests(unittest.TestCase):
         }
         rendered = format_event(row)
         self.assertIn("16:00:00", rendered)
-        self.assertIn("[1234]", rendered)
+        self.assertIn("12345678 ", rendered)
         self.assertIn("📨", rendered)
         self.assertIn("SSE event received", rendered)
         self.assertNotIn("123456789abcdef", rendered)
 
-    def test_list_runtime_ids_returns_four_character_prefixes(self):
+    def test_list_runtime_ids_returns_eight_character_prefixes(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ai-diagnostics.sqlite3"
             connection = sqlite3.connect(path)
@@ -48,7 +49,7 @@ class LoggingMonitorTests(unittest.TestCase):
             connection.commit()
             self.assertEqual(
                 list_runtime_ids(connection),
-                [("abcd", "abcdef123456"), ("0123", "0123456789ab")],
+                [("abcdef12", "abcdef123456"), ("01234567", "0123456789ab")],
             )
             connection.close()
 
@@ -81,6 +82,27 @@ class LoggingMonitorTests(unittest.TestCase):
         self.assertIn("Monitor peforth SQLite diagnostic logging", output.getvalue())
         self.assertIn("--database", output.getvalue())
 
+    def test_main_loads_dotenv_before_resolving_database_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".env").write_text(
+                "LINE_CHANNEL_ACCESS_TOKEN=test-token\nLINE_USER_ID=test-user\n",
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with patch.dict(os.environ, {
+                    "PEFORTH_CONFIG_DIR": tmp,
+                    "LINE_CHANNEL_ACCESS_TOKEN": "",
+                    "LINE_USER_ID": "",
+            }), redirect_stdout(output):
+                with self.assertRaises(SystemExit) as raised:
+                    main(["--help"])
+                self.assertEqual(os.environ["LINE_CHANNEL_ACCESS_TOKEN"], "test-token")
+                self.assertEqual(os.environ["LINE_USER_ID"], "test-user")
+
+            self.assertEqual(raised.exception.code, 0)
+            help_text = "".join(output.getvalue().split())
+            self.assertIn(str(Path(tmp) / "ai-diagnostics.sqlite3"), help_text)
+
     def test_runtime_map_command_prints_short_and_full_ids(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "ai-diagnostics.sqlite3"
@@ -92,7 +114,7 @@ class LoggingMonitorTests(unittest.TestCase):
             output = io.StringIO()
             with redirect_stdout(output):
                 self.assertEqual(main(["--database", str(path), "--runtime-map"]), 0)
-            self.assertIn("abcd  abcdef123456", output.getvalue())
+            self.assertIn("abcdef12  abcdef123456", output.getvalue())
 
     def test_render_events_collapses_adjacent_identical_events_with_count(self):
         rows = [{

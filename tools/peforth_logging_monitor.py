@@ -11,6 +11,9 @@ import sys
 import time
 from urllib.parse import quote
 
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 
 EMOJI = {
     "runtime_started": "🚀",
@@ -204,6 +207,10 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Resolve the configured runtime .env before parser defaults read PEFORTH_CONFIG_DIR.
+    from peforth.ai_bridge import load_dotenv
+
+    load_dotenv()
     args = parser().parse_args(argv)
     try:
         if args.runtime_map:
