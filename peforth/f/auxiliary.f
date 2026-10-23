@@ -1,5 +1,19 @@
 \ Auxiliary words are optional conveniences outside the core Forth dictionary.
 
+code sleep
+    import time
+
+    milliseconds = vm.pop()
+    if isinstance(milliseconds, bool) or not isinstance(milliseconds, int):
+        raise TypeError('sleep expects an integer number of milliseconds')
+    if milliseconds < 0:
+        raise ValueError('sleep milliseconds must be non-negative')
+    time.sleep(milliseconds / 1000)
+end-code
+// ( milliseconds -- ) Suspend the current Forth task for the given number of milliseconds.
+/// Blocks this VM's current Forth task until the delay expires; the VM cannot interpret other input while sleeping.
+/// milliseconds must be a non-negative integer; zero returns immediately.
+
 code cls
     print("\x1b[2J\x1b[H", end="", flush=True)
 end-code
