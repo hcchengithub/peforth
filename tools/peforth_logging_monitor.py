@@ -2,17 +2,25 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime
 import json
 import os
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 import time
 from urllib.parse import quote
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from tools.peforth_watchdog import (
+    ReminderManager,
+    Watchdog,
+    validate_lookback_hours,
+)
 
 
 EMOJI = {
@@ -165,24 +173,83 @@ def render_events(rows: list[dict]) -> list[str]:
     return rendered
 
 
-def monitor(database: Path, interval: float) -> None:
+def _positive_lookback(value: str) -> float:
+    try:
+        return validate_lookback_hours(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
+def _start_message_box(issue: dict):
+    command = [
+        sys.executable, str(Path(__file__).resolve()), "--notify", "--wait",
+        "--title", issue["title"], "--message", issue["message"],
+    ]
+    options = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+               "stderr": subprocess.DEVNULL, "close_fds": True}
+    if os.name == "nt":
+        options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.Popen(command, **options)
+
+
+def _show_message_box(title: str, message: str) -> None:
+    if os.name == "nt":
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, message, title, 0x30)
+        return
+    if sys.platform.startswith("linux"):
+        script = (
+            "Add-Type -AssemblyName System.Windows.Forms; "
+            "$null = [System.Windows.Forms.MessageBox]::Show(" +
+            "'" + message.replace("'", "''") + "', " +
+            "'" + title.replace("'", "''") + "', " +
+            "[System.Windows.Forms.MessageBoxButtons]::OK, " +
+            "[System.Windows.Forms.MessageBoxIcon]::Warning)"
+        )
+        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        subprocess.run(
+            ["powershell.exe", "-NoProfile", "-STA", "-WindowStyle", "Hidden",
+             "-EncodedCommand", encoded],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return
+    raise OSError("Windows Message Box notifications require Windows or WSL")
+
+
+def monitor(database: Path, interval: float, *, watchdog_enabled: bool = False,
+            orphan_lookback_hours: float = 24) -> None:
     if interval <= 0:
         raise ValueError("interval must be positive")
     connection = connect_readonly(database)
     last_event_id = 0
+    watchdog = None
+    reminders = None
+    if watchdog_enabled:
+        watchdog = Watchdog(connection, orphan_lookback_hours=orphan_lookback_hours)
+        watchdog.initialize()
+        reminders = ReminderManager(_start_message_box)
+        reminders.update(watchdog.current_issues())
     print(f"👀 peforth logging monitor | {database}", flush=True)
+    if watchdog_enabled:
+        print("   Watchdog enabled; Windows Message Box alerts are active", flush=True)
     print("   waiting for activity; press Ctrl-C to stop", flush=True)
     try:
         while True:
-            events = iter_new_events(connection, last_event_id)
+            if watchdog is not None:
+                events = watchdog.poll()
+            else:
+                events = iter_new_events(connection, last_event_id)
+                if events:
+                    last_event_id = max(int(row["event_id"]) for row in events)
             for line in render_events(events):
                 print(line, flush=True)
-            if events:
-                for row in events:
-                    last_event_id = max(last_event_id, int(row["event_id"]))
+            if watchdog is not None:
+                reminders.update(watchdog.current_issues())
             time.sleep(interval)
             connection.close()
             connection = connect_readonly(database)
+            if watchdog is not None:
+                watchdog.connection = connection
     finally:
         connection.close()
 
@@ -203,6 +270,18 @@ def parser() -> argparse.ArgumentParser:
         "--runtime-map", action="store_true",
         help="print eight-character runtime IDs and full UUIDs, then exit",
     )
+    result.add_argument(
+        "--watchdog", action="store_true",
+        help="enable 5-minute no-progress and orphan Message Box alerts",
+    )
+    result.add_argument(
+        "--orphan-lookback-hours", type=_positive_lookback, default=24,
+        help="include unexpected exits with activity in this many recent hours (default: %(default)s)",
+    )
+    result.add_argument("--notify", action="store_true", help=argparse.SUPPRESS)
+    result.add_argument("--wait", action="store_true", help=argparse.SUPPRESS)
+    result.add_argument("--title", default="peforth Watchdog", help=argparse.SUPPRESS)
+    result.add_argument("--message", default="", help=argparse.SUPPRESS)
     return result
 
 
@@ -213,6 +292,11 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     args = parser().parse_args(argv)
     try:
+        if args.notify:
+            if not args.wait:
+                raise ValueError("--notify requires --wait")
+            _show_message_box(args.title, args.message)
+            return 0
         if args.runtime_map:
             connection = connect_readonly(args.database)
             try:
@@ -221,7 +305,8 @@ def main(argv: list[str] | None = None) -> int:
             finally:
                 connection.close()
             return 0
-        monitor(args.database, args.interval)
+        monitor(args.database, args.interval, watchdog_enabled=args.watchdog,
+                orphan_lookback_hours=args.orphan_lookback_hours)
     except KeyboardInterrupt:
         print("\n👋 logging monitor stopped", flush=True)
     except (OSError, sqlite3.Error, ValueError) as exc:

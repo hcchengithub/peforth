@@ -3,7 +3,7 @@ import io
 import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from peforth import ai_bridge, repl
 
@@ -49,11 +49,15 @@ class NonStreamingTransportTests(unittest.TestCase):
                 return self.task
 
         vm = RecordingVM()
-        with patch.object(repl, "create_vm", return_value=vm), \
+        create_vm_mock = Mock(return_value=vm)
+        with patch.object(repl, "create_vm", new=create_vm_mock), \
                 patch.object(ai_bridge, "_list_remote_sessions", return_value=[]), \
                 patch.object(repl, "repl"):
             self.assertEqual(repl.main(["-c", "tell", "me", "a", "joke"]), 0)
 
+        launch = create_vm_mock.call_args.kwargs["launch_context"]
+        self.assertTrue(launch["initial_one_shot"])
+        self.assertEqual(launch["initial_repl_mode"], "chat")
         self.assertFalse(vm.host["ai_transport_stream_once"])
         self.assertEqual(vm.executed, ("(ai)", ["tell me a joke", True]))
 
@@ -75,7 +79,10 @@ class NonStreamingTransportTests(unittest.TestCase):
 
         vm = FakeVM()
         logger = RecordingLogger()
-        vm.host.update(diagnostic_log=logger, diagnostic_runtime_id="runtime-1")
+        vm.host.update(
+            diagnostic_log=logger, diagnostic_runtime_id="runtime-1",
+            one_shot=True, repl_mode="chat",
+        )
 
         ai_bridge._diagnostic_start_turn(
             vm, "a prompt", session_id="sess-1",
@@ -84,6 +91,8 @@ class NonStreamingTransportTests(unittest.TestCase):
 
         self.assertEqual(logger.event_type, "ai_turn_started")
         self.assertEqual(logger.payload, {
+            "one_shot": True,
+            "repl_mode": "chat",
             "terminal_output_stream": True,
             "api_transport_stream": False,
         })
@@ -157,35 +166,53 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertEqual(events[-1]["type"], "agent.session.turn.completed")
         self.assertTrue(response.closed)
 
-    def test_poll_timeout_is_explicit_after_prompt_was_accepted(self):
-        order = []
+    def test_accepted_turn_can_continue_past_former_five_minute_deadline(self):
         response = FakeResponse()
+        elapsed = [0.0]
+        submitted = [False]
+        poll_turns = [0]
 
         def api_get(path, **kwargs):
-            order.append(("GET", path))
             if "/turns" in path:
-                return {"data": [{"id": "turn-new", "status": "in_progress"}]}
+                if not submitted[0]:
+                    return {"data": [{"id": "turn-old", "status": "completed"}]}
+                poll_turns[0] += 1
+                status = "completed" if elapsed[0] >= 301 else "in_progress"
+                return {"data": [{"id": "turn-new", "status": status}]}
             if path.endswith("/sessions/sess-timeout"):
                 return {"id": "sess-timeout", "status": "in_progress", "required_actions": []}
+            if "/items" in path:
+                return {"data": [{
+                    "type": "message", "role": "assistant", "phase": "final_answer",
+                    "turn_id": "turn-new",
+                    "content": [{"type": "output_text", "text": "Completed after five minutes."}],
+                }], "has_more": False, "last_id": "item-final"}
             self.fail(f"Unexpected API GET: {path}")
 
         def request(method, path, payload=None, **kwargs):
-            order.append((method, path, payload))
+            self.assertEqual(method, "POST")
+            submitted[0] = True
             return response
+
+        def sleep(seconds):
+            elapsed[0] += seconds
 
         with patch.dict(os.environ, {
                 "PEFORTH_AI_REQUEST_TIMEOUT": "1",
                 "PEFORTH_AI_TURN_TIMEOUT": "0.02",
-                "PEFORTH_AI_POLL_INTERVAL": "0.001",
+                "PEFORTH_AI_POLL_INTERVAL": "0.5",
         }), patch.object(ai_bridge, "_api_get", side_effect=api_get), \
-                patch.object(ai_bridge, "_request", side_effect=request):
-            with self.assertRaisesRegex(RuntimeError, "timed out.*prompt was accepted"):
-                list(ai_bridge._stream(
-                    "sess-timeout", {"type": "agent.session.input.message", "input": []},
-                    stream=False,
-                ))
+                patch.object(ai_bridge, "_request", side_effect=request) as request_mock, \
+                patch.object(ai_bridge.time, "sleep", side_effect=sleep):
+            events = list(ai_bridge._stream(
+                "sess-timeout", {"type": "agent.session.input.message", "input": []},
+                stream=False,
+            ))
 
-        self.assertTrue(any(entry[0] == "POST" for entry in order))
+        self.assertGreaterEqual(elapsed[0], 301)
+        self.assertGreater(poll_turns[0], 600)
+        self.assertEqual(request_mock.call_count, 1)
+        self.assertEqual(events[-1]["type"], "agent.session.turn.completed")
         self.assertTrue(response.closed)
 
     def test_polling_surfaces_required_action_once_and_then_final_answer(self):
@@ -251,44 +278,25 @@ class NonStreamingTransportTests(unittest.TestCase):
             list(ai_bridge._event_stream(response, timeout=0.01))
         self.assertTrue(response.closed)
 
-    def test_one_shot_deadline_covers_create_poll_and_every_saved_item_page(self):
-        deadline = ai_bridge._OneShotDeadline(timeout=5)
-        diagnostic = {"_one_shot_deadline": deadline}
-        response = FakeResponse(b'{"id":"sess-budget","status":"in_progress"}')
-        pages = []
+    def test_sse_keepalives_can_keep_stream_open_past_five_minutes(self):
+        class KeepaliveResponse(FakeResponse):
+            def __iter__(self):
+                return iter([b": keepalive\\n"] * 305)
 
-        def api_get(path, **kwargs):
-            pages.append((path, kwargs.get("deadline")))
-            if path.endswith("/sessions/sess-budget"):
-                return {"id": "sess-budget", "status": "idle", "required_actions": []}
-            if "/turns" in path:
-                return {"data": [{"id": "turn-budget", "status": "completed"}]}
-            if "/items" in path and len([p for p in pages if "/items" in p[0]]) == 1:
-                return {"data": [{"id": "item-1"}], "has_more": True, "last_id": "item-1"}
-            if "/items" in path:
-                return {"data": [{
-                    "id": "item-2", "type": "message", "role": "assistant",
-                    "phase": "final_answer", "turn_id": "turn-budget",
-                    "content": [{"type": "output_text", "text": "Done."}],
-                }], "has_more": False, "last_id": "item-2"}
-            self.fail(f"Unexpected API GET: {path}")
+        response = KeepaliveResponse()
+        elapsed_ns = [0]
 
-        with patch.object(ai_bridge, "_request", return_value=response) as request, \
-                patch.object(ai_bridge, "_api_get", side_effect=api_get):
-            events = list(ai_bridge._create_session(
-                {"input": "prompt"}, diagnostic=diagnostic, stream=False
-            ))
+        def monotonic_ns():
+            elapsed_ns[0] += 1_000_000_000
+            return elapsed_ns[0]
 
-        self.assertTrue(deadline.prompt_accepted)
-        self.assertIs(request.call_args.kwargs["deadline"], deadline)
-        self.assertTrue(request.call_args.kwargs["prompt_submission"])
-        self.assertEqual([p[1] for p in pages], [deadline] * len(pages))
-        self.assertEqual(events[-1]["type"], "agent.session.turn.completed")
-        self.assertEqual(events[-2], {
-            "type": "agent.session.turn.output_text.done", "text": "Done."
-        })
+        with patch.object(ai_bridge.time, "monotonic_ns", side_effect=monotonic_ns):
+            events = list(ai_bridge._event_stream(response, timeout=300))
+        self.assertEqual(events, [])
+        self.assertGreaterEqual(elapsed_ns[0], 300_000_000_000)
+        self.assertTrue(response.closed)
 
-    def test_one_shot_caps_request_and_each_body_read_to_remaining_budget(self):
+    def test_http_response_body_has_its_own_request_timeout(self):
         class FakeSocket:
             def __init__(self):
                 self.timeouts = []
@@ -296,7 +304,7 @@ class NonStreamingTransportTests(unittest.TestCase):
             def settimeout(self, value):
                 self.timeouts.append(value)
 
-        class FakeResponse:
+        class SlowResponse:
             status = 200
             headers = {}
 
@@ -314,66 +322,50 @@ class NonStreamingTransportTests(unittest.TestCase):
             def close(self):
                 self.closed = True
 
-        deadline = ai_bridge._OneShotDeadline(timeout=5)
-        deadline.deadline = ai_bridge.time.monotonic() + 0.3
-        response = FakeResponse()
+        response = SlowResponse()
         with patch.dict(os.environ, {
                 "OPENAI_API_KEY": "test-key",
-                "PEFORTH_AI_REQUEST_TIMEOUT": "5",
+                "PEFORTH_AI_REQUEST_TIMEOUT": "0.03",
+                "PEFORTH_AI_TURN_TIMEOUT": "0.001",
         }), patch.object(ai_bridge, "load_dotenv"), \
                 patch.object(ai_bridge.urllib.request, "urlopen", return_value=response) as urlopen:
-            logged = ai_bridge._request(
-                "GET", "/bounded", diagnostic={"_one_shot_deadline": deadline}
-            )
-            self.assertEqual(logged.read(), b"ab")
+            logged = ai_bridge._request("GET", "/bounded", timeout=5)
+            with self.assertRaisesRegex(RuntimeError, r"response body timed out after 0\.03s: GET /bounded"):
+                logged.read()
             logged.close()
 
-        self.assertGreater(urlopen.call_args.kwargs["timeout"], 0)
-        self.assertLessEqual(urlopen.call_args.kwargs["timeout"], 0.3)
-        self.assertEqual(len(response.sock.timeouts), 3)
-        self.assertTrue(all(0 < value <= 0.3 for value in response.sock.timeouts))
-        self.assertGreater(response.sock.timeouts[0], response.sock.timeouts[-1])
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], 5)
+        self.assertEqual(len(response.sock.timeouts), 2)
+        self.assertTrue(all(0 < value <= 0.03 for value in response.sock.timeouts))
+        self.assertTrue(response.closed)
 
-    def test_timed_out_one_shot_post_reports_uncertainty_without_retry(self):
-        deadline = ai_bridge._OneShotDeadline(timeout=5)
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}), \
-                patch.object(ai_bridge, "load_dotenv"), \
+    def test_timed_out_post_reports_uncertainty_without_retry(self):
+        with patch.dict(os.environ, {
+                "OPENAI_API_KEY": "test-key", "PEFORTH_AI_REQUEST_TIMEOUT": "0.01",
+        }), patch.object(ai_bridge, "load_dotenv"), \
                 patch.object(ai_bridge.urllib.request, "urlopen",
                              side_effect=TimeoutError("simulated timeout")) as urlopen:
             with self.assertRaisesRegex(RuntimeError, "outcome may be unknown"):
-                ai_bridge._request(
-                    "POST", "/sessions", {"input": "prompt"},
-                    diagnostic={"_one_shot_deadline": deadline},
-                    prompt_submission=True,
-                )
+                ai_bridge._request("POST", "/sessions", {"input": "prompt"})
         urlopen.assert_called_once()
-        self.assertTrue(deadline.prompt_submission_started)
-        self.assertFalse(deadline.prompt_accepted)
 
-    def test_one_shot_post_body_timeout_reports_uncertain_acceptance(self):
+    def test_post_body_timeout_reports_uncertain_acceptance_without_retry(self):
         class DelayedResponse(FakeResponse):
             def read1(self, _size):
                 import time
-                time.sleep(0.05)
+                time.sleep(0.03)
                 return b"{}"
 
-        deadline = ai_bridge._OneShotDeadline(timeout=1)
-        deadline.deadline = ai_bridge.time.monotonic() + 0.02
         response = DelayedResponse()
         with patch.dict(os.environ, {
-                "OPENAI_API_KEY": "test-key", "PEFORTH_AI_REQUEST_TIMEOUT": "5",
+                "OPENAI_API_KEY": "test-key", "PEFORTH_AI_REQUEST_TIMEOUT": "0.01",
         }), patch.object(ai_bridge, "load_dotenv"), \
                 patch.object(ai_bridge.urllib.request, "urlopen", return_value=response) as urlopen:
-            with self.assertRaisesRegex(RuntimeError, "prompt submission outcome is unknown"):
-                with ai_bridge._request(
-                        "POST", "/sessions", {"input": "prompt"},
-                        diagnostic={"_one_shot_deadline": deadline},
-                        prompt_submission=True) as logged:
+            with self.assertRaisesRegex(RuntimeError, "POST outcome may be unknown"):
+                with ai_bridge._request("POST", "/sessions", {"input": "prompt"}) as logged:
                     logged.read()
         urlopen.assert_called_once()
         self.assertTrue(response.closed)
-        self.assertTrue(deadline.prompt_submission_started)
-        self.assertFalse(deadline.prompt_accepted)
 
     def test_wait_for_current_actions_retries_transitional_status(self):
         action = {"call_id": "call-ready", "name": "peforth_search_words"}
@@ -477,6 +469,75 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertEqual(vm.pop(), "Brightness set to 50%.")
         tool_result.assert_called_once()
         reconcile.assert_called_once()
+
+    def test_heartbeat_tool_uses_only_pinned_word_and_correlates_current_turn(self):
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
+            vm = repl.create_vm()
+        safe_word = vm.host["_diagnostic_tick_heartbeat_word"]
+        vm.words["tickHeartbeat"] = object()  # Rebinding the public name cannot widen the tool.
+        message = ': unsafe-command 999 ;'
+        action = {
+            "type": "function_call", "turn_id": "server-turn-1", "call_id": "call-heartbeat",
+            "name": "peforth_tick_heartbeat", "arguments": {"message": message},
+        }
+        diagnostic = {
+            "logger": object(), "runtime_id": "runtime-1", "turn_id": "local-turn-1",
+            "session_id": "session-1", "mode": "normal",
+        }
+        tool_payloads = []
+        heartbeat_calls = []
+
+        def fake_create(payload, *, diagnostic=None, stream=True):
+            tool_payloads.append(payload)
+            yield {"type": "agent.session.created", "session": {"id": "session-1"}}
+            yield {"type": "agent.session.turn.created", "turn": {"id": "server-turn-1"}}
+            yield {"type": "agent.session.requires_action", "session": {"status": "requires_action"}}
+            yield {"type": "agent.session.turn.completed", "turn_id": "server-turn-1"}
+
+        def fake_heartbeat(target_vm, text):
+            context = target_vm.host["_ai_heartbeat_context"]
+            heartbeat_calls.append((text, dict(context)))
+            context["_logged"] = True
+            return True
+
+        with patch.dict(os.environ, {
+                "PEFORTH_AI_LOG_MODE": "disabled", "OPENAI_API_KEY": "test-key",
+        }), patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_diagnostic_start_turn", return_value="local-turn-1"), \
+                patch.object(ai_bridge, "_diagnostic_context", return_value=diagnostic), \
+                patch.object(ai_bridge, "_diagnostic_update_session"), \
+                patch.object(ai_bridge, "_diagnostic_finish_turn"), \
+                patch.object(ai_bridge, "_diagnostic_action_event"), \
+                patch.object(ai_bridge, "_diagnostic_store_content", return_value=1), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(ai_bridge, "_wait_for_current_actions", return_value=("requires_action", [action])), \
+                patch.object(ai_bridge, "_tool_result") as tool_result, \
+                patch.object(ai_bridge, "log_heartbeat", side_effect=fake_heartbeat), \
+                contextlib.redirect_stdout(io.StringIO()):
+            vm.push("test heartbeat routing")
+            vm.push(False)
+            task = vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertIs(vm.host["_diagnostic_tick_heartbeat_word"], safe_word)
+        self.assertNotIn("unsafe-command", vm.words)
+        self.assertNotIn("_ai_heartbeat_context", vm.host)
+        self.assertEqual(len(heartbeat_calls), 1)
+        self.assertEqual(heartbeat_calls[0][0], message)
+        self.assertEqual(heartbeat_calls[0][1]["runtime_id"], "runtime-1")
+        self.assertEqual(heartbeat_calls[0][1]["turn_id"], "local-turn-1")
+        self.assertEqual(heartbeat_calls[0][1]["remote_turn_id"], "server-turn-1")
+        self.assertEqual(heartbeat_calls[0][1]["call_id"], "call-heartbeat")
+        self.assertFalse(vm.host.get("ai_pending_approval"))
+        tools = tool_payloads[0]["agent"]["tools"]
+        tool_names = [tool["name"] for tool in tools]
+        self.assertIn("peforth_tick_heartbeat", tool_names)
+        self.assertIn("peforth_run_forth", tool_names)
+        heartbeat_tool = next(tool for tool in tools if tool["name"] == "peforth_tick_heartbeat")
+        self.assertEqual(heartbeat_tool["parameters"]["required"], ["message"])
+        self.assertFalse(heartbeat_tool["parameters"]["additionalProperties"])
+        self.assertIs(tool_result.call_args.args[2], True)
 
     def test_idle_required_action_is_reconciled_against_completed_turn(self):
         with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
@@ -582,7 +643,7 @@ class NonStreamingTransportTests(unittest.TestCase):
         self.assertEqual(vm.pop(), "Recovered answer.")
         reconcile.assert_called_once()
 
-    def test_one_shot_deadline_pauses_only_during_manual_approval(self):
+    def test_manual_approval_still_pauses_without_overall_turn_deadline(self):
         with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "disabled"}):
             vm = repl.create_vm()
         vm.host["ai_transport_stream_once"] = False
@@ -614,17 +675,13 @@ class NonStreamingTransportTests(unittest.TestCase):
             vm.push(False)
             task = vm.dictate("(ai)")
             self.assertEqual(task.status, "paused")
-            deadline = captured["diagnostic"]["_one_shot_deadline"]
-            self.assertIsNotNone(deadline.paused_at)
-            paused_remaining = deadline.remaining()
+            self.assertIsNone(captured["diagnostic"])
             import time
             time.sleep(0.03)
-            self.assertAlmostEqual(deadline.remaining(), paused_remaining, delta=0.005)
             vm.host.pop("ai_pending_approval")
             vm.host["ai_approval_result"] = True
             task.resume()
             self.assertEqual(task.status, "done")
-            self.assertIsNone(deadline.paused_at)
 
     def test_forth_ai_consumes_transport_flag_and_still_prints_final_text(self):
         vm = repl.create_vm()
@@ -723,7 +780,7 @@ class NonStreamingTransportTests(unittest.TestCase):
         poll.assert_called_once()
         poll_args, poll_kwargs = poll.call_args
         self.assertEqual(poll_args[:2], ("sess-fallback", "turn-old"))
-        self.assertEqual(poll_kwargs["deadline"], latest.call_args.kwargs["deadline"])
+        self.assertNotIn("deadline", poll_kwargs)
         self.assertEqual(poll_kwargs["diagnostic"]["session_id"], "sess-fallback")
         self.assertEqual(result, events)
         self.assertTrue(post_response.closed)

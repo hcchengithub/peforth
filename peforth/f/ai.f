@@ -83,13 +83,17 @@ end-code
 /// The REPL applies Task Trust and resumes or cancels the pending AI Task.
 
 code chat
-    vm.host["repl_mode"] = "chat"
+    from peforth import ai_bridge
+
+    ai_bridge.set_repl_mode(vm, "chat", reason="forth_word")
 end-code
 // ( -- ) Switch the REPL to direct AI chat input.
 /// In Chat mode, the prompt is chat>; each submitted buffer is sent to the active AI session.
 
 code forth
-    vm.host["repl_mode"] = "forth"
+    from peforth import ai_bridge
+
+    ai_bridge.set_repl_mode(vm, "forth", reason="forth_word")
 end-code
 // ( -- ) Switch the REPL to Forth input.
 /// In Forth mode, the prompt is > and submitted buffers are evaluated as Forth source.
@@ -245,11 +249,17 @@ code (ai)
          "description": "Search the current Forth dictionary and documentation.",
          "parameters": {"type": "object", "properties": {"query": {"type": "string"}},
                         "required": ["query"], "additionalProperties": False}},
+        {"type": "function", "name": "peforth_tick_heartbeat",
+         "description": "Record a brief self-reported progress milestone in peforth diagnostics. This cannot execute Forth.",
+         "parameters": {"type": "object", "properties": {"message": {"type": "string"}},
+                        "required": ["message"], "additionalProperties": False}},
         {"type": "function", "name": "peforth_run_forth",
          "description": "Propose Forth source for execution in the user's current local VM. The CLI applies its current approval mode.",
          "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "purpose": {"type": "string"}},
                         "required": ["source", "purpose"], "additionalProperties": False}},
     ]
+    if vm.host.get("_diagnostic_tick_heartbeat_word") is None:
+        tools = [tool for tool in tools if tool["name"] != "peforth_tick_heartbeat"]
     session_id = ai_bridge._saved_session(vm)
     answer = []
     turn_completed = False
@@ -265,9 +275,6 @@ code (ai)
         if api_stream:
             events = ai_bridge._stream(session_id, message, diagnostic=diagnostic_context)
         else:
-            if diagnostic_context is None:
-                diagnostic_context = {}
-            diagnostic_context["_one_shot_deadline"] = ai_bridge._OneShotDeadline()
             events = ai_bridge._stream(
                 session_id, message, diagnostic=diagnostic_context, stream=False
             )
@@ -314,10 +321,6 @@ code (ai)
             terminal_output_stream=stream_response, api_transport_stream=api_stream,
         )
         diagnostic_context = ai_bridge._diagnostic_context(vm, diagnostic_turn_id)
-        if not api_stream:
-            if diagnostic_context is None:
-                diagnostic_context = {}
-            diagnostic_context["_one_shot_deadline"] = ai_bridge._OneShotDeadline()
         try:
             if api_stream:
                 events = ai_bridge._create_session(payload, diagnostic=diagnostic_context)
@@ -466,7 +469,53 @@ code (ai)
                     ai_bridge._diagnostic_action_event(
                         diagnostic_context, "tool_call_started", action,
                     )
-                    if name == "peforth_search_words":
+                    if name == "peforth_tick_heartbeat":
+                        heartbeat_message = arguments.get("message")
+                        if not isinstance(heartbeat_message, str):
+                            raise TypeError("heartbeat message must be a string")
+                        heartbeat_word = vm.host.get("_diagnostic_tick_heartbeat_word")
+                        if heartbeat_word is None:
+                            raise RuntimeError("The trusted tickHeartbeat word is unavailable.")
+                        heartbeat_context = dict(diagnostic_context or {})
+                        heartbeat_context.update({
+                            "session_id": session_id,
+                            "remote_turn_id": remote_turn_id or action.get("turn_id"),
+                            "call_id": action.get("call_id"),
+                        })
+                        had_previous_context = "_ai_heartbeat_context" in vm.host
+                        previous_context = vm.host.get("_ai_heartbeat_context")
+                        stack_depth = len(vm.stack)
+                        vm.host["_ai_heartbeat_context"] = heartbeat_context
+                        vm.push(heartbeat_message)
+                        try:
+                            yield from vm.call(heartbeat_word)
+                            if len(vm.stack) != stack_depth:
+                                raise RuntimeError("tickHeartbeat must consume exactly one message and return nothing.")
+                        finally:
+                            if had_previous_context:
+                                vm.host["_ai_heartbeat_context"] = previous_context
+                            else:
+                                vm.host.pop("_ai_heartbeat_context", None)
+                        heartbeat_logged = bool(heartbeat_context.get("_logged", False))
+                        tool_result_text = (
+                            "Heartbeat recorded."
+                            if heartbeat_logged else
+                            "Heartbeat received, but diagnostic logging is disabled or unavailable."
+                        )
+                        tool_result_id = ai_bridge._diagnostic_store_content(
+                            diagnostic_context, "tool_result", tool_result_text
+                        )
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "tool_call_completed", action,
+                            content_id=tool_result_id,
+                            elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                            payload={"heartbeat_logged": heartbeat_logged},
+                        )
+                        ai_bridge._tool_result(
+                            session_id, action, True, tool_result_text,
+                            diagnostic=diagnostic_context,
+                        )
+                    elif name == "peforth_search_words":
                         terms = str(arguments.get("query", "")).casefold().split()
                         matches = []
                         for word_name, word in vm.words.items():
@@ -529,14 +578,7 @@ code (ai)
                                 diagnostic_context, "approval_wait_started", action,
                                 content_id=proposal["source_content_id"],
                             )
-                            one_shot_deadline = diagnostic_context.get("_one_shot_deadline")
-                            if one_shot_deadline is not None:
-                                one_shot_deadline.pause()
-                            try:
-                                yield vm.pause()
-                            finally:
-                                if one_shot_deadline is not None:
-                                    one_shot_deadline.resume()
+                            yield vm.pause()
                             approval = vm.host.pop("ai_approval_result", False)
                             if isinstance(approval, str) and approval.casefold() == "trust":
                                 vm.host["ai_trusted"] = True

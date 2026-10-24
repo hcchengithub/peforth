@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -448,9 +449,41 @@ def _close_diagnostic_log(logger: DiagnosticLog, runtime_id: str | None = None) 
         print(f"Could not close AI diagnostic log: {exc}", file=sys.stderr)
 
 
-def create_vm(base_file: str | None = None) -> VM:
+def _make_launch_context(argv, *, one_shot: bool, repl_mode: str) -> dict:
+    arguments = [str(argument) for argument in argv]
+    command_line = (subprocess.list2cmdline(arguments) if os.name == "nt"
+                    else shlex.join(arguments))
+    encoded = command_line.encode("utf-8")
+    command_line_truncated = len(encoded) > 1024
+    if command_line_truncated:
+        suffix = "…"
+        prefix = encoded[:1024 - len(suffix.encode("utf-8"))].decode("utf-8", "ignore")
+        command_line = prefix + suffix
+    return {
+        "command_line": command_line,
+        "command_line_truncated": command_line_truncated,
+        "initial_one_shot": bool(one_shot),
+        "initial_repl_mode": repl_mode,
+    }
+
+
+def create_vm(base_file: str | None = None, *, launch_context: dict | None = None) -> VM:
     ai_bridge.load_dotenv()
     system_info = _detect_system_info()
+    if launch_context is None:
+        launch_context = _make_launch_context(
+            sys.argv, one_shot=False, repl_mode="forth"
+        )
+    else:
+        launch_context = dict(launch_context)
+    initial_one_shot = bool(launch_context.get("initial_one_shot", False))
+    initial_repl_mode = launch_context.get("initial_repl_mode", "forth")
+    runtime_metadata = {
+        "command_line": launch_context.get("command_line", ""),
+        "command_line_truncated": bool(launch_context.get("command_line_truncated", False)),
+        "initial_one_shot": initial_one_shot,
+        "initial_repl_mode": initial_repl_mode,
+    }
     diagnostic_mode = _diagnostic_log_mode()
     config = system_info.setdefault("config", {})
     config["PEFORTH_AI_LOG_MODE"] = diagnostic_mode
@@ -465,6 +498,7 @@ def create_vm(base_file: str | None = None) -> VM:
                 source_path=system_info.get("source_path"),
                 runtime_path=system_info.get("runtime_path"),
                 runtime_version=system_info.get("python", {}).get("version"),
+                metadata=runtime_metadata,
             )
             atexit.register(_close_diagnostic_log, diagnostic_log, diagnostic_runtime_id)
         except Exception as exc:
@@ -474,7 +508,8 @@ def create_vm(base_file: str | None = None) -> VM:
             diagnostic_runtime_id = None
             print(f"AI diagnostics unavailable: {exc}", file=sys.stderr)
     vm = VM(host={"Constant": Constant, "Value": Value, "ForthError": ForthError,
-             "system_info": system_info})
+             "system_info": system_info, "one_shot": initial_one_shot,
+             "repl_mode": initial_repl_mode})
     vm.host["diagnostic_log_mode"] = diagnostic_mode
     if diagnostic_log is not None:
         vm.host["diagnostic_log"] = diagnostic_log
@@ -488,6 +523,13 @@ def create_vm(base_file: str | None = None) -> VM:
         "stack": vm.stack,
         "comma": vm.comma,
     })
+    ai_bridge._diagnostic_runtime_event(
+        vm, "one_shot_state", payload={"one_shot": initial_one_shot, "reason": "startup"}
+    )
+    ai_bridge._diagnostic_runtime_event(
+        vm, "repl_input_mode_state",
+        payload={"mode": initial_repl_mode, "reason": "startup"},
+    )
     # Comments support
     vm.define("\\", _comment_line, immediate=True)
     vm.define("(", _comment_paren, immediate=True)
@@ -501,6 +543,9 @@ def create_vm(base_file: str | None = None) -> VM:
             vm.dictate(f.read())
     else:
         raise ForthError(f"Bootstrap file not found: {target_base}")
+    heartbeat_word = vm.tick("tickHeartbeat")
+    if heartbeat_word is not None:
+        vm.host["_diagnostic_tick_heartbeat_word"] = heartbeat_word
     vm.dictate(AUXILIARY_F_PATH.read_text(encoding="utf-8"))
     vm.dictate(AI_F_PATH.read_text(encoding="utf-8"))
     return vm
@@ -936,6 +981,10 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                 _process_repl_input(vm, raw_input, state)
                 continue
             else:
+                task = state.get("ai_task")
+                if (vm.host.get("one_shot") and not pending
+                        and (task is None or task.status in {"done", "aborted", "failed"})):
+                    ai_bridge.set_one_shot(vm, False, reason="enter_repl")
                 if state["in_code_block"] or vm.compiling:
                     prompt = "... "
                 elif vm.host.get("repl_mode", "forth") == "chat":
@@ -1015,7 +1064,10 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        repl(create_vm())
+        launch_context = _make_launch_context(
+            [sys.argv[0]], one_shot=False, repl_mode="forth"
+        )
+        repl(create_vm(launch_context=launch_context))
         return 0
 
     interactive = False
@@ -1096,10 +1148,15 @@ def main(argv=None) -> int:
         _print_cli_help(sys.stderr)
         return 2
 
-    vm = create_vm()
+    launch_context = _make_launch_context(
+        [sys.argv[0], *args],
+        one_shot=(source is not None or chat_prompt is not None),
+        repl_mode="chat" if chat_prompt is not None else "forth",
+    )
+    vm = create_vm(launch_context=launch_context)
     if chat_prompt is not None:
         vm.host["ai_transport_stream_once"] = False
-        vm.host["repl_mode"] = "chat"
+        ai_bridge.set_repl_mode(vm, "chat", reason="cli_chat")
         if session_id is not None:
             vm.host["ai_active_session_id"] = session_id
         try:
@@ -1124,6 +1181,7 @@ def main(argv=None) -> int:
         print(f"Error: {err}", file=sys.stderr)
         return 1
     if interactive:
+        ai_bridge.set_one_shot(vm, False, reason="enter_repl")
         repl(vm)
     return 0
 

@@ -9,11 +9,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools.peforth_logging_monitor import (
+    _start_message_box,
     format_event,
     iter_new_events,
     list_runtime_ids,
     render_events,
     main,
+    parser,
 )
 
 
@@ -115,6 +117,30 @@ class LoggingMonitorTests(unittest.TestCase):
             with redirect_stdout(output):
                 self.assertEqual(main(["--database", str(path), "--runtime-map"]), 0)
             self.assertIn("abcdef12  abcdef123456", output.getvalue())
+
+    def test_watchdog_options_accept_large_finite_lookback_and_reject_invalid_values(self):
+        args = parser().parse_args(["--watchdog", "--orphan-lookback-hours", "1000"])
+        self.assertTrue(args.watchdog)
+        self.assertEqual(args.orphan_lookback_hours, 1000)
+        for value in ("0", "-1", "inf", "nan"):
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                parser().parse_args(["--orphan-lookback-hours", value])
+
+    def test_message_box_is_launched_as_a_waiting_child_process(self):
+        issue = {"title": "title", "message": "message"}
+        with patch("tools.peforth_logging_monitor.subprocess.Popen") as popen:
+            child = _start_message_box(issue)
+        command = popen.call_args.args[0]
+        self.assertIn("--notify", command)
+        self.assertIn("--wait", command)
+        self.assertEqual(command[-4:], ["--title", "title", "--message", "message"])
+        self.assertIs(child, popen.return_value)
+
+    def test_notifier_child_calls_windows_adapter_only_in_wait_mode(self):
+        with patch("tools.peforth_logging_monitor._show_message_box") as show:
+            self.assertEqual(main(["--notify", "--wait", "--title", "title",
+                                   "--message", "message"]), 0)
+        show.assert_called_once_with("title", "message")
 
     def test_render_events_collapses_adjacent_identical_events_with_count(self):
         rows = [{

@@ -75,6 +75,15 @@ end-code
 // ( x -- ) Discard the top item from the data stack.
 /// Pop and discard the top value from the data stack.
 
+code tickHeartbeat
+    from peforth import ai_bridge
+
+    message = vm.pop()
+    ai_bridge.log_heartbeat(vm, message)
+end-code
+// ( "message" -- ) Record a heartbeat message in the AI diagnostic timeline.
+/// This word only logs the message; it does not execute Forth or change VM/session state.
+
 code dropall
     vm.stack.clear()
 end-code

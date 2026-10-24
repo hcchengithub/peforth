@@ -927,7 +927,7 @@ class ReplBootstrapTests(unittest.TestCase):
 
         functions = captured["agent"]["tools"]
         self.assertEqual([tool["name"] for tool in functions],
-                         ["peforth_search_words", "peforth_run_forth"])
+                         ["peforth_search_words", "peforth_tick_heartbeat", "peforth_run_forth"])
         instructions = captured["agent"]["instructions"]
         self.assertIn("peforth Forth", instructions)
         self.assertNotIn("Project K", instructions)
@@ -1325,6 +1325,7 @@ class ReplBootstrapTests(unittest.TestCase):
         class RecordingVM:
             def __init__(self):
                 self.sources = []
+                self.host = {"one_shot": True}
 
             def dictate(self, source):
                 self.sources.append(source)
@@ -2107,6 +2108,8 @@ class ReplBootstrapTests(unittest.TestCase):
                 (turn[0], "ai_turn_started"),
             ).fetchone()[0]
             self.assertEqual(json.loads(started_payload), {
+                "one_shot": False,
+                "repl_mode": "forth",
                 "terminal_output_stream": False,
                 "api_transport_stream": False,
             })
