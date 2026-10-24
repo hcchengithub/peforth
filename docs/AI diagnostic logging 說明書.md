@@ -45,8 +45,8 @@ python tools/peforth_logging_monitor.py --runtime-map
 | `-d, --database PATH` | 指定要監看的 SQLite database；預設使用上述設定目錄 |
 | `-i, --interval SECONDS` | 輪詢間隔，預設 `0.5` 秒，必須大於 0 |
 | `--runtime-map` | 列出八碼 runtime 簡稱與完整 UUID，然後結束 |
-| `--watchdog` | 額外啟用五分鐘無客觀進展與 orphan runtime 的 Message Box 告警 |
-| `--orphan-lookback-hours HOURS` | Orphan 最近活動回溯時數；預設 `24`，必須是正的有限數值，不設人工上限 |
+| `--watchdog-off` | 關閉 Watchdog Message Box 告警；預設開啟，logging monitor 仍會繼續顯示事件 |
+| `--orphan-lookback-hours HOURS` | 啟動時回溯既有 orphan runtime 的時數；預設 `0`（不掃描歷史 orphan），必須是非負有限數值；監看期間新發現的 orphan 不受此值限制 |
 
 一般監視模式啟動時會讀取目前資料庫的既有事件，再持續顯示新事件；按 **Ctrl-C** 結束。資料庫必須存在且可讀取。它使用 read-only SQLite connection，不修改 logging 資料。
 
@@ -55,15 +55,21 @@ python tools/peforth_logging_monitor.py --runtime-map
 從 repository 根目錄執行：
 
 ```bash
-python tools/peforth_logging_monitor.py --watchdog
-python tools/peforth_logging_monitor.py --watchdog --orphan-lookback-hours 1000
+# Watchdog and logging display are on by default; print history, then follow live events
+python tools/peforth_logging_monitor.py
+
+# Disable alerts but keep the logging display
+python tools/peforth_logging_monitor.py --watchdog-off
+
+# Also scan for pre-existing orphans from the last 24 hours
+python tools/peforth_logging_monitor.py --orphan-lookback-hours 24
 ```
 
-Watchdog 對診斷資料庫唯讀，啟動時以 `MAX(event_id)` 建立高水位，只快照目前可能仍在執行的 runtime/turn 及回溯範圍內的 orphan 候選；之後只讀取較新的 event ID，不逐次重掃歷史 timeline。Monitor 重啟會重新判定目前仍符合條件的問題並提醒，但不重播舊 timeline。Watchdog 的提醒狀態只存於程序記憶體，不寫入 SQLite。
+Watchdog 對診斷資料庫唯讀。啟動時終端先從 event ID 0 顯示既有 timeline；Watchdog 另外以 `MAX(event_id)` 建立自己的高水位，只快照目前可能仍在執行的 runtime/turn 及設定回溯範圍內的既有 orphan 候選，之後只處理高水位之後的新事件，不逐次重掃歷史 timeline。預設 lookback 為 `0`，因此不回溯啟動前已死亡的 runtime；若指定正數時數，才掃描該範圍。Watchdog 的提醒狀態只存於程序記憶體，不寫入 SQLite。Monitor 重啟時會重新判定仍在 lookback 範圍內的既有 orphan。
 
 客觀進展為 remote turn 狀態實際轉變、新的 tool/action/call ID、tool result 被接受，或 assistant output 增加。重複 polling、SSE keepalive 和自由文字 heartbeat 不會重設五分鐘計時。提醒含短 ID、prompt 與最近 heartbeat 各自最多 60 字元的折疊空白預覽、最後進展時間/類型；orphan 提醒含 runtime 最近活動時間，若有未完成 turn 也附 turn ID 和 prompt 預覽。從不顯示完整 prompt、Forth source 或工具內容。因診斷 SQLite 本身可能保存敏感 prompt/source/tool 資料，桌面提示的短預覽也可能包含敏感文字。
 
-告警使用 Windows Message Box；WSL 透過 Windows PowerShell 顯示，不使用 LINE。一次只開一個視窗；使用者關閉後，問題仍存在就每五分鐘重提醒。問題恢復後不再發新提醒，但不自動關閉已開啟視窗，也不另發恢復通知。通知失敗會記錄錯誤，不應中止監視。Orphan 候選須是未正常結束、程序已不存在且 PID/程序建立時間確認不是 PID reuse 的 runtime；最後活動時間等於 lookback cutoff 時納入，早於 cutoff 排除。Lookback 只用於啟動回溯和剛偵測到 orphan 時，不在每次輪詢重掃歷史。
+告警使用 Windows Message Box；WSL 透過 Windows PowerShell 顯示，不使用 LINE。一次只開一個視窗。無進展告警在使用者關閉後，若問題仍存在，每五分鐘重提醒；orphan 的「Runtime ended unexpectedly」只顯示一次，關閉後在同一個 monitor 執行期間不再重複。Monitor 重啟且 lookback 大於 0 時，仍可能對同一筆歷史 orphan 再顯示一次；預設 lookback 為 0，不會這樣回溯。問題恢復後不再發新提醒，但不自動關閉已開啟視窗，也不另發恢復通知。通知失敗會記錄錯誤，不應中止監視。Orphan 候選須是未正常結束、程序已不存在且 PID/程序建立時間確認不是 PID reuse 的 runtime；lookback 只篩選 monitor 啟動前已死亡的 runtime；監看期間新偵測到 runtime 意外結束時仍會告警。
 
 Watchdog 只監督整體 runtime/turn 進展，不管理 approval waits，也不取消 turn、終止程序或重送 prompt。一般 HTTP request/response body timeout 由 runtime 管理；SSE inactivity timeout 不是整回合總時限，若 keepalive 持續到達，串流可無限保持開啟。`PEFORTH_AI_LOG_MODE=disabled` 時 runtime 照常工作，但不寫 diagnostics DB，也沒有 Watchdog 覆蓋。
 

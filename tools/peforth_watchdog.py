@@ -148,11 +148,11 @@ def process_matches_runtime(runtime: dict) -> bool | None:
 class Watchdog:
     """Maintain only current candidate state while consuming events by ID."""
 
-    def __init__(self, connection, *, orphan_lookback_hours: float = 24,
+    def __init__(self, connection, *, orphan_lookback_hours: float = 0,
                  process_checker=process_matches_runtime, now=utc_now):
         value = float(orphan_lookback_hours)
-        if not math.isfinite(value) or value <= 0:
-            raise ValueError("orphan-lookback-hours must be a positive finite number")
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("orphan-lookback-hours must be a non-negative finite number")
         self.connection = connection
         self.lookback_hours = value
         self.process_checker = process_checker
@@ -282,7 +282,7 @@ class Watchdog:
             alive = self.process_checker(runtime)
             if alive is True:
                 self.runtimes[runtime_id] = runtime
-            elif alive is False:
+            elif alive is False and self.lookback_hours > 0:
                 activity = parse_timestamp(runtime.get("last_activity_at")) or parse_timestamp(runtime.get("started_at"))
                 if activity is not None and activity >= cutoff:
                     dead_candidates.append(runtime)
@@ -299,7 +299,7 @@ class Watchdog:
                 self._load_turn(row["turn_id"])
 
         for runtime in dead_candidates:
-            self._consider_orphan(runtime, now, cutoff)
+            self._consider_orphan(runtime, now, historical=True)
 
         for turn in list(self.turns.values()):
             if turn.get("runtime_id") not in self.runtimes:
@@ -320,12 +320,15 @@ class Watchdog:
         self._refresh_open_turns()
         return self.cursor
 
-    def _consider_orphan(self, runtime: dict, now: datetime, cutoff: datetime) -> None:
+    def _consider_orphan(self, runtime: dict, now: datetime, *, historical: bool = False) -> None:
         runtime_id = runtime.get("runtime_id")
         last_activity = parse_timestamp(runtime.get("last_activity_at"))
         if last_activity is None:
             last_activity = parse_timestamp(runtime.get("started_at"))
-        if last_activity is None or last_activity < cutoff:
+        if last_activity is None:
+            return
+        if historical and (
+                self.lookback_hours <= 0 or last_activity < self._cutoff(now)):
             return
         open_turn = next((turn for turn in self.turns.values()
                           if turn.get("runtime_id") == runtime_id), None)
@@ -336,6 +339,7 @@ class Watchdog:
             "prompt_text": open_turn.get("prompt_text") if open_turn else "",
             "last_activity_at": last_activity,
             "age_seconds": max(0.0, (now - last_activity).total_seconds()),
+            "historical": historical,
         }
 
     def _refresh_open_turns(self) -> None:
@@ -364,7 +368,7 @@ class Watchdog:
                         self.runtimes[runtime_id] = runtime
                     elif alive is False:
                         now = self.now()
-                        self._consider_orphan(runtime, now, self._cutoff(now))
+                        self._consider_orphan(runtime, now)
             if kind == "runtime_finished":
                 self.runtimes.pop(runtime_id, None)
                 self.orphans.pop(f"orphan:{runtime_id}", None)
@@ -383,9 +387,10 @@ class Watchdog:
             alive = self.process_checker(runtime)
             if alive is False:
                 self.runtimes.pop(runtime_id, None)
-                self._consider_orphan(runtime, now, cutoff)
+                self._consider_orphan(runtime, now)
         for key, orphan in list(self.orphans.items()):
-            if orphan["last_activity_at"] < cutoff:
+            if (orphan.get("historical") and self.lookback_hours > 0
+                    and orphan["last_activity_at"] < cutoff):
                 self.orphans.pop(key, None)
         return events
 
@@ -447,6 +452,7 @@ class ReminderManager:
         self.now = now
         self.log = log
         self.states: dict[str, dict] = {}
+        self.dismissed_orphans: set[str] = set()
         self.child = None
         self.child_key = None
 
@@ -459,6 +465,8 @@ class ReminderManager:
                 if key != self.child_key:
                     self.states.pop(key, None)
         for key, issue in issues.items():
+            if issue.get("kind") == "orphan" and key in self.dismissed_orphans:
+                continue
             if key not in self.states:
                 self.states[key] = {"issue": issue, "next_due": now, "resolved": False}
             else:
@@ -495,6 +503,10 @@ class ReminderManager:
             return
         if state["resolved"]:
             self.states.pop(key, None)
+        elif state["issue"].get("kind") == "orphan" and code == 0:
+            # An orphan cannot be repaired by waiting; acknowledge it once per monitor run.
+            self.dismissed_orphans.add(key)
+            self.states.pop(key, None)
         else:
             state["next_due"] = now + REMINDER_SECONDS
 
@@ -503,7 +515,7 @@ def validate_lookback_hours(value: str | float) -> float:
     try:
         hours = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("orphan-lookback-hours must be a positive finite number") from exc
-    if not math.isfinite(hours) or hours <= 0:
-        raise ValueError("orphan-lookback-hours must be a positive finite number")
+        raise ValueError("orphan-lookback-hours must be a non-negative finite number") from exc
+    if not math.isfinite(hours) or hours < 0:
+        raise ValueError("orphan-lookback-hours must be a non-negative finite number")
     return hours

@@ -85,7 +85,7 @@ class WatchdogTests(unittest.TestCase):
         self.set_event_time(event_id, when or self.now)
         return event_id
 
-    def watchdog(self, *, lookback: float = 24):
+    def watchdog(self, *, lookback: float = 0):
         connection = connect_readonly(self.path)
         self.connections.append(connection)
         watchdog = Watchdog(
@@ -185,19 +185,25 @@ class WatchdogTests(unittest.TestCase):
         runtime_id, _ = self.add_runtime("boundary", alive=False, last_activity=cutoff)
         old_id, _ = self.add_runtime("old", alive=False,
                                      last_activity=cutoff - timedelta(seconds=1))
-        watchdog = self.watchdog()
+        watchdog = self.watchdog(lookback=24)
         issues = watchdog.current_issues()
         self.assertIn(f"orphan:{runtime_id}", issues)
         self.assertNotIn(f"orphan:{old_id}", issues)
+        self.assertEqual(validate_lookback_hours(0), 0)
         self.assertEqual(validate_lookback_hours(1000), 1000)
         self.assertEqual(validate_lookback_hours(1e300), 1e300)
         self.assertEqual(validate_lookback_hours(0.001), 0.001)
-        for invalid in (0, -1, float("inf"), float("nan")):
+        for invalid in (-1, float("inf"), float("nan")):
             with self.assertRaises(ValueError):
                 validate_lookback_hours(invalid)
 
         huge_watchdog = self.watchdog(lookback=1e300)
         self.assertIn(f"orphan:{runtime_id}", huge_watchdog.current_issues())
+
+    def test_default_zero_lookback_skips_preexisting_orphan(self):
+        runtime_id, _ = self.add_runtime("old-orphan", alive=False)
+        watchdog = self.watchdog()
+        self.assertNotIn(f"orphan:{runtime_id}", watchdog.current_issues())
 
     def test_repeated_polled_action_snapshot_does_not_advance_progress(self):
         runtime_id, turn_id = self.add_runtime("live")
@@ -226,17 +232,17 @@ class WatchdogTests(unittest.TestCase):
         watchdog = self.watchdog()
         self.alive[runtime_id] = False
         self.add_event(runtime_id, turn_id, "ai_heartbeat",
-                       payload={"message": "working"}, when=self.now)
+                       payload={"message": "working"}, when=self.now - timedelta(seconds=1))
         events = watchdog.poll()
         self.assertEqual(len(events), 1)
         issue = watchdog.current_issues()[f"orphan:{runtime_id}"]
         self.assertEqual(issue["turn_id"], turn_id)
-        self.assertEqual(issue["last_activity_at"], self.now)
+        self.assertEqual(issue["last_activity_at"], self.now - timedelta(seconds=1))
 
     def test_orphan_summary_contains_short_preview_without_full_prompt(self):
         prompt = "secret " + "very long task " * 20
         runtime_id, turn_id = self.add_runtime("dead", alive=False, prompt=prompt)
-        watchdog = self.watchdog()
+        watchdog = self.watchdog(lookback=24)
         issue = watchdog.current_issues()[f"orphan:{runtime_id}"]
         self.assertEqual(issue["turn_id"], turn_id)
         message = issue["message"]
@@ -282,6 +288,24 @@ class WatchdogTests(unittest.TestCase):
         clock[0] += 1
         manager.update({issue["key"]: issue})
         self.assertEqual(len(children), 2)
+
+    def test_orphan_alert_is_not_repeated_after_dismissal(self):
+        clock = [0.0]
+        children = []
+        manager = ReminderManager(
+            lambda issue: children.append(FakeChild()) or children[-1],
+            now=lambda: clock[0], log=lambda _: None,
+        )
+        issue = {"key": "orphan:r", "kind": "orphan", "title": "title", "message": "message"}
+        manager.update({issue["key"]: issue})
+        self.assertEqual(len(children), 1)
+
+        children[0].returncode = 0
+        clock[0] = REMINDER_SECONDS * 2
+        manager.update({issue["key"]: issue})
+        manager.update({issue["key"]: issue})
+        self.assertEqual(len(children), 1)
+        self.assertIn(issue["key"], manager.dismissed_orphans)
 
     def test_recovery_stops_future_reminders_without_closing_open_child(self):
         clock = [0.0]

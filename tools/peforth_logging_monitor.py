@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Iterator
 import base64
 from datetime import datetime
 import json
@@ -70,6 +71,21 @@ def iter_new_events(connection: sqlite3.Connection, last_event_id: int) -> list[
         names = [column[0] for column in cursor.description]
         return [dict(zip(names, row)) for row in rows]
     return [dict(row) for row in rows]
+
+
+def iter_events_through(connection: sqlite3.Connection, high_water_event_id: int) -> Iterator[dict]:
+    """Stream existing event history through a captured high-water ID."""
+    cursor = connection.execute(
+        "SELECT * FROM timeline WHERE event_id <= ? ORDER BY event_id",
+        (high_water_event_id,),
+    )
+    names = [column[0] for column in cursor.description or ()]
+    while rows := cursor.fetchmany(1000):
+        for row in rows:
+            if isinstance(row, sqlite3.Row):
+                yield dict(row)
+            else:
+                yield dict(zip(names, row))
 
 
 def list_runtime_ids(connection: sqlite3.Connection) -> list[tuple[str, str]]:
@@ -153,27 +169,31 @@ def _event_key(row: dict) -> tuple:
     )
 
 
-def render_events(rows: list[dict]) -> list[str]:
-    """Render events, collapsing consecutive display-equivalent events."""
-    rendered: list[str] = []
+def render_event_stream(rows: Iterable[dict]) -> Iterator[str]:
+    """Render a possibly large event stream with bounded memory."""
     previous_key = None
     repeat_count = 0
+    pending_line = None
     for row in rows:
         key = _event_key(row)
         if key == previous_key:
             repeat_count += 1
             continue
-        if rendered and repeat_count > 1:
-            rendered[-1] += f" ×{repeat_count}"
-        rendered.append(format_event(row))
+        if pending_line is not None:
+            yield pending_line + (f" ×{repeat_count}" if repeat_count > 1 else "")
+        pending_line = format_event(row)
         previous_key = key
         repeat_count = 1
-    if rendered and repeat_count > 1:
-        rendered[-1] += f" ×{repeat_count}"
-    return rendered
+    if pending_line is not None:
+        yield pending_line + (f" ×{repeat_count}" if repeat_count > 1 else "")
 
 
-def _positive_lookback(value: str) -> float:
+def render_events(rows: Iterable[dict]) -> list[str]:
+    """Render events, collapsing consecutive display-equivalent events."""
+    return list(render_event_stream(rows))
+
+
+def _lookback_hours(value: str) -> float:
     try:
         return validate_lookback_hours(value)
     except ValueError as exc:
@@ -216,22 +236,28 @@ def _show_message_box(title: str, message: str) -> None:
     raise OSError("Windows Message Box notifications require Windows or WSL")
 
 
-def monitor(database: Path, interval: float, *, watchdog_enabled: bool = False,
-            orphan_lookback_hours: float = 24) -> None:
+def monitor(database: Path, interval: float, *, watchdog_enabled: bool = True,
+            orphan_lookback_hours: float = 0) -> None:
     if interval <= 0:
         raise ValueError("interval must be positive")
     connection = connect_readonly(database)
     last_event_id = 0
     watchdog = None
     reminders = None
+    high_water_event_id = 0
     if watchdog_enabled:
         watchdog = Watchdog(connection, orphan_lookback_hours=orphan_lookback_hours)
-        watchdog.initialize()
+        high_water_event_id = watchdog.initialize()
         reminders = ReminderManager(_start_message_box)
-        reminders.update(watchdog.current_issues())
     print(f"👀 peforth logging monitor | {database}", flush=True)
     if watchdog_enabled:
         print("   Watchdog enabled; Windows Message Box alerts are active", flush=True)
+        # The terminal replays history, while the watchdog's independent cursor
+        # starts at its initialization high-water mark and handles only new events.
+        for line in render_event_stream(iter_events_through(connection, high_water_event_id)):
+            print(line, flush=True)
+        assert watchdog is not None and reminders is not None
+        reminders.update(watchdog.current_issues())
     print("   waiting for activity; press Ctrl-C to stop", flush=True)
     try:
         while True:
@@ -256,7 +282,8 @@ def monitor(database: Path, interval: float, *, watchdog_enabled: bool = False,
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        description="Monitor peforth SQLite diagnostic logging and show live activity."
+        description="Monitor peforth SQLite diagnostic logging and show live activity.",
+        allow_abbrev=False,
     )
     result.add_argument(
         "-d", "--database", type=Path, default=default_database(),
@@ -271,12 +298,13 @@ def parser() -> argparse.ArgumentParser:
         help="print eight-character runtime IDs and full UUIDs, then exit",
     )
     result.add_argument(
-        "--watchdog", action="store_true",
-        help="enable 5-minute no-progress and orphan Message Box alerts",
+        "--watchdog-off", action="store_true",
+        help="disable Watchdog alerts (enabled by default); logging monitor remains active",
     )
     result.add_argument(
-        "--orphan-lookback-hours", type=_positive_lookback, default=24,
-        help="include unexpected exits with activity in this many recent hours (default: %(default)s)",
+        "--orphan-lookback-hours", type=_lookback_hours, default=0,
+        help=("scan this many recent hours for pre-existing orphan runtimes at startup; "
+              "0 disables the historical scan (default: %(default)s)"),
     )
     result.add_argument("--notify", action="store_true", help=argparse.SUPPRESS)
     result.add_argument("--wait", action="store_true", help=argparse.SUPPRESS)
@@ -305,7 +333,7 @@ def main(argv: list[str] | None = None) -> int:
             finally:
                 connection.close()
             return 0
-        monitor(args.database, args.interval, watchdog_enabled=args.watchdog,
+        monitor(args.database, args.interval, watchdog_enabled=not args.watchdog_off,
                 orphan_lookback_hours=args.orphan_lookback_hours)
     except KeyboardInterrupt:
         print("\n👋 logging monitor stopped", flush=True)
