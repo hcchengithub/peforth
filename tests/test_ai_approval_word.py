@@ -29,6 +29,7 @@ def _strip_vt100_sequences(text):
 
 def _create_vm_with_silent_nokia():
     vm = repl.create_vm()
+    vm.define('nokia', lambda _: None)
     vm.define('nokia2', lambda _: None)
     return vm
 

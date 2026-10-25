@@ -281,37 +281,15 @@ code run_http
     // ( request-mapping -- response ) Send one HTTP/HTTPS request.
     /// Request fields: url (required), method (default GET), headers (string mapping), and body (optional string).
 
-code nokia2
-    import msvcrt
-    import time
-    import winsound
-
-    notes = [(1319,160),(1175,160),(740,320),(831,320),(1109,160),(988,160),(587,320),(659,320),(988,160),(880,160),(554,320),(659,320),(880,640)]
-    stopped = False
-    for frequency, duration in notes:
-        if msvcrt.kbhit():
-            break
-        winsound.Beep(frequency, duration)
-        if msvcrt.kbhit():
-            break
-        gap = 0
-        while gap < 25:
-            if msvcrt.kbhit():
-                stopped = True
-                break
-            time.sleep(0.005)
-            gap += 5
-        if stopped:
-            break
-    end-code
-    // ( -- ) Play the Nokia Tune phrase once, stopping when a key is pending.
-    /// Plays all 13 notes at their original durations with 25 ms gaps. Checks keyboard input between notes without consuming a pending key. A key pressed during a note stops playback after that note finishes (up to 640 ms).
-    /// Requires Windows and winsound.Beep support.
+: nokia2 ( -- )
+    s" $child = '$notes = @(@(988,160),@(880,160),@(554,320),@(659,320),@(880,640)); foreach ($n in $notes) { [Console]::Beep($n[0], $n[1]); Start-Sleep -Milliseconds 25 }'; $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($child)); $pwsh = (Get-Command pwsh -ErrorAction Stop).Source; Start-Process -FilePath $pwsh -WindowStyle Hidden -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded) | Out-Null" run_pwsh drop
+;
+    // ( -- ) Start the final Nokia Tune section asynchronously.
+    /// Plays the last five notes, including the long final note. Uses the same background PowerShell playback path as nokia.
 
 : nokia ( -- )
-    s" $child = '$notes = @(@(1319,160),@(1175,160),@(740,320),@(831,320),@(1109,160),@(988,160),@(587,320),@(659,320),@(988,160),@(880,160),@(554,320),@(659,320),@(880,640)); foreach ($n in $notes) { [Console]::Beep($n[0], $n[1]); Start-Sleep -Milliseconds 25 }'; $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($child)); $pwsh = (Get-Command pwsh -ErrorAction Stop).Source; Start-Process -FilePath $pwsh -WindowStyle Hidden -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded) | Out-Null" run_pwsh drop
+    s" $child = '$notes = @(@(1319,160),@(1175,160),@(740,320),@(831,320),@(1109,160),@(988,160),@(587,320),@(659,320)); foreach ($n in $notes) { [Console]::Beep($n[0], $n[1]); Start-Sleep -Milliseconds 25 }'; $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($child)); $pwsh = (Get-Command pwsh -ErrorAction Stop).Source; Start-Process -FilePath $pwsh -WindowStyle Hidden -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded) | Out-Null" run_pwsh drop
     ;
-    // ( -- ) Start the Nokia Tune phrase asynchronously.
+    // ( -- ) Start the first two Nokia Tune sections asynchronously.
     /// Launches a hidden PowerShell child process and returns without waiting for playback.
-    /// Plays the original 13 notes with 25 ms gaps.
-    /// Requires Windows PowerShell 7 and Console.Beep support.
+    /// Plays the first eight notes with 25 ms gaps, using PowerShell Console.Beep.

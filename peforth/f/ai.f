@@ -89,7 +89,7 @@ code (ai-approve-input)
         flush=True,
     )
     print(f"{cyan}Choose 1-4: {reset}", end="", flush=True)
-    yield from vm.call(vm.tick("nokia2"))
+    yield from vm.call(vm.tick("nokia"))
     choice = read_numbered_choice("", default="1")
     vm.push(choice)
 end-code
@@ -802,6 +802,10 @@ end-code
 // ( <prompt> -- ) Send the remaining input as a prompt to the current AI session.
 /// The response streams to the terminal. Proposed Forth programs pause for approval.
 /// Trust approves later proposals for this Forth process; ai-confirm restores per-proposal approval.
+
+: AI: s" " word true (ai) nokia2 ; immediate
+// ( <prompt> -- ) Send an AI prompt and play Nokia 2 after successful completion.
+/// Like ai:, but opts into a completion chime. The chime starts asynchronously.
 
 code (ai-sessions)
     from peforth import ai_bridge
