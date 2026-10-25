@@ -27,6 +27,12 @@ def _strip_vt100_sequences(text):
     return "".join(visible)
 
 
+def _create_vm_with_silent_nokia():
+    vm = repl.create_vm()
+    vm.define('nokia2', lambda _: None)
+    return vm
+
+
 class NumberedChoiceTests(unittest.TestCase):
     def test_digit_returns_and_echoes_choice_inline(self):
         display = io.StringIO()
@@ -55,7 +61,7 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertIn("Choose 1-4: 1" + chr(13) + chr(10), visible)
 
     def test_ai_approve_maps_choices_without_executing_proposal(self):
-        vm = repl.create_vm()
+        vm = _create_vm_with_silent_nokia()
         proposal = {
             "purpose": "unit test approval only",
             "source": "This source must never be executed.",
@@ -77,7 +83,7 @@ class NumberedChoiceTests(unittest.TestCase):
                 self.assertNotIn("ai_trusted", vm.host)
 
     def test_ai_approve_word_accepts_one_key_without_enter(self):
-        vm = repl.create_vm()
+        vm = _create_vm_with_silent_nokia()
         vm.push({"purpose": "one-key test", "source": "not executed"})
         reader = repl.read_numbered_choice
         prompts = []
@@ -98,13 +104,13 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertTrue(display.getvalue().startswith("\n\x1b[96m"))
         self.assertIn("2. Trust this AI task only", display.getvalue())
         self.assertIn("\x1b[0m", display.getvalue())
-        self.assertTrue(prompts[0].startswith("\x1b[96m"))
-        self.assertTrue(prompts[0].endswith("\x1b[0m"))
+        self.assertIn("Choose 1-4:", display.getvalue())
+        self.assertEqual(prompts, [""])
 
 
 class ApprovalScopeTests(unittest.TestCase):
     def test_task_trust_applies_only_to_same_task_and_expires(self):
-        vm = repl.create_vm()
+        vm = _create_vm_with_silent_nokia()
         state = {"trusted_ai_task": None}
         task = SimpleNamespace(status="paused")
         proposal = {"purpose": "trust one AI task", "source": "1 2 +"}
@@ -130,7 +136,7 @@ class ApprovalScopeTests(unittest.TestCase):
         self.assertIsNone(state["trusted_ai_task"])
 
     def test_task_trust_and_approval_word_preserve_paused_task_continuation(self):
-        vm = repl.create_vm()
+        vm = _create_vm_with_silent_nokia()
         vm.define("pause-once", lambda current_vm: current_vm.pause())
         vm.dictate(": parent pause-once ;")
         parent_task = vm.dictate("parent")
@@ -150,7 +156,7 @@ class ApprovalScopeTests(unittest.TestCase):
         self.assertIsNone(state["trusted_ai_task"])
 
     def test_runtime_trust_is_explicit_and_ai_confirm_clears_both_scopes(self):
-        vm = repl.create_vm()
+        vm = _create_vm_with_silent_nokia()
         task = object()
         state = {"trusted_ai_task": task}
         vm.host["ai_clear_task_trust"] = lambda: state.__setitem__("trusted_ai_task", None)

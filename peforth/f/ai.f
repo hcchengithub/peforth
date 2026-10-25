@@ -64,10 +64,12 @@ code (ai-approve-input)
         end="",
         flush=True,
     )
-    choice = read_numbered_choice(f"{cyan}Choose 1-4: {reset}", default="1")
+    print(f"{cyan}Choose 1-4: {reset}", end="", flush=True)
+    yield from vm.call(vm.tick("nokia2"))
+    choice = read_numbered_choice("", default="1")
     vm.push(choice)
 end-code
-// ( proposal -- choice ) Display a proposal and read one key for the live REPL approval flow.
+// ( proposal -- choice ) Display a proposal, play Nokia Tune, and read one key for the live REPL approval flow.
 
 : ai-approve ( proposal -- decision )
     (ai-approve-input)
