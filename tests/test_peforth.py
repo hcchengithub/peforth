@@ -759,11 +759,20 @@ class ReplBootstrapTests(unittest.TestCase):
         other_vm = _f_mod.create_vm()
         self.vm.host["ai_active_session_id"] = "sess_current_12345678"
         other_vm.host["ai_active_session_id"] = "sess_other_abcdefgh"
+        detail = {"id": "sess_current_12345678", "created_at": 1791466592,
+                  "last_active_at": 1791470192, "status": "idle",
+                  "agent": {"model": "gpt-test"},
+                  "usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}}
         with patch.object(bridge, "_session_titles", return_value={"sess_current_12345678": "peforth"}):
-            output = io.StringIO()
-            with contextlib.redirect_stdout(output):
-                self.vm.dictate("ai-status")
-            self.assertIn("peforth [sess_current_12345678]", output.getvalue())
+            with patch.object(bridge, "_api_get", return_value=detail) as api_get:
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.vm.dictate("ai-status")
+                self.assertIn("Session current: peforth [sess_current_12345678]", output.getvalue())
+                self.assertIn("Status: idle", output.getvalue())
+                self.assertIn("Model: gpt-test", output.getvalue())
+                self.assertIn("Usage: input=1 output=2 total=3 tokens", output.getvalue())
+                api_get.assert_called_once_with("/sessions/sess_current_12345678")
 
             with contextlib.redirect_stdout(io.StringIO()):
                 self.vm.dictate("ai-new")
@@ -817,15 +826,18 @@ class ReplBootstrapTests(unittest.TestCase):
     def test_ai_session_and_cleanup_accept_full_session_ids(self):
         bridge = _f_mod.ai_bridge
         session_id = "sess_full_12345678"
-        self.vm.host["ai_session_rows"] = [{"id": session_id}]
+        self.vm.host.pop("ai_session_rows", None)
         detail = {"id": session_id, "created_at": 1791466592,
                   "last_active_at": 1791470192, "status": "idle",
                   "agent": {"model": "gpt-test"}, "usage": {}}
         output = io.StringIO()
-        with patch.object(bridge, "_api_get", return_value=detail) as api_get:
-            with contextlib.redirect_stdout(output):
-                self.vm.push(session_id)
-                self.vm.execute(self.vm.tick("ai-session"))
+        with patch.object(bridge, "_list_remote_sessions", return_value=[{"id": session_id}]) as list_sessions:
+            with patch.object(bridge, "_sync_session_index", return_value={session_id: "Design"}):
+                with patch.object(bridge, "_api_get", return_value=detail) as api_get:
+                    with contextlib.redirect_stdout(output):
+                        self.vm.push(session_id)
+                        self.vm.execute(self.vm.tick("ai-session"))
+        list_sessions.assert_called_once_with()
         api_get.assert_called_once_with("/sessions/sess_full_12345678")
         self.assertIn("[sess_full_12345678]", output.getvalue())
 
@@ -1402,7 +1414,7 @@ class ReplBootstrapTests(unittest.TestCase):
                 patch.object(_f_mod.ai_bridge, "_list_remote_sessions") as list_sessions, \
                 patch.object(_f_mod, "repl") as interactive_repl, \
                 contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            result = _f_mod.main(["-id", "sess_explicit", "-c", "Hello", "from", "CLI"])
+            result = _f_mod.main(["-c", "Hello", "from", "CLI", "-id", "sess_explicit"])
         self.assertEqual(result, 0)
         self.assertEqual(vm.executed, ("(ai)", ["Hello from CLI", True]))
         self.assertEqual(vm.host["ai_active_session_id"], "sess_explicit")
@@ -1413,18 +1425,20 @@ class ReplBootstrapTests(unittest.TestCase):
         interactive_repl.assert_called_once_with(
             vm, initial_task=vm.task, exit_when_idle=True, show_greeting=False)
 
-    def test_cli_id_requires_chat_and_value(self):
+    def test_cli_id_requires_value_and_can_select_repl_without_chat(self):
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             result = _f_mod.main(["-id"])
         self.assertEqual(result, 2)
         self.assertIn("-id requires a session ID", stderr.getvalue())
 
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            result = _f_mod.main(["-id", "sess_explicit"])
-        self.assertEqual(result, 2)
-        self.assertIn("-id applies only to -c", stderr.getvalue())
+        vm = SimpleNamespace(host={})
+        with patch.object(_f_mod, "create_vm", return_value=vm):
+            with patch.object(_f_mod, "repl") as interactive_repl:
+                result = _f_mod.main(["-id", "sess_explicit"])
+        self.assertEqual(result, 0)
+        self.assertEqual(vm.host["ai_active_session_id"], "sess_explicit")
+        interactive_repl.assert_called_once_with(vm)
 
     def test_cli_new_option_is_removed(self):
         stderr = io.StringIO()
@@ -1530,6 +1544,8 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("-e <Forth tokens...>", output.getvalue())
         self.assertIn("-i, --interactive", output.getvalue())
         self.assertIn("-id <session-id>", output.getvalue())
+        self.assertIn("may appear anywhere", output.getvalue())
+        self.assertNotIn("must appear before -c", output.getvalue())
         self.assertIn("SESSION_ID=<session-id>", output.getvalue())
         self.assertNotIn("-new", output.getvalue())
 

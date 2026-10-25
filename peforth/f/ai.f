@@ -6,17 +6,41 @@ code ai-new
 end-code
 // ( -- ) Clear this Forth process's selected AI session.
 
+code (ai-session-details)
+    from peforth import ai_bridge
+    import urllib.parse
+
+    session_id = vm.pop()
+    index = vm.pop()
+    detail = ai_bridge._api_get(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+    agent = detail.get("agent") or {}
+    usage = detail.get("usage") or {}
+    resolved_id = detail.get("id") or session_id
+    title = ai_bridge._session_title(resolved_id) or "(untitled)"
+    print(f"Session {index}: {title} [{resolved_id}]")
+    print(f"Created: {ai_bridge._format_time(detail.get('created_at'))}")
+    print(f"Last active: {ai_bridge._format_time(detail.get('last_active_at'))}")
+    print(f"Status: {detail.get('status', 'unknown')}")
+    print(f"Model: {agent.get('model', 'unknown')}")
+    print(f"Usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)} "
+          f"total={usage.get('total_tokens', 0)} tokens")
+    if detail.get("error"):
+        print(f"Error: {detail['error']}")
+end-code
+// ( display-index session-ID -- ) Print complete details for one session.
+
 code ai-status
     from peforth import ai_bridge
 
     active_id = vm.host.get("ai_active_session_id")
-    if active_id:
-        title = ai_bridge._session_title(active_id) or "(untitled)"
-        print(f"Active AI session: {title} [{active_id}]")
-    else:
+    if not active_id:
         print("Active AI session: none (next request creates a new session)")
+    else:
+        vm.push("current")
+        vm.push(active_id)
+        yield from vm.call(vm.tick("(ai-session-details)"))
 end-code
-// ( -- ) Show the AI session selected by this Forth process.
+// ( -- ) Show complete details for the session selected by this Forth process.
 
 code ai-confirm
     vm.host.pop("ai_trusted", None)
@@ -813,34 +837,26 @@ end-code
     (ai-sessions)
     (ai-sessions-list)
 ;
-// ( session-number | session-ID -- ) Show remote session details.
+// ( session-number | full-session-ID -- ) Show remote session details.
 /// Fetches and displays timestamps, status, model, usage, and any API error.
-/// Uses the snapshot populated by ai-sessions; selectors may be list numbers or full IDs.
+/// Refreshes the remote list when needed; numeric selectors use its current ordering.
 code ai-session
     from peforth import ai_bridge
-    import urllib.parse
 
     selector = vm.pop()
     rows = vm.host.get("ai_session_rows")
-    if rows is None:
-        raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
+    if rows is None or (isinstance(selector, str) and
+                        not any(row.get("id") == selector for row in rows)):
+        rows = ai_bridge._list_remote_sessions()
+        titles = ai_bridge._sync_session_index(rows)
+        vm.host["ai_session_rows"] = rows
+        vm.host["ai_session_titles"] = titles
     index, row = ai_bridge._resolve_session_selector(rows, selector)
-    detail = ai_bridge._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
-    agent = detail.get("agent") or {}
-    usage = detail.get("usage") or {}
-    session_id = detail.get("id") or row["id"]
-    title = ai_bridge._session_title(session_id) or "(untitled)"
-    print(f"Session {index}: {title} [{session_id}]")
-    print(f"Created: {ai_bridge._format_time(detail.get('created_at'))}")
-    print(f"Last active: {ai_bridge._format_time(detail.get('last_active_at'))}")
-    print(f"Status: {detail.get('status', 'unknown')}")
-    print(f"Model: {agent.get('model', 'unknown')}")
-    print(f"Usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)} "
-          f"total={usage.get('total_tokens', 0)} tokens")
-    if detail.get("error"):
-        print(f"Error: {detail['error']}")
+    vm.push(index)
+    vm.push(row["id"])
+    yield from vm.call(vm.tick("(ai-session-details)"))
 end-code
-// ( session-number | session-ID -- ) Show remote session details.
+// ( session-number | full-session-ID -- ) Show remote session details.
 
 code ai-use
     from peforth import ai_bridge

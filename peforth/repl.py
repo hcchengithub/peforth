@@ -1041,19 +1041,19 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
 
 
 def _print_cli_help(file=None) -> None:
-    print("""Usage: f [-h] [-i] [-e <Forth tokens...> | [-id <session-id>] -c <prompt tokens...> | <file.f>]
+    print("""Usage: f [-h] [-i] [-id <session-id>] [-e <Forth tokens...> | -c <prompt tokens...> | <file.f>]
 
 Run peforth Forth source or start the interactive REPL.
 
 Options:
   -h, --help         Show this help message and exit
   -i, --interactive  Enter the REPL after executing source or completing chat
+  -id <session-id>   Select this existing session for AI requests; may appear anywhere
   -e <tokens...>     Execute all remaining command-line tokens as one TIB,
                      joined with one space between tokens
                      Example: f -e run-monitor
   -c, --chat         Send all remaining command-line tokens as one prompt to AI,
-                     joined with one space; start a new session unless -id is given
-  -id <session-id>   Continue this existing session; must appear before -c
+                     joined with one space; uses a new session unless -id is given
 
 Each -c run writes SESSION_ID=<session-id> to stderr after completion.
 
@@ -1064,17 +1064,40 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
 
 def main(argv=None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    original_args = args.copy()
+    session_id = None
+    filtered_args = []
+    index = 0
+    while index < len(args):
+        if args[index] != "-id":
+            filtered_args.append(args[index])
+            index += 1
+            continue
+        if session_id is not None:
+            print("Error: -id may be specified only once.", file=sys.stderr)
+            _print_cli_help(sys.stderr)
+            return 2
+        if index + 1 >= len(args) or not args[index + 1] or args[index + 1].startswith("-"):
+            print("Error: -id requires a session ID.", file=sys.stderr)
+            _print_cli_help(sys.stderr)
+            return 2
+        session_id = args[index + 1]
+        index += 2
+    args = filtered_args
+
     if not args:
         launch_context = _make_launch_context(
-            [sys.argv[0]], one_shot=False, repl_mode="forth"
+            [sys.argv[0], *original_args], one_shot=False, repl_mode="forth"
         )
-        repl(create_vm(launch_context=launch_context))
+        vm = create_vm(launch_context=launch_context)
+        if session_id is not None:
+            vm.host["ai_active_session_id"] = session_id
+        repl(vm)
         return 0
 
     interactive = False
     source = None
     chat_prompt = None
-    session_id = None
     source_file = None
     index = 0
     while index < len(args):
@@ -1085,18 +1108,6 @@ def main(argv=None) -> int:
         if arg in ("-i", "--interactive"):
             interactive = True
             index += 1
-            continue
-        if arg == "-id":
-            if session_id is not None:
-                print("Error: -id may be specified only once.", file=sys.stderr)
-                _print_cli_help(sys.stderr)
-                return 2
-            if index + 1 >= len(args) or not args[index + 1] or args[index + 1].startswith("-"):
-                print("Error: -id requires a session ID before -c.", file=sys.stderr)
-                _print_cli_help(sys.stderr)
-                return 2
-            session_id = args[index + 1]
-            index += 2
             continue
         if arg in ("-e", "--execute"):
             if source_file is not None:
@@ -1144,22 +1155,17 @@ def main(argv=None) -> int:
             print(f"Could not read {source_file}: {err}", file=sys.stderr)
             return 1
 
-    if session_id is not None and chat_prompt is None:
-        print("Error: -id applies only to -c/--chat.", file=sys.stderr)
-        _print_cli_help(sys.stderr)
-        return 2
-
     launch_context = _make_launch_context(
-        [sys.argv[0], *args],
+        [sys.argv[0], *original_args],
         one_shot=(source is not None or chat_prompt is not None),
         repl_mode="chat" if chat_prompt is not None else "forth",
     )
     vm = create_vm(launch_context=launch_context)
+    if session_id is not None:
+        vm.host["ai_active_session_id"] = session_id
     if chat_prompt is not None:
         vm.host["ai_transport_stream_once"] = False
         ai_bridge.set_repl_mode(vm, "chat", reason="cli_chat")
-        if session_id is not None:
-            vm.host["ai_active_session_id"] = session_id
         try:
             vm.push(chat_prompt)
             vm.push(True)
