@@ -35,7 +35,7 @@ def _configured_seconds(name, default):
 
 
 def _request_timeout():
-    return _configured_seconds("PEFORTH_AI_REQUEST_TIMEOUT", 30)
+    return _configured_seconds("PEFORTH_AI_REQUEST_TIMEOUT", 120)
 
 
 def _stream_timeout():
