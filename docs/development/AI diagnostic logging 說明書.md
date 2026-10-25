@@ -4,7 +4,7 @@
 
 peforth 已提供 AI Diagnostic Logging：將 AI transport、HTTP、SSE streaming、AI turn、工具呼叫、approval 與 Forth execution 的診斷事件及相關內容記錄在 SQLite database，供問題追蹤、除錯與研究使用。這不是待實作的計劃，而是現有功能的使用與資料解讀說明。
 
-**重點：詳細的 AI 活動紀錄是給 AI 分析的資料。** SQLite 保存的內容、關聯 ID 與事件時序十分豐富，直接由人手動查詢不容易；建議將 [AI diagnostics log inspector skill](../skills/ai-diagnostics-log-inspector/SKILL.md) 交給 Agentic AI，讓它協助定位 runtime、turn、還原對話與工具執行過程，進行 debug 或研究。此 skill 已可供其他 Agentic AI 依照指引使用，不限 peforth 內建 AI。
+**重點：詳細的 AI 活動紀錄是給 AI 分析的資料。** SQLite 保存的內容、關聯 ID 與事件時序十分豐富，直接由人手動查詢不容易；建議將 [AI diagnostics log inspector skill](../../skills/ai-diagnostics-log-inspector/SKILL.md) 交給 Agentic AI，讓它協助定位 runtime、turn、還原對話與工具執行過程，進行 debug 或研究。此 skill 已可供其他 Agentic AI 依照指引使用，不限 peforth 內建 AI。
 
 ## 1. Database 與執行環境
 
@@ -25,7 +25,7 @@ SQLite 以 `contents` 保存完整文字、以 `turns` 保存每次 AI turn、�
 
 ## 2. 即時查看：peforth_logging_monitor.py
 
-[peforth_logging_monitor.py](../tools/peforth_logging_monitor.py) 是**唯讀**的終端機即時監視器：輪詢 SQLite `timeline`，以時間、八碼 runtime 簡稱、emoji 和事件摘要顯示活動，連續相同的事件會合併顯示次數。它適合快速觀察 AI request、SSE、工具呼叫、approval 和 Forth execution 的動態，不是完整內容檢索工具。
+[peforth_logging_monitor.py](../../tools/peforth_logging_monitor.py) 是**唯讀**的終端機即時監視器：輪詢 SQLite `timeline`，以時間、八碼 runtime 簡稱、emoji 和事件摘要顯示活動，連續相同的事件會合併顯示次數。它適合快速觀察 AI request、SSE、工具呼叫、approval 和 Forth execution 的動態，不是完整內容檢索工具。
 
 從 repository 根目錄執行：
 
@@ -77,7 +77,7 @@ Watchdog 只監督整體 runtime/turn 進展，不管理 approval waits，也不
 
 ## 3. 讓 Agentic AI 分析：ai-diagnostics-log-inspector
 
-專案提供 [`skills/ai-diagnostics-log-inspector/`](../skills/ai-diagnostics-log-inspector/)；核心指引在 [SKILL.md](../skills/ai-diagnostics-log-inspector/SKILL.md)。讓支援讀取 skill 與執行本機命令的 Agentic AI 先閱讀該 skill，再告訴它要檢查的 Windows 或 WSL database、runtime 或問題現象。
+專案提供 [`skills/ai-diagnostics-log-inspector/`](../../skills/ai-diagnostics-log-inspector/)；核心指引在 [SKILL.md](../../skills/ai-diagnostics-log-inspector/SKILL.md)。讓支援讀取 skill 與執行本機命令的 Agentic AI 先閱讀該 skill，再告訴它要檢查的 Windows 或 WSL database、runtime 或問題現象。
 
 例如：
 
@@ -87,7 +87,7 @@ skill 指導 AI 區分**執行分析的環境**與**資料庫所在的環境**�
 
 ## 4. 深入查詢：ai_diagnostics.py
 
-[tools/ai_diagnostics.py](../tools/ai_diagnostics.py) 提供進一步的唯讀診斷查詢。使用時先看 `--help`，再依 skill 的指引選擇 runtime 與 turn：
+[tools/ai_diagnostics.py](../../tools/ai_diagnostics.py) 提供進一步的唯讀診斷查詢。使用時先看 `--help`，再依 skill 的指引選擇 runtime 與 turn：
 
 ```bash
 python tools/ai_diagnostics.py /path/to/ai-diagnostics.sqlite3 list-runtimes

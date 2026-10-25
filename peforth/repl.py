@@ -1050,6 +1050,7 @@ Options:
   -i, --interactive  Enter the REPL after executing source or completing chat
   -e <tokens...>     Execute all remaining command-line tokens as one TIB,
                      joined with one space between tokens
+                     Example: f -e run-monitor
   -c, --chat         Send all remaining command-line tokens as one prompt to AI,
                      joined with one space; start a new session unless -id is given
   -id <session-id>   Continue this existing session; must appear before -c

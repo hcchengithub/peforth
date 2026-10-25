@@ -71,6 +71,18 @@ uv --native-tls pip install -e .
 
 Do not disable TLS certificate verification.
 
+## CLI help and monitoring
+
+Run `f -h` to see the command-line options. The `-e` option executes the remaining arguments as Forth input. For example, start the diagnostic monitor with:
+
+```bash
+f -e run-monitor
+```
+
+- **Monitor:** Reads the local SQLite diagnostic log in read-only mode and displays existing and new runtime and AI events. It runs in the foreground; press `Ctrl-C` to stop it.
+
+- **Watchdog:** Runs by default inside the Monitor. It alerts when an AI turn makes no objective progress for five minutes or when a runtime being monitored exits unexpectedly. On Windows, including WSL, alerts appear as Windows Message Boxes. It warns but does not cancel a turn or stop a process.
+
 ## Quick start
 
 Start `f` and enter ordinary Forth:
@@ -94,7 +106,7 @@ end-code
 
 The host Python code runs in the same process as the Forth VM, so it has the normal permissions of your local user account.
 
-To leave the REPL, enter `bye` or press Ctrl-D. For Forth definitions, introspection, parsing, control structures, and more Python integration examples, see [peforth manual（漂亮字）](docs/peforth%20manual.md) and [peforth manual (English)](docs/peforth%20manual%20%28English%29.md).
+To leave the REPL, enter `bye` or press Ctrl-D. For Forth definitions, introspection, parsing, control structures, and more Python integration examples, see [peforth manual（漂亮字）](docs/user/peforth%20manual.md) and [peforth manual (English)](docs/user/peforth%20manual%20%28English%29.md).
 
 ## Optional AI assistant
 
@@ -118,9 +130,13 @@ chat
 
 In `chat` mode, subsequent input goes to the selected AI session. Enter `forth` to return to Forth mode. Other commands include `ai-status`, `ai-sessions`, `ai-new`, and `ai-confirm`.
 
-**Local execution is permissioned:** When the assistant proposes Forth code via `peforth_run_forth`, peforth asks for approval. You can approve once, trust only the current AI task, deny, or cancel. Approved code executes in the **live local VM** and can use its Python bridge; review proposals before approving them. See [AI support](docs/ai.md) for details about approvals, sessions, configuration, and troubleshooting.
+**Local execution is permissioned:** When the assistant proposes Forth code via `peforth_run_forth`, peforth asks for approval. You can approve once, trust only the current AI task, deny, or cancel. Approved code executes in the **live local VM** and can use its Python bridge; review proposals before approving them. See [AI support](docs/user/ai.md) for details about approvals, sessions, configuration, and troubleshooting.
 
 AI API usage is optional and billed according to your OpenAI Platform account and selected model.
+
+## Documentation
+
+See the [documentation index](docs/README.md) for the full map. [User guides](docs/user/) contain the Forth manuals and AI usage guide; [development documents](docs/development/) contain design, diagnostics, plans, and project notes.
 
 ## Project layout
 
@@ -132,7 +148,9 @@ AI API usage is optional and billed according to your OpenAI Platform account an
 | `peforth/f/ai.f` | Forth-facing AI words and control flow |
 | `peforth/repl.py` | Terminal REPL and runtime initialization |
 | `peforth/ai_bridge.py`, `peforth/ai_tools.py` | AI transport, session helpers, and host tools |
-| `docs/` | User manual, AI guide, design documents, and historical migration plan |
+| `docs/user/` | User manuals and AI usage guide |
+| `docs/development/` | Design, diagnostics, development plans, and project notes |
+| `docs/README.md` | Documentation index |
 | `skills/`, `plugins/` | Repository-owned AI skill and plugin assets |
 | `tests/` | Automated tests |
 
@@ -157,7 +175,7 @@ Run the test suite from the checkout using your environment's Python; for exampl
 
 On Windows, use `.venv\Scripts\python.exe` instead.
 
-Do not run `git pull` over uncommitted modifications without reviewing them first. The historical [V2 migration plan](docs/v2-migration-plan.md) is retained as background, not as the current installation guide.
+Do not run `git pull` over uncommitted modifications without reviewing them first. The historical [V2 migration plan](docs/development/v2-migration-plan.md) is retained as background, not as the current installation guide.
 
 ## License
 

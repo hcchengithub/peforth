@@ -4,7 +4,7 @@
 >
 > Runtime: Python 3.10+ on Linux, WSL, and Windows. Principal sources: `peforth/projectk.py`, `peforth/repl.py`, and `peforth/f/base.f`.
 
-This is an **architecture and design manual**, not an exhaustive Forth word reference. The dictionary provides per-word help and comments. For installation, virtual environments, the `f` command, and current compatibility limitations, start with the repository [README](../README.md). For the optional AI assistant, also see [AI support](ai.md).
+This is an **architecture and design manual**, not an exhaustive Forth word reference. The dictionary provides per-word help and comments. For installation, virtual environments, the `f` command, and current compatibility limitations, start with the repository [README](../../README.md). For the optional AI assistant, also see [AI support](ai.md).
 
 **Use AI as a reading companion.** We have made every effort to explain the design and technical details clearly, but some passages may still leave questions unanswered. If anything is unclear, don't forget to make use of an AI sidebar in your browser (for example, Gemini in Chrome) to ask questions about the page you are reading, request additional examples, or explore the code and concepts in greater depth.
 
@@ -390,9 +390,9 @@ The result is not merely a Forth interpreter implemented in Python. It is a prog
 
 ### Further reading
 
-- [Repository README: installation and quick start](../README.md)
+- [Repository README: installation and quick start](../../README.md)
 - [Traditional Chinese manual（漂亮字）](peforth%20manual.md)
 - [AI assistant guide](ai.md)
-- [Project K source](../peforth/projectk.py)
-- [Base Forth vocabulary](../peforth/f/base.f)
-- [Tests](../tests/)
+- [Project K source](../../peforth/projectk.py)
+- [Base Forth vocabulary](../../peforth/f/base.f)
+- [Tests](../../tests/)

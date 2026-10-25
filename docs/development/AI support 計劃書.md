@@ -37,7 +37,7 @@ Agents API 的 Skills 需要把 skill 提供給 agent 的執行環境。初步�
 
 若希望 agent 只保有 Forth 知識、完全沒有 hosted shell，則需評估 self-hosted sandbox 與 executor；這比第一版預期增加本機 executor、連線和生命週期管理。故第一版優先採 hosted skill plugin 加受限的本機 function tools，明確要求 agent 只透過 Forth tools 操作 peforth。
 
-Agents API 會保存 session 狀態。本機 session index 位於 `~/.peforth/.ai_session.json`（可由 `PEFORTH_CONFIG_DIR` 指定）；目前每個 `f` process 的 active session selection 留在該 VM 記憶體中，不會自動恢復本機 VM 的 stack、dictionary 或檔案。session 操作與清除方式記錄於 `docs/ai.md`。
+Agents API 會保存 session 狀態。本機 session index 位於 `~/.peforth/.ai_session.json`（可由 `PEFORTH_CONFIG_DIR` 指定）；目前每個 `f` process 的 active session selection 留在該 VM 記憶體中，不會自動恢復本機 VM 的 stack、dictionary 或檔案。session 操作與清除方式記錄於 `docs/user/ai.md`。
 
 官方參考：[Agents API 概觀](https://developers.openai.com/api/docs/guides/agents-api/overview)、[Sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions)、[Skills](https://developers.openai.com/api/docs/guides/tools-skills)、[Agents API Plugins](https://developers.openai.com/api/docs/guides/agents-api/tools/plugins)、[Agents API hosted files](https://developers.openai.com/api/docs/guides/agents-api/environments/files)。
 
@@ -81,7 +81,7 @@ API key 僅用於本機 Host 向 OpenAI API 驗證，不放入 skill、plugin ZI
 | `skills/peforth-forth/references/` | Forth 操作與語言說明 |
 | `plugins/peforth-forth/.codex-plugin/plugin.json` | Agent Plugin 描述；隨 source 提供，不自動全域部署 |
 | `peforth/repl.py` | REPL 與 f CLI |
-| `docs/ai.md` | 設定、使用、權限、session 保存與故障處理 |
+| `docs/user/ai.md` | 設定、使用、權限、session 保存與故障處理 |
 
 skill/plugin 內容應由 repo 中審閱過的 peforth 文件維護，不讓模型任意載入未檢查的 skills。
 
@@ -120,4 +120,4 @@ skill/plugin 內容應由 repo 中審閱過的 peforth 文件維護，不讓模�
 3. Forth skill 根目錄可由 `PEFORTH_AI_SKILLS_DIR` 環境變數指定，預設為 checkout 的 `skills`。docs、skills、plugins 隨 source 提供，不會自動部署到其他 AI CLI 全域目錄。
 	--> 已實作 `PEFORTH_AI_SKILLS_DIR`，預設值為 checkout 的 `skills`。
 
-本文件記錄已確認的 AI 設計及目前實作狀態；v2 package/CLI 實作以 source code、`docs/ai.md` 和測試為準。
+本文件記錄已確認的 AI 設計及目前實作狀態；v2 package/CLI 實作以 source code、`docs/user/ai.md` 和測試為準。

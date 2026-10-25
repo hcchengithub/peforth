@@ -16,4 +16,4 @@ dist/
 *.log
 __pycache__/
 *.py[cod]
-/docs/peforth-devlog.txt
+/docs/development/peforth-devlog.txt
