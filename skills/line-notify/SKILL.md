@@ -15,7 +15,7 @@ This skill sends push messages directly to the user's LINE account using its bun
 ### 1. Send a direct text message
 
 ```bash
-bash ~/.gemini/config/skills/line-notify/scripts/send_line_message.sh "Your message text here"
+bash ~/.peforth/skills/line-notify/scripts/send_line_message.sh "Your message text here"
 ```
 
 ### 2. Send a multi-line message from a file
@@ -29,9 +29,35 @@ cat <<'EOF' > "$tmp_msg"
 - Item 1: PASS
 - Item 2: PASS
 EOF
-bash ~/.gemini/config/skills/line-notify/scripts/send_line_message.sh --message-file "$tmp_msg"
+bash ~/.peforth/skills/line-notify/scripts/send_line_message.sh --message-file "$tmp_msg"
 rm -f "$tmp_msg"
 ```
+
+## Windows and WSL
+
+If the skill script runs in WSL but LINE_CHANNEL_ACCESS_TOKEN and LINE_USER_ID are set in Windows, pass those variables to WSL for this PowerShell process with WSLENV. This does not persist the setting or print the credentials.
+
+    $forwardVars = 'LINE_CHANNEL_ACCESS_TOKEN:LINE_USER_ID'
+    if ($env:WSLENV) {
+        $env:WSLENV = $env:WSLENV + ':' + $forwardVars
+    } else {
+        $env:WSLENV = $forwardVars
+    }
+
+    # Replace Hello World!! with the message to send.
+    $bashCommand = 'bash ~/.peforth/skills/line-notify/scripts/send_line_message.sh $''Hello World!!'''
+    & wsl.exe --exec bash -lc $bashCommand
+    if ($LASTEXITCODE -ne 0) {
+        throw ('LINE script failed with exit code ' + $LASTEXITCODE)
+    }
+
+The doubled single quotes in the PowerShell string produce Bash's $'...' quoted message argument. Check for HTTP 200 and LINE push succeeded in the script output. If the credentials are already set inside WSL, use the Bash examples above and do not forward them.
+
+
+
+When invoking this from Windows through peforth run_pwsh, keep the PowerShell source ASCII-only: non-ASCII message literals sent through PowerShell stdin may be corrupted. For non-ASCII text, encode each character as a Bash ANSI-C escape in the message argument; Bash decodes \uNNNN for BMP characters and \UNNNNNNNN for supplementary characters. For example, the code points U+5403 U+98EF U+4E86 can be passed as:
+
+    $bashCommand = 'bash ~/.peforth/skills/line-notify/scripts/send_line_message.sh $''\u5403\u98ef\u4e86'''
 
 ## Configuration
 

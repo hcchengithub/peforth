@@ -129,6 +129,32 @@ end-code
 ;
 // ( -- info ) Return the startup System Info prepared by the Python runtime.
 
+code list-skills
+    from peforth import ai_bridge
+
+    skills_root = ai_bridge._source_skills_dir()
+    if not skills_root.is_absolute():
+        skills_root = (ai_bridge.RUNTIME_ROOT / skills_root).resolve()
+
+    skill_names = []
+    for entry in sorted(skills_root.iterdir()):
+        if not entry.is_dir():
+            continue
+        skill_file = entry / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        skill_names.append(entry.name)
+        text = skill_file.read_text(encoding="utf-8")
+        match = ai_bridge.re.match(r"\A---\s*\n.*?\n---\s*(?:\n|$)", text,
+                                  flags=ai_bridge.re.S)
+        if match:
+            print(f"## {entry.name}\n{match.group(0).rstrip()}\n")
+        else:
+            print(f"## {entry.name}\n(no YAML header)\n")
+    vm.push(chr(32).join(skill_names))
+end-code
+// ( -- names-string ) Print each skill's YAML header and push sorted names separated by spaces.
+
 : initial-ai-model
     system_info :> ["config"] :> ["PEFORTH_AI_MODEL"]
     dup 0= if drop s" gpt-6-luna" then ;

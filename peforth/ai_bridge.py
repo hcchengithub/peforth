@@ -74,6 +74,36 @@ def _source_skills_dir():
     return Path(configured).expanduser() if configured else RUNTIME_ROOT / "skills"
 
 
+def _load_all_skills_text():
+    """Collect the markdown text of every skill bundle under ``skills_root``.
+
+    Each skill directory is expected to contain a ``SKILL.md`` file. The
+    function returns a tuple ``(skill_names, combined_text)`` where
+    ``skill_names`` is a list of discovered skill directory names and
+    ``combined_text`` is the concatenated markdown of all skill files with a
+    simple header separating them.
+    """
+    skills_root = _source_skills_dir()
+    if not skills_root.is_absolute():
+        skills_root = (RUNTIME_ROOT / skills_root).resolve()
+
+    skill_names = []
+    parts = []
+    for entry in sorted(skills_root.iterdir()):
+        if not entry.is_dir():
+            continue
+        skill_file = entry / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        skill_names.append(entry.name)
+        text = skill_file.read_text(encoding="utf-8")
+        # Strip the leading YAML‑style block (--- ... ---) which is used for metadata.
+        text = re.sub(r"\A---\s*\n.*?\n---\s*\n", "", text, count=1, flags=re.S)
+        parts.append(f"## Skill: {entry.name}\n\n{text}\n")
+    combined = "\n".join(parts)
+    return skill_names, combined
+
+
 def load_dotenv():
     try:
         lines = (_runtime_config_path() / ".env").read_text(encoding="utf-8-sig").splitlines()
@@ -666,24 +696,22 @@ def refresh_session_index(vm=None):
 
 
 def _agent_instructions():
+    skill_names, combined_text = _load_all_skills_text()
+    # Optional: include reference documentation for core peforth-forth skill
     skills_root = _source_skills_dir()
     if not skills_root.is_absolute():
         skills_root = (RUNTIME_ROOT / skills_root).resolve()
-    skill = skills_root / "peforth-forth"
-    skill_file = skill / "SKILL.md"
-    if not skill_file.is_file():
-        raise RuntimeError(f"peforth Forth skill not found: {skill_file}")
-    skill_text = skill_file.read_text(encoding="utf-8")
-    reference_path = skill / "references" / "forth-reference.md"
+    reference_path = skills_root / 'peforth-forth' / 'references' / 'forth-reference.md'
     reference_text = reference_path.read_text(encoding="utf-8") if reference_path.is_file() else ""
-    skill_text = re.sub(r"\A---\s*\n.*?\n---\s*\n", "", skill_text, count=1, flags=re.S)
-    instructions = (
+    intro = (
         "You assist with peforth Forth. Use the live dictionary tool before relying on unfamiliar words. "
-        "Only the local Forth tool can execute code. Use peforth_tick_heartbeat only for meaningful milestones, not periodic or repeated status messages; it records a diagnostic message and cannot execute Forth. Approval scopes: Yes (allow_once) approves one proposal; Trust this AI task applies only to later proposals in the same AI Task and expires when that Task completes, fails, or is cancelled; Runtime Trust must be explicitly enabled with ai-trust-runtime and lasts in this Forth process until ai-confirm or process exit. ai-confirm revokes Runtime Trust and any active Task Trust. Never infer Trust from a prior Yes or from a different AI Task.\n\n"
-        + skill_text + ("\n\nForth reference:\n" + reference_text if reference_text else "")
+        "Only the local Forth tool can execute code. Use peforth_tick_heartbeat only for meaningful milestones, not periodic or repeated status messages; it records a diagnostic message and cannot execute Forth. Approval scopes: Yes (allow_once) approves one proposal; Trust this AI task applies only for later proposals in the same AI Task and expires when that Task completes, fails, or is cancelled; Runtime Trust must be explicitly enabled with ai-trust-runtime and lasts in this Forth process until ai-confirm or process exit. ai-confirm revokes Runtime Trust and any active Task Trust. Never infer Trust from a prior Yes or from a different AI Task.\n\n"
     )
+    instructions = intro + combined_text
+    if reference_text:
+        instructions += "\n\nForth reference:\n" + reference_text
     if len(instructions.encode("utf-8")) > 100_000:
-        raise RuntimeError("peforth Forth skill text is too large to include in agent instructions.")
+        raise RuntimeError("Combined skill texts are too large to include in agent instructions.")
     return instructions
 
 
