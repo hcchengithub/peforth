@@ -1,6 +1,6 @@
 # peforth v2 AI 支援計劃書
 
-> 狀態：已依使用者回覆定案，開始實作  
+> 狀態：核心 AI 對話與本機工具流程已實作；UI 規格依終端 UI 風格文件維護（更新日期：2026-10-26）
 > 日期：2026-10-08  
 > 適用範圍：peforth v2 Python package
 
@@ -16,9 +16,12 @@ peforth 已將微核心、Forth 擴充字典與 Python Host 分開。AI 擴充�
 
 AI 以 Agents API session 保存多輪對話；AI 學習 peforth 的 Forth 規則則用 Agent Skills 表達。本機檔案、Forth VM 與操作結果只透過明確定義的工具提供。
 
-## 3. 使用者介面草案
+## 3. 使用者介面
 
-ai: 取用本行剩餘文字作為問題，顯示 AI 回覆。同一 CLI 對話沿用相同 session。
+- `ai:` 取用本行剩餘文字作為問題，串流顯示 AI 回覆，沿用目前 session。
+- `AI:` 與 `ai:` 相同，成功完成後另播放 Nokia 2 提示音。
+- `chat` mode 使用 `chat> `；Forth mode 保持 `> `。兩種 mode 的 AI turn 共用相同視覺呈現。
+- 原始輸入留在終端，之後再顯示同文的裝飾 user turn；AI 回覆顯示為 peforth turn。這適用於 `chat` mode 及 Forth mode 的 `ai:`、`AI:`。樣式細節以 `docs/development/terminal-ui-style-guide.md` 為準。
 
     ai: 說明這個系統的 stack 與 dictionary 如何運作
     ai: 幫我定義一個 square，然後驗證 12 的平方
@@ -101,7 +104,7 @@ skill/plugin 內容應由 repo 中審閱過的 peforth 文件維護，不讓模�
 
 ## 10. 驗收條件草案
 
-- ai: 能送出問題、串流顯示回覆，並在相同 session 延續對話。
+- `chat`、`ai:`、`AI:` 能在相同 session 延續對話，並共用原始輸入加裝飾 user turn、裝飾 peforth 回覆的呈現；`AI:` 保留完成提示音。
 - `ai-sessions` 可刷新本機標題索引；active session 僅在目前 `f` VM 內，除非明確執行 `ai-use`，新 process 不會自動續接。
 - Agents API 能發現 peforth Forth skill，並按需參考 Forth 說明。
 - AI 能查詢目前 dictionary；提交的 Forth 程式每次先顯示並取得使用者確認。

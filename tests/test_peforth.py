@@ -2110,6 +2110,33 @@ class ReplBootstrapTests(unittest.TestCase):
             self.assertIn('"decision": "cancelled"', events[1][2])
             logger.close()
 
+    def test_ai_turn_renders_same_cards_in_forth_and_chat_modes(self):
+        def fake_create(payload, *, diagnostic=None, stream=True):
+            yield {"type": "agent.session.created", "session": {"id": "sess_ui"}}
+            yield {"type": "agent.session.turn.output_text.delta", "delta": "Hello"}
+            yield {"type": "agent.session.turn.output_text.done", "text": "Hello"}
+            yield {"type": "agent.session.turn.completed"}
+
+        for mode in ("forth", "chat"):
+            with self.subTest(mode=mode):
+                vm = _f_mod.create_vm()
+                vm.host["repl_mode"] = mode
+                output = io.StringIO()
+                with patch.object(_f_mod.ai_bridge, "_create_session", side_effect=fake_create), \
+                        patch.object(_f_mod.ai_bridge, "_agent_instructions", return_value="instructions"), \
+                        patch.object(_f_mod.ai_bridge, "load_dotenv"), \
+                        contextlib.redirect_stdout(output):
+                    vm.push("Say hello")
+                    vm.push(True)
+                    vm.dictate("(ai)")
+
+                rendered = output.getvalue()
+                self.assertIn(chr(0x1F44B) + " user", rendered)
+                self.assertIn(chr(0x1FA84) + " peforth", rendered)
+                self.assertIn("  Hello", rendered)
+                self.assertNotIn(chr(0x1F916), rendered)
+                self.assertLess(rendered.index(chr(0x1F44B)), rendered.index(chr(0x1FA84)))
+
     def test_ai_turn_records_prompt_and_completed_output(self):
         with tempfile.TemporaryDirectory() as directory:
             logger = DiagnosticLog(pathlib.Path(directory) / "diagnostics.sqlite3", environment="wsl")

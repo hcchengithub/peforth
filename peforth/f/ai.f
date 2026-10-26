@@ -76,13 +76,14 @@ code (ai-approve-input)
 
     purpose = terminal_safe(purpose)
     source = terminal_safe(source)
-    green = "\x1b[1;38;2;135;215;135m"
-    deep_green = "\x1b[1;38;2;0;100;0m"
+    green = "\x1b[38;2;135;215;135m"
+    green_bold = "\x1b[1;38;2;135;215;135m"
+    deep_green = "\x1b[38;2;0;100;0m"
     red = "\x1b[38;2;205;70;70m"
     dim = "\x1b[2;37m"
     reset = "\x1b[0m"
     print(
-        f"\n{green}AI permission requested{reset}\n"
+        f"\n{green_bold}AI permission requested{reset}\n"
         f"{green}Purpose: {purpose}{reset}\n\n"
         f"{dim}Forth action:{reset}\n"
         f"{deep_green}{source}{reset}\n\n",
@@ -310,6 +311,9 @@ code (ai)
     if not prompt:
         raise RuntimeError("ai: needs a prompt on the same line.")
 
+    from peforth.repl import _print_chat_turn
+    _print_chat_turn("user", prompt)
+
     ai_bridge.load_dotenv()
     tools = [
         {"type": "function", "name": "peforth_search_words",
@@ -405,6 +409,19 @@ code (ai)
     ai_started = False
     ai_line_start = True
     remote_turn_id = None
+    chat_box_state = {"open": False}
+    if stream_response:
+        from peforth.repl import _chat_turn_header, _chat_turn_bottom
+
+    def close_chat_box():
+        if not chat_box_state["open"]:
+            return
+        if not ai_line_start:
+            print()
+        print(_chat_turn_bottom())
+        print()
+        chat_box_state["open"] = False
+
 
     def reconcile_current_turn():
         if not remote_turn_id:
@@ -418,7 +435,8 @@ code (ai)
                 answer[:] = [recovered]
                 if stream_response and not had_answer:
                     print()
-                    print("🤖 " + recovered)
+                    _print_chat_turn("assistant", recovered)
+                    print()
             return status, True
         if status in {"failed", "cancelled", "incomplete"}:
             raise RuntimeError(
@@ -447,10 +465,13 @@ code (ai)
                 if stream_response:
                     if text and not ai_started:
                         print()
+                        if not chat_box_state["open"]:
+                            print(_chat_turn_header("assistant"))
+                            chat_box_state["open"] = True
                         ai_started = True
                     for part in text.splitlines(keepends=True):
                         if ai_line_start:
-                            print("🤖 ", end="")
+                            print("  ", end="")
                         print(part, end="", flush=True)
                         ai_line_start = part.endswith("\n") or part.endswith("\r")
             elif kind == "agent.session.turn.output_text.done":
@@ -777,6 +798,7 @@ code (ai)
             vm, diagnostic_turn_id, "".join(answer) if answer else None,
             output_status=output_status, status="cancelled", error=exc,
         )
+        close_chat_box()
         raise
     except Exception as exc:
         recoverable_sse_timeout = (
@@ -794,6 +816,7 @@ code (ai)
                 vm, diagnostic_turn_id, "".join(answer) if answer else None,
                 output_status=output_status, status="failed", error=exc,
             )
+            close_chat_box()
             raise exc
     if not turn_completed and remote_turn_id:
         try:
@@ -809,6 +832,7 @@ code (ai)
                 vm, diagnostic_turn_id, "".join(answer) if answer else None,
                 output_status=output_status, status="failed", error=exc,
             )
+            close_chat_box()
             raise
     if not session_id:
         error = RuntimeError("Agents API stream ended without returning the new session ID.")
@@ -817,7 +841,9 @@ code (ai)
             output_status="partial" if answer else "failed_before_output",
             status="failed", error=error,
         )
+        close_chat_box()
         raise error
+    close_chat_box()
     if turn_completed:
         output_text = "".join(answer)
         output_status = "complete" if output_text else "empty"

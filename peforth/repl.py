@@ -93,6 +93,36 @@ def _print_greeting(system_info: dict) -> None:
     print_formatted_text(FormattedText(_greeting_fragments(system_info)), style=style, end="\n\n")
 
 
+def _chat_turn_width() -> int:
+    return max(24, min(shutil.get_terminal_size((80, 24)).columns, 100))
+
+
+def _chat_turn_header(role: str) -> str:
+    from wcwidth import wcswidth
+
+    if role == "user":
+        title = chr(0x1F44B) + ' user'
+    elif role == "assistant":
+        title = chr(0x1FA84) + ' peforth'
+    else:
+        raise ValueError("role must be user or assistant")
+    prefix = "╭─ " + title + " "
+    dashes = max(1, _chat_turn_width() - wcswidth(prefix) - 1)
+    return prefix + "─" * dashes + "╮"
+
+
+def _chat_turn_bottom() -> str:
+    return "╰" + "─" * (_chat_turn_width() - 2) + "╯"
+
+
+def _print_chat_turn(role: str, text: str) -> None:
+    print(_chat_turn_header(role))
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.split("\n"):
+        print("  " + line)
+    print(_chat_turn_bottom())
+
+
 def _reported_source_path() -> str:
     """Return the checkout path separately from the installed runtime path."""
     configured = os.environ.get("PEFORTH_SOURCE_PATH", "").strip()
@@ -981,7 +1011,9 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
             "completion-menu.completion.current": "bold fg:#006400 bg:#ffffff noreverse",
             "completion-menu.multi-column-meta": "fg:default bg:default noreverse",
         }),
-        prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
+        prompt_continuation=lambda width, line_number, is_soft_wrap: (
+            "  " if vm.host.get("repl_mode", "forth") == "chat" else "... "
+        ),
     )
 
     if show_greeting:

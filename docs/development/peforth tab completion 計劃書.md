@@ -1,5 +1,7 @@
 # peforth Input Box Tab Auto-completion 計劃書
 
+> 狀態：已實作；完整測試於 2026-10-26 通過（263 passed，23 subtests passed）。
+
 **目標：**
 
 在 peforth 互動式 Forth REPL 的 input box 中，按下 Tab 時，從目前 VM 的 live dictionary 提供所有 word names 的自動完成（auto-completion）。候選比對不分大小寫，但補回輸入的 word name 保留 dictionary 中的原始大小寫。
@@ -300,7 +302,7 @@ pytest -q
 
 ## 五、實作順序
 
-### Task 1：建立 completer 單元測試
+### Task 1：建立 completer 單元測試（已完成）
 
 **Files：**
 
@@ -309,7 +311,7 @@ pytest -q
 
 先加入大小寫不分、特殊字元、目前 token、動態 dictionary 與 chat mode 測試，確認測試在尚未實作時失敗。
 
-### Task 2：在 `repl.py` 實作 live dictionary completer
+### Task 2：在 `repl.py` 實作 live dictionary completer（已完成）
 
 **Files：**
 
@@ -317,7 +319,7 @@ pytest -q
 
 加入 `ForthWordCompleter`，只讀取 `vm.words`，不引入新的 dictionary state。
 
-### Task 3：掛接主要 PromptSession
+### Task 3：掛接主要 PromptSession（已完成）
 
 **Files：**
 
@@ -325,7 +327,7 @@ pytest -q
 
 將 completer 掛到主要 multiline `PromptSession`，approval/cleanup session 維持不變。
 
-### Task 4：執行單元與完整回歸測試
+### Task 4：執行單元與完整回歸測試（已完成）
 
 執行：
 
@@ -344,7 +346,7 @@ pytest -q
 
 並確認 `chat` mode 不出現 Forth candidates。
 
-### Task 5：更新文件與變更摘要
+### Task 5：更新文件與變更摘要（已完成）
 
 若實際行為與本計劃有差異，更新本文件的「已確定的行為」與驗收標準，避免文件和程式分歧。
 
