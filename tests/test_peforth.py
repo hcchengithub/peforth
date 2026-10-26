@@ -968,7 +968,7 @@ class ReplBootstrapTests(unittest.TestCase):
 
         ai_stack = self.vm.tick("(ai)")
         self.assertIn("prompt-string stream?", ai_stack.help)
-        self.assertIn("stream? true", ai_stack.comment)
+        self.assertIn("Trust/Yes/No/Cancel approval flow", ai_stack.comment)
 
     def test_ai_workflow_words_are_defined_in_ai_f(self):
         for name in ("ai-sessions", "ai-session", "ai-use", "ai-cleanup",
@@ -1333,6 +1333,23 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertEqual(vm.sources, ["1 2 + . -i"])
         interactive_repl.assert_not_called()
 
+    def test_cli_repeated_load_options_run_files_in_order_before_execute(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = pathlib.Path(directory) / "first.f"
+            second = pathlib.Path(directory) / "second.f"
+            first.write_text(": loaded-first 40 ;", encoding="utf-8")
+            second.write_text(": loaded-second loaded-first 2 + ;", encoding="utf-8")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                result = _f_mod.main([
+                    "-l", str(first), "--load", str(second),
+                    "-e", "loaded-second", ".",
+                ])
+
+        self.assertEqual(result, 0)
+        self.assertIn("42", output.getvalue())
+
     def test_cli_interactive_option_runs_after_execute(self):
         class RecordingVM:
             def __init__(self):
@@ -1544,8 +1561,10 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("-e <Forth tokens...>", output.getvalue())
         self.assertIn("-i, --interactive", output.getvalue())
         self.assertIn("-id <session-id>", output.getvalue())
-        self.assertIn("may appear anywhere", output.getvalue())
-        self.assertNotIn("must appear before -c", output.getvalue())
+        self.assertIn("Continue the conversation in this session", output.getvalue())
+        self.assertIn("-l, --load <path>", output.getvalue())
+        self.assertIn("may be repeated; before -e or -c", output.getvalue())
+        self.assertNotIn("may appear anywhere", output.getvalue())
         self.assertIn("SESSION_ID=<session-id>", output.getvalue())
         self.assertNotIn("-new", output.getvalue())
 

@@ -1041,14 +1041,15 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
 
 
 def _print_cli_help(file=None) -> None:
-    print("""Usage: f [-h] [-i] [-id <session-id>] [-e <Forth tokens...> | -c <prompt tokens...> | <file.f>]
+    print("""Usage: f [-h] [-i] [-id <session-id>] [-l, --load <path>]... [-e <Forth tokens...> | -c <prompt tokens...>]
 
 Run peforth Forth source or start the interactive REPL.
 
 Options:
   -h, --help         Show this help message and exit
   -i, --interactive  Enter the REPL after executing source or completing chat
-  -id <session-id>   Select this existing session for AI requests; may appear anywhere
+  -id <session-id>   Continue the conversation in this session
+  -l, --load <path>  Include a Forth source file (may be repeated; before -e or -c)
   -e <tokens...>     Execute all remaining command-line tokens as one TIB,
                      joined with one space between tokens
                      Example: f -e run-monitor
@@ -1057,8 +1058,8 @@ Options:
 
 Each -c run writes SESSION_ID=<session-id> to stderr after completion.
 
-With no source argument, the REPL starts. A .f file is executed as one source
-buffer. Put -i before -e or -c when you want to continue interactively; all
+With no source argument, the REPL starts. Loaded files run in order before -e
+or -c. Put -i before -e or -c when you want to continue interactively; all
 tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
 
 
@@ -1098,7 +1099,7 @@ def main(argv=None) -> int:
     interactive = False
     source = None
     chat_prompt = None
-    source_file = None
+    load_files = []
     index = 0
     while index < len(args):
         arg = args[index]
@@ -1109,11 +1110,15 @@ def main(argv=None) -> int:
             interactive = True
             index += 1
             continue
-        if arg in ("-e", "--execute"):
-            if source_file is not None:
-                print("Error: -e cannot be combined with a source file.", file=sys.stderr)
+        if arg in ("-l", "--load"):
+            if index + 1 >= len(args) or not args[index + 1] or args[index + 1].startswith("-"):
+                print(f"Error: {arg} requires a source file path.", file=sys.stderr)
                 _print_cli_help(sys.stderr)
                 return 2
+            load_files.append(args[index + 1])
+            index += 2
+            continue
+        if arg in ("-e", "--execute"):
             source = " ".join(args[index + 1:])
             if not source:
                 print("Error: -e requires Forth input.", file=sys.stderr)
@@ -1122,10 +1127,6 @@ def main(argv=None) -> int:
             index = len(args)
             break
         if arg in ("-c", "--chat"):
-            if source_file is not None:
-                print("Error: -c cannot be combined with a source file.", file=sys.stderr)
-                _print_cli_help(sys.stderr)
-                return 2
             chat_prompt = " ".join(args[index + 1:])
             if not chat_prompt:
                 print("Error: -c requires an AI prompt.", file=sys.stderr)
@@ -1137,32 +1138,36 @@ def main(argv=None) -> int:
             print(f"Unknown option: {arg}", file=sys.stderr)
             _print_cli_help(sys.stderr)
             return 2
-        if source_file is not None:
-            print(f"Unexpected argument: {arg}", file=sys.stderr)
-            _print_cli_help(sys.stderr)
-            return 2
-        source_file = arg
-        index += 1
+        print(f"Unexpected argument: {arg}", file=sys.stderr)
+        _print_cli_help(sys.stderr)
+        return 2
 
-    if source is None and source_file is not None:
-        if not os.path.isfile(source_file):
-            print(f"Forth source file not found: {source_file}", file=sys.stderr)
+    loaded_sources = []
+    for load_file in load_files:
+        if not os.path.isfile(load_file):
+            print(f"Forth source file not found: {load_file}", file=sys.stderr)
             return 2
         try:
-            with open(source_file, "r", encoding="utf-8") as source_handle:
-                source = source_handle.read()
+            with open(load_file, "r", encoding="utf-8") as source_handle:
+                loaded_sources.append(source_handle.read())
         except OSError as err:
-            print(f"Could not read {source_file}: {err}", file=sys.stderr)
+            print(f"Could not read {load_file}: {err}", file=sys.stderr)
             return 1
 
     launch_context = _make_launch_context(
         [sys.argv[0], *original_args],
-        one_shot=(source is not None or chat_prompt is not None),
+        one_shot=(bool(load_files) or source is not None or chat_prompt is not None),
         repl_mode="chat" if chat_prompt is not None else "forth",
     )
     vm = create_vm(launch_context=launch_context)
     if session_id is not None:
         vm.host["ai_active_session_id"] = session_id
+    try:
+        for loaded_source in loaded_sources:
+            vm.dictate(loaded_source)
+    except ForthError as err:
+        print(f"Error: {err}", file=sys.stderr)
+        return 1
     if chat_prompt is not None:
         vm.host["ai_transport_stream_once"] = False
         ai_bridge.set_repl_mode(vm, "chat", reason="cli_chat")
@@ -1179,7 +1184,10 @@ def main(argv=None) -> int:
             print(f"SESSION_ID={active_session_id}", file=sys.stderr)
         return 0
     if source is None:
-        repl(vm)
+        if interactive or not load_files:
+            if interactive:
+                ai_bridge.set_one_shot(vm, False, reason="enter_repl")
+            repl(vm)
         return 0
 
     try:

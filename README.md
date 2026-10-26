@@ -73,7 +73,13 @@ Do not disable TLS certificate verification.
 
 ## CLI help and monitoring
 
-Run `f -h` to see the command-line options. The `-e` option executes the remaining arguments as Forth input. For example, start the diagnostic monitor with:
+Run `f -h` to see the command-line options. The `-e` option executes the remaining arguments as Forth input. Use `-l` or `--load` to include Forth source files; repeat the option to load multiple files. Put all load options before `-e` or `-c`, since those options consume the remaining arguments:
+
+```bash
+f -l ./definitions.f --load ./program.f -e run-program
+```
+
+For example, start the diagnostic monitor with:
 
 ```bash
 f -e run-monitor
