@@ -822,11 +822,15 @@ end-code
 // ( prompt-string stream? -- [response-string] ) Run one AI turn; stream or return its text.
 /// Local Forth tool calls pause for the REPL's Trust/Yes/No/Cancel approval flow.
 
+code (ai-monotonic-time)
+    import time
+    vm.push(time.monotonic())
+end-code
 /// stream? true prints the reply; false pushes it as a string. This controls terminal output, not HTTP/SSE transport.
 
-: ai: s" " word true (ai) ; immediate
+: ai: s" " word (ai-monotonic-time) >t true (ai) (ai-monotonic-time) t> - 15 > if nokia2 then ; immediate
 // ( <prompt> -- ) Send the remaining input as a prompt to the current AI session.
-/// The response streams to the terminal. Proposed Forth programs pause for approval.
+/// The response streams to the terminal. If the turn takes over 15 seconds, Nokia 2 plays when it completes. Proposed Forth programs pause for approval.
 /// Trust approves later proposals for this Forth process; ai-confirm restores per-proposal approval.
 
 : AI: s" " word true (ai) nokia2 ; immediate
