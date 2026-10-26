@@ -55,13 +55,42 @@ def _latest_runtime_file_info(runtime_path: Path = RUNTIME_PATH) -> dict | None:
     }
 
 
-def _greeting_line(system_info: dict) -> str:
-    """Render the concise REPL banner using runtime file metadata."""
+def _greeting_fragments(system_info: dict) -> list[tuple[str, str]]:
+    """Build styled text fragments for the interactive REPL greeting."""
     latest = system_info.get("runtime_latest")
     modified = latest.get("modified") if isinstance(latest, dict) else None
+    fragments = [
+        ("class:greeting.title", "\np e f o r t h   v 2"),
+        ("", "\nForth REPL"),
+    ]
     if isinstance(modified, str) and modified:
-        return f"peforth v2 Forth REPL | Latest runtime file modified: {modified}"
-    return "peforth v2 Forth REPL"
+        fragments.extend([
+            ("", " · Runtime modified: "),
+            ("class:greeting.metadata", modified),
+        ])
+    fragments.extend([
+        ("", "\n\nEnter submits / Ctrl+J or Esc then Enter adds a line.\n"),
+        ("class:greeting.command", "chat"),
+        ("", "  AI chat / "),
+        ("class:greeting.command", "forth"),
+        ("", "  Forth mode / "),
+        ("class:greeting.command", "bye"),
+        ("", " or "),
+        ("class:greeting.key", "Ctrl-D"),
+        ("", "  Exit"),
+    ])
+    return fragments
+
+
+def _print_greeting(system_info: dict) -> None:
+    """Print the REPL greeting with restrained prompt_toolkit styling."""
+    style = Style.from_dict({
+        "greeting.title": "bold #5fd7ff",
+        "greeting.metadata": "#888888",
+        "greeting.command": "bold #87d787",
+        "greeting.key": "bold #87d787",
+    })
+    print_formatted_text(FormattedText(_greeting_fragments(system_info)), style=style, end="\n\n")
 
 
 def _reported_source_path() -> str:
@@ -88,6 +117,9 @@ merge_key_bindings = None
 Keys = None
 MultiColumnCompletionMenuControl = None
 CompleteStyle = None
+print_formatted_text = None
+Style = None
+FormattedText = None
 _PROMPT_TOOLKIT_LOADED = False
 
 
@@ -95,7 +127,8 @@ def _load_prompt_toolkit() -> bool:
     """Load interactive terminal support only when a prompt is needed."""
     global PromptSession, CompleteEvent, Completion, Condition, has_completions
     global ANSI_SEQUENCES, KeyBindings, merge_key_bindings, Keys
-    global MultiColumnCompletionMenuControl, CompleteStyle, _PROMPT_TOOLKIT_LOADED
+    global MultiColumnCompletionMenuControl, CompleteStyle, print_formatted_text, Style, FormattedText
+    global _PROMPT_TOOLKIT_LOADED
     if _PROMPT_TOOLKIT_LOADED:
         return True
     try:
@@ -107,6 +140,9 @@ def _load_prompt_toolkit() -> bool:
         from prompt_toolkit.keys import Keys as keys
         from prompt_toolkit.layout.menus import MultiColumnCompletionMenuControl as completion_menu
         from prompt_toolkit.shortcuts import CompleteStyle as complete_style
+        from prompt_toolkit import print_formatted_text as formatted_print
+        from prompt_toolkit.styles import Style as style_class
+        from prompt_toolkit.formatted_text import FormattedText as formatted_text
     except ImportError:
         return False
     PromptSession = prompt_session
@@ -120,6 +156,9 @@ def _load_prompt_toolkit() -> bool:
     Keys = keys
     MultiColumnCompletionMenuControl = completion_menu
     CompleteStyle = complete_style
+    print_formatted_text = formatted_print
+    Style = style_class
+    FormattedText = formatted_text
     _PROMPT_TOOLKIT_LOADED = True
     return True
 
@@ -161,7 +200,7 @@ class ForthWordCompleter(_CompleterBase):
                 yield completion_type(
                     name,
                     start_position=-len(prefix),
-                    display_meta="Arrows move | Space selects | Esc cancels",
+                    display_meta="↑ ↓ ← → move | Space selects | Esc cancels",
                 )
 
     async def get_completions_async(self, document, complete_event):
@@ -890,13 +929,15 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
         completer=ForthWordCompleter(vm),
         complete_while_typing=False,
         complete_style=CompleteStyle.MULTI_COLUMN,
+        style=Style.from_dict({
+            "completion-menu.completion.current": "bold fg:#006400 bg:#ffffff noreverse",
+            "completion-menu.multi-column-meta": "fg:default bg:default noreverse",
+        }),
         prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
     )
 
     if show_greeting:
-        print(_greeting_line(vm.host.get("system_info") or {}))
-        print("Enter submits; Ctrl+J or Esc then Enter adds a line. Shift+Enter depends on terminal support.")
-        print("Type 'chat' for direct AI chat, 'forth' for Forth, or 'bye'/Ctrl-D to exit.\n")
+        _print_greeting(vm.host.get("system_info") or {})
 
     vm.host.setdefault("repl_mode", "forth")
     state = {"in_code_block": False, "code_buffer": [], "ai_task": initial_task,

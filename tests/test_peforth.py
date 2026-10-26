@@ -1006,13 +1006,17 @@ class ReplBootstrapTests(unittest.TestCase):
             info = _f_mod._latest_runtime_file_info(pathlib.Path(directory))
         self.assertIsNone(info)
 
-    def test_repl_greeting_includes_latest_runtime_file_info_time(self):
+    def test_repl_greeting_fragments_include_runtime_and_command_hints(self):
         info = {"runtime_latest": {"file": "f/auxiliary.f", "modified": "2026-10-12 23:37:29"}}
+        fragments = _f_mod._greeting_fragments(info)
         self.assertEqual(
-            _f_mod._greeting_line(info),
-            "peforth v2 Forth REPL | Latest runtime file modified: 2026-10-12 23:37:29",
+            "".join(text for _style, text in fragments),
+            "\np e f o r t h   v 2\nForth REPL · Runtime modified: 2026-10-12 23:37:29"
+            "\n\nEnter submits / Ctrl+J or Esc then Enter adds a line.\n"
+            "chat  AI chat / forth  Forth mode / bye or Ctrl-D  Exit",
         )
-        self.assertEqual(_f_mod._greeting_line({}), "peforth v2 Forth REPL")
+        self.assertEqual(fragments[0][0], "class:greeting.title")
+        self.assertEqual(_f_mod._greeting_fragments({})[0][1], "\np e f o r t h   v 2")
 
     def test_reported_source_path_expands_windows_userprofile_placeholder(self):
         configured = r"%USERPROFILE%\OneDrive\Documents\GitHub\peforth"
