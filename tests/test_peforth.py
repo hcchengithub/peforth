@@ -490,20 +490,20 @@ class ReplCompletionTests(unittest.TestCase):
 
         self.assertEqual(actual, "w00 ")
 
-    def test_completion_menu_shows_key_hint_below_candidates(self):
+    def test_completion_items_show_arrow_navigation_hint(self):
         vm = SimpleNamespace(
             words={"dup": object(), "duplicate": object()},
             host={"repl_mode": "forth"},
         )
-        transcript = io.StringIO()
-        output = Vt100_Output(
-            transcript, lambda: Size(rows=12, columns=80),
-            term="xterm-256color", enable_cpr=False,
+        completions = list(_f_mod.ForthWordCompleter(vm).get_completions(
+            Document(text="du"), CompleteEvent(completion_requested=True)))
+
+        self.assertEqual(len(completions), 2)
+        expected_hint = "\u2191 \u2193 \u2190 \u2192 move | Space selects | Esc cancels"
+        self.assertEqual(
+            {completion.display_meta_text for completion in completions},
+            {expected_hint},
         )
-
-        self.run_prompt(["du", chr(9), chr(27), "x", chr(13)], vm, output=output)
-
-        self.assertIn("Arrows move | Space selects | Esc cancels", transcript.getvalue())
 
     def test_space_confirms_a_single_candidate(self):
         vm = SimpleNamespace(words={"dup": object()}, host={"repl_mode": "forth"})

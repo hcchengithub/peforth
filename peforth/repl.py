@@ -817,10 +817,19 @@ def _make_repl_key_bindings(vm):
     ])
 
 
-def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1", *, input=None, output=None) -> str:
-    """Return a permitted single-character choice, displaying it inline."""
+def read_numbered_choice(
+    prompt: str,
+    choices=("1", "2", "3", "4"),
+    default="1",
+    *,
+    input=None,
+    output=None,
+    labels=None,
+    styles=None,
+) -> str:
+    """Read a choice: arrows move, Enter/Space confirm, and digits act immediately."""
     _load_prompt_toolkit()
-    if PromptSession is None or KeyBindings is None:
+    if PromptSession is None or KeyBindings is None or Keys is None:
         raise RuntimeError("Single-key choices require prompt_toolkit.")
     choices = tuple(choices)
     if (not choices or any(not isinstance(choice, str) or len(choice) != 1 for choice in choices)
@@ -828,13 +837,44 @@ def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1",
         raise ValueError("choices must be distinct single-character strings.")
     if default not in choices:
         raise ValueError("default must be one of the permitted choices.")
+    if labels is None:
+        labels = {}
+    if styles is None:
+        styles = {}
+    if not isinstance(labels, dict) or any(
+            choice in labels and not isinstance(labels[choice], str) for choice in choices):
+        raise ValueError("labels must map choices to strings.")
+    if not isinstance(styles, dict) or any(
+            choice in styles and not isinstance(styles[choice], str) for choice in choices):
+        raise ValueError("styles must map choices to strings.")
+    choice_labels = {choice: labels.get(choice, choice) for choice in choices}
+    selected_index = [choices.index(default)]
 
     bindings = KeyBindings()
 
+    def _confirm(event):
+        event.current_buffer.text = choices[selected_index[0]]
+        event.current_buffer.validate_and_handle()
+
     @bindings.add("c-m", eager=True)
     def _enter(event):
-        event.current_buffer.text = default
-        event.current_buffer.validate_and_handle()
+        _confirm(event)
+
+    @bindings.add(" ", eager=True)
+    def _space(event):
+        _confirm(event)
+
+    def _move_selection(event, step):
+        selected_index[0] = (selected_index[0] + step) % len(choices)
+        event.app.invalidate()
+
+    @bindings.add(Keys.Up, eager=True)
+    def _previous_choice(event):
+        _move_selection(event, -1)
+
+    @bindings.add(Keys.Down, eager=True)
+    def _next_choice(event):
+        _move_selection(event, 1)
 
     for choice in choices:
         def _select(event, selected=choice):
@@ -842,18 +882,26 @@ def read_numbered_choice(prompt: str, choices=("1", "2", "3", "4"), default="1",
             event.current_buffer.validate_and_handle()
         bindings.add(choice, eager=True)(_select)
 
+    def choice_prompt():
+        from prompt_toolkit.formatted_text import ANSI
+
+        selected = choices[selected_index[0]]
+        selected_style = "\x1b[1;48;2;255;255;255;38;2;0;100;0m"
+        reset = "\x1b[0m"
+        rows = []
+        for choice in choices:
+            style = selected_style if choice == selected else styles.get(choice, "")
+            suffix = reset if style else ""
+            rows.append(f"{style}{choice}. {choice_labels[choice]}{suffix}")
+        rows.extend(("", prompt))
+        return ANSI("\n".join(rows))
+
     session_options = {"multiline": False, "key_bindings": bindings}
     if input is not None:
         session_options["input"] = input
     if output is not None:
         session_options["output"] = output
-    formatted_prompt = prompt
-    if "\x1b[" in prompt:
-        from prompt_toolkit.formatted_text import ANSI
-        formatted_prompt = ANSI(prompt)
-    return PromptSession(**session_options).prompt(formatted_prompt)
-
-
+    return PromptSession(**session_options).prompt(choice_prompt)
 _AI_APPROVAL_DECISIONS = {"allow_once", "trust_task", "deny", "cancel"}
 _TERMINAL_TASK_STATES = {"done", "aborted", "failed"}
 

@@ -76,24 +76,39 @@ code (ai-approve-input)
 
     purpose = terminal_safe(purpose)
     source = terminal_safe(source)
-    cyan = "\x1b[96m"
+    green = "\x1b[1;38;2;135;215;135m"
+    deep_green = "\x1b[1;38;2;0;100;0m"
+    red = "\x1b[38;2;205;70;70m"
+    dim = "\x1b[2;37m"
     reset = "\x1b[0m"
     print(
-        f"\n{cyan}AI requests permission to run this Forth action:\n"
-        f"Purpose: {purpose}\n---\n{source}\n---\n"
-        "1. Allow Once (or press Enter)\n"
-        "2. Trust this AI task only\n"
-        "3. Deny this proposal\n"
-        f"4. Cancel this AI task\n{reset}",
+        f"\n{green}AI permission requested{reset}\n"
+        f"{green}Purpose: {purpose}{reset}\n\n"
+        f"{dim}Forth action:{reset}\n"
+        f"{deep_green}{source}{reset}\n\n",
         end="",
         flush=True,
     )
-    print(f"{cyan}Choose 1-4: {reset}", end="", flush=True)
     yield from vm.call(vm.tick("nokia"))
-    choice = read_numbered_choice("", default="1")
+    choice = read_numbered_choice(
+        "Choose 1-4: ",
+        default="1",
+        labels={
+            "1": "Allow Once",
+            "2": "Trust this AI task only",
+            "3": "Deny this proposal",
+            "4": "Cancel this AI task",
+        },
+        styles={
+            "1": green,
+            "2": green,
+            "3": red,
+            "4": dim,
+        },
+    )
     vm.push(choice)
 end-code
-// ( proposal -- choice ) Display a proposal, play Nokia Tune, and read one key for the live REPL approval flow.
+// ( proposal -- choice ) Display a proposal, play Nokia Tune, and read an approval choice for the live REPL approval flow.
 
 : ai-approve ( proposal -- decision )
     (ai-approve-input)

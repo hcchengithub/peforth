@@ -48,18 +48,49 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertEqual(result, "2")
         self.assertIn("Choose 1-4: 2" + chr(13) + chr(10), visible)
 
-    def test_enter_returns_and_echoes_default_choice_inline(self):
+    def test_down_arrow_moves_highlight_and_enter_confirms_current_choice(self):
         display = io.StringIO()
         output = Vt100_Output(
             stdout=display, get_size=lambda: Size(rows=24, columns=80),
             term="xterm", enable_cpr=False)
+        labels = {
+            "1": "Allow Once",
+            "2": "Trust this AI task only",
+            "3": "Deny this proposal",
+            "4": "Cancel this AI task",
+        }
+        with create_pipe_input() as input_stream:
+            input_stream.send_text("\x1b[B" + chr(13))
+            result = repl.read_numbered_choice(
+                "Choose 1-4: ", input=input_stream, output=output, labels=labels)
+        rendered = display.getvalue()
+        visible = _strip_vt100_sequences(rendered)
+        self.assertEqual(result, "2")
+        self.assertIn("2. Trust this AI task only", visible)
+        self.assertIn(
+            "\x1b[0;38;5;22;48;5;231;1m2. Trust this AI task only",
+            rendered,
+        )
+        self.assertNotIn("Selected:", visible)
+        self.assertIn("Choose 1-4: 2" + chr(13) + chr(10), visible)
+
+    def test_space_confirms_the_currently_highlighted_choice(self):
+        with create_pipe_input() as input_stream:
+            input_stream.send_text("\x1b[B ")
+            result = repl.read_numbered_choice(
+                "Choose 1-4: ",
+                labels={"1": "Allow Once", "2": "Trust this AI task only"},
+                output=DummyOutput(),
+                input=input_stream,
+            )
+        self.assertEqual(result, "2")
+
+    def test_enter_confirms_initially_highlighted_first_choice(self):
         with create_pipe_input() as input_stream:
             input_stream.send_text(chr(13))
             result = repl.read_numbered_choice(
-                "Choose 1-4: ", default="1", input=input_stream, output=output)
-        visible = _strip_vt100_sequences(display.getvalue())
+                "Choose 1-4: ", input=input_stream, output=DummyOutput())
         self.assertEqual(result, "1")
-        self.assertIn("Choose 1-4: 1" + chr(13) + chr(10), visible)
 
     def test_ai_approve_maps_choices_without_executing_proposal(self):
         vm = _create_vm_with_silent_nokia()
@@ -88,12 +119,14 @@ class NumberedChoiceTests(unittest.TestCase):
         vm.push({"purpose": "one-key test", "source": "not executed"})
         reader = repl.read_numbered_choice
         prompts = []
+        reader_options = []
         display = io.StringIO()
         with create_pipe_input() as input_stream:
             input_stream.send_text("3")
 
             def read_choice(prompt, **kwargs):
                 prompts.append(prompt)
+                reader_options.append(kwargs)
                 return reader(prompt, input=input_stream, output=DummyOutput(), **kwargs)
 
             with patch.object(repl, "read_numbered_choice", side_effect=read_choice), \
@@ -102,11 +135,23 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertEqual(task.status, "done")
         self.assertEqual(vm.pop(), "deny")
         self.assertNotIn("ai_trusted", vm.host)
-        self.assertTrue(display.getvalue().startswith("\n\x1b[96m"))
-        self.assertIn("2. Trust this AI task only", display.getvalue())
+        visible = _strip_vt100_sequences(display.getvalue())
+        self.assertTrue(visible.startswith("\nAI permission requested\nPurpose: one-key test"))
+        self.assertLess(visible.index("Purpose:"), visible.index("Forth action:"))
+        self.assertNotIn("---", visible)
+        self.assertNotIn("Choose 1-4:", visible)
         self.assertIn("\x1b[0m", display.getvalue())
-        self.assertIn("Choose 1-4:", display.getvalue())
-        self.assertEqual(prompts, [""])
+        self.assertEqual(prompts, ["Choose 1-4: "])
+        self.assertEqual(
+            reader_options[0]["labels"],
+            {
+                "1": "Allow Once",
+                "2": "Trust this AI task only",
+                "3": "Deny this proposal",
+                "4": "Cancel this AI task",
+            },
+        )
+        self.assertEqual(set(reader_options[0]["styles"]), {"1", "2", "3", "4"})
 
 
 class ApprovalScopeTests(unittest.TestCase):
