@@ -2638,6 +2638,28 @@ class ReplBootstrapTests(unittest.TestCase):
         self.vm.dictate(': greet s" Welcome!" ; greet')
         self.assertEqual(self.vm.pop(), 'Welcome!')
 
+    def test_dot_string_words_print_in_interpret_and_compiled_modes(self):
+        for source, expected in [
+                ('." double quote output"', "double quote output"),
+                (".' single quote output'", "single quote output"),
+                (".` backtick output`", "backtick output")]:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.vm.dictate(source)
+            self.assertEqual(output.getvalue(), expected)
+
+        self.vm.dictate(': say-double ." compiled double" ;')
+        self.vm.dictate(": say-single .' compiled single' ;")
+        self.vm.dictate(': say-backtick .` compiled backtick` ;')
+        for source, expected in [
+                ("say-double", "compiled double"),
+                ("say-single", "compiled single"),
+                ("say-backtick", "compiled backtick")]:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.vm.dictate(source)
+            self.assertEqual(output.getvalue(), expected)
+
     def test_char_token(self):
         # Single char
         self.vm.dictate('char "')

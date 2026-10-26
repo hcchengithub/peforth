@@ -536,6 +536,33 @@ char / string-quote s/
 /// Friends: s" s' s` s| s^ s/
 /// Use alternative delimiters to avoid escaping internal quotes.
 
+code (print-string)
+    if vm.compiling:
+        vm.comma(vm.tick("."))
+    else:
+        yield from vm.call(vm.tick("."))
+end-code
+// ( string -- ) Print a string now or compile its output into the current definition.
+/// While compiling, append the "." word after the parsed string literal.
+
+: print-string-quote ( delim <name> -- )
+    create , immediate
+does> @ (s) (print-string) ;
+// ( delim <name> -- ) Define an immediate word that parses and prints a delimited string.
+/// In interpretation mode, print immediately without a newline. In a colon definition, compile the string and print it when the definition runs.
+
+char " print-string-quote ."
+// ( <string>" -- ) Parse and print text up to the next double quote.
+/// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+
+char ' print-string-quote .'
+// ( <string>' -- ) Parse and print text up to the next single quote.
+/// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+
+char ` print-string-quote .`
+// ( <string>` -- ) Parse and print text up to the next backtick.
+/// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+
 code BL
     vm.push(" ")
 end-code
@@ -994,7 +1021,6 @@ end-code
 // ( -- ) Exit the Forth process.
 /// Terminate execution immediately via SystemExit(0).
 
-\ (include) ( pathname -- ) reads and evaluates a Forth source file.
 code (include)
     from pathlib import Path
     pathname = vm.pop()
@@ -1015,7 +1041,11 @@ code (include)
             f'Forth source file {pathname!r} not found; searched: {searched}')
     yield from vm.evaluate(target.read_text(encoding='utf-8-sig'))
 end-code
+// ( pathname -- ) Read and evaluate the Forth source file at pathname.
+/// Accepts a full path string, including spaces. Relative paths search the current working directory first, then runtime_path/f; ~ is expanded.
+/// Reads UTF-8 with an optional BOM and evaluates the source in the current VM. Raises FileNotFoundError if no candidate exists.
 
-\ include parses the next pathname from the TIB.
 : include BL word (include) ;
 immediate
+// ( <pathname> -- ) Parse and include the next whitespace-delimited Forth path.
+/// This immediate word delegates path lookup and evaluation to (include). Use (include) for paths containing spaces.

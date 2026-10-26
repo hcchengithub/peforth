@@ -2,6 +2,10 @@
 
 **peforth is an AI-first Forth environment hosted by Python.** It combines a small extensible Forth kernel, direct access to Python, and an optional AI-assisted terminal REPL in the single `f` command.
 
+> **The best way to get to know peforth is to talk directly to this repository.** The source code and its Git history are our most reliable documentation. Rather than trying to read every document first, open this GitHub repository in Google Chrome and use the Gemini sidebar to talk with it: ask questions or request sample code.
+>
+> **Be cautious if the answer comes instantly.** Gemini may be hallucinating or answering from general knowledge instead of the repository. A gentle follow-up such as "Could you take a closer look at the relevant source before answering?" may help.
+
 **Version 2 is now the mainline implementation on `master`.** The migration from v1 has been completed; the previous migration branch is no longer required for installation.
 
 ## Highlights

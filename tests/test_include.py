@@ -18,6 +18,14 @@ class IncludeTests(unittest.TestCase):
         vm.host['system_info']['runtime_path'] = str(runtime_path)
         return vm
 
+    def test_include_words_have_help_and_comments(self):
+        with tempfile.TemporaryDirectory() as runtime:
+            vm = self.make_vm(runtime)
+            for name in ("include", "(include)"):
+                word = vm.tick(name)
+                self.assertTrue(word.help, name)
+                self.assertTrue(word.comment, name)
+
     def test_include_prefers_current_working_directory(self):
         with tempfile.TemporaryDirectory() as cwd, tempfile.TemporaryDirectory() as runtime:
             cwd_path = Path(cwd)
