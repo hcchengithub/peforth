@@ -55,7 +55,7 @@ class NumberedChoiceTests(unittest.TestCase):
             term="xterm", enable_cpr=False)
         labels = {
             "1": "Allow Once",
-            "2": "Trust this AI task only",
+            "2": "Trust this AI task",
             "3": "Deny this proposal",
             "4": "Cancel this AI task",
         }
@@ -66,9 +66,9 @@ class NumberedChoiceTests(unittest.TestCase):
         rendered = display.getvalue()
         visible = _strip_vt100_sequences(rendered)
         self.assertEqual(result, "2")
-        self.assertIn("2. Trust this AI task only", visible)
+        self.assertIn("2. Trust this AI task", visible)
         self.assertIn(
-            "\x1b[0;38;5;22;48;5;231;1m2. Trust this AI task only",
+            "\x1b[0;38;5;22;48;5;231;1m2. Trust this AI task",
             rendered,
         )
         self.assertNotIn("Selected:", visible)
@@ -79,7 +79,7 @@ class NumberedChoiceTests(unittest.TestCase):
             input_stream.send_text("\x1b[B ")
             result = repl.read_numbered_choice(
                 "Choose 1-4: ",
-                labels={"1": "Allow Once", "2": "Trust this AI task only"},
+                labels={"1": "Allow Once", "2": "Trust this AI task"},
                 output=DummyOutput(),
                 input=input_stream,
             )
@@ -146,7 +146,7 @@ class NumberedChoiceTests(unittest.TestCase):
             reader_options[0]["labels"],
             {
                 "1": "Allow Once",
-                "2": "Trust this AI task only",
+                "2": "Trust this AI task",
                 "3": "Deny this proposal",
                 "4": "Cancel this AI task",
             },

@@ -1049,3 +1049,186 @@ end-code
 immediate
 // ( <pathname> -- ) Parse and include the next whitespace-delimited Forth path.
 /// This immediate word delegates path lookup and evaluation to (include). Use (include) for paths containing spaces.
+
+\ Additional base words ported from peforth v1.33.
+code [ vm.host.setdefault('_base2_brackets', []).append(vm._definition); vm._definition = None end-code immediate // ( -- ) Enter interpretation state while compiling.
+code ]
+    vm._definition = vm.host['_base2_brackets'].pop()
+    end-code immediate // ( -- ) Resume compilation after [.
+    /// Restores the definition saved by [.
+code compiling
+    vm.push(vm.compiling)
+    end-code // ( -- flag ) Report whether compilation is active.
+    /// The result reflects whether the VM currently has an open definition.
+code literal
+    value=vm.pop()
+    if vm.compiling:
+        vm.literal(value)
+    elif vm.host.get("_base2_brackets"):
+        definition=vm._definition
+        vm._definition=vm.host["_base2_brackets"][-1]
+        try:
+            vm.literal(value)
+        finally:
+            vm._definition=definition
+    else:
+        raise RuntimeError("literal requires an active definition")
+    end-code immediate // ( x -- ) Compile x into the active definition.
+    /// Also supports peforth v1's [ value literal ] form.
+code compile
+    name = vm.input.read()
+    if name is None: raise RuntimeError("Expected a word name after compile")
+    word = vm.tick(name)
+    if word is None: raise RuntimeError(f"Unknown word after compile: {name}")
+    vm.comma(word)
+    end-code immediate // ( <name> -- ) Compile the named word into the current definition.
+    /// Reads and compiles the next word name.
+code compile-only
+    word = vm.last()
+    if word is not None: word.compileonly = True
+    end-code // ( -- ) Set compileonly on the last defined word.
+    /// Stores v1's property flag; v2 does not enforce it.
+code interpret-only
+    word = vm.last()
+    if word is not None: word.interpretonly = True
+    end-code // ( -- ) Set interpretonly on the last defined word.
+    /// Stores v1's property flag; v2 does not enforce it.
+code -rot
+    if len(vm.stack) < 3: raise RuntimeError("-rot needs three stack items")
+    a, b, c = vm.stack[-3:]
+    vm.stack[-3:] = [c, a, b]
+    end-code // ( a b c -- c a b ) Rotate the top three items backward.
+    /// Equivalent to rot rot.
+code 2drop
+    if len(vm.stack) < 2: raise RuntimeError("2drop needs two stack items")
+    del vm.stack[-2:]
+    end-code // ( a b -- ) Drop the top two items.
+    /// Requires two stack cells.
+code 2dup
+    if len(vm.stack) < 2: raise RuntimeError("2dup needs two stack items")
+    a, b = vm.stack[-2:]
+    vm.push(a); vm.push(b)
+    end-code // ( a b -- a b a b ) Duplicate the top pair.
+    /// Preserves the original pair.
+code pick
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n >= len(vm.stack): raise IndexError("pick index out of range")
+    vm.push(vm.stack[-n-1])
+    end-code // ( ... xj ... j -- ... xj ... xj ) Copy the j-deep item.
+    /// Index zero refers to TOS.
+code roll
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n >= len(vm.stack): raise IndexError("roll index out of range")
+    vm.push(vm.stack.pop(-n-1))
+    end-code // ( ... xj ... j -- ... xj ) Move the j-deep item to TOS.
+    /// Index zero leaves TOS in place.
+code slice
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool): raise TypeError("slice expects an integer")
+    start = max(0, len(vm.stack) + n) if n < 0 else 0
+    end = len(vm.stack) if n < 0 else min(n, len(vm.stack))
+    result = vm.stack[start:end]
+    del vm.stack[start:end]
+    vm.push(result)
+    end-code // ( ... cells -n -- ... [cells] ) Move the last -n cells into a list.
+    /// The v1 use selects a suffix of the data stack.
+code 2+
+    vm.push(vm.pop() + 2)
+    end-code // ( n -- n+2 ) Add two.
+code 2-
+    vm.push(vm.pop() - 2)
+    end-code // ( n -- n-2 ) Subtract two.
+code abs
+    vm.push(abs(vm.pop()))
+    end-code // ( n -- |n| ) Push the absolute value.
+code max
+    b=vm.pop(); a=vm.pop(); vm.push(max(a,b))
+    end-code // ( a b -- max ) Keep the larger value.
+code min
+    b=vm.pop(); a=vm.pop(); vm.push(min(a,b))
+    end-code // ( a b -- min ) Keep the smaller value.
+code negate
+    vm.push(-vm.pop())
+    end-code // ( n -- -n ) Negate TOS.
+code within
+    high=vm.pop(); low=vm.pop(); value=vm.pop()
+    vm.push(low <= value < high)
+    end-code // ( n low high -- flag ) Test low <= n < high.
+    /// The upper bound is exclusive.
+code !=
+    b=vm.pop(); a=vm.pop(); vm.push(a != b)
+    end-code // ( a b -- flag ) Test inequality.
+code ==
+    b=vm.pop(); a=vm.pop(); vm.push(bool(a)==bool(b))
+    end-code // ( a b -- flag ) Compare truth values.
+    /// This follows v1: values are converted to Boolean before comparison.
+code and
+    b=vm.pop(); a=vm.pop(); vm.push(bool(a and b))
+    end-code // ( a b -- flag ) Logical AND.
+    /// Returns a Boolean.
+code or
+    b=vm.pop(); a=vm.pop(); vm.push(bool(a or b))
+    end-code // ( a b -- flag ) Logical OR.
+    /// Returns a Boolean.
+code AND
+    b=vm.pop(); a=vm.pop(); vm.push(a & b)
+    end-code // ( a b -- a AND b ) Bitwise AND.
+code OR
+    b=vm.pop(); a=vm.pop(); vm.push(a | b)
+    end-code // ( a b -- a OR b ) Bitwise OR.
+code NOT
+    vm.push(~vm.pop())
+    end-code // ( a -- NOT a ) Bitwise complement.
+code XOR
+    b=vm.pop(); a=vm.pop(); vm.push(a ^ b)
+    end-code // ( a b -- a XOR b ) Bitwise exclusive OR.
+code <<
+    b=vm.pop(); a=vm.pop(); vm.push(a << b)
+    end-code // ( value n -- value<<n ) Shift left n bits.
+code >>
+    b=vm.pop(); a=vm.pop(); vm.push(a >> b)
+    end-code // ( value n -- value>>n ) Shift right n bits.
+code ?stop
+    if vm.pop(): vm.abort()
+    end-code // ( flag -- ) Abort the task when flag is true.
+    /// A false flag leaves the task running.
+code stop
+    vm.abort()
+    end-code // ( -- ) Abort the current Forth task.
+    /// Uses the VM's abort signal.
+code nop
+    end-code // ( -- ) Do nothing.
+: case // ( -- 0 ) Begin a case ... of ... endof ... endcase structure.
+    0 ; immediate compile-only
+    /// The default branch leaves the selector for endcase to drop.
+: of // ( -- ) Compare the selector with this case value.
+    ['] over , ['] = , [compile] if ['] drop , ; immediate compile-only
+    /// Use endof to finish the branch.
+: endof // ( -- ) Finish a case branch and skip later branches.
+    [compile] else ; immediate compile-only
+    /// A matched branch skips the remaining cases.
+: endcase // ( -- ) Resolve case branches and drop the selector.
+    ['] drop , begin ?dup while [compile] then repeat ; immediate compile-only
+    /// Default-branch code must leave the selector on TOS.
+code {} vm.push({}) end-code // ( -- dict ) Push an empty dictionary.
+code bool vm.push(bool(vm.pop())) end-code // ( x -- flag ) Convert x to Boolean.
+code list vm.push(list(vm.pop())) end-code // ( x -- list ) Convert x to list.
+code dict vm.push(dict(vm.pop())) end-code // ( x -- dict ) Convert x to dictionary.
+code set vm.push(set(vm.pop())) end-code // ( x -- set ) Convert x to set.
+code tuple vm.push(tuple(vm.pop())) end-code // ( x -- tuple ) Convert x to tuple.
+code str vm.push(str(vm.pop())) end-code // ( x -- string ) Convert x to string.
+code type vm.push(type(vm.pop())) end-code // ( x -- type ) Push the Python type of x.
+code forget
+    name=vm.input.read()
+    if name is None: raise RuntimeError("Expected a name after forget")
+    if name not in vm.words: raise RuntimeError(f"Unknown word: {name}")
+    del vm.words[name]
+    end-code immediate
+code count
+    vm.push(len(vm.stack[-1]))
+    end-code // ( x -- x n ) Leave x and push its length.
+code trim
+    value=vm.pop()
+    if not isinstance(value,str): raise TypeError("trim expects a string")
+    vm.push(value.strip())
+    end-code // ( string -- string' ) Strip leading and trailing whitespace.

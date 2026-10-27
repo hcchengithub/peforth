@@ -96,7 +96,7 @@ code (ai-approve-input)
         default="1",
         labels={
             "1": "Allow Once",
-            "2": "Trust this AI task only",
+            "2": "Trust this AI task",
             "3": "Deny this proposal",
             "4": "Cancel this AI task",
         },

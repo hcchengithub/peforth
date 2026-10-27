@@ -1,3 +1,91 @@
+\ Additional auxiliary words ported from peforth v1.33.
+code dir
+    obj=vm.pop()
+    vm.push([name for name in dir(obj) if not name.startswith("_") and not name.endswith("_")])
+    end-code // ( object -- names ) List public member names.
+    /// Filters names beginning or ending with an underscore.
+code _dir_
+    vm.push(dir(vm.pop()))
+    end-code // ( object -- names ) Return Python's complete dir() result.
+    /// Includes private and special names.
+code dict>keys
+    vm.push(list(vm.pop().keys()))
+    end-code // ( dict -- keys ) Return dictionary keys as a list.
+    /// The result is a list, not a dict_keys view.
+code keys
+    obj=vm.pop()
+    if isinstance(obj,dict): vm.push(list(obj.keys()))
+    else: vm.push([name for name in dir(obj) if not name.startswith("_") and not name.endswith("_")])
+    end-code // ( object -- keys ) Return dict keys or public members as a list.
+    /// Both input cases return a list.
+code <text>
+    import re
+    chunks=[]
+    depth=1
+    boundary=re.compile(r"</text>|<text>")
+    while depth:
+        remaining=vm.input.remaining
+        match=boundary.search(remaining)
+        if match is None: raise RuntimeError("Unclosed <text>")
+        chunk=vm.input.read(until=boundary)
+        tag=remaining[len(chunk):match.end()]
+        chunks.append(chunk)
+        if tag=="<text>":
+            depth+=1
+            chunks.append(tag)
+        else:
+            depth-=1
+            if depth: chunks.append(tag)
+    text="".join(chunks)
+    if text.startswith(" "): text=text[1:]
+    if vm.compiling: vm.literal(text)
+    else: vm.push(text)
+    end-code immediate // ( <text> -- string ) Read a possibly nested text block.
+    /// Inner <text> tags are retained.
+code </text>
+    end-code immediate // ( -- ) Closing delimiter consumed by <text>.
+code <comment>
+    import re
+    depth=1
+    boundary=re.compile(r"<comment>|</comment>")
+    while depth:
+        remaining=vm.input.remaining
+        match=boundary.search(remaining)
+        if match is None: raise RuntimeError("Unclosed <comment>")
+        vm.input.read(until=boundary)
+        tag=remaining[match.start():match.end()]
+        if tag=="<comment>": depth+=1
+        else: depth-=1
+    end-code immediate
+code </comment>
+    end-code immediate // ( -- ) Closing delimiter consumed by <comment>.
+code -->
+    value=vm.pop()
+    source=vm.input.tib
+    line_start=source.rfind("\n",0,vm.input.itib)+1
+    command=source[line_start:vm.input.itib].strip()
+    print(f"{command} {value} ({type(value)})")
+    end-code// ( result -- ) Print command line, and result.
+    /// Includes the Python type.
+code ==>
+    value=vm.pop()
+    source=vm.input.tib
+    line_start=source.rfind("\n",0,vm.input.itib)+1
+    command=source[line_start:vm.input.itib].strip()
+    print(f"\n{command} {value} ({type(value)})")
+    end-code // ( result -- ) Print a blank line, command line, and result.
+    /// Includes the Python type.
+code (space)
+    vm.push(" ")
+    end-code // ( -- string ) Push one space.
+code (')
+    name=vm.pop()
+    word=vm.tick(name) if isinstance(name,str) else None
+    if word is None: raise RuntimeError(f"Unknown word: {name}")
+    vm.push(word)
+    end-code // ( name -- word ) Look up the word named by the string on TOS.
+    /// Unlike tick, it takes the name from the stack.
+
 \ Auxiliary words are optional conveniences outside the core Forth dictionary.
 
 code sleep

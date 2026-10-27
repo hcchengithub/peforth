@@ -2563,13 +2563,13 @@ class ReplBootstrapTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.vm.dictate('words drop')
-        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop')
+        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop 2drop')
 
         # Case-insensitive
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.vm.dictate('words DROP')
-        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop')
+        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop 2drop')
 
         # Multiple patterns (AND logic)
         buf = io.StringIO()
