@@ -2,16 +2,16 @@
 
 **peforth is an AI-first Forth environment hosted by Python.** It combines a small extensible Forth kernel, direct access to Python, and an optional AI-assisted terminal REPL in the single `f` command.
 
-> **The best way to get to know peforth is to talk directly to this repository.** The source code and its Git history are our most reliable documentation. Rather than trying to read every document first, open this GitHub repository in Google Chrome and use the Gemini sidebar to talk with it: ask questions or request sample code.
+> **The best way to explore peforth is to talk directly to this repository.** Use GitHub Copilot or the Gemini sidebar to explore its documentation, design plans, source code, and Git history.
 >
-> **Be cautious if the answer comes instantly.** Gemini may be hallucinating or answering from general knowledge instead of the repository. A gentle follow-up such as "Could you take a closer look at the relevant source before answering?" may help.
+> **Be cautious of instant answers.** Ask the AI to examine the relevant repository materials before answering, rather than relying on general knowledge.
 
 **Version 2 is now the mainline implementation on `master`.** The migration from v1 has been completed; the previous migration branch is no longer required for installation.
 
 ## Highlights
 
 - **Forth + Python:** Define Forth words and embed host-side Python through `code ... end-code`. Use Python libraries without a separate foreign-function runtime.
-- **Project K kernel:** A Python-hosted Forth VM supporting cooperative Task pause/resume, input streams, dictionary introspection, and extensible words.
+- **[Project K](https://github.com/hcchengithub/project-k) kernel:** Built on the independent Project K Forth kernel, providing cooperative Task pause/resume, input streams, dictionary introspection, and extensible words.
 - **Interactive REPL:** Enter Forth directly, define your own words, inspect the dictionary, and switch between `forth` and `chat` modes.
 - **Optional AI assistant:** The OpenAI Agents API integration provides conversational help and can propose Forth actions in the active VM, subject to local approval.
 - **Transparent sources:** Core Forth vocabulary is in `peforth/f/`; host runtime and integrations live in `peforth/*.py`.
