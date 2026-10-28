@@ -859,24 +859,31 @@ code (ai)
         )
     if not stream_response:
         vm.push("".join(answer))
-end-code
-// ( prompt-string stream? -- [response-string] ) Run one AI turn; stream or return its text.
-/// Local Forth tool calls pause for the REPL's Trust/Yes/No/Cancel approval flow.
+    end-code
+    // ( prompt-string stream? -- [response-string] ) Run one AI turn; stream or return its text.
+    /// Local Forth tool calls pause for the REPL's Trust/Yes/No/Cancel approval flow.
 
 code (ai-monotonic-time)
     import time
     vm.push(time.monotonic())
-end-code
-/// stream? true prints the reply; false pushes it as a string. This controls terminal output, not HTTP/SSE transport.
+    end-code
+    /// stream? true prints the reply; false pushes it as a string. This controls terminal output, not HTTP/SSE transport.
 
-: ai: s" " word (ai-monotonic-time) >t true (ai) (ai-monotonic-time) t> - 15 > if nokia2 then ; immediate
-// ( <prompt> -- ) Send the remaining input as a prompt to the current AI session.
-/// The response streams to the terminal. If the turn takes over 15 seconds, Nokia 2 plays when it completes. Proposed Forth programs pause for approval.
-/// Trust approves later proposals for this Forth process; ai-confirm restores per-proposal approval.
+: ai: // ( <prompt> -- ) Send a prompt; play Nokia 2 if the completed turn exceeds the configured threshold.
+    [ last literal ] :> nokia2_after_seconds
+    "" word
+    (ai-monotonic-time) >t
+    true (ai)
+    (ai-monotonic-time) t> -
+    swap > if nokia2 then
+    ; immediate
+    ' ai: :: nokia2_after_seconds=30
+    /// Configure the delay in seconds with: ' ai: :: nokia2_after_seconds=<seconds>
+    /// The AI response streams to the terminal. Nokia 2 plays only when turn time exceeds the threshold. Proposed Forth programs pause for approval.
+    /// Trust approves later proposals for this Forth process; ai-confirm restores per-proposal approval.
 
-: AI: s" " word true (ai) nokia2 ; immediate
-// ( <prompt> -- ) Send an AI prompt and play Nokia 2 after successful completion.
-/// Like ai:, but opts into a completion chime. The chime starts asynchronously.
+: AI: s" " word true (ai) nokia2 ; immediate // ( <prompt> -- ) Send an AI prompt and play Nokia 2 after successful completion.
+    /// Like ai:, but opts into a completion chime. The chime starts asynchronously.
 
 code (ai-sessions)
     from peforth import ai_bridge
