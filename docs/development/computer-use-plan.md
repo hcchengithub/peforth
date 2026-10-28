@@ -1,7 +1,7 @@
 # Computer Use：設計與實作計畫
 
-狀態：草案  
-日期：2026-10-27
+τïÇµàï∩╝Üµá╕σ┐âσèƒΦâ╜σ╖▓σ»ªΣ╜£∩╝¢268 σÇï unittest ΘÇÜΘüÄ∩╝¢live Herdr µëïσïòΘ⌐ùµö╢ΦêçµÄ¿σç║σ╛àσ«îµêÉ
+µùÑµ£ƒ∩╝Ü2026-10-28
 
 ## 目標
 
@@ -24,31 +24,39 @@ AI
 - **Tool 層**把有限能力提供給 AI，固定呼叫指定 Forth words 和明確參數，不接受任意 Forth source。
 - **批准層**在任何改變 pane 狀態的 AI 操作執行前核准，並綁定目標 pane、操作種類和完整參數。
 
-## Forth words 草案
+## σ╖▓σ»ªΣ╜£τÜä Forth words
 
 唯讀：
 
 - `herdr-current-pane ( -- pane-id )`：從 Herdr 呼叫端脈絡解析 pane ID，不猜測或沿用過期 ID。
-- `herdr-screen-read ( -- snapshot )`：讀取目前 pane 的可見終端文字。
-- `herdr-screen-tail ( line-count -- snapshot )`：讀取最近指定行數，限制最大值並回報截斷狀態。
+- `herdr-screen-read ( pane-id [line-count] -- snapshot )`∩╝ÜΦ«ÇσÅûτ¢«σëì pane τÜäσÅ»Φªïτ╡éτ½»µûçσ¡ù∩╝¢line-count σÅ»τ£üτòÑ∩╝îΘáÉΦ¿¡ 80πÇé
+- `herdr-screen-tail ( pane-id [line-count] -- snapshot )`∩╝ÜΦ«ÇσÅûµ£ÇΦ┐æτÜäµ£¬µÅ¢ΦíîΦ╝╕σç║∩╝¢line-count σÅ»τ£üτòÑ∩╝îΘáÉΦ¿¡ 80πÇé
 
 操作：
 
-- `herdr-screen-send-text ( text -- result )`：輸入文字，不自行送 Enter。
-- `herdr-screen-send-keys ( keys -- result )`：送出經驗證的具名按鍵。
-- `herdr-screen-run ( command -- result )`：把明確命令送到指定 shell pane 並提交；只可由批准後的 AI 操作路徑呼叫。
+- `herdr-screen-send-text ( pane-id text -- result )`：輸入文字，不自行送 Enter。
+- `herdr-screen-send-keys ( pane-id keys -- result )`：送出經驗證的具名按鍵。
+- `herdr-screen-run ( pane-id command -- result )`：把明確命令送到指定 shell pane 並提交；只可由批准後的 AI 操作路徑呼叫。
 
-snapshot 至少含 pane ID、讀取來源、取得時間、文字、行數和截斷狀態。操作結果含 pane ID、操作種類及成功或錯誤狀態。
+snapshot σÉ½ pane IDπÇüΣ╛åµ║ÉπÇüσÅûσ╛ùµÖéΘûôπÇüµûçσ¡ùπÇüσ»ªΘÜ¢Φíîµò╕πÇüσÄƒσºïΦ½ïµ▒éΦíîµò╕πÇüµê¬µû╖τïÇµàïσÅè CLI τ╡Éµ₧£πÇéΦ«ÇσÅûµ£ÇσñÜ 1000 Φíî∩╝îCLI Φ╝╕σç║µ£ÇσñÜ 64 KiB∩╝¢Φ╢àΘüÄΦíîµò╕Σ╕èΘÖÉτÜäΦ½ïµ▒éµ£âµê¬µû╖Σ╕ªµ¿ÖΦ¿ÿπÇéµôìΣ╜£τ╡Éµ₧£σÉ½ pane IDπÇüµôìΣ╜£τ¿«Θí₧πÇüσÄƒσºïσæ╜Σ╗ñ/µûçσ¡ù/µîëΘì╡σÅè CLI µêÉσèƒµêûΘî»Φ¬ñτïÇµàïπÇé
 
 ## Tool 和批准規則
 
-1. `computer_read_screen` 只接受讀取來源與行數等參數，只呼叫唯讀 words，免批准；不能接受命令、按鍵或任意路徑。
-2. `computer_operate` 只接受有限操作種類與明確參數。批准畫面顯示目標 pane、完整文字或命令、按鍵序列和是否包含 Enter。
-3. 每次批准只授權畫面上展示的那次操作。目標或參數改變、pane 狀態過期時，重新核准。
-4. 免批准讀取 tool 不得間接呼叫操作 words。操作 tool 不提供 Trust this task 或 Runtime Trust。
-5. 通用 `peforth_run_forth`、Task Trust 和 Runtime Trust 不能繞過電腦操作批准。操作 word 必須驗證 AI 操作的逐次授權，或使用 VM 批准層簽發、綁定操作參數的一次性授權。
-6. 使用者在 REPL 手動執行 Forth，與 AI 發起操作分開處理；不能把手動執行當成 AI 授權。
+1. computer_read_screen Φªüµ▒éµÿÄτó║ pane_id∩╝¢source ΘáÉΦ¿¡ visible∩╝îΣ╣ƒσÅ»τö¿ recent-unwrapped∩╝¢lines ΘáÉΦ¿¡ 80πÇüµ£ÇσñÜ 1000 Φíî∩╝îCLI Φ╝╕σç║µ£ÇσñÜ 64 KiBπÇéσÅ¬σæ╝σÅ½σö»Φ«Ç words∩╝îΣ╕ìΦâ╜µÄÑσÅùσæ╜Σ╗ñπÇüµîëΘì╡µêûΣ╗╗µäÅΦ╖»σ╛æπÇé
+2. computer_operate 只接受有限操作種類與明確參數。Computer Use 審核畫面顯示目標 pane、操作種類、完整文字或命令、按鍵序列，以及是否包含 Enter。
+3. 每次批准只授權畫面上展示的那次操作，並綁定目標 pane、操作種類和完整參數。目標或參數改變、pane 狀態過期時，重新核准。
+4. Computer Use proposal 可沿用 ai-approve 的 purpose 和 source 欄位。範例如下：
 
+       purpose:
+       Computer Use: 在 pane w1:p3 執行命令
+       Command: git status --short
+
+       source:
+       s' w1:p3' s' git status --short' herdr-screen-run
+
+   審核畫面應讓使用者同時看見 pane、操作和完整參數。Computer Use 審核只提供單次批准、拒絕或取消；不提供 Task Trust 或 Runtime Trust。
+5. AI σ╛₧ΘÇÜτö¿ peforth_run_forth σæ╝σÅ½µôìΣ╜£ word µ£âΦó½τ¢┤µÄÑµïÆτ╡ò∩╝¢AI σ┐àΘáêΣ╜┐τö¿ computer_operate∩╝îτö▒Φ⌐▓ tool σ╗║τ½ï computer_use proposal Σ╕ªσÅûσ╛ù ai-approve σû«µ¼íµá╕σçåπÇéµ¡ñµá╕σçåτ╢üσ«Ü paneπÇüµôìΣ╜£τ¿«Θí₧σÆîσ«îµò┤σÅâµò╕∩╝îTask Trust Φêç Runtime Trust σ¥çΣ╕ìΦâ╜τòÑΘüÄπÇé
+6. Σ╜┐τö¿ΦÇàτ¢┤µÄÑσ£¿ REPL Φ╝╕σàÑµôìΣ╜£ word µÖé∩╝îword Σ╗ìµ£âΦªüµ▒éΦç¬σ╖▒τÜäσû«µ¼íµá╕σçå∩╝¢ΘÇÖΣ╕ìµ£âσ╗║τ½ïσÅ»Σ╛¢ AI Θçìτö¿τÜäµÄêµ¼èπÇé
 ## Herdr 狀態與錯誤處理
 
 - 控制 pane 前確認程序位於 Herdr 管理的 pane，並由 Herdr 取得真實 pane ID。
@@ -60,33 +68,33 @@ snapshot 至少含 pane ID、讀取來源、取得時間、文字、行數和截
 
 ## 隱私與安全邊界
 
-終端文字可能含密碼、token 或個人資料。只在工作需要時讀取，限定 pane 與行數，避免不必要的持久紀錄。免批准能力維持唯讀；任何輸入、按鍵或命令都屬操作，必須先核准。批准後不得追加、改寫或換目標。不能由一般讀取入口、背景工作或廣泛信任模式旁路操作批准。
+τ╡éτ½»µûçσ¡ùσÅ»Φâ╜σÉ½σ»åτó╝πÇütoken µêûσÇïΣ║║Φ│çµûÖπÇécomputer_read_screen σÆîµôìΣ╜£τ╡Éµ₧£µ£âΣ╜£τé║ tool result σé│σ¢₧ Agents API∩╝îσ¢áµ¡ñσÅ»Φâ╜Σ┐¥τòÖσ£¿Θüáτ½» session history∩╝¢µ£¼µ⌐ƒ SQLite diagnostics Σ╕ìΣ┐¥σ¡ÿµêÉσèƒΦ«ÇσÅûµêûµôìΣ╜£τ╡Éµ₧£τÜäµ¡úµûçπÇéσÅ¬σ£¿σ╖ÑΣ╜£Θ£ÇΦªüµÖéΦ«ÇσÅû∩╝îΘÖÉσ«Ü pane ΦêçΦíîµò╕πÇéσàìµë╣σçåΦâ╜σè¢τ╢¡µîüσö»Φ«Ç∩╝¢Σ╗╗Σ╜òΦ╝╕σàÑπÇüµîëΘì╡µêûσæ╜Σ╗ñΘâ╜σ┐àΘáêσàêµá╕σçå∩╝îµë╣σçåσ╛îΣ╕ìσ╛ùΦ┐╜σèáπÇüµö╣σ»½µêûµÅ¢τ¢«µ¿ÖπÇé
 
 ## 分階段實作
 
-### Phase 1：契約與批准邊界
+### Phase 1∩╝ÜσÑæτ┤äΦêçµë╣σçåΘéèτòî∩╝êµá╕σ┐âσ»ªΣ╜£σ«îµêÉ∩╝ë
 
-- 確認 Herdr 讀取、輸入及回應格式，定義 snapshot、operation request、批准收據和 result。
-- 找出 AI tool 註冊位置與 VM 中批准、Task Trust、Runtime Trust 的傳遞方式。
-- 設計通用 Forth 執行路徑下的防繞過機制，先完成威脅與失敗情境審查。
+- σ╖▓Σ╛¥ Herdr CLI σ»ªΣ╜£Φ«ÇσÅûπÇüΦ╝╕σàÑπÇüoperation request Φêç result σÑæτ┤äπÇé
+- σ╖▓σ░ç tool Φ¿╗σåèσÅè Trust/µë╣σçåτïÇµàïΦÖòτÉåµÄÑσàÑ AI Forth µ╡üτ¿ïπÇé
+- σ╖▓σ£¿ΘÇÜτö¿ Forth AI σƒ╖ΦíîΦ╖»σ╛æΘÿ╗µôï Computer Use µôìΣ╜£∩╝îΣ╕ªΦªüµ▒éµö╣Φ╡░σ░êτö¿µá╕σçå toolπÇé
 
-### Phase 2：唯讀能力
+### Phase 2∩╝Üσö»Φ«ÇΦâ╜σè¢∩╝êσ╖▓σ»ªΣ╜£∩╝ë
 
-- 加入 current-pane、read、tail Forth words 和固定的唯讀 tool bridge。
-- 加入 pane 身分檢查、行數上限、截斷資訊和清楚的錯誤回報。
-- 確認讀取入口不能造成任何 pane 狀態變化。
+- σ╖▓σèáσàÑ current-paneπÇüreadπÇütail words Φêçσ¢║σ«ÜτÜäσö»Φ«Ç tool bridgeπÇé
+- σ╖▓σèáσàÑ pane Φ║½σêåµ¬óµƒÑπÇüΦíîµò╕/Σ╜ìσàâτ╡äΣ╕èΘÖÉπÇüµê¬µû╖Φ│çΦ¿èσÆîΘî»Φ¬ñσ¢₧σá▒πÇé
+- Φ«ÇσÅûσàÑσÅúσ¢║σ«Üσæ╝σÅ½σö»Φ«ÇµôìΣ╜£∩╝¢computer_read_screen Σ╕ìµÄÑσÅùσæ╜Σ╗ñπÇüµîëΘì╡µêûΣ╗╗µäÅΦ╖»σ╛æπÇé
 
-### Phase 3：逐次批准操作
+### Phase 3∩╝ÜΘÇÉµ¼íµë╣σçåµôìΣ╜£∩╝êσ╖▓σ»ªΣ╜£∩╝ë
 
-- 加入 send-text、send-keys、run words 和有限參數的操作 tool。
-- 批准畫面綁定 pane 與完整操作內容；批准拒絕、取消或逾時時不得送出。
-- 驗證通用 Forth 執行與廣泛 Trust 狀態不能繞過逐次批准。
+- σ╖▓σèáσàÑ send-textπÇüsend-keysπÇürun words Φêçµ£ëΘÖÉσÅâµò╕τÜä computer_operate toolπÇé
+- µá╕σçåτ╢üσ«Ü pane Φêçσ«îµò┤µôìΣ╜£σÅâµò╕∩╝¢µïÆτ╡òπÇüσÅûµ╢êπÇüµá╕σçåΘüÄµ£ƒµêûσÅâµò╕Σ╕ìτ¼ªµÖéΣ╕ìµ£âσƒ╖ΦíîπÇé
+- σ╖▓Θ⌐ùΦ¡ëΘÇÜτö¿ Forth σƒ╖ΦíîσàÑσÅúσÅè Task/Runtime Trust Σ╕ìΦâ╜µùüΦ╖»ΘÇÉµ¼íµá╕σçåπÇé
 
-### Phase 4：驗證與推出
+### Phase 4∩╝ÜΘ⌐ùΦ¡ëΦêçµÄ¿σç║∩╝êΦç¬σïòµ╕¼Φ⌐ªσ«îµêÉ∩╝¢µëïσïòΘ⌐ùµö╢σ╛àσ«îµêÉ∩╝ë
 
-- 驗證核准的目標與參數和實際送出內容完全一致。
-- 驗證 pane 更換、重複提交、連線錯誤和逾時不會造成錯誤目標操作。
-- 先在本機 Herdr pane 使用並記錄限制，再評估是否擴充能力。
+- Φç¬σïòσîû unittest σà▒ 268 ΘáàΘÇÜΘüÄ∩╝¢Computer Use approval σ░êΘáà 10 ΘáàΘÇÜΘüÄπÇé
+- µÄ¿σç║σëìΣ╗ìΘ£Çσ£¿ live Herdr pane µëïσïòΘ⌐ùΦ¡ë pane µ¢┤µÅ¢πÇüΘÇ╛µÖé/ΘÇúτ╖ÜΘî»Φ¬ñσÅèΘçìΦñçµÅÉΣ║ñΣ╕ìµ£âΘÇáµêÉΘî»Φ¬ñτ¢«µ¿ÖµôìΣ╜£πÇé
+- σ«îµêÉΣ║║σ╖ÑΘ⌐ùµö╢σ╛î∩╝îσåìΦ⌐òΣ╝░µÿ»σÉªµô┤σààΦâ╜σè¢πÇé
 
 ## 完成條件
 

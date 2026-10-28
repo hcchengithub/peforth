@@ -82,47 +82,72 @@ code (ai-approve-input)
     red = "\x1b[38;2;205;70;70m"
     dim = "\x1b[2;37m"
     reset = "\x1b[0m"
-    print(
-        f"\n{green_bold}AI permission requested{reset}\n"
-        f"{green}Purpose: {purpose}{reset}\n\n"
-        f"{dim}Forth action:{reset}\n"
-        f"{deep_green}{source}{reset}\n\n",
-        end="",
-        flush=True,
-    )
-    yield from vm.call(vm.tick("nokia"))
-    choice = read_numbered_choice(
-        "Choose 1-4: ",
-        default="1",
-        labels={
-            "1": "Allow Once",
-            "2": "Trust this AI task",
-            "3": "Deny this proposal",
-            "4": "Cancel this AI task",
-        },
-        styles={
-            "1": green,
-            "2": green,
-            "3": red,
-            "4": dim,
-        },
-    )
-    vm.push(choice)
-end-code
-// ( proposal -- choice ) Display a proposal, play Nokia Tune, and read an approval choice for the live REPL approval flow.
+    computer_use = proposal.get("kind") == "computer_use"
+    if computer_use:
+        print("\n"
+            f"{green_bold}Purpose: {purpose}{reset}\n\n"
+            f"{dim}Computer Use operation and complete parameters:{reset}\n"
+            f"{deep_green}{source}{reset}\n\n",
+            end="",
+            flush=True,
+        )
+        yield from vm.call(vm.tick("nokia"))
+        choice = read_numbered_choice(
+            "Choose 1-3: ",
+            choices=("1", "2", "3"),
+            default="2",
+            labels={
+                "1": "Allow this operation once",
+                "2": "Deny this operation",
+                "3": "Cancel this AI task",
+            },
+            styles={"1": green, "2": red, "3": dim},
+        )
+        decision = {"1": "allow_once", "2": "deny", "3": "cancel"}[choice]
+    else:
+        print("\n"
+            f"{green_bold}Purpose: {purpose}{reset}\n\n"
+            f"{dim}Forth action:{reset}\n"
+            f"{deep_green}{source}{reset}\n\n",
+            end="",
+            flush=True,
+        )
+        yield from vm.call(vm.tick("nokia"))
+        choice = read_numbered_choice(
+            "Choose 1-4: ",
+            default="1",
+            labels={
+                "1": "Allow Once",
+                "2": "Trust this AI task",
+                "3": "Deny this proposal",
+                "4": "Cancel this AI task",
+            },
+            styles={"1": green, "2": green, "3": red, "4": dim},
+        )
+        decision = {
+            "1": "allow_once",
+            "2": "trust_task",
+            "3": "deny",
+            "4": "cancel",
+        }[choice]
+    vm.push(decision)
+    end-code
+    // ( proposal -- decision ) Display the appropriate AI approval prompt.
+    /// Proposal mapping requires string fields purpose and source.
+    /// proposal.kind chooses the flow: approval (or missing/unknown) uses the Forth proposal choices.
+    /// Forth proposals offer Allow Once, Trust this AI task, Deny, or Cancel.
+    /// computer_use displays exact pane operation parameters and offers Allow this operation once, Deny, or Cancel.
+    /// Task Trust and Runtime Trust never approve computer_use proposals.
 
 : ai-approve ( proposal -- decision )
     (ai-approve-input)
-    dup s" 1" = if drop s" allow_once" else
-    dup s" 2" = if drop s" trust_task" else
-    dup s" 3" = if drop s" deny" else
-    drop s" cancel"
-    then then then
+    ;
+    // ( proposal -- decision ) Compatibility alias for ai-approve.
+    /// Example: {'kind': 'computer_use', 'purpose': 'Computer Use: run on pane w2:p4', 'source': '{"arguments":"git status --short","includes_enter":true,"operation":"run","pane_id":"w2:p4"}'}
+
+: computer-use-approve ( proposal -- decision )
+    ai-approve
 ;
-// ( proposal -- decision ) Request a decision for a pending AI Forth proposal.
-/// Proposal mapping requires string fields purpose and source.
-/// Decision is allow_once, trust_task, deny, or cancel; Enter means allow_once.
-/// The REPL applies Task Trust and resumes or cancels the pending AI Task.
 
 code chat
     from peforth import ai_bridge
@@ -292,6 +317,71 @@ end-code
 // ( request-mapping -- response ) Send one HTTP/HTTPS request.
 /// Request fields: url (required), method (default GET), headers (string mapping), and body (optional string).
 
+
+code herdr-current-pane
+    from peforth import ai_tools
+
+    vm.push(ai_tools._herdr_current_pane())
+end-code
+// ( -- pane-id ) Resolve and verify this process's live Herdr pane context.
+
+code herdr-screen-read
+    from peforth import ai_tools
+
+    line_count = 80
+    if vm.stack and type(vm.stack[-1]) is int:
+        line_count = vm.pop()
+    pane_id = vm.pop()
+    vm.push(ai_tools._herdr_screen_read(pane_id, "visible", line_count))
+end-code
+// ( pane-id [line-count] -- snapshot ) Read visible text; line-count defaults to 80.
+
+code herdr-screen-tail
+    from peforth import ai_tools
+
+    line_count = 80
+    if vm.stack and type(vm.stack[-1]) is int:
+        line_count = vm.pop()
+    pane_id = vm.pop()
+    vm.push(ai_tools._herdr_screen_read(pane_id, "recent-unwrapped", line_count))
+end-code
+// ( pane-id [line-count] -- snapshot ) Read recent unwrapped output; line-count defaults to 80.
+
+code herdr-screen-send-text
+    from peforth import ai_tools
+
+    text = vm.pop()
+    pane_id = vm.pop()
+    result = yield from ai_tools._herdr_forth_operation(vm, "send_text", pane_id, text)
+    vm.push(result)
+end-code
+// ( pane-id text -- result ) Send text only with a live one-time Computer Use permit.
+
+code herdr-screen-send-keys
+    from peforth import ai_tools
+
+    keys = vm.pop()
+    pane_id = vm.pop()
+    result = yield from ai_tools._herdr_forth_operation(vm, "send_keys", pane_id, keys)
+    vm.push(result)
+end-code
+// ( pane-id keys -- result ) Send key names. Example: char w2:p4 char ctrl+a -1 slice herdr-screen-send-keys.
+/// Key names are passed through to Herdr CLI; syntax is version-specific, with no fixed peforth key list.
+/// Examples: printable characters, backspace, enter, tab, esc/escape, arrows, f12; modifiers ctrl/shift/alt/cmd/super can combine (ctrl+shift+alt+left).
+/// Named punctuation includes minus, comma, ampersand, plus, and backtick. On the tested Herdr build, backspace works; home/end/delete did not.
+/// These examples are not exhaustive; check herdr pane send-keys --help and do not assume undocumented names.
+/// For two keys: char w2:p4 char ctrl+a char enter -2 slice herdr-screen-send-keys.
+
+code herdr-screen-run
+    from peforth import ai_tools
+
+    command = vm.pop()
+    pane_id = vm.pop()
+    result = yield from ai_tools._herdr_forth_operation(vm, "run", pane_id, command)
+    vm.push(result)
+end-code
+// ( pane-id command -- result ) Run a command only with a live one-time Computer Use permit.
+
 code (ai)
     from peforth import ai_bridge
     import json
@@ -328,6 +418,22 @@ code (ai)
          "description": "Propose Forth source for execution in the user's current local VM. The CLI applies its current approval mode.",
          "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "purpose": {"type": "string"}},
                         "required": ["source", "purpose"], "additionalProperties": False}},
+        {"type": "function", "name": "computer_read_screen",
+         "description": "Read bounded text from an explicitly identified Herdr terminal pane. Read-only; requires a live Herdr-managed caller.",
+         "parameters": {"type": "object", "properties": {
+             "pane_id": {"type": "string"},
+             "source": {"type": "string", "enum": ["visible", "recent-unwrapped"]},
+             "lines": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Maximum requested lines; requests above 1000 are capped. visible reads the current viewport."}},
+             "required": ["pane_id"], "additionalProperties": False}},
+        {"type": "function", "name": "computer_operate",
+         "description": "Request one Herdr pane operation. Every operation requires a fresh one-time approval, including when Task Trust or Runtime Trust is active.",
+         "parameters": {"type": "object", "properties": {
+             "operation": {"type": "string", "enum": ["send_text", "send_keys", "run"]},
+             "pane_id": {"type": "string"},
+             "text": {"type": "string", "minLength": 1, "maxLength": 10000},
+             "keys": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 32}, "minItems": 1, "maxItems": 32},
+             "command": {"type": "string", "minLength": 1, "maxLength": 10000}},
+             "required": ["operation", "pane_id"], "additionalProperties": False}},
     ]
     if vm.host.get("_diagnostic_tick_heartbeat_word") is None:
         tools = [tool for tool in tools if tool["name"] != "peforth_tick_heartbeat"]
@@ -524,8 +630,12 @@ code (ai)
                     call_started_ns = time.monotonic_ns()
                     raw_arguments = action.get("arguments", {})
                     raw_arguments_text = (
-                        raw_arguments if isinstance(raw_arguments, str)
-                        else json.dumps(raw_arguments, ensure_ascii=False, sort_keys=True, default=str)
+                        "Computer Use operation parameters omitted from persistent diagnostics."
+                        if name == "computer_operate"
+                        else (
+                            raw_arguments if isinstance(raw_arguments, str)
+                            else json.dumps(raw_arguments, ensure_ascii=False, sort_keys=True, default=str)
+                        )
                     )
                     raw_arguments_id = ai_bridge._diagnostic_store_content(
                         diagnostic_context, "tool_arguments", raw_arguments_text
@@ -545,6 +655,14 @@ code (ai)
                         )
                         raise
                     parsed_arguments_text = json.dumps(
+                        {
+                            "operation": arguments.get("operation"),
+                            "pane_id": arguments.get("pane_id"),
+                            "parameters_omitted": True,
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ) if name == "computer_operate" else json.dumps(
                         arguments, ensure_ascii=False, sort_keys=True, default=str
                     )
                     parsed_arguments_id = ai_bridge._diagnostic_store_content(
@@ -630,6 +748,212 @@ code (ai)
                             session_id, action, True, tool_result_text,
                             diagnostic=diagnostic_context,
                         )
+
+                    elif name == "computer_read_screen":
+                        from peforth import ai_tools
+
+                        pane_id = arguments.get("pane_id")
+                        source = arguments.get("source", "visible")
+                        line_count = arguments.get("lines", 80)
+                        if source not in {"visible", "recent-unwrapped"}:
+                            raise ValueError("source must be visible or recent-unwrapped.")
+                        if isinstance(line_count, bool) or not isinstance(line_count, int) or line_count < 1:
+                            raise ValueError("lines must be a positive integer.")
+                        pane_id = ai_tools._herdr_pane_id(pane_id)
+                        word_name = "herdr-screen-read" if source == "visible" else "herdr-screen-tail"
+                        word = vm.tick(word_name)
+                        if word is None:
+                            raise RuntimeError(f"The {word_name} Forth word is not defined.")
+                        stack_depth = len(vm.stack)
+                        vm.push(pane_id)
+                        vm.push(line_count)
+                        try:
+                            yield from vm.call(word)
+                            if len(vm.stack) != stack_depth + 1:
+                                raise RuntimeError(f"{word_name} must return exactly one snapshot.")
+                            snapshot = vm.pop()
+                        finally:
+                            del vm.stack[stack_depth:]
+                        tool_result_text = json.dumps(snapshot, ensure_ascii=False, default=str)
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "tool_call_completed", action,
+                            elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                            payload={
+                                "pane_id": pane_id,
+                                "source": source,
+                                "line_count": snapshot.get("line_count") if isinstance(snapshot, dict) else None,
+                                "truncated": snapshot.get("truncated") if isinstance(snapshot, dict) else None,
+                                "result_persisted": False,
+                            },
+                        )
+                        ai_bridge._tool_result(
+                            session_id, action, True, tool_result_text,
+                            diagnostic=diagnostic_context, persist_result=False,
+                        )
+                    elif name == "computer_operate":
+                        from peforth import ai_tools
+
+                        operation = arguments.get("operation")
+                        pane_id = ai_tools._herdr_pane_id(arguments.get("pane_id"))
+                        operation_fields = {
+                            "send_text": ("text", "herdr-screen-send-text"),
+                            "send_keys": ("keys", "herdr-screen-send-keys"),
+                            "run": ("command", "herdr-screen-run"),
+                        }
+                        if operation not in operation_fields:
+                            raise ValueError("operation must be send_text, send_keys, or run.")
+                        argument_key, word_name = operation_fields[operation]
+                        if set(arguments) != {"operation", "pane_id", argument_key}:
+                            raise ValueError(
+                                f"{operation} requires exactly operation, pane_id, and {argument_key}."
+                            )
+                        operation_arguments = arguments[argument_key]
+                        ai_tools._herdr_validate_operation_arguments(operation, operation_arguments)
+                        ai_tools._herdr_validate_pane(pane_id)
+                        includes_enter = (
+                            operation == "run"
+                            or (
+                                operation == "send_keys"
+                                and any("enter" in key.casefold() or "return" in key.casefold()
+                                        for key in operation_arguments)
+                            )
+                        )
+                        display = {
+                            "pane_id": pane_id,
+                            "operation": operation,
+                            "includes_enter": includes_enter,
+                            argument_key: operation_arguments,
+                        }
+                        proposal = {
+                            "kind": "computer_use",
+                            "action": action,
+                            "pane_id": pane_id,
+                            "operation": operation,
+                            "arguments": operation_arguments,
+                            "purpose": f"Computer Use: {operation} on pane {pane_id}",
+                            "source": json.dumps(display, ensure_ascii=False, sort_keys=True),
+                            "diagnostic_context": diagnostic_context,
+                        }
+                        diagnostic_operation = json.dumps(
+                            {
+                                "kind": "computer_use",
+                                "operation": operation,
+                                "pane_id": pane_id,
+                                "parameters_omitted": True,
+                            },
+                            sort_keys=True,
+                        )
+                        proposal["source_content_id"] = ai_bridge._diagnostic_store_content(
+                            diagnostic_context, "computer_use_operation", diagnostic_operation
+                        )
+                        approval_started_ns = time.monotonic_ns()
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "approval_requested", action,
+                            content_id=proposal["source_content_id"],
+                            payload={"kind": "computer_use", "operation": operation, "pane_id": pane_id},
+                        )
+                        proposal["approval_started_ns"] = approval_started_ns
+                        vm.host["ai_pending_approval"] = proposal
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "approval_wait_started", action,
+                            content_id=proposal["source_content_id"],
+                        )
+                        yield vm.pause()
+                        approved = bool(vm.host.pop("ai_approval_result", False))
+                        decision = "allow_once" if approved else "deny"
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "approval_decision_received", action,
+                            content_id=proposal["source_content_id"],
+                            payload={"decision": decision},
+                        )
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "approval_wait_ended", action,
+                            content_id=proposal["source_content_id"],
+                            elapsed_ms=(time.monotonic_ns() - approval_started_ns) / 1_000_000,
+                            payload={"decision": decision},
+                        )
+                        if approved:
+                            status, still_pending = ai_bridge._current_actions(
+                                session_id, diagnostic=diagnostic_context
+                            )
+                            if status != "requires_action" or not any(
+                                    pending.get("call_id") == action.get("call_id")
+                                    for pending in still_pending):
+                                ai_bridge._diagnostic_action_event(
+                                    diagnostic_context, "approval_expired", action,
+                                    content_id=proposal["source_content_id"],
+                                )
+                                raise RuntimeError(
+                                    "This Computer Use approval expired before execution; "
+                                    "the pane operation was not run."
+                                )
+                            word = vm.tick(word_name)
+                            if word is None:
+                                raise RuntimeError(f"The {word_name} Forth word is not defined.")
+                            try:
+                                token = ai_tools._herdr_activate_permit(
+                                    vm, operation, pane_id, operation_arguments
+                                )
+                                stack_depth = len(vm.stack)
+                                vm.push(pane_id)
+                                vm.push(operation_arguments)
+                                try:
+                                    yield from vm.call(word)
+                                    if len(vm.stack) != stack_depth + 1:
+                                        raise RuntimeError(
+                                            f"{word_name} must consume its arguments and return one result."
+                                        )
+                                    operation_result = vm.pop()
+                                finally:
+                                    del vm.stack[stack_depth:]
+                                    ai_tools._herdr_deactivate_permit(vm, token)
+                                tool_result_text = json.dumps(
+                                    operation_result, ensure_ascii=False, default=str
+                                )
+                            except Exception as exc:
+                                error_text = f"{type(exc).__name__}: {exc}"
+                                ai_bridge._diagnostic_action_event(
+                                    diagnostic_context, "tool_call_failed", action,
+                                    elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                                    error=RuntimeError("Herdr operation result was unconfirmed."),
+                                    payload={
+                                        "stage": "herdr_operation",
+                                        "approved": True,
+                                        "operation": operation,
+                                        "pane_id": pane_id,
+                                    },
+                                )
+                                ai_bridge._tool_result(
+                                    session_id, action, False,
+                                    error=error_text, diagnostic=diagnostic_context,
+                                    persist_result=False,
+                                )
+                            else:
+                                ai_bridge._diagnostic_action_event(
+                                    diagnostic_context, "tool_call_completed", action,
+                                    elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                                    payload={
+                                        "approved": True,
+                                        "operation": operation,
+                                        "pane_id": pane_id,
+                                        "result_persisted": False,
+                                    },
+                                )
+                                ai_bridge._tool_result(
+                                    session_id, action, True, tool_result_text,
+                                    diagnostic=diagnostic_context, persist_result=False,
+                                )
+                        else:
+                            tool_result_text = "User declined this Computer Use operation."
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "tool_call_completed", action,
+                                elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                                payload={"approved": False, "operation": operation, "pane_id": pane_id},
+                            )
+                            ai_bridge._tool_result(
+                                session_id, action, False,
+                                error=tool_result_text, diagnostic=diagnostic_context,
+                            )
                     elif name == "peforth_run_forth":
                         proposal = {"kind": "approval", "action": action,
                                     "source": str(arguments.get("source", "")),
@@ -869,7 +1193,7 @@ code (ai-monotonic-time)
     end-code
     /// stream? true prints the reply; false pushes it as a string. This controls terminal output, not HTTP/SSE transport.
 
-: ai: // ( <prompt> -- ) Send a prompt; play Nokia 2 if the completed turn exceeds the configured threshold.
+: ai: // ( <prompt> -- ) Send the remaining input as a prompt; play Nokia 2 if the completed turn exceeds the configured threshold.
     [ last literal ] :> nokia2_after_seconds
     "" word
     (ai-monotonic-time) >t
