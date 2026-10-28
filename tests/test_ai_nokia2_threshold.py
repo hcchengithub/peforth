@@ -32,5 +32,22 @@ class Nokia2ThresholdTests(unittest.TestCase):
             self.assertEqual(played,[True] if expected else [])
             self.assertEqual(vm.stack,[])
 
+    def test_threshold_check_survives_stack_changes_during_ai_turn(self):
+        vm=repl.create_vm()
+        clock=iter((100.0,131.5))
+        played=[]
+        def fake_ai_leaving_type_on_stack(vm):
+            vm.pop()
+            vm.pop()
+            vm.stack.clear()
+            vm.push(str)
+        vm.tick("(ai-monotonic-time)").action=lambda vm: vm.push(next(clock))
+        vm.tick("(ai)").action=fake_ai_leaving_type_on_stack
+        vm.tick("nokia2").action=lambda vm: played.append(True)
+        task=vm.dictate("ai: hello")
+        self.assertEqual(task.status,"done")
+        self.assertEqual(played,[True])
+        self.assertEqual(vm.stack,[str])
+
 if __name__ == "__main__":
     unittest.main()

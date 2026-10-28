@@ -3,15 +3,14 @@ code immediate
     if word is None:
         raise ForthError("immediate needs a previous definition")
     word.immediate = True
-end-code
+    end-code
 
 code //
     s = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
     word = vm.last()
     if word is not None:
         word.help = s.strip()
-end-code
-immediate
+    end-code immediate
 
 code ///
     s = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
@@ -19,165 +18,164 @@ code ///
     if word is not None:
         line = s.strip() + chr(10)
         word.comment = (getattr(word, "comment", "") or "") + line
-end-code
-immediate
+    end-code immediate
 
 code (last)
     name = vm.input.read()
     if name is not None:
         vm._last = vm.words.get(name)
-end-code
-// ( <name> -- ) Set vm.last() to the specified word name.
-/// Allow retroactively setting // help and /// comments for earlier words.
+    end-code
+    // ( <name> -- ) Set vm.last() to the specified word name.
+    /// Allow retroactively setting // help and /// comments for earlier words.
 
 (last) code
-// ( <name> -- ) Begin a Python host code definition.
-/// Read the next token as the word name.
-/// Read Python body text until the matching end-code keyword.
-/// Compile the Python code into a host operation: def operation(vm).
+    // ( <name> -- ) Begin a Python host code definition.
+    /// Read the next token as the word name.
+    /// Read Python body text until the matching end-code keyword.
+    /// Compile the Python code into a host operation: def operation(vm).
 
 (last) end-code
-// ( -- ) Terminate a Python host code definition.
-/// Delimiter that ends a host code block and installs it into the dictionary.
+    // ( -- ) Terminate a Python host code definition.
+    /// Delimiter that ends a host code block and installs it into the dictionary.
 
 (last) \
-// ( <line> -- ) Skip line comment to newline.
-/// Immediate word that ignores all characters up to the next newline.
+    // ( <line> -- ) Skip line comment to newline.
+    /// Immediate word that ignores all characters up to the next newline.
 
 (last) (
-// ( <comment> ) Skip parenthetical comment.
-/// Immediate word that ignores all characters up to the matching right parenthesis.
+    // ( <comment> ) Skip parenthetical comment.
+    /// Immediate word that ignores all characters up to the matching right parenthesis.
 
 (last) immediate
-// ( -- ) Mark the most recently defined word as immediate.
-/// Set word.immediate = True so the word executes during compilation rather than compiling.
+    // ( -- ) Mark the most recently defined word as immediate.
+    /// Set word.immediate = True so the word executes during compilation rather than compiling.
 
 (last) //
-// ( <line> -- ) Set one-line help description for the last defined word.
-/// Read the remainder of the line up to newline.
-/// Assign the stripped string to vm.last().help.
+    // ( <line> -- ) Set one-line help description for the last defined word.
+    /// Read the remainder of the line up to newline.
+    /// Assign the stripped string to vm.last().help.
 
 (last) ///
-// ( <line> -- ) Append detailed comment line to the last defined word.
-/// Read the remainder of the line up to newline.
-/// Append the line to vm.last().comment.
-/// Multiple consecutive /// commands accumulate lines into multi-line comments.
+    // ( <line> -- ) Append detailed comment line to the last defined word.
+    /// Read the remainder of the line up to newline.
+    /// Append the line to vm.last().comment.
+    /// Multiple consecutive /// commands accumulate lines into multi-line comments.
 
 code dup
     vm.push(vm.peek())
-end-code
-// ( x -- x x ) Duplicate the top item on the data stack.
-/// Push a duplicate of TOS (top-of-stack) onto the data stack.
+    end-code
+    // ( x -- x x ) Duplicate the top item on the data stack.
+    /// Push a duplicate of TOS (top-of-stack) onto the data stack.
 
 code drop
     vm.pop()
-end-code
-// ( x -- ) Discard the top item from the data stack.
-/// Pop and discard the top value from the data stack.
+    end-code
+    // ( x -- ) Discard the top item from the data stack.
+    /// Pop and discard the top value from the data stack.
 
 code tickHeartbeat
     from peforth import ai_bridge
 
     message = vm.pop()
     ai_bridge.log_heartbeat(vm, message)
-end-code
-// ( "message" -- ) Record a heartbeat message in the AI diagnostic timeline.
-/// This word only logs the message; it does not execute Forth or change VM/session state.
+    end-code
+    // ( "message" -- ) Record a heartbeat message in the AI diagnostic timeline.
+    /// This word only logs the message; it does not execute Forth or change VM/session state.
 
 code dropall
     vm.stack.clear()
-end-code
-// ( ... -- ) Clear all items from the data stack.
-/// Remove all elements, leaving the data stack completely empty.
+    end-code
+    // ( ... -- ) Clear all items from the data stack.
+    /// Remove all elements, leaving the data stack completely empty.
 
 code swap
     b, a = vm.pop(), vm.pop()
     vm.push(b)
     vm.push(a)
-end-code
-// ( x1 x2 -- x2 x1 ) Exchange the top two items on the data stack.
-/// Swap the positions of the top two stack values.
+    end-code
+    // ( x1 x2 -- x2 x1 ) Exchange the top two items on the data stack.
+    /// Swap the positions of the top two stack values.
 
 code over
     vm.push(vm.peek(1))
-end-code
-// ( x1 x2 -- x1 x2 x1 ) Copy the second item to the top of the data stack.
-/// Peek the item below TOS (depth 1) and push a copy onto the stack.
+    end-code
+    // ( x1 x2 -- x1 x2 x1 ) Copy the second item to the top of the data stack.
+    /// Peek the item below TOS (depth 1) and push a copy onto the stack.
 
 code rot
     c, b, a = vm.pop(), vm.pop(), vm.pop()
     vm.push(b)
     vm.push(c)
     vm.push(a)
-end-code
-// ( x1 x2 x3 -- x2 x3 x1 ) Rotate the third item to the top of the stack.
-/// Move the third stack item to the top, shifting the other two items down.
+    end-code
+    // ( x1 x2 x3 -- x2 x3 x1 ) Rotate the third item to the top of the stack.
+    /// Move the third stack item to the top, shifting the other two items down.
 
 code depth
     vm.push(len(vm.stack))
-end-code
-// ( -- n ) Push the current depth of the data stack.
-/// Return the total number of items currently on the data stack.
+    end-code
+    // ( -- n ) Push the current depth of the data stack.
+    /// Return the total number of items currently on the data stack.
 
 code >r
     rstack.append(vm.pop())
-end-code
-// ( x -- ) ( R: -- x ) Move the top item from data stack to return stack.
-/// Pop TOS and push it onto the return stack (rstack).
+    end-code
+    // ( x -- ) ( R: -- x ) Move the top item from data stack to return stack.
+    /// Pop TOS and push it onto the return stack (rstack).
 
 code r>
     vm.push(rstack.pop())
-end-code
-// ( -- x ) ( R: x -- ) Move the top item from return stack to data stack.
-/// Pop the top item from rstack and push it onto the data stack.
+    end-code
+    // ( -- x ) ( R: x -- ) Move the top item from return stack to data stack.
+    /// Pop the top item from rstack and push it onto the data stack.
 
 code r@
     vm.push(rstack[-1])
-end-code
-// ( -- x ) ( R: x -- x ) Copy the top item from return stack to data stack.
-/// Peek the top value of rstack without popping it.
+    end-code
+    // ( -- x ) ( R: x -- x ) Copy the top item from return stack to data stack.
+    /// Peek the top value of rstack without popping it.
 
 code rdrop
     rstack.pop()
-end-code
-// ( -- ) ( R: x -- ) Discard the top item from the return stack.
-/// Pop and discard the top value from rstack.
+    end-code
+    // ( -- ) ( R: x -- ) Discard the top item from the return stack.
+    /// Pop and discard the top value from rstack.
 
 code >t
     vm.tstack.append(vm.pop())
-end-code
-// ( x -- ) ( T: -- x ) Move the top data-stack item to this Task's T-stack.
-/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
+    end-code
+    // ( x -- ) ( T: -- x ) Move the top data-stack item to this Task's T-stack.
+    /// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code t@
     if not vm.tstack:
         raise ForthError("T-stack underflow")
     vm.push(vm.tstack[-1])
-end-code
-// ( -- x ) ( T: x -- x ) Copy the top item from this Task's T-stack.
-/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
+    end-code
+    // ( -- x ) ( T: x -- x ) Copy the top item from this Task's T-stack.
+    /// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code t>
     if not vm.tstack:
         raise ForthError("T-stack underflow")
     vm.push(vm.tstack.pop())
-end-code
-// ( -- x ) ( T: x -- ) Move the top item from this Task's T-stack to data stack.
-/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
+    end-code
+    // ( -- x ) ( T: x -- ) Move the top item from this Task's T-stack to data stack.
+    /// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code *
     b, a = vm.pop(), vm.pop()
     vm.push(a * b)
-end-code
-// ( n1 n2 -- n3 ) Multiply n1 by n2.
-/// Pop two numbers from the data stack and push their product.
+    end-code
+    // ( n1 n2 -- n3 ) Multiply n1 by n2.
+    /// Pop two numbers from the data stack and push their product.
 
 code +
     b, a = vm.pop(), vm.pop()
     vm.push(a + b)
-end-code
-// ( n1 n2 -- n3 ) Add n1 and n2.
-/// Pop two numbers from the data stack and push their sum.
+    end-code
+    // ( n1 n2 -- n3 ) Add n1 and n2.
+    /// Pop two numbers from the data stack and push their sum.
 
 code -
     b, a = vm.pop(), vm.pop()

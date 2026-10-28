@@ -1194,12 +1194,12 @@ code (ai-monotonic-time)
     /// stream? true prints the reply; false pushes it as a string. This controls terminal output, not HTTP/SSE transport.
 
 : ai: // ( <prompt> -- ) Send the remaining input as a prompt; play Nokia 2 if the completed turn exceeds the configured threshold.
-    [ last literal ] :> nokia2_after_seconds
     "" word
     (ai-monotonic-time) >t
     true (ai)
     (ai-monotonic-time) t> -
-    swap > if nokia2 then
+    [ last literal ] :> nokia2_after_seconds
+    > if nokia2 then
     ; immediate
     ' ai: :: nokia2_after_seconds=30
     /// Configure the delay in seconds with: ' ai: :: nokia2_after_seconds=<seconds>

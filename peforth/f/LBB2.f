@@ -25,9 +25,9 @@ code lcd-backlight
     if confirmed != level:
         raise RuntimeError(f"Requested {level}%, but Windows reports {confirmed}%.")
     print(f"LCD backlight set to {confirmed}%.")
-end-code
-// ( n -- ) Set the laptop LCD backlight to an integer percentage from 0 to 100.
-/// Uses Windows WMI and verifies the reported brightness; reports an error if the setting fails.
+    end-code
+    // ( n -- ) Set the laptop LCD backlight to an integer percentage from 0 to 100.
+    /// Uses Windows WMI and verifies the reported brightness; reports an error if the setting fails.
 
 code audio-status(LBB2)
     import json
@@ -259,10 +259,10 @@ Write-Output 'AUDIO_STATUS_DONE'
         for role in ("Console", "Multimedia", "Communications")
     }
     vm.push(report)
-end-code
-// ( -- dict ) Show Windows playback defaults, endpoint volume/mute, and active app audio sessions.
-/// Read-only: does not change devices, volume levels, or mute state.
-/// Uses Windows Core Audio through PowerShell; reports Console, Multimedia, and Communications defaults.
+    end-code
+    // ( -- dict ) Show Windows playback defaults, endpoint volume/mute, and active app audio sessions.
+    /// Read-only: does not change devices, volume levels, or mute state.
+    /// Uses Windows Core Audio through PowerShell; reports Console, Multimedia, and Communications defaults.
 
 code audio-volume!
     import json
@@ -358,6 +358,6 @@ $json = ConvertTo-Json -InputObject $report -Compress
     if confirmed != percent:
         raise RuntimeError(f"Requested {percent}%, but Windows reports {confirmed}%.")
     print(f"Default playback volume set to {confirmed}%.")
-end-code
-// ( n -- ) Set the default Multimedia playback volume to an integer percentage from 0 to 100.
-/// Uses Windows Core Audio and verifies the resulting endpoint volume; does not change mute state or per-app volumes.
+    end-code
+    // ( n -- ) Set the default Multimedia playback volume to an integer percentage from 0 to 100.
+    /// Uses Windows Core Audio and verifies the resulting endpoint volume; does not change mute state or per-app volumes.
