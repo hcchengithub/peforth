@@ -53,6 +53,19 @@ s' w1:p3' s' git status --short' herdr-screen-run
 
 若操作發生 timeout、連線錯誤或回應無法確認，錯誤會提醒使用者先檢查目標 pane，再決定是否重試，避免重複執行可能已成功的操作。pane 不存在、CLI 回應格式錯誤或輸出遭截斷時，會回報可辨識的結果或錯誤。
 
+## Herdr 狀態與錯誤處理
+
+- 控制 pane 前確認程序位於 Herdr 管理的 pane，並由 Herdr 取得真實 pane ID。
+- 使用明確 pane ID；不把 UI 焦點或呼叫者環境變數當成任意目標。
+- 執行前確認 pane 仍存在且身分未變。預設不改變焦點、不建立或關閉 pane。
+- 對逾時、連線錯誤或結果不明確的操作，回報狀態並先讀取 pane 確認；不得盲目重送。
+- 遵循 peforth 專用的本機 Herdr 執行路徑，不以通用 shell tool 取代整合入口。
+- 輸出設行數與位元組上限；錯誤時採取失敗封閉，不操作其他 pane。
+
+## 隱私與安全邊界
+
+終端輸出可能包含密碼、token 或個人資料。`computer_read_screen` 的回應及操作結果會作為 tool result 傳回 Agents API，因此可能保留在遠端 session history；本機 SQLite diagnostics 不保存成功讀取或操作結果的正文。只讀取工作所需的 pane 與行數。唯讀操作不需核准；任何輸入、按鍵或命令都必須逐次核准，核准後不得追加、修改參數或變更目標。
+
 ## 分階段實作
 
 ### Phase 1：契約與批准邊界（已完成）
