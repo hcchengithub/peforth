@@ -3,15 +3,14 @@ code immediate
     if word is None:
         raise ForthError("immediate needs a previous definition")
     word.immediate = True
-end-code
+    end-code
 
 code //
     s = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
     word = vm.last()
     if word is not None:
         word.help = s.strip()
-end-code
-immediate
+    end-code immediate
 
 code ///
     s = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
@@ -19,291 +18,290 @@ code ///
     if word is not None:
         line = s.strip() + chr(10)
         word.comment = (getattr(word, "comment", "") or "") + line
-end-code
-immediate
+    end-code immediate
 
 code (last)
     name = vm.input.read()
     if name is not None:
         vm._last = vm.words.get(name)
-end-code
-// ( <name> -- ) Set vm.last() to the specified word name.
-/// Allow retroactively setting // help and /// comments for earlier words.
+    end-code
+    // ( <name> -- ) Set vm.last() to the specified word name.
+    /// Allow retroactively setting // help and /// comments for earlier words.
 
 (last) code
-// ( <name> -- ) Begin a Python host code definition.
-/// Read the next token as the word name.
-/// Read Python body text until the matching end-code keyword.
-/// Compile the Python code into a host operation: def operation(vm).
+    // ( <name> -- ) Begin a Python host code definition.
+    /// Read the next token as the word name.
+    /// Read Python body text until the matching end-code keyword.
+    /// Compile the Python code into a host operation: def operation(vm).
 
 (last) end-code
-// ( -- ) Terminate a Python host code definition.
-/// Delimiter that ends a host code block and installs it into the dictionary.
+    // ( -- ) Terminate a Python host code definition.
+    /// Delimiter that ends a host code block and installs it into the dictionary.
 
 (last) \
-// ( <line> -- ) Skip line comment to newline.
-/// Immediate word that ignores all characters up to the next newline.
+    // ( <line> -- ) Skip line comment to newline.
+    /// Immediate word that ignores all characters up to the next newline.
 
 (last) (
-// ( <comment> ) Skip parenthetical comment.
-/// Immediate word that ignores all characters up to the matching right parenthesis.
+    // ( <comment> ) Skip parenthetical comment.
+    /// Immediate word that ignores all characters up to the matching right parenthesis.
 
 (last) immediate
-// ( -- ) Mark the most recently defined word as immediate.
-/// Set word.immediate = True so the word executes during compilation rather than compiling.
+    // ( -- ) Mark the most recently defined word as immediate.
+    /// Set word.immediate = True so the word executes during compilation rather than compiling.
 
 (last) //
-// ( <line> -- ) Set one-line help description for the last defined word.
-/// Read the remainder of the line up to newline.
-/// Assign the stripped string to vm.last().help.
+    // ( <line> -- ) Set one-line help description for the last defined word.
+    /// Read the remainder of the line up to newline.
+    /// Assign the stripped string to vm.last().help.
 
 (last) ///
-// ( <line> -- ) Append detailed comment line to the last defined word.
-/// Read the remainder of the line up to newline.
-/// Append the line to vm.last().comment.
-/// Multiple consecutive /// commands accumulate lines into multi-line comments.
+    // ( <line> -- ) Append detailed comment line to the last defined word.
+    /// Read the remainder of the line up to newline.
+    /// Append the line to vm.last().comment.
+    /// Multiple consecutive /// commands accumulate lines into multi-line comments.
 
 code dup
     vm.push(vm.peek())
-end-code
-// ( x -- x x ) Duplicate the top item on the data stack.
-/// Push a duplicate of TOS (top-of-stack) onto the data stack.
+    end-code
+    // ( x -- x x ) Duplicate the top item on the data stack.
+    /// Push a duplicate of TOS (top-of-stack) onto the data stack.
 
 code drop
     vm.pop()
-end-code
-// ( x -- ) Discard the top item from the data stack.
-/// Pop and discard the top value from the data stack.
+    end-code
+    // ( x -- ) Discard the top item from the data stack.
+    /// Pop and discard the top value from the data stack.
 
 code tickHeartbeat
     from peforth import ai_bridge
 
     message = vm.pop()
     ai_bridge.log_heartbeat(vm, message)
-end-code
-// ( "message" -- ) Record a heartbeat message in the AI diagnostic timeline.
-/// This word only logs the message; it does not execute Forth or change VM/session state.
+    end-code
+    // ( "message" -- ) Record a heartbeat message in the AI diagnostic timeline.
+    /// This word only logs the message; it does not execute Forth or change VM/session state.
 
 code dropall
     vm.stack.clear()
-end-code
-// ( ... -- ) Clear all items from the data stack.
-/// Remove all elements, leaving the data stack completely empty.
+    end-code
+    // ( ... -- ) Clear all items from the data stack.
+    /// Remove all elements, leaving the data stack completely empty.
 
 code swap
     b, a = vm.pop(), vm.pop()
     vm.push(b)
     vm.push(a)
-end-code
-// ( x1 x2 -- x2 x1 ) Exchange the top two items on the data stack.
-/// Swap the positions of the top two stack values.
+    end-code
+    // ( x1 x2 -- x2 x1 ) Exchange the top two items on the data stack.
+    /// Swap the positions of the top two stack values.
 
 code over
     vm.push(vm.peek(1))
-end-code
-// ( x1 x2 -- x1 x2 x1 ) Copy the second item to the top of the data stack.
-/// Peek the item below TOS (depth 1) and push a copy onto the stack.
+    end-code
+    // ( x1 x2 -- x1 x2 x1 ) Copy the second item to the top of the data stack.
+    /// Peek the item below TOS (depth 1) and push a copy onto the stack.
 
 code rot
     c, b, a = vm.pop(), vm.pop(), vm.pop()
     vm.push(b)
     vm.push(c)
     vm.push(a)
-end-code
-// ( x1 x2 x3 -- x2 x3 x1 ) Rotate the third item to the top of the stack.
-/// Move the third stack item to the top, shifting the other two items down.
+    end-code
+    // ( x1 x2 x3 -- x2 x3 x1 ) Rotate the third item to the top of the stack.
+    /// Move the third stack item to the top, shifting the other two items down.
 
 code depth
     vm.push(len(vm.stack))
-end-code
-// ( -- n ) Push the current depth of the data stack.
-/// Return the total number of items currently on the data stack.
+    end-code
+    // ( -- n ) Push the current depth of the data stack.
+    /// Return the total number of items currently on the data stack.
 
 code >r
     rstack.append(vm.pop())
-end-code
-// ( x -- ) ( R: -- x ) Move the top item from data stack to return stack.
-/// Pop TOS and push it onto the return stack (rstack).
+    end-code
+    // ( x -- ) ( R: -- x ) Move the top item from data stack to return stack.
+    /// Pop TOS and push it onto the return stack (rstack).
 
 code r>
     vm.push(rstack.pop())
-end-code
-// ( -- x ) ( R: x -- ) Move the top item from return stack to data stack.
-/// Pop the top item from rstack and push it onto the data stack.
+    end-code
+    // ( -- x ) ( R: x -- ) Move the top item from return stack to data stack.
+    /// Pop the top item from rstack and push it onto the data stack.
 
 code r@
     vm.push(rstack[-1])
-end-code
-// ( -- x ) ( R: x -- x ) Copy the top item from return stack to data stack.
-/// Peek the top value of rstack without popping it.
+    end-code
+    // ( -- x ) ( R: x -- x ) Copy the top item from return stack to data stack.
+    /// Peek the top value of rstack without popping it.
 
 code rdrop
     rstack.pop()
-end-code
-// ( -- ) ( R: x -- ) Discard the top item from the return stack.
-/// Pop and discard the top value from rstack.
+    end-code
+    // ( -- ) ( R: x -- ) Discard the top item from the return stack.
+    /// Pop and discard the top value from rstack.
 
 code >t
     vm.tstack.append(vm.pop())
-end-code
-// ( x -- ) ( T: -- x ) Move the top data-stack item to this Task's T-stack.
-/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
+    end-code
+    // ( x -- ) ( T: -- x ) Move the top data-stack item to this Task's T-stack.
+    /// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code t@
     if not vm.tstack:
         raise ForthError("T-stack underflow")
     vm.push(vm.tstack[-1])
-end-code
-// ( -- x ) ( T: x -- x ) Copy the top item from this Task's T-stack.
-/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
+    end-code
+    // ( -- x ) ( T: x -- x ) Copy the top item from this Task's T-stack.
+    /// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code t>
     if not vm.tstack:
         raise ForthError("T-stack underflow")
     vm.push(vm.tstack.pop())
-end-code
-// ( -- x ) ( T: x -- ) Move the top item from this Task's T-stack to data stack.
-/// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
+    end-code
+    // ( -- x ) ( T: x -- ) Move the top item from this Task's T-stack to data stack.
+    /// Each REPL input runs in its own Task, so T-stack contents do not carry over to the next input.
 
 code *
     b, a = vm.pop(), vm.pop()
     vm.push(a * b)
-end-code
-// ( n1 n2 -- n3 ) Multiply n1 by n2.
-/// Pop two numbers from the data stack and push their product.
+    end-code
+    // ( n1 n2 -- n3 ) Multiply n1 by n2.
+    /// Pop two numbers from the data stack and push their product.
 
 code +
     b, a = vm.pop(), vm.pop()
     vm.push(a + b)
-end-code
-// ( n1 n2 -- n3 ) Add n1 and n2.
-/// Pop two numbers from the data stack and push their sum.
+    end-code
+    // ( n1 n2 -- n3 ) Add n1 and n2.
+    /// Pop two numbers from the data stack and push their sum.
 
 code -
     b, a = vm.pop(), vm.pop()
     vm.push(a - b)
-end-code
-// ( n1 n2 -- n3 ) Subtract n2 from n1.
-/// Pop two numbers from the data stack and push the difference (n1 - n2).
+    end-code
+    // ( n1 n2 -- n3 ) Subtract n2 from n1.
+    /// Pop two numbers from the data stack and push the difference (n1 - n2).
 
 code /
     b, a = vm.pop(), vm.pop()
     vm.push(a / b if isinstance(a, float) or isinstance(b, float) else a // b)
-end-code
-// ( n1 n2 -- n3 ) Divide n1 by n2.
-/// Perform floating-point division if either operand is float;
-/// otherwise perform integer floor division.
+    end-code
+    // ( n1 n2 -- n3 ) Divide n1 by n2.
+    /// Perform floating-point division if either operand is float;
+    /// otherwise perform integer floor division.
 
 code =
     b, a = vm.pop(), vm.pop()
     vm.push(a == b)
-end-code
-// ( x1 x2 -- flag ) Check if x1 equals x2.
-/// Pop two items and push True if they are equal, False otherwise.
+    end-code
+    // ( x1 x2 -- flag ) Check if x1 equals x2.
+    /// Pop two items and push True if they are equal, False otherwise.
 
 code <>
     b, a = vm.pop(), vm.pop()
     vm.push(a != b)
-end-code
-// ( x1 x2 -- flag ) Check if x1 is not equal to x2.
-/// Pop two items and push True if they are not equal, False otherwise.
+    end-code
+    // ( x1 x2 -- flag ) Check if x1 is not equal to x2.
+    /// Pop two items and push True if they are not equal, False otherwise.
 
 code <
     b, a = vm.pop(), vm.pop()
     vm.push(a < b)
-end-code
-// ( n1 n2 -- flag ) Check if n1 is strictly less than n2.
-/// Pop two numbers and push True if n1 < n2, False otherwise.
+    end-code
+    // ( n1 n2 -- flag ) Check if n1 is strictly less than n2.
+    /// Pop two numbers and push True if n1 < n2, False otherwise.
 
 code >
     b, a = vm.pop(), vm.pop()
     vm.push(a > b)
-end-code
-// ( n1 n2 -- flag ) Check if n1 is strictly greater than n2.
-/// Pop two numbers and push True if n1 > n2, False otherwise.
+    end-code
+    // ( n1 n2 -- flag ) Check if n1 is strictly greater than n2.
+    /// Pop two numbers and push True if n1 > n2, False otherwise.
 
 code <=
     b, a = vm.pop(), vm.pop()
     vm.push(a <= b)
-end-code
-// ( n1 n2 -- flag ) Check if n1 is less than or equal to n2.
-/// Pop two numbers and push True if n1 <= n2, False otherwise.
+    end-code
+    // ( n1 n2 -- flag ) Check if n1 is less than or equal to n2.
+    /// Pop two numbers and push True if n1 <= n2, False otherwise.
 
 code >=
     b, a = vm.pop(), vm.pop()
     vm.push(a >= b)
-end-code
-// ( n1 n2 -- flag ) Check if n1 is greater than or equal to n2.
-/// Pop two numbers and push True if n1 >= n2, False otherwise.
+    end-code
+    // ( n1 n2 -- flag ) Check if n1 is greater than or equal to n2.
+    /// Pop two numbers and push True if n1 >= n2, False otherwise.
 
 code 1+
     vm.push(vm.pop() + 1)
-end-code
-// ( n -- n+1 ) Increment the top of the stack by 1.
-/// Add 1 to the top stack value.
+    end-code
+    // ( n -- n+1 ) Increment the top of the stack by 1.
+    /// Add 1 to the top stack value.
 
 code 1-
     vm.push(vm.pop() - 1)
-end-code
-// ( n -- n-1 ) Decrement the top of the stack by 1.
-/// Subtract 1 from the top stack value.
+    end-code
+    // ( n -- n-1 ) Decrement the top of the stack by 1.
+    /// Subtract 1 from the top stack value.
 
 code nip
     b, a = vm.pop(), vm.pop()
     vm.push(b)
-end-code
-// ( x1 x2 -- x2 ) Drop the item just below the top of the stack.
-/// Equivalent to swap drop. Discard the second item on the stack.
+    end-code
+    // ( x1 x2 -- x2 ) Drop the item just below the top of the stack.
+    /// Equivalent to swap drop. Discard the second item on the stack.
 
 code 0=
     vm.push(not vm.pop())
-end-code
-// ( x -- flag ) Check if x is zero or false.
-/// Return True if TOS is falsy (0, False, None, etc.), False otherwise.
+    end-code
+    // ( x -- flag ) Check if x is zero or false.
+    /// Return True if TOS is falsy (0, False, None, etc.), False otherwise.
 
 code not
     vm.push(not vm.pop())
-end-code
-// ( x -- flag ) Logical NOT of the top stack item.
-/// Return boolean negation of the top stack value.
+    end-code
+    // ( x -- flag ) Logical NOT of the top stack item.
+    /// Return boolean negation of the top stack value.
 
 code .
     print(vm.pop(), end="", flush=True)
-end-code
-// ( x -- ) Pop and print the top of the stack without trailing newline.
-/// Print TOS to stdout with flush=True and without automatic spacing.
+    end-code
+    // ( x -- ) Pop and print the top of the stack without trailing newline.
+    /// Print TOS to stdout with flush=True and without automatic spacing.
 
 code .s
     print([(x, type(x)) for x in vm.stack])
-end-code
-// ( -- ) Print the contents of the data stack.
-/// Display each data stack value paired with its Python type.
+    end-code
+    // ( -- ) Print the contents of the data stack.
+    /// Display each data stack value paired with its Python type.
 
 code cr
     print()
-end-code
-// ( -- ) Output a newline.
-/// Print a carriage return / newline to stdout.
+    end-code
+    // ( -- ) Output a newline.
+    /// Print a carriage return / newline to stdout.
 
 code space
     print(" ", end="", flush=True)
-end-code
-// ( -- ) Output a single space character.
-/// Print a space ' ' to stdout without newline.
+    end-code
+    // ( -- ) Output a single space character.
+    /// Print a space ' ' to stdout without newline.
+
 code :
     vm.begin(vm.input.read())
-end-code
-// ( <name> -- ) Begin a colon definition.
-/// Read the next token as the name of the new word.
-/// Switch the system into compilation mode (vm.compiling = True).
+    end-code
+    // ( <name> -- ) Begin a colon definition.
+    /// Read the next token as the name of the new word.
+    /// Switch the system into compilation mode (vm.compiling = True).
 
 code ;
     vm.finish()
-end-code
-immediate
-// ( -- ) End a colon definition.
-/// Finish building the colon definition and return to interpretation mode.
-/// Install the completed word into the dictionary.
+    end-code immediate
+    // ( -- ) End a colon definition.
+    /// Finish building the colon definition and return to interpretation mode.
+    /// Install the completed word into the dictionary.
 
 code ,
     val = vm.pop()
@@ -314,9 +312,9 @@ code ,
         if target is None or getattr(target, "type", "") != "created" or getattr(target, "body", None) is None:
             raise ForthError("No definition is being built")
         target.body.append(val)
-end-code
-// ( x -- ) Compile an operation into definition, or append to created word body.
-/// In compilation mode, append to current definition. In interpret mode, append to last().body.
+    end-code
+    // ( x -- ) Compile an operation into definition, or append to created word body.
+    /// In compilation mode, append to current definition. In interpret mode, append to last().body.
 
 code !
     addr = vm.pop()
@@ -333,9 +331,9 @@ code !
             raise ForthError("Integer address only valid during compilation")
     else:
         raise ForthError(f"Cannot store to {type(addr)}")
-end-code
-// ( val addr -- ) Store val at addr (body list or compilation cell).
-/// If addr is list, store into addr[0]. If addr is int, patch definition cell.
+    end-code
+    // ( val addr -- ) Store val at addr (body list or compilation cell).
+    /// If addr is list, store into addr[0]. If addr is int, patch definition cell.
 
 code @
     addr = vm.pop()
@@ -350,9 +348,9 @@ code @
             raise ForthError("Integer address only valid during compilation")
     else:
         raise ForthError(f"Cannot fetch from {type(addr)}")
-end-code
-// ( addr -- val ) Fetch value stored at addr (body list or compilation cell).
-/// If addr is list, push addr[0]. If addr is int, push definition cell.
+    end-code
+    // ( addr -- val ) Fetch value stored at addr (body list or compilation cell).
+    /// If addr is list, push addr[0]. If addr is int, push definition cell.
 
 code create
     name = vm.input.read()
@@ -362,9 +360,9 @@ code create
     def default_action(v, b=body):
         v.push(b)
     word = vm.define(name, default_action, type="created", body=body)
-end-code
-// ( <name> -- ) Create a new word with an initialized data body.
-/// Default execution pushes the word's body list onto stack.
+    end-code
+    // ( <name> -- ) Create a new word with an initialized data body.
+    /// Default execution pushes the word's body list onto stack.
 
 code (does>)
     child = vm.last()
@@ -382,16 +380,15 @@ code (does>)
         yield from v.call(s)
     child.action = child_action
     frame.ip = len(frame.action)
-end-code
-// ( -- ) Runtime step of does>.
-/// Rebinds the last created word's action to execute the following steps, and exits.
+    end-code
+    // ( -- ) Runtime step of does>.
+    /// Rebinds the last created word's action to execute the following steps, and exits.
 
 code does>
     vm.comma(vm.words["(does>)"])
-end-code
-immediate
-// ( -- ) Define runtime behavior for words built by the current defining word.
-/// In compilation mode, compiles (does>). At runtime, attaches the following code block to the child word.
+    end-code immediate
+    // ( -- ) Define runtime behavior for words built by the current defining word.
+    /// In compilation mode, compiles (does>). At runtime, attaches the following code block to the child word.
 
 code char
     tok = vm.input.read()
@@ -401,29 +398,28 @@ code char
         vm.literal(tok)
     else:
         vm.push(tok)
-end-code
-immediate
-// ( <token> -- string ) Read next token as string and push/compile it.
-/// Enhanced char that reads any whitespace-delimited token without truncating to 1 character.
+    end-code immediate
+    // ( <token> -- string ) Read next token as string and push/compile it.
+    /// Enhanced char that reads any whitespace-delimited token without truncating to 1 character.
 
 : constant ( val <name> -- )
     create ,
-does> ( -- val )
+    does> ( -- val )
     @ ;
-// ( val <name> -- ) Define a named constant with value val.
-/// Defined via create ... does>. Executing the constant pushes val.
+    // ( val <name> -- ) Define a named constant with value val.
+    /// Defined via create ... does>. Executing the constant pushes val.
 
 : variable ( <name> -- )
     create 0 , ;
-// ( <name> -- ) Define a named variable initialized to 0.
-/// Executing pushes variable's body list. Use @ to fetch and ! to store.
+    // ( <name> -- ) Define a named variable initialized to 0.
+    /// Executing pushes variable's body list. Use @ to fetch and ! to store.
 
 : value ( val <name> -- )
     create ,
-does> ( -- val )
+    does> ( -- val )
     @ ;
-// ( val <name> -- ) Define a named reassignable value initialized to val.
-/// Defined via create ... does>. Executing pushes current value. Update via 'to'.
+    // ( val <name> -- ) Define a named reassignable value initialized to val.
+    /// Defined via create ... does>. Executing pushes current value. Update via 'to'.
 
 code to
     name = vm.input.read()
@@ -442,26 +438,25 @@ code to
             word.value = vm.pop()
     else:
         raise ForthError(f"{name} is not a value")
-end-code
-immediate
-// ( val <name> -- ) Assign val to the specified value word.
-/// If interpreting, update value immediately. If compiling, compile runtime assignment.
+    end-code immediate
+    // ( val <name> -- ) Assign val to the specified value word.
+    /// If interpreting, update value immediately. If compiling, compile runtime assignment.
 
 code branch
     vm.frame.ip = vm.frame.action[vm.frame.ip]
-end-code
-// ( -- ) Unconditional branch at runtime.
-/// Advance the instruction pointer (ip) to the target address stored in the next cell.
+    end-code
+    // ( -- ) Unconditional branch at runtime.
+    /// Advance the instruction pointer (ip) to the target address stored in the next cell.
 
 code 0branch
     if not vm.pop():
         vm.frame.ip = vm.frame.action[vm.frame.ip]
     else:
         vm.frame.ip += 1
-end-code
-// ( flag -- ) Conditional branch if flag is false at runtime.
-/// Pop flag; if false, jump to the target address stored in the next cell;
-/// otherwise, advance ip past the target cell.
+    end-code
+    // ( flag -- ) Conditional branch if flag is false at runtime.
+    /// Pop flag; if false, jump to the target address stored in the next cell;
+    /// otherwise, advance ip past the target cell.
 
 code doNext
     count = rstack.pop() - 1
@@ -470,16 +465,16 @@ code doNext
         vm.frame.ip = vm.frame.action[vm.frame.ip]
     else:
         vm.frame.ip += 1
-end-code
-// ( -- ) ( R: count -- count-1 ) Counted loop runtime step.
-/// Decrement rstack counter by 1. If counter > 0, jump to loop start;
-/// otherwise pop counter and exit the loop.
+    end-code
+    // ( -- ) ( R: count -- count-1 ) Counted loop runtime step.
+    /// Decrement rstack counter by 1. If counter > 0, jump to loop start;
+    /// otherwise pop counter and exit the loop.
 
 code here
     vm.push(len(vm._definition.body))
-end-code
-// ( -- addr ) Return the current compilation address in the definition body.
-/// Push the current length of the definition array being compiled.
+    end-code
+    // ( -- addr ) Return the current compilation address in the definition body.
+    /// Push the current length of the definition array being compiled.
 
 code (s)
     delim = vm.pop()
@@ -489,132 +484,132 @@ code (s)
         vm.literal(val)
     else:
         vm.push(val)
-end-code
-// ( delim -- string ) Internal engine for parsing string delimited by delim.
-/// Read input stream until delimiter, handle leading space, and emit literal or push.
+    end-code
+    // ( delim -- string ) Internal engine for parsing string delimited by delim.
+    /// Read input stream until delimiter, handle leading space, and emit literal or push.
 
 : string-quote ( delim <name> -- )
     create , immediate
-does> ( -- string )
+    does> ( -- string )
     @ (s) ;
-// ( delim <name> -- ) Define an immediate string quote word for delim.
-/// Defined via create ... does>. When executed, parses input until delim.
+    // ( delim <name> -- ) Define an immediate string quote word for delim.
+    /// Defined via create ... does>. When executed, parses input until delim.
 
 char " string-quote s"
-// ( <string>" -- string ) Parse string delimited by double quote ".
-/// Part of the s["'`|^/] string family. Delimiter is '"'.
-/// Friends: s" s' s` s| s^ s/
-/// Use alternative delimiters to avoid escaping internal quotes.
+    // ( <string>" -- string ) Parse string delimited by double quote ".
+    /// Part of the s["'`|^/] string family. Delimiter is '"'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
 
 char ' string-quote s'
-// ( <string>' -- string ) Parse string delimited by single quote '.
-/// Part of the s["'`|^/] string family. Delimiter is "'".
-/// Friends: s" s' s` s| s^ s/
-/// Use alternative delimiters to avoid escaping internal quotes.
+    // ( <string>' -- string ) Parse string delimited by single quote '.
+    /// Part of the s["'`|^/] string family. Delimiter is "'".
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
 
 char ` string-quote s`
-// ( <string>` -- string ) Parse string delimited by backtick `.
-/// Part of the s["'`|^/] string family. Delimiter is '`'.
-/// Friends: s" s' s` s| s^ s/
-/// Use alternative delimiters to avoid escaping internal quotes.
+    // ( <string>` -- string ) Parse string delimited by backtick `.
+    /// Part of the s["'`|^/] string family. Delimiter is '`'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
 
 char | string-quote s|
-// ( <string>| -- string ) Parse string delimited by pipe |.
-/// Part of the s["'`|^/] string family. Delimiter is '|'.
-/// Friends: s" s' s` s| s^ s/
-/// Use alternative delimiters to avoid escaping internal quotes.
+    // ( <string>| -- string ) Parse string delimited by pipe |.
+    /// Part of the s["'`|^/] string family. Delimiter is '|'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
 
 char ^ string-quote s^
-// ( <string>^ -- string ) Parse string delimited by caret ^.
-/// Part of the s["'`|^/] string family. Delimiter is '^'.
-/// Friends: s" s' s` s| s^ s/
-/// Use alternative delimiters to avoid escaping internal quotes.
+    // ( <string>^ -- string ) Parse string delimited by caret ^.
+    /// Part of the s["'`|^/] string family. Delimiter is '^'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
 
 char / string-quote s/
-// ( <string>/ -- string ) Parse string delimited by slash /.
-/// Part of the s["'`|^/] string family. Delimiter is '/'.
-/// Friends: s" s' s` s| s^ s/
-/// Use alternative delimiters to avoid escaping internal quotes.
+    // ( <string>/ -- string ) Parse string delimited by slash /.
+    /// Part of the s["'`|^/] string family. Delimiter is '/'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
 
 code (print-string)
     if vm.compiling:
         vm.comma(vm.tick("."))
     else:
         yield from vm.call(vm.tick("."))
-end-code
-// ( string -- ) Print a string now or compile its output into the current definition.
-/// While compiling, append the "." word after the parsed string literal.
+    end-code
+    // ( string -- ) Print a string now or compile its output into the current definition.
+    /// While compiling, append the "." word after the parsed string literal.
 
 : print-string-quote ( delim <name> -- )
     create , immediate
-does> @ (s) (print-string) ;
-// ( delim <name> -- ) Define an immediate word that parses and prints a delimited string.
-/// In interpretation mode, print immediately without a newline. In a colon definition, compile the string and print it when the definition runs.
+    does> @ (s) (print-string) ;
+    // ( delim <name> -- ) Define an immediate word that parses and prints a delimited string.
+    /// In interpretation mode, print immediately without a newline. In a colon definition, compile the string and print it when the definition runs.
 
 char " print-string-quote ."
-// ( <string>" -- ) Parse and print text up to the next double quote.
-/// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+    // ( <string>" -- ) Parse and print text up to the next double quote.
+    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
 
 char ' print-string-quote .'
-// ( <string>' -- ) Parse and print text up to the next single quote.
-/// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+    // ( <string>' -- ) Parse and print text up to the next single quote.
+    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
 
 char ` print-string-quote .`
-// ( <string>` -- ) Parse and print text up to the next backtick.
-/// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+    // ( <string>` -- ) Parse and print text up to the next backtick.
+    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
 
 code BL
     vm.push(" ")
-end-code
-// ( -- char ) Push a blank space character ' '.
-/// Constant providing the space string ' '.
+    end-code
+    // ( -- char ) Push a blank space character ' '.
+    /// Constant providing the space string ' '.
 
 code int
     vm.push(int(vm.pop()))
-end-code
-// ( value -- integer ) Convert a value to a Python integer.
-/// Uses Python's built-in int() conversion.
+    end-code
+    // ( value -- integer ) Convert a value to a Python integer.
+    /// Uses Python's built-in int() conversion.
 
 code float
     vm.push(float(vm.pop()))
-end-code
-// ( value -- float ) Convert a value to a Python floating-point number.
-/// Uses Python's built-in float() conversion.
+    end-code
+    // ( value -- float ) Convert a value to a Python floating-point number.
+    /// Uses Python's built-in float() conversion.
 
 code true
     vm.push(True)
-end-code
-// ( -- flag ) Push Python's True value.
+    end-code
+    // ( -- flag ) Push Python's True value.
 
 code false
     vm.push(False)
-end-code
-// ( -- flag ) Push Python's False value.
+    end-code
+    // ( -- flag ) Push Python's False value.
 
 code none
     vm.push(None)
-end-code
-// ( -- None ) Push Python's None value.
+    end-code
+    // ( -- None ) Push Python's None value.
 
 code ""
     vm.push("")
-end-code
-// ( -- string ) Push an empty string.
+    end-code
+    // ( -- string ) Push an empty string.
 
 code inf
     vm.push(float("inf"))
-end-code
-// ( -- number ) Push positive floating-point infinity.
+    end-code
+    // ( -- number ) Push positive floating-point infinity.
 
 code -inf
     vm.push(float("-inf"))
-end-code
-// ( -- number ) Push negative floating-point infinity.
+    end-code
+    // ( -- number ) Push negative floating-point infinity.
 
 code nan
     vm.push(float("nan"))
-end-code
-// ( -- number ) Push a floating-point NaN value.
+    end-code
+    // ( -- number ) Push a floating-point NaN value.
 
 code word
     delim = vm.pop()
@@ -627,17 +622,17 @@ code word
     else:
         val = vm.input.read(until=delim)
     vm.push(val if val is not None else "")
-end-code
-// ( delim -- string ) Read input text until the specified delimiter.
-/// If delim is falsy (None, empty string, False, or 0), consume all remaining TIB.
-/// If delim is space, read the next whitespace-delimited word.
-/// If delim is newline, read until the end of the line.
-/// Otherwise read until the delimiter.
+    end-code
+    // ( delim -- string ) Read input text until the specified delimiter.
+    /// If delim is falsy (None, empty string, False, or 0), consume all remaining TIB.
+    /// If delim is space, read the next whitespace-delimited word.
+    /// If delim is newline, read until the end of the line.
+    /// Otherwise read until the delimiter.
 
 code tib.append
     vm.input.append(" " + vm.pop())
-end-code
-// ( string -- ) Append source text at the TIB tail with a separating space.
+    end-code
+    // ( string -- ) Append source text at the TIB tail with a separating space.
 
 code '
     name = vm.input.read()
@@ -650,11 +645,10 @@ code '
         vm.literal(word)
     else:
         vm.push(word)
-end-code
-immediate
-// ( <name> -- word ) Find word by name.
-/// Read the next token and look up the word in the dictionary.
-/// If compiling, compile the word as a literal; if interpreting, push it.
+    end-code immediate
+    // ( <name> -- word ) Find word by name.
+    /// Read the next token and look up the word in the dictionary.
+    /// If compiling, compile the word as a literal; if interpreting, push it.
 
 code [']
     name = vm.input.read()
@@ -667,10 +661,9 @@ code [']
         vm.literal(word)
     else:
         vm.push(word)
-end-code
-immediate
-// ( <name> -- word ) Compile the next word as a literal in a colon definition.
-/// Immediate word that looks up the following word and compiles it into the definition.
+    end-code immediate
+    // ( <name> -- word ) Compile the next word as a literal in a colon definition.
+    /// Immediate word that looks up the following word and compiles it into the definition.
 
 code [compile]
     name = vm.input.read()
@@ -680,10 +673,9 @@ code [compile]
     if word is None:
         raise ForthError(f"Unknown word: {name}")
     vm.comma(word)
-end-code
-immediate
-// ( <name> -- ) Compile the next immediate word into the definition.
-/// Force compiling an immediate word as a normal operation instead of executing it.
+    end-code immediate
+    // ( <name> -- ) Compile the next immediate word into the definition.
+    /// Force compiling an immediate word as a normal operation instead of executing it.
 
 code alias
     target = vm.pop()
@@ -695,10 +687,9 @@ code alias
     vm.define(alias_name, (target,), immediate=target.immediate,
               source=f": {alias_name} {target.name} ;",
               help=target.help, comment=target.comment, type="alias")
-end-code
-immediate
-// ( word <alias-name> -- ) Define an alias for an existing word.
-/// Usage: ' true alias True. The alias executes the original word.
+    end-code immediate
+    // ( word <alias-name> -- ) Define an alias for an existing word.
+    /// Usage: ' true alias True. The alias executes the original word.
 
 ' true alias True
 ' false alias False
@@ -707,74 +698,74 @@ immediate
 ' -inf alias -infinity
 
 : begin     here ; immediate
-// ( -- addr ) Mark the start of an indefinite loop.
-/// Push the current compilation address (here) as the backward branch destination.
+    // ( -- addr ) Mark the start of an indefinite loop.
+    /// Push the current compilation address (here) as the backward branch destination.
 
 : until     ['] 0branch , , ; immediate
-// ( addr -- ) Conditional loop termination: repeat if flag is false.
-/// Compile 0branch back to addr. Exit loop when flag is true.
+    // ( addr -- ) Conditional loop termination: repeat if flag is false.
+    /// Compile 0branch back to addr. Exit loop when flag is true.
 
 : again     ['] branch , , ; immediate
-// ( addr -- ) Unconditional loop repeat: loop forever.
-/// Compile branch back to addr.
+    // ( addr -- ) Unconditional loop repeat: loop forever.
+    /// Compile branch back to addr.
 
 : if        ['] 0branch , here 0 , ; immediate
-// ( flag -- ) Conditional forward branch: execute following code if flag is true.
-/// Compile 0branch and reserve a forward patch address on the compilation stack.
+    // ( flag -- ) Conditional forward branch: execute following code if flag is true.
+    /// Compile 0branch and reserve a forward patch address on the compilation stack.
 
 : ahead     ['] branch , here 0 , ; immediate
-// ( -- addr ) Unconditional forward branch.
-/// Compile branch and reserve a forward patch address on the compilation stack.
+    // ( -- addr ) Unconditional forward branch.
+    /// Compile branch and reserve a forward patch address on the compilation stack.
 
 : then      here swap ! ; immediate
-// ( addr -- ) Resolve a forward branch target for if/else/ahead.
-/// Patch the target cell at addr to point to the current compilation address (here).
+    // ( addr -- ) Resolve a forward branch target for if/else/ahead.
+    /// Patch the target cell at addr to point to the current compilation address (here).
 
 : else      [compile] ahead swap [compile] then ; immediate
-// ( addr1 -- addr2 ) Alternate branch clause for if ... else ... then.
-/// Compile an ahead branch past the false block and resolve the preceding if branch.
+    // ( addr1 -- addr2 ) Alternate branch clause for if ... else ... then.
+    /// Compile an ahead branch past the false block and resolve the preceding if branch.
 
 : ?dup      dup if dup then ;
-// ( x -- x x | x ) Duplicate TOS if it is logically true.
-/// Tests TOS using Python truthiness. If true, leaves two copies of x;
-/// if false, leaves x unchanged.
+    // ( x -- x x | x ) Duplicate TOS if it is logically true.
+    /// Tests TOS using Python truthiness. If true, leaves two copies of x;
+    /// if false, leaves x unchanged.
 
 : while     [compile] if swap ; immediate
-// ( addr1 -- addr2 addr1 ) Test loop condition in begin ... while ... repeat.
-/// Compile if check; if false, exit past repeat.
+    // ( addr1 -- addr2 addr1 ) Test loop condition in begin ... while ... repeat.
+    /// Compile if check; if false, exit past repeat.
 
 : repeat    [compile] again [compile] then ; immediate
-// ( addr2 addr1 -- ) End a begin ... while ... repeat loop.
-/// Compile again back to addr1 and resolve the forward branch from while at addr2.
+    // ( addr2 addr1 -- ) End a begin ... while ... repeat loop.
+    /// Compile again back to addr1 and resolve the forward branch from while at addr2.
 
 : aft       drop [compile] ahead [compile] begin swap ; immediate
-// ( addr1 -- addr2 addr1 ) Jump past code on the first loop iteration.
-/// Used in for ... aft ... then ... next loops to skip first iteration logic.
+    // ( addr1 -- addr2 addr1 ) Jump past code on the first loop iteration.
+    /// Used in for ... aft ... then ... next loops to skip first iteration logic.
 
 : for       ['] >r , here ; immediate
-// ( count -- ) ( R: -- count ) Begin a for ... next counted loop.
-/// Compile >r to put count on rstack and leave loop start address (here) on stack.
+    // ( count -- ) ( R: -- count ) Begin a for ... next counted loop.
+    /// Compile >r to put count on rstack and leave loop start address (here) on stack.
 
 : next      ['] doNext , , ; immediate
-// ( addr -- ) End a for ... next counted loop.
-/// Compile doNext and target address back to the beginning of the for loop.
+    // ( addr -- ) End a for ... next counted loop.
+    /// Compile doNext and target address back to the beginning of the for loop.
 
 code last
     vm.push(vm.last())
-end-code
-// ( -- word ) Push the most recently defined word object onto the stack.
-/// Return vm.last().
+    end-code
+    // ( -- word ) Push the most recently defined word object onto the stack.
+    /// Return vm.last().
 
 code perform
     word = vm.pop()
     yield from vm.call(word)
-end-code
-// ( word -- ... ) Execute a word object from the data stack.
-/// Dispatch the word through the current VM task so stack effects and pauses are preserved.
+    end-code
+    // ( word -- ... ) Execute a word object from the data stack.
+    /// Dispatch the word through the current VM task so stack effects and pauses are preserved.
 
 : execute perform ;
-// ( word -- ... ) Execute the word object on the data stack.
-/// Commonly used as `last execute` to run the most recently defined word.
+    // ( word -- ... ) Execute the word object on the data stack.
+    /// Commonly used as `last execute` to run the most recently defined word.
 
 code <py>
     import re
@@ -785,10 +776,9 @@ code <py>
     code_str = curr[:match.start()]
     vm.input.consume(match.start())
     vm.push(code_str)
-end-code
-immediate
-// ( <python> -- string ) Read Python code until </py> or </pyV>.
-/// Collect the multi-line Python source block from input and push it onto the stack.
+    end-code immediate
+    // ( <python> -- string ) Read Python code until </py> or </pyV>.
+    /// Collect the multi-line Python source block from input and push it onto the stack.
 
 code </py>
     source = vm.pop()
@@ -800,11 +790,10 @@ code </py>
         vm.comma(op)
     else:
         exec(source, vm.host)
-end-code
-immediate
-// ( string -- ) Execute Python code block without pushing a result.
-/// Execute dedented Python code inside the host environment.
-/// In compilation mode, compile as a runtime host execution step.
+    end-code immediate
+    // ( string -- ) Execute Python code block without pushing a result.
+    /// Execute dedented Python code inside the host environment.
+    /// In compilation mode, compile as a runtime host execution step.
 
 code </pyV>
     source = vm.pop().strip()
@@ -815,33 +804,32 @@ code </pyV>
         vm.comma(op)
     else:
         exec(wrapped, vm.host)
-end-code
-immediate
-// ( string -- ) Execute Python expression and push its result onto the data stack.
-/// Wrap the Python expression with push(...) and execute in host environment.
-/// In compilation mode, compile as a runtime push step.
+    end-code immediate
+    // ( string -- ) Execute Python expression and push its result onto the data stack.
+    /// Wrap the Python expression with push(...) and execute in host environment.
+    /// In compilation mode, compile as a runtime push step.
 
 code CR
     vm.push(chr(10))
-end-code
-// ( -- char ) Push a newline character (chr(10)).
-/// Provide newline string for string/word delimiters.
+    end-code
+    // ( -- char ) Push a newline character (chr(10)).
+    /// Provide newline string for string/word delimiters.
 
 : py:  BL word [compile] </py>  ; immediate
-// ( <python_token> -- ) Execute next single-token Python code without return value.
-/// Read one word of Python code and execute it in host environment.
+    // ( <python_token> -- ) Execute next single-token Python code without return value.
+    /// Read one word of Python code and execute it in host environment.
 
 : py>  BL word [compile] </pyV> ; immediate
-// ( <python_expr> -- result ) Evaluate next single-token Python expression.
-/// Read one word of Python code, evaluate it, and push the result onto data stack.
+    // ( <python_expr> -- result ) Evaluate next single-token Python expression.
+    /// Read one word of Python code, evaluate it, and push the result onto data stack.
 
 : py:: CR word [compile] </py>  ; immediate
-// ( <python_line> -- ) Execute Python code up to newline without return value.
-/// Read remainder of line as Python code and execute in host environment.
+    // ( <python_line> -- ) Execute Python code up to newline without return value.
+    /// Read remainder of line as Python code and execute in host environment.
 
 : py>> CR word [compile] </pyV> ; immediate
-// ( <python_expr> -- result ) Evaluate Python expression up to newline.
-/// Read remainder of line as Python expression and push result onto data stack.
+    // ( <python_expr> -- result ) Evaluate Python expression up to newline.
+    /// Read remainder of line as Python expression and push result onto data stack.
 
 code (::)
     stmt = vm.pop().strip()
@@ -857,9 +845,9 @@ code (::)
         vm.comma(op)
     else:
         exec(code_str, vm.host)
-end-code
-// ( str -- ) Runtime helper for member call or execution on TOS.
-/// Execute pop().str or pop()str in host environment.
+    end-code
+    // ( str -- ) Runtime helper for member call or execution on TOS.
+    /// Execute pop().str or pop()str in host environment.
 
 code (:>)
     stmt = vm.pop().strip()
@@ -875,16 +863,17 @@ code (:>)
         vm.comma(op)
     else:
         exec(code_str, vm.host)
-end-code
-// ( str -- result ) Runtime helper for member access on TOS with result.
-/// Execute push(pop().str) or push(pop()str) in host environment.
+    end-code
+    // ( str -- result ) Runtime helper for member access on TOS with result.
+    /// Execute push(pop().str) or push(pop()str) in host environment.
+
 : :: BL word (::) ; immediate
-// ( <member> -- ) Execute member expression on TOS without return value.
-/// Read the next token as attribute/method name and invoke it on the top stack object.
+    // ( <member> -- ) Execute member expression on TOS without return value.
+    /// Read the next token as attribute/method name and invoke it on the top stack object.
 
 : :> BL word (:>) ; immediate
-// ( <member> -- result ) Access member on TOS and push result onto data stack.
-/// Read next token as attribute/method name, evaluate on TOS, and push the result.
+    // ( <member> -- result ) Access member on TOS and push result onto data stack.
+    /// Read next token as attribute/method name, evaluate on TOS, and push the result.
 
 code see
     name = vm.input.read()
@@ -950,21 +939,21 @@ code see
     else:
         imm = " (immediate)" if word.immediate else ""
         print(f"Host word {word.name}: {word.action!r}{imm}")
-end-code
-// ( <name> -- ) Decompile and display the documentation, object metadata, and definition of word.
-/// Print the documentation header, word object metadata dictionary, and definition source.
+    end-code
+    // ( <name> -- ) Decompile and display the documentation, object metadata, and definition of word.
+    /// Print the documentation header, word object metadata dictionary, and definition source.
 
 code pause
     yield vm.pause()
-end-code
-// ( -- ) Yield execution back to the host task scheduler.
-/// Pause the current Forth task continuation, returning control to host Python.
+    end-code
+    // ( -- ) Yield execution back to the host task scheduler.
+    /// Pause the current Forth task continuation, returning control to host Python.
 
 code *debug*
     breakpoint()
-end-code
-// ( -- ) Enter Python interactive breakpoint debugger.
-/// Call Python's built-in breakpoint() to inspect VM state.
+    end-code
+    // ( -- ) Enter Python interactive breakpoint debugger.
+    /// Call Python's built-in breakpoint() to inspect VM state.
 
 code words
     line = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
@@ -975,10 +964,10 @@ code words
         matched = [name for name in vm.words.keys() if all(p in name.lower() for p in patterns)]
     if matched:
         print(" ".join(matched))
-end-code
-// ( <patterns> -- ) List words in dictionary filtered by pattern(s).
-/// If no patterns given, list all word names.
-/// If patterns given, list names containing all patterns (case-insensitive AND).
+    end-code
+    // ( <patterns> -- ) List words in dictionary filtered by pattern(s).
+    /// If no patterns given, list all word names.
+    /// If patterns given, list names containing all patterns (case-insensitive AND).
 
 code help
     line = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
@@ -1009,17 +998,17 @@ code help
                 entries.append(header)
         if entries:
             print((nl + nl).join(entries))
-end-code
-// ( [word-name] -- ) Display help for an exact word name, case-insensitively.
-/// With no word name, display help and comments for all words.
-/// The provided name must exactly match a dictionary word; help text and comments are not searched.
-/// If no exact word exists, print a not-found message.
+    end-code
+    // ( [word-name] -- ) Display help for an exact word name, case-insensitively.
+    /// With no word name, display help and comments for all words.
+    /// The provided name must exactly match a dictionary word; help text and comments are not searched.
+    /// If no exact word exists, print a not-found message.
 
 code bye
     raise SystemExit(0)
-end-code
-// ( -- ) Exit the Forth process.
-/// Terminate execution immediately via SystemExit(0).
+    end-code
+    // ( -- ) Exit the Forth process.
+    /// Terminate execution immediately via SystemExit(0).
 
 code (include)
     from pathlib import Path
@@ -1040,12 +1029,194 @@ code (include)
         raise FileNotFoundError(
             f'Forth source file {pathname!r} not found; searched: {searched}')
     yield from vm.evaluate(target.read_text(encoding='utf-8-sig'))
-end-code
-// ( pathname -- ) Read and evaluate the Forth source file at pathname.
-/// Accepts a full path string, including spaces. Relative paths search the current working directory first, then runtime_path/f; ~ is expanded.
-/// Reads UTF-8 with an optional BOM and evaluates the source in the current VM. Raises FileNotFoundError if no candidate exists.
+    end-code
+    // ( pathname -- ) Read and evaluate the Forth source file at pathname.
+    /// Accepts a full path string, including spaces. Relative paths search the current working directory first, then runtime_path/f; ~ is expanded.
+    /// Reads UTF-8 with an optional BOM and evaluates the source in the current VM. Raises FileNotFoundError if no candidate exists.
 
-: include BL word (include) ;
-immediate
-// ( <pathname> -- ) Parse and include the next whitespace-delimited Forth path.
-/// This immediate word delegates path lookup and evaluation to (include). Use (include) for paths containing spaces.
+: include BL word (include) ; immediate
+    // ( <pathname> -- ) Parse and include the next whitespace-delimited Forth path.
+    /// This immediate word delegates path lookup and evaluation to (include). Use (include) for paths containing spaces.
+
+\ Additional base words ported from peforth v1.33.
+code [ vm.host.setdefault('_base2_brackets', []).append(vm._definition); vm._definition = None end-code immediate // ( -- ) Enter interpretation state while compiling.
+code ]
+    vm._definition = vm.host['_base2_brackets'].pop()
+    end-code immediate // ( -- ) Resume compilation after [.
+    /// Restores the definition saved by [.
+code compiling
+    vm.push(vm.compiling)
+    end-code // ( -- flag ) Report whether compilation is active.
+    /// The result reflects whether the VM currently has an open definition.
+code literal
+    value=vm.pop()
+    if vm.compiling:
+        vm.literal(value)
+    elif vm.host.get("_base2_brackets"):
+        definition=vm._definition
+        vm._definition=vm.host["_base2_brackets"][-1]
+        try:
+            vm.literal(value)
+        finally:
+            vm._definition=definition
+    else:
+        raise RuntimeError("literal requires an active definition")
+    end-code immediate // ( x -- ) Compile x into the active definition.
+    /// Also supports peforth v1's [ value literal ] form.
+code compile
+    name = vm.input.read()
+    if name is None: raise RuntimeError("Expected a word name after compile")
+    word = vm.tick(name)
+    if word is None: raise RuntimeError(f"Unknown word after compile: {name}")
+    vm.comma(word)
+    end-code immediate // ( <name> -- ) Compile the named word into the current definition.
+    /// Reads and compiles the next word name.
+code compile-only
+    word = vm.last()
+    if word is not None: word.compileonly = True
+    end-code // ( -- ) Set compileonly on the last defined word.
+    /// Stores v1's property flag; v2 does not enforce it.
+code interpret-only
+    word = vm.last()
+    if word is not None: word.interpretonly = True
+    end-code // ( -- ) Set interpretonly on the last defined word.
+    /// Stores v1's property flag; v2 does not enforce it.
+code -rot
+    if len(vm.stack) < 3: raise RuntimeError("-rot needs three stack items")
+    a, b, c = vm.stack[-3:]
+    vm.stack[-3:] = [c, a, b]
+    end-code // ( a b c -- c a b ) Rotate the top three items backward.
+    /// Equivalent to rot rot.
+code 2drop
+    if len(vm.stack) < 2: raise RuntimeError("2drop needs two stack items")
+    del vm.stack[-2:]
+    end-code // ( a b -- ) Drop the top two items.
+    /// Requires two stack cells.
+code 2dup
+    if len(vm.stack) < 2: raise RuntimeError("2dup needs two stack items")
+    a, b = vm.stack[-2:]
+    vm.push(a); vm.push(b)
+    end-code // ( a b -- a b a b ) Duplicate the top pair.
+    /// Preserves the original pair.
+code pick
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n >= len(vm.stack): raise IndexError("pick index out of range")
+    vm.push(vm.stack[-n-1])
+    end-code // ( ... xj ... j -- ... xj ... xj ) Copy the j-deep item.
+    /// Index zero refers to TOS.
+code roll
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n >= len(vm.stack): raise IndexError("roll index out of range")
+    vm.push(vm.stack.pop(-n-1))
+    end-code // ( ... xj ... j -- ... xj ) Move the j-deep item to TOS.
+    /// Index zero leaves TOS in place.
+code slice
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool): raise TypeError("slice expects an integer")
+    start = max(0, len(vm.stack) + n) if n < 0 else 0
+    end = len(vm.stack) if n < 0 else min(n, len(vm.stack))
+    result = vm.stack[start:end]
+    del vm.stack[start:end]
+    vm.push(result)
+    end-code // ( ... cells -n -- ... [cells] ) Move the last -n cells into a list.
+    /// The v1 use selects a suffix of the data stack.
+code 2+
+    vm.push(vm.pop() + 2)
+    end-code // ( n -- n+2 ) Add two.
+code 2-
+    vm.push(vm.pop() - 2)
+    end-code // ( n -- n-2 ) Subtract two.
+code abs
+    vm.push(abs(vm.pop()))
+    end-code // ( n -- |n| ) Push the absolute value.
+code max
+    b=vm.pop(); a=vm.pop(); vm.push(max(a,b))
+    end-code // ( a b -- max ) Keep the larger value.
+code min
+    b=vm.pop(); a=vm.pop(); vm.push(min(a,b))
+    end-code // ( a b -- min ) Keep the smaller value.
+code negate
+    vm.push(-vm.pop())
+    end-code // ( n -- -n ) Negate TOS.
+code within
+    high=vm.pop(); low=vm.pop(); value=vm.pop()
+    vm.push(low <= value < high)
+    end-code // ( n low high -- flag ) Test low <= n < high.
+    /// The upper bound is exclusive.
+code !=
+    b=vm.pop(); a=vm.pop(); vm.push(a != b)
+    end-code // ( a b -- flag ) Test inequality.
+code ==
+    b=vm.pop(); a=vm.pop(); vm.push(bool(a)==bool(b))
+    end-code // ( a b -- flag ) Compare truth values.
+    /// This follows v1: values are converted to Boolean before comparison.
+code and
+    b=vm.pop(); a=vm.pop(); vm.push(bool(a and b))
+    end-code // ( a b -- flag ) Logical AND.
+    /// Returns a Boolean.
+code or
+    b=vm.pop(); a=vm.pop(); vm.push(bool(a or b))
+    end-code // ( a b -- flag ) Logical OR.
+    /// Returns a Boolean.
+code AND
+    b=vm.pop(); a=vm.pop(); vm.push(a & b)
+    end-code // ( a b -- a AND b ) Bitwise AND.
+code OR
+    b=vm.pop(); a=vm.pop(); vm.push(a | b)
+    end-code // ( a b -- a OR b ) Bitwise OR.
+code NOT
+    vm.push(~vm.pop())
+    end-code // ( a -- NOT a ) Bitwise complement.
+code XOR
+    b=vm.pop(); a=vm.pop(); vm.push(a ^ b)
+    end-code // ( a b -- a XOR b ) Bitwise exclusive OR.
+code <<
+    b=vm.pop(); a=vm.pop(); vm.push(a << b)
+    end-code // ( value n -- value<<n ) Shift left n bits.
+code >>
+    b=vm.pop(); a=vm.pop(); vm.push(a >> b)
+    end-code // ( value n -- value>>n ) Shift right n bits.
+code ?stop
+    if vm.pop(): vm.abort()
+    end-code // ( flag -- ) Abort the task when flag is true.
+    /// A false flag leaves the task running.
+code stop
+    vm.abort()
+    end-code // ( -- ) Abort the current Forth task.
+    /// Uses the VM's abort signal.
+code nop
+    end-code // ( -- ) Do nothing.
+: case // ( -- 0 ) Begin a case ... of ... endof ... endcase structure.
+    0 ; immediate compile-only
+    /// The default branch leaves the selector for endcase to drop.
+: of // ( -- ) Compare the selector with this case value.
+    ['] over , ['] = , [compile] if ['] drop , ; immediate compile-only
+    /// Use endof to finish the branch.
+: endof // ( -- ) Finish a case branch and skip later branches.
+    [compile] else ; immediate compile-only
+    /// A matched branch skips the remaining cases.
+: endcase // ( -- ) Resolve case branches and drop the selector.
+    ['] drop , begin ?dup while [compile] then repeat ; immediate compile-only
+    /// Default-branch code must leave the selector on TOS.
+code {} vm.push({}) end-code // ( -- dict ) Push an empty dictionary.
+code bool vm.push(bool(vm.pop())) end-code // ( x -- flag ) Convert x to Boolean.
+code list vm.push(list(vm.pop())) end-code // ( x -- list ) Convert x to list.
+code dict vm.push(dict(vm.pop())) end-code // ( x -- dict ) Convert x to dictionary.
+code set vm.push(set(vm.pop())) end-code // ( x -- set ) Convert x to set.
+code tuple vm.push(tuple(vm.pop())) end-code // ( x -- tuple ) Convert x to tuple.
+code str vm.push(str(vm.pop())) end-code // ( x -- string ) Convert x to string.
+code type vm.push(type(vm.pop())) end-code // ( x -- type ) Push the Python type of x.
+code forget
+    name=vm.input.read()
+    if name is None: raise RuntimeError("Expected a name after forget")
+    if name not in vm.words: raise RuntimeError(f"Unknown word: {name}")
+    del vm.words[name]
+    end-code immediate
+code count
+    vm.push(len(vm.stack[-1]))
+    end-code // ( x -- x n ) Leave x and push its length.
+code trim
+    value=vm.pop()
+    if not isinstance(value,str): raise TypeError("trim expects a string")
+    vm.push(value.strip())
+    end-code // ( string -- string' ) Strip leading and trailing whitespace.

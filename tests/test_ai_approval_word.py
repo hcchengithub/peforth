@@ -55,7 +55,7 @@ class NumberedChoiceTests(unittest.TestCase):
             term="xterm", enable_cpr=False)
         labels = {
             "1": "Allow Once",
-            "2": "Trust this AI task only",
+            "2": "Trust this AI task",
             "3": "Deny this proposal",
             "4": "Cancel this AI task",
         }
@@ -66,9 +66,9 @@ class NumberedChoiceTests(unittest.TestCase):
         rendered = display.getvalue()
         visible = _strip_vt100_sequences(rendered)
         self.assertEqual(result, "2")
-        self.assertIn("2. Trust this AI task only", visible)
+        self.assertIn("2. Trust this AI task", visible)
         self.assertIn(
-            "\x1b[0;38;5;22;48;5;231;1m2. Trust this AI task only",
+            "\x1b[0;38;5;22;48;5;231;1m2. Trust this AI task",
             rendered,
         )
         self.assertNotIn("Selected:", visible)
@@ -79,7 +79,7 @@ class NumberedChoiceTests(unittest.TestCase):
             input_stream.send_text("\x1b[B ")
             result = repl.read_numbered_choice(
                 "Choose 1-4: ",
-                labels={"1": "Allow Once", "2": "Trust this AI task only"},
+                labels={"1": "Allow Once", "2": "Trust this AI task"},
                 output=DummyOutput(),
                 input=input_stream,
             )
@@ -114,6 +114,36 @@ class NumberedChoiceTests(unittest.TestCase):
                 self.assertEqual(vm.pop(), decision)
                 self.assertNotIn("ai_trusted", vm.host)
 
+    def test_ai_approve_computer_use_prompt_is_bold_and_one_time_only(self):
+        vm = _create_vm_with_silent_nokia()
+        proposal = {
+            'kind': 'computer_use',
+            'purpose': 'Computer Use: run on pane w2:p4',
+            'source': 'pane w2:p4 command: git status',
+        }
+        vm.push(proposal)
+        display = io.StringIO()
+        with patch.object(repl, 'read_numbered_choice', return_value='1') as reader:
+            with contextlib.redirect_stdout(display):
+                task = vm.dictate('ai-approve')
+        self.assertEqual(task.status, 'done')
+        self.assertEqual(vm.pop(), 'allow_once')
+        visible = _strip_vt100_sequences(display.getvalue())
+        self.assertNotIn('AI permission requested', visible)
+        self.assertIn('Purpose: Computer Use: run on pane w2:p4', visible)
+        self.assertIn('Computer Use operation and complete parameters:', visible)
+        self.assertIn('pane w2:p4 command: git status', visible)
+        self.assertIn(chr(27) + '[1;38;2;135;215;135mPurpose: Computer Use: run on pane w2:p4' + chr(27) + '[0m', display.getvalue())
+        self.assertEqual(reader.call_args.args[0], 'Choose 1-3: ')
+        self.assertEqual(reader.call_args.kwargs['choices'], ('1', '2', '3'))
+        self.assertEqual(
+            reader.call_args.kwargs['labels'],
+            {
+                '1': 'Allow this operation once',
+                '2': 'Deny this operation',
+                '3': 'Cancel this AI task',
+            },
+        )
     def test_ai_approve_word_accepts_one_key_without_enter(self):
         vm = _create_vm_with_silent_nokia()
         vm.push({"purpose": "one-key test", "source": "not executed"})
@@ -136,7 +166,9 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertEqual(vm.pop(), "deny")
         self.assertNotIn("ai_trusted", vm.host)
         visible = _strip_vt100_sequences(display.getvalue())
-        self.assertTrue(visible.startswith("\nAI permission requested\nPurpose: one-key test"))
+        self.assertIn('Purpose: one-key test', visible)
+        self.assertNotIn('AI permission requested', visible)
+        self.assertIn(chr(27) + '[1;38;2;135;215;135mPurpose: one-key test' + chr(27) + '[0m', display.getvalue())
         self.assertLess(visible.index("Purpose:"), visible.index("Forth action:"))
         self.assertNotIn("---", visible)
         self.assertNotIn("Choose 1-4:", visible)
@@ -146,7 +178,7 @@ class NumberedChoiceTests(unittest.TestCase):
             reader_options[0]["labels"],
             {
                 "1": "Allow Once",
-                "2": "Trust this AI task only",
+                "2": "Trust this AI task",
                 "3": "Deny this proposal",
                 "4": "Cancel this AI task",
             },

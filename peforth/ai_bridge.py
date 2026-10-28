@@ -1187,31 +1187,39 @@ def _diagnostic_cancel_approval(pending, *, reason):
     )
 
 
-def _tool_result(session_id, action, success, output="", error="", *, diagnostic=None):
+def _tool_result(session_id, action, success, output="", error="", *, diagnostic=None,
+                 persist_result=True):
     result_text = output if success else error
-    result_content_id = _diagnostic_store_content(diagnostic, "tool_result", result_text)
+    result_content_id = (
+        _diagnostic_store_content(diagnostic, "tool_result", result_text)
+        if persist_result else None
+    )
     event = {"type": "agent.session.input.tool_result", "turn_id": action["turn_id"],
              "call_id": action["call_id"], "success": success}
     event["output" if success else "error"] = result_text
     encoded_id = urllib.parse.quote(session_id, safe="")
     started_ns = time.monotonic_ns()
+    request_diagnostic = diagnostic
+    if not persist_result and isinstance(diagnostic, dict):
+        request_diagnostic = dict(diagnostic)
+        request_diagnostic["mode"] = "standard"
     try:
         with _request(
                 "POST", f"/sessions/{encoded_id}/events", {"events": [event]},
-                diagnostic=diagnostic, operation="submit_tool_result") as response:
+                diagnostic=request_diagnostic, operation="submit_tool_result") as response:
             response.read()
     except Exception as exc:
         _diagnostic_action_event(
             diagnostic, "tool_result_submit_failed", action,
             content_id=result_content_id, error=exc,
             elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
-            payload={"success": success},
+            payload={"success": success, "result_persisted": persist_result},
         )
         raise
     _diagnostic_action_event(
         diagnostic, "tool_result_submitted", action, content_id=result_content_id,
         elapsed_ms=(time.monotonic_ns() - started_ns) / 1_000_000,
-        payload={"success": success},
+        payload={"success": success, "result_persisted": persist_result},
     )
 
 
@@ -1323,9 +1331,17 @@ def _normalize_surrogates(text):
 
 def _run(vm, source):
     stdout, stderr = io.StringIO(), io.StringIO()
+    previous_execution_depth = vm.host.get("_ai_forth_execution", 0)
+    vm.host["_ai_forth_execution"] = previous_execution_depth + 1
     try:
-        with redirect_stdout(stdout), redirect_stderr(stderr):
-            task = vm.dictate(source)
+        try:
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                task = vm.dictate(source)
+        finally:
+            if previous_execution_depth:
+                vm.host["_ai_forth_execution"] = previous_execution_depth
+            else:
+                vm.host.pop("_ai_forth_execution", None)
         if task.status == "paused":
             task.cancel()
             return json.dumps({"status": "error", "error": "Async pause is not supported in AI execution"})

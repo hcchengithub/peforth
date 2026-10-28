@@ -939,7 +939,7 @@ class ReplBootstrapTests(unittest.TestCase):
 
         functions = captured["agent"]["tools"]
         self.assertEqual([tool["name"] for tool in functions],
-                         ["peforth_search_words", "peforth_tick_heartbeat", "peforth_run_forth"])
+                         ["peforth_search_words", "peforth_tick_heartbeat", "peforth_run_forth", "computer_read_screen", "computer_operate"])
         instructions = captured["agent"]["instructions"]
         self.assertIn("peforth Forth", instructions)
         self.assertNotIn("Project K", instructions)
@@ -1986,6 +1986,7 @@ class ReplBootstrapTests(unittest.TestCase):
         class FakeVM:
             def __init__(self):
                 self.stack = [SurrogateRepr()]
+                self.host = {}
 
             def dictate(self, _source):
                 print(("x" * 73) + surrogate_pair)
@@ -2563,13 +2564,13 @@ class ReplBootstrapTests(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.vm.dictate('words drop')
-        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop')
+        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop 2drop')
 
         # Case-insensitive
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             self.vm.dictate('words DROP')
-        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop')
+        self.assertEqual(buf.getvalue().strip(), 'drop dropall rdrop 2drop')
 
         # Multiple patterns (AND logic)
         buf = io.StringIO()
