@@ -371,7 +371,7 @@ code run_http
 
 : nokia2 ( -- )
     s" $child = '$notes = @(@(988,160),@(880,160),@(554,320),@(659,320),@(880,640)); foreach ($n in $notes) { [Console]::Beep($n[0], $n[1]); Start-Sleep -Milliseconds 25 }'; $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($child)); $pwsh = (Get-Command pwsh -ErrorAction Stop).Source; Start-Process -FilePath $pwsh -WindowStyle Hidden -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-WindowStyle','Hidden','-EncodedCommand',$encoded) | Out-Null" run_pwsh drop
-;
+    ;
     // ( -- ) Start the final Nokia Tune section asynchronously.
     /// Plays the last five notes, including the long final note. Uses the same background PowerShell playback path as nokia.
 

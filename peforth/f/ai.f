@@ -3,8 +3,8 @@
 code ai-new
     vm.host.pop("ai_active_session_id", None)
     print("A fresh AI session will be created for this Forth process on its next request.")
-end-code
-// ( -- ) Clear this Forth process's selected AI session.
+    end-code
+    // ( -- ) Clear this Forth process's selected AI session.
 
 code (ai-session-details)
     from peforth import ai_bridge
@@ -26,8 +26,8 @@ code (ai-session-details)
           f"total={usage.get('total_tokens', 0)} tokens")
     if detail.get("error"):
         print(f"Error: {detail['error']}")
-end-code
-// ( display-index session-ID -- ) Print complete details for one session.
+    end-code
+    // ( display-index session-ID -- ) Print complete details for one session.
 
 code ai-status
     from peforth import ai_bridge
@@ -39,8 +39,8 @@ code ai-status
         vm.push("current")
         vm.push(active_id)
         yield from vm.call(vm.tick("(ai-session-details)"))
-end-code
-// ( -- ) Show complete details for the session selected by this Forth process.
+    end-code
+    // ( -- ) Show complete details for the session selected by this Forth process.
 
 code ai-confirm
     vm.host.pop("ai_trusted", None)
@@ -48,14 +48,14 @@ code ai-confirm
     if callable(clear_task_trust):
         clear_task_trust()
     print("AI Forth programs will require approval again.")
-end-code
-// ( -- ) Revoke Runtime Trust and the current AI Task's Trust.
+    end-code
+    // ( -- ) Revoke Runtime Trust and the current AI Task's Trust.
 
 code ai-trust-runtime
     vm.host["ai_trusted"] = True
     print("AI Forth programs are trusted for this Forth process. Use ai-confirm to revoke.")
-end-code
-// ( -- ) Enable Runtime Trust for this Forth process until ai-confirm or process exit.
+    end-code
+    // ( -- ) Enable Runtime Trust for this Forth process until ai-confirm or process exit.
 
 code (ai-approve-input)
     from peforth.repl import read_numbered_choice
@@ -147,28 +147,28 @@ code (ai-approve-input)
 
 : computer-use-approve ( proposal -- decision )
     ai-approve
-;
+    ;
 
 code chat
     from peforth import ai_bridge
 
     ai_bridge.set_repl_mode(vm, "chat", reason="forth_word")
-end-code
-// ( -- ) Switch the REPL to direct AI chat input.
-/// In Chat mode, the prompt is chat>; each submitted buffer is sent to the active AI session.
+    end-code
+    // ( -- ) Switch the REPL to direct AI chat input.
+    /// In Chat mode, the prompt is chat>; each submitted buffer is sent to the active AI session.
 
 code forth
     from peforth import ai_bridge
 
     ai_bridge.set_repl_mode(vm, "forth", reason="forth_word")
-end-code
-// ( -- ) Switch the REPL to Forth input.
-/// In Forth mode, the prompt is > and submitted buffers are evaluated as Forth source.
+    end-code
+    // ( -- ) Switch the REPL to Forth input.
+    /// In Forth mode, the prompt is > and submitted buffers are evaluated as Forth source.
 
 : system_info
     py> system_info
-;
-// ( -- info ) Return the startup System Info prepared by the Python runtime.
+    ;
+    // ( -- info ) Return the startup System Info prepared by the Python runtime.
 
 code list-skills
     from peforth import ai_bridge
@@ -193,21 +193,21 @@ code list-skills
         else:
             print(f"## {entry.name}\n(no YAML header)\n")
     vm.push(chr(32).join(skill_names))
-end-code
-// ( -- names-string ) Print each skill's YAML header and push sorted names separated by spaces.
+    end-code
+    // ( -- names-string ) Print each skill's YAML header and push sorted names separated by spaces.
 
 : initial-ai-model
     system_info :> ["config"] :> ["PEFORTH_AI_MODEL"]
     dup 0= if drop s" gpt-6-luna" then ;
 initial-ai-model value aiModel
-// ( -- model-name ) Current AI model. Change with: s" model-name" to aiModel.
+    // ( -- model-name ) Current AI model. Change with: s" model-name" to aiModel.
 
 code (ai-tool-error)
     message = vm.pop()
     vm.push({"exit_code": None, "stdout": "", "stderr": "", "timed_out": False,
              "truncated": False, "error": str(message)})
-end-code
-// ( message -- result ) Build a normalized local tool error result.
+    end-code
+    // ( message -- result ) Build a normalized local tool error result.
 
 code run_pwsh
     from peforth import ai_tools
@@ -226,9 +226,9 @@ code run_pwsh
     vm.push(ai_tools._run_process(
         [pwsh["path"], "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
         input_text=script))
-end-code
-// ( script-string -- result ) Run a PowerShell 7 script without profiles.
-/// Returns exit_code, stdout, stderr, timed_out, truncated, and optional error details. Runs locally with the current user's permissions.
+    end-code
+    // ( script-string -- result ) Run a PowerShell 7 script without profiles.
+    /// Returns exit_code, stdout, stderr, timed_out, truncated, and optional error details. Runs locally with the current user's permissions.
 
 code run_bash
     from peforth import ai_tools
@@ -255,9 +255,9 @@ code run_bash
             return
         argv = [bash["path"], "--noprofile", "--norc", "-s"]
     vm.push(ai_tools._run_process(argv, input_text=script))
-end-code
-// ( script-string -- result ) Run Bash natively or through the configured Ubuntu WSL distro.
-/// Returns exit_code, stdout, stderr, timed_out, truncated, and optional error details.
+    end-code
+    // ( script-string -- result ) Run Bash natively or through the configured Ubuntu WSL distro.
+    /// Returns exit_code, stdout, stderr, timed_out, truncated, and optional error details.
 
 code run_curl
     from peforth import ai_tools
@@ -274,9 +274,9 @@ code run_curl
         yield from vm.call(vm.tick("(ai-tool-error)"))
         return
     vm.push(ai_tools._run_process([curl["path"], *arguments]))
-end-code
-// ( argument-list -- result ) Run curl with arguments passed directly, without shell parsing.
-/// Include the URL. Returns exit_code, stdout, stderr, timed_out, truncated, and optional error details.
+    end-code
+    // ( argument-list -- result ) Run curl with arguments passed directly, without shell parsing.
+    /// Include the URL. Returns exit_code, stdout, stderr, timed_out, truncated, and optional error details.
 
 code run_http
     from peforth import ai_tools
@@ -313,17 +313,17 @@ code run_http
         vm.push({"error": "run_http body must be a string when provided."})
         return
     vm.push(ai_tools._http_request(url, method.upper(), headers, body))
-end-code
-// ( request-mapping -- response ) Send one HTTP/HTTPS request.
-/// Request fields: url (required), method (default GET), headers (string mapping), and body (optional string).
+    end-code
+    // ( request-mapping -- response ) Send one HTTP/HTTPS request.
+    /// Request fields: url (required), method (default GET), headers (string mapping), and body (optional string).
 
 
 code herdr-current-pane
     from peforth import ai_tools
 
     vm.push(ai_tools._herdr_current_pane())
-end-code
-// ( -- pane-id ) Resolve and verify this process's live Herdr pane context.
+    end-code
+    // ( -- pane-id ) Resolve and verify this process's live Herdr pane context.
 
 code herdr-screen-read
     from peforth import ai_tools
@@ -333,8 +333,8 @@ code herdr-screen-read
         line_count = vm.pop()
     pane_id = vm.pop()
     vm.push(ai_tools._herdr_screen_read(pane_id, "visible", line_count))
-end-code
-// ( pane-id [line-count] -- snapshot ) Read visible text; line-count defaults to 80.
+    end-code
+    // ( pane-id [line-count] -- snapshot ) Read visible text; line-count defaults to 80.
 
 code herdr-screen-tail
     from peforth import ai_tools
@@ -344,8 +344,8 @@ code herdr-screen-tail
         line_count = vm.pop()
     pane_id = vm.pop()
     vm.push(ai_tools._herdr_screen_read(pane_id, "recent-unwrapped", line_count))
-end-code
-// ( pane-id [line-count] -- snapshot ) Read recent unwrapped output; line-count defaults to 80.
+    end-code
+    // ( pane-id [line-count] -- snapshot ) Read recent unwrapped output; line-count defaults to 80.
 
 code herdr-screen-send-text
     from peforth import ai_tools
@@ -354,8 +354,8 @@ code herdr-screen-send-text
     pane_id = vm.pop()
     result = yield from ai_tools._herdr_forth_operation(vm, "send_text", pane_id, text)
     vm.push(result)
-end-code
-// ( pane-id text -- result ) Send text only with a live one-time Computer Use permit.
+    end-code
+    // ( pane-id text -- result ) Send text only with a live one-time Computer Use permit.
 
 code herdr-screen-send-keys
     from peforth import ai_tools
@@ -364,13 +364,13 @@ code herdr-screen-send-keys
     pane_id = vm.pop()
     result = yield from ai_tools._herdr_forth_operation(vm, "send_keys", pane_id, keys)
     vm.push(result)
-end-code
-// ( pane-id keys -- result ) Send key names. Example: char w2:p4 char ctrl+a -1 slice herdr-screen-send-keys.
-/// Key names are passed through to Herdr CLI; syntax is version-specific, with no fixed peforth key list.
-/// Examples: printable characters, backspace, enter, tab, esc/escape, arrows, f12; modifiers ctrl/shift/alt/cmd/super can combine (ctrl+shift+alt+left).
-/// Named punctuation includes minus, comma, ampersand, plus, and backtick. On the tested Herdr build, backspace works; home/end/delete did not.
-/// These examples are not exhaustive; check herdr pane send-keys --help and do not assume undocumented names.
-/// For two keys: char w2:p4 char ctrl+a char enter -2 slice herdr-screen-send-keys.
+    end-code
+    // ( pane-id keys -- result ) Send key names. Example: char w2:p4 char ctrl+a -1 slice herdr-screen-send-keys.
+    /// Key names are passed through to Herdr CLI; syntax is version-specific, with no fixed peforth key list.
+    /// Examples: printable characters, backspace, enter, tab, esc/escape, arrows, f12; modifiers ctrl/shift/alt/cmd/super can combine (ctrl+shift+alt+left).
+    /// Named punctuation includes minus, comma, ampersand, plus, and backtick. On the tested Herdr build, backspace works; home/end/delete did not.
+    /// These examples are not exhaustive; check herdr pane send-keys --help and do not assume undocumented names.
+    /// For two keys: char w2:p4 char ctrl+a char enter -2 slice herdr-screen-send-keys.
 
 code herdr-screen-run
     from peforth import ai_tools
@@ -379,8 +379,8 @@ code herdr-screen-run
     pane_id = vm.pop()
     result = yield from ai_tools._herdr_forth_operation(vm, "run", pane_id, command)
     vm.push(result)
-end-code
-// ( pane-id command -- result ) Run a command only with a live one-time Computer Use permit.
+    end-code
+    // ( pane-id command -- result ) Run a command only with a live one-time Computer Use permit.
 
 code (ai)
     from peforth import ai_bridge
@@ -1215,10 +1215,11 @@ code (ai-sessions)
     titles = ai_bridge._sync_session_index(rows)
     vm.host["ai_session_rows"] = rows
     vm.host["ai_session_titles"] = titles
-end-code
-// ( -- ) Refresh the session snapshot silently.
-/// Fetches remote sessions, synchronizes the local title index, and updates the VM snapshot.
-/// Stores session rows and titles in vm.host. Prints nothing and leaves the data stack unchanged.
+    end-code
+    // ( -- ) Refresh the session snapshot silently.
+    /// Fetches remote sessions, synchronizes the local title index, and updates the VM snapshot.
+    /// Stores session rows and titles in vm.host. Prints nothing and leaves the data stack unchanged.
+
 code (ai-sessions-list)
     from peforth import ai_bridge
     rows = vm.host.get("ai_session_rows")
@@ -1237,15 +1238,17 @@ code (ai-sessions-list)
                   f"Last active: {ai_bridge._format_time(row.get('last_active_at'))}")
             print(f"     {row.get('status', 'unknown')}  "
                   f"{(row.get('agent') or {}).get('model', 'unknown')}")
-end-code
-// ( -- ) Print the session snapshot prepared by (ai-sessions).
+    end-code
+    // ( -- ) Print the session snapshot prepared by (ai-sessions).
+
 : ai-sessions
     (ai-sessions)
     (ai-sessions-list)
-;
-// ( session-number | full-session-ID -- ) Show remote session details.
-/// Fetches and displays timestamps, status, model, usage, and any API error.
-/// Refreshes the remote list when needed; numeric selectors use its current ordering.
+    ;
+    // ( session-number | full-session-ID -- ) Show remote session details.
+    /// Fetches and displays timestamps, status, model, usage, and any API error.
+    /// Refreshes the remote list when needed; numeric selectors use its current ordering.
+
 code ai-session
     from peforth import ai_bridge
 
@@ -1261,8 +1264,8 @@ code ai-session
     vm.push(index)
     vm.push(row["id"])
     yield from vm.call(vm.tick("(ai-session-details)"))
-end-code
-// ( session-number | full-session-ID -- ) Show remote session details.
+    end-code
+    // ( session-number | full-session-ID -- ) Show remote session details.
 
 code ai-use
     from peforth import ai_bridge
@@ -1298,8 +1301,8 @@ code ai-use
     vm.host["ai_active_session_id"] = row["id"]
     title = ai_bridge._session_title(row["id"]) or "(untitled)"
     print(f"Using session {label}: {title} [{row['id']}]")
-end-code
-// ( session-number | session-ID -- ) Select a remote session for follow-up chat.
+    end-code
+    // ( session-number | session-ID -- ) Select a remote session for follow-up chat.
 
 code ai-cleanup
     from peforth import ai_bridge
@@ -1320,16 +1323,17 @@ code ai-cleanup
     vm.host.pop("ai_session_titles", None)
 
     print("AI session deleted from the API.")
-end-code
-// ( session-number | session-ID -- ) Delete the selected remote session immediately.
-/// Permanently deletes the selected session and its conversation without prompting.
-/// Run ai-sessions first to refresh the session list. Cached session rows and titles are cleared after deletion.
-/// Example: keep the 20 newest sessions (requires more than 20 sessions):
-///   (ai-sessions)
-///   py> len(ai_session_rows) (length) 20 - [for]
-///       t@ . space 21 ai-cleanup (ai-sessions)
-///   [next]
-/// [for] runs once for a zero count, so use the example only when there are more than 20 sessions.
+    end-code
+    // ( session-number | session-ID -- ) Delete the selected remote session immediately.
+    /// Permanently deletes the selected session and its conversation without prompting.
+    /// Run ai-sessions first to refresh the session list. Cached session rows and titles are cleared after deletion.
+    /// Example: keep the 20 newest sessions (requires more than 20 sessions):
+    ///   (ai-sessions)
+    ///   py> len(ai_session_rows) (length) 20 - [for]
+    ///       t@ . space 21 ai-cleanup (ai-sessions)
+    ///   [next]
+    /// [for] runs once for a zero count, so use the example only when there are more than 20 sessions.
+
 code ai-cancel
     from peforth import ai_bridge
 
@@ -1338,8 +1342,8 @@ code ai-cancel
         print("Sent an Agents API cancel request.")
     else:
         print("No AI task is waiting for local approval; use cancel at its confirmation prompt.")
-end-code
-// ( -- ) Cancel the active Agents API turn.
+    end-code
+    // ( -- ) Cancel the active Agents API turn.
 
 code (ai-context)
     from peforth import ai_bridge
@@ -1404,12 +1408,12 @@ code (ai-context)
             if text:
                 messages.append({"role": item["role"], "text": text})
         vm.push(messages)
-end-code
-// ( session-number count mode -- object ) Return recent API items or chat messages for a session.
-/// Count is the number of most recent user-initiated chat turns. Mode is "json", "chat", or None.
-/// json returns all API items in those turns; chat and None return user/assistant text messages.
+    end-code
+    // ( session-number count mode -- object ) Return recent API items or chat messages for a session.
+    /// Count is the number of most recent user-initiated chat turns. Mode is "json", "chat", or None.
+    /// json returns all API items in those turns; chat and None return user/assistant text messages.
 
 : ai-context BL word int BL word int BL word dup "" = if drop none then (ai-context) ; immediate
-// ( <session-number> <count> [mode] -- object ) Fetch recent context for a listed session.
-/// Count is a positive number of latest user-initiated chat turns. Mode defaults to chat.
-/// Run ai-sessions first. Example: ai-context 1 5 json stringify .
+    // ( <session-number> <count> [mode] -- object ) Fetch recent context for a listed session.
+    /// Count is a positive number of latest user-initiated chat turns. Mode defaults to chat.
+    /// Run ai-sessions first. Example: ai-context 1 5 json stringify .
