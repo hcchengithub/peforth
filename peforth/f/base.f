@@ -1220,3 +1220,13 @@ code trim
     if not isinstance(value,str): raise TypeError("trim expects a string")
     vm.push(value.strip())
     end-code // ( string -- string' ) Strip leading and trailing whitespace.
+
+\ REPL greeting text after the Python-printed heading.
+: greeting ( -- )
+    cr
+    ." Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth."
+    cr cr
+    ." Enter submits / Ctrl+J or Esc then Enter adds a line."
+    cr
+    ." chat  AI chat / forth  Forth mode / bye or Ctrl-D  Exit"
+    cr cr ;

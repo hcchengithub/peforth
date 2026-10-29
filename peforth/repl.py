@@ -56,7 +56,7 @@ def _latest_runtime_file_info(runtime_path: Path = RUNTIME_PATH) -> dict | None:
 
 
 def _greeting_fragments(system_info: dict) -> list[tuple[str, str]]:
-    """Build styled text fragments for the interactive REPL greeting."""
+    """Build styled fragments for the two-line REPL heading."""
     latest = system_info.get("runtime_latest")
     modified = latest.get("modified") if isinstance(latest, dict) else None
     fragments = [
@@ -68,29 +68,20 @@ def _greeting_fragments(system_info: dict) -> list[tuple[str, str]]:
             ("", " · Runtime modified: "),
             ("class:greeting.metadata", modified),
         ])
-    fragments.extend([
-        ("", "\n\nEnter submits / Ctrl+J or Esc then Enter adds a line.\n"),
-        ("class:greeting.command", "chat"),
-        ("", "  AI chat / "),
-        ("class:greeting.command", "forth"),
-        ("", "  Forth mode / "),
-        ("class:greeting.command", "bye"),
-        ("", " or "),
-        ("class:greeting.key", "Ctrl-D"),
-        ("", "  Exit"),
-    ])
     return fragments
 
 
-def _print_greeting(system_info: dict) -> None:
-    """Print the REPL greeting with restrained prompt_toolkit styling."""
+def _print_greeting_heading(system_info: dict) -> None:
+    """Print only the title and REPL metadata; base.f prints the rest."""
     style = Style.from_dict({
         "greeting.title": "bold #5fd7ff",
         "greeting.metadata": "#888888",
-        "greeting.command": "bold #87d787",
-        "greeting.key": "bold #87d787",
+        "greeting.command": "#87d787",
+        "greeting.key": "#87d787",
     })
-    print_formatted_text(FormattedText(_greeting_fragments(system_info)), style=style, end="\n\n")
+    print_formatted_text(
+        FormattedText(_greeting_fragments(system_info)), style=style, end=""
+    )
 
 
 def _chat_turn_width() -> int:
@@ -1025,7 +1016,8 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
     )
 
     if show_greeting:
-        _print_greeting(vm.host.get("system_info") or {})
+        _print_greeting_heading(vm.host.get("system_info") or {})
+        vm.dictate("greeting")
 
     vm.host.setdefault("repl_mode", "forth")
     state = {"in_code_block": False, "code_buffer": [], "ai_task": initial_task,
