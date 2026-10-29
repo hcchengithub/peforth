@@ -128,7 +128,7 @@ def _herdr_walk(value):
 
 
 def _herdr_pane_id(value):
-    if not isinstance(value, str) or not re.fullmatch(r"w[0-9]+:p[0-9]+", value):
+    if not isinstance(value, str) or not re.fullmatch(r"w[0-9A-Za-z]+:p[0-9A-Za-z]+", value):
         raise ValueError("pane_id must be a Herdr pane ID such as w1:p2.")
     return value
 
