@@ -381,3 +381,74 @@ code run_http
     // ( -- ) Start the first two Nokia Tune sections asynchronously.
     /// Launches a hidden PowerShell child process and returns without waiting for playback.
     /// Plays the first eight notes with 25 ms gaps, using PowerShell Console.Beep.
+
+code (sudo)
+    import os
+    import pty
+
+    command_line = vm.pop()
+    if not isinstance(command_line, str):
+        vm.push({
+            "exit_code": None,
+            "output": "",
+            "truncated": False,
+            "error": "(sudo) expects a command line string.",
+        })
+        return
+
+    if not command_line.strip():
+        vm.push({
+            "exit_code": 2,
+            "output": "",
+            "truncated": False,
+            "error": "empty command line",
+        })
+        return
+
+    print(
+        "[sudo] Enter your password in this terminal if prompted.",
+        flush=True,
+    )
+
+    output_limit = 65536
+    captured = bytearray()
+    truncated = [False]
+
+    def read_master(fd):
+        try:
+            chunk = os.read(fd, 1024)
+        except OSError:
+            return b""
+
+        room = max(0, output_limit - len(captured))
+        if room:
+            captured.extend(chunk[:room])
+        if len(chunk) > room:
+            truncated[0] = True
+
+        return chunk
+
+    status = pty.spawn(
+        ["sudo", "--", "bash", "-c", command_line],
+        master_read=read_master,
+    )
+
+    vm.push({
+        "exit_code": os.waitstatus_to_exitcode(status),
+        "output": captured.decode("utf-8", errors="replace"),
+        "truncated": truncated[0],
+    })
+    end-code
+    // ( command-line -- result-dict ) Run a command script as root in an interactive PTY.
+    /// The complete string is passed to sudo -- bash -c; every line runs as root.
+    /// PTY output is shown live and returned as combined output, capped at 65536 bytes.
+    /// Returns a dictionary with exit_code, output, and truncated; an error key appears for invalid input.
+    /// Blocks until the command exits. sudo normally disables echo while reading the password.
+    /// Before invoking this word for a user, tell them the password prompt may appear in this terminal.
+
+: sudo "" word (sudo) ;
+    // ( -- result-dict ) Run the remaining TIB text as a root command script.
+    /// Consumes all remaining TIB text, including newlines, and passes it to (sudo).
+    /// Submit multiline commands as one TIB input; separately submitted lines are not collected together.
+    /// Put sudo last in the Forth submission: all following text becomes the root shell script.
+    /// The result dictionary is left on the data stack; use stringify . in the next input to display it.
