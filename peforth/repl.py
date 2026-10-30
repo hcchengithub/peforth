@@ -2,6 +2,7 @@
 """peforth v2 AI-first Forth REPL."""
 
 import atexit
+import asyncio
 import json
 import os
 import platform
@@ -878,10 +879,18 @@ def read_numbered_choice(
     def _next_choice(event):
         _move_selection(event, 1)
 
+    def _confirm_selected_choice(app, buffer):
+        async def confirm_after_render():
+            await asyncio.sleep(0.05)
+            buffer.validate_and_handle()
+        app.create_background_task(confirm_after_render())
+
     for choice in choices:
         def _select(event, selected=choice):
+            selected_index[0] = choices.index(selected)
             event.current_buffer.text = selected
-            event.current_buffer.validate_and_handle()
+            event.app.invalidate()
+            _confirm_selected_choice(event.app, event.current_buffer)
         bindings.add(choice, eager=True)(_select)
 
     def choice_prompt():

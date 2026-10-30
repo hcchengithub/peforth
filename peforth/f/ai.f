@@ -79,7 +79,6 @@ code (ai-approve-input)
     green = "\x1b[38;2;135;215;135m"
     green_bold = "\x1b[1;38;2;135;215;135m"
     deep_green = "\x1b[38;2;0;100;0m"
-    red = "\x1b[38;2;205;70;70m"
     dim = "\x1b[2;37m"
     reset = "\x1b[0m"
     computer_use = proposal.get("kind") == "computer_use"
@@ -104,7 +103,7 @@ code (ai-approve-input)
             "3": "Deny this proposal",
             "4": "Cancel this AI task",
         },
-        styles={"1": green, "2": green, "3": red, "4": dim},
+        styles={"1": green, "2": green, "3": dim, "4": dim},
     )
     decision = {
         "1": "allow_once",

@@ -48,6 +48,30 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertEqual(result, "2")
         self.assertIn("Choose 1-4: 2" + chr(13) + chr(10), visible)
 
+    def test_digit_highlights_choice_before_confirming_it(self):
+        labels = {
+            "1": "Allow Once",
+            "2": "Trust this AI task",
+            "3": "Deny this proposal",
+            "4": "Cancel this AI task",
+        }
+        for choice, label in labels.items():
+            with self.subTest(choice=choice):
+                display = io.StringIO()
+                output = Vt100_Output(
+                    stdout=display, get_size=lambda: Size(rows=24, columns=80),
+                    term="xterm", enable_cpr=False)
+                with create_pipe_input() as input_stream:
+                    input_stream.send_text(choice)
+                    result = repl.read_numbered_choice(
+                        "Choose 1-4: ", input=input_stream, output=output,
+                        labels=labels)
+                self.assertEqual(result, choice)
+                self.assertIn(
+                    f"\x1b[0;38;5;22;48;5;231;1m{choice}. {label}",
+                    display.getvalue(),
+                )
+
     def test_down_arrow_moves_highlight_and_enter_confirms_current_choice(self):
         display = io.StringIO()
         output = Vt100_Output(
@@ -135,6 +159,10 @@ class NumberedChoiceTests(unittest.TestCase):
         self.assertIn(chr(27) + "[1;38;2;135;215;135mPurpose: Computer Use: run on pane w2:p4 in session default" + chr(27) + "[0m", display.getvalue())
         self.assertEqual(reader.call_args.args[0], "Choose 1-4: ")
         self.assertEqual(reader.call_args.kwargs.get("choices", ("1", "2", "3", "4")), ("1", "2", "3", "4"))
+        self.assertEqual(
+            reader.call_args.kwargs["styles"]["3"],
+            reader.call_args.kwargs["styles"]["4"],
+        )
         self.assertEqual(
             reader.call_args.kwargs["labels"],
             {
