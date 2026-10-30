@@ -114,36 +114,37 @@ class NumberedChoiceTests(unittest.TestCase):
                 self.assertEqual(vm.pop(), decision)
                 self.assertNotIn("ai_trusted", vm.host)
 
-    def test_ai_approve_computer_use_prompt_is_bold_and_one_time_only(self):
+    def test_ai_approve_computer_use_uses_shared_trust_choices(self):
         vm = _create_vm_with_silent_nokia()
         proposal = {
-            'kind': 'computer_use',
-            'purpose': 'Computer Use: run on pane w2:p4',
-            'source': 'pane w2:p4 command: git status',
+            "kind": "computer_use",
+            "purpose": "Computer Use: run on pane w2:p4 in session default",
+            "source": '{"session":"default","pane_id":"w2:p4","command":"git status","operation":"run"}',
         }
         vm.push(proposal)
         display = io.StringIO()
-        with patch.object(repl, 'read_numbered_choice', return_value='1') as reader:
+        with patch.object(repl, "read_numbered_choice", return_value="2") as reader:
             with contextlib.redirect_stdout(display):
-                task = vm.dictate('ai-approve')
-        self.assertEqual(task.status, 'done')
-        self.assertEqual(vm.pop(), 'allow_once')
+                task = vm.dictate("ai-approve")
+        self.assertEqual(task.status, "done")
+        self.assertEqual(vm.pop(), "trust_task")
         visible = _strip_vt100_sequences(display.getvalue())
-        self.assertNotIn('AI permission requested', visible)
-        self.assertIn('Purpose: Computer Use: run on pane w2:p4', visible)
-        self.assertIn('Computer Use operation and complete parameters:', visible)
-        self.assertIn('pane w2:p4 command: git status', visible)
-        self.assertIn(chr(27) + '[1;38;2;135;215;135mPurpose: Computer Use: run on pane w2:p4' + chr(27) + '[0m', display.getvalue())
-        self.assertEqual(reader.call_args.args[0], 'Choose 1-3: ')
-        self.assertEqual(reader.call_args.kwargs['choices'], ('1', '2', '3'))
+        self.assertIn("Purpose: Computer Use: run on pane w2:p4 in session default", visible)
+        self.assertIn("Computer Use operation and complete parameters:", visible)
+        self.assertIn('"session":"default"', visible)
+        self.assertIn(chr(27) + "[1;38;2;135;215;135mPurpose: Computer Use: run on pane w2:p4 in session default" + chr(27) + "[0m", display.getvalue())
+        self.assertEqual(reader.call_args.args[0], "Choose 1-4: ")
+        self.assertEqual(reader.call_args.kwargs.get("choices", ("1", "2", "3", "4")), ("1", "2", "3", "4"))
         self.assertEqual(
-            reader.call_args.kwargs['labels'],
+            reader.call_args.kwargs["labels"],
             {
-                '1': 'Allow this operation once',
-                '2': 'Deny this operation',
-                '3': 'Cancel this AI task',
+                "1": "Allow Once",
+                "2": "Trust this AI task",
+                "3": "Deny this proposal",
+                "4": "Cancel this AI task",
             },
         )
+
     def test_ai_approve_word_accepts_one_key_without_enter(self):
         vm = _create_vm_with_silent_nokia()
         vm.push({"purpose": "one-key test", "source": "not executed"})
@@ -191,7 +192,11 @@ class ApprovalScopeTests(unittest.TestCase):
         vm = _create_vm_with_silent_nokia()
         state = {"trusted_ai_task": None}
         task = SimpleNamespace(status="paused")
-        proposal = {"purpose": "trust one AI task", "source": "1 2 +"}
+        proposal = {
+            "kind": "computer_use",
+            "purpose": "trust one AI task pane operation",
+            "source": '{"session":"default","pane_id":"w2:p4","operation":"run","command":"git status"}',
+        }
 
         with patch.object(repl, "read_numbered_choice", return_value="2"), \
                 contextlib.redirect_stdout(io.StringIO()):
@@ -235,13 +240,23 @@ class ApprovalScopeTests(unittest.TestCase):
 
     def test_runtime_trust_is_explicit_and_ai_confirm_clears_both_scopes(self):
         vm = _create_vm_with_silent_nokia()
-        task = object()
+        task = SimpleNamespace(status="paused")
         state = {"trusted_ai_task": task}
         vm.host["ai_clear_task_trust"] = lambda: state.__setitem__("trusted_ai_task", None)
 
         vm.dictate("ai-trust-runtime")
         self.assertTrue(vm.host["ai_trusted"])
         self.assertIs(state["trusted_ai_task"], task)
+        proposal = {
+            "kind": "computer_use",
+            "purpose": "trusted pane operation",
+            "source": '{"session":"default","pane_id":"w2:p4","operation":"run","command":"git status"}',
+        }
+        with patch.object(repl, "read_numbered_choice", side_effect=AssertionError("Runtime Trust should approve")):
+            self.assertEqual(
+                repl._resolve_ai_approval_decision(vm, state, task, proposal),
+                "allow_once",
+            )
 
         vm.dictate("ai-confirm")
         self.assertNotIn("ai_trusted", vm.host)

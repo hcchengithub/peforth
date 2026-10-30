@@ -915,12 +915,10 @@ def _expire_ai_task_trust(state):
 
 
 def _resolve_ai_approval_decision(vm: VM, state: dict, task, proposal: dict) -> str:
-    """Resolve proposals while keeping Computer Use outside broad Trust scopes."""
+    """Resolve all proposals through shared task/runtime Trust scopes."""
     _expire_ai_task_trust(state)
-    computer_use = proposal.get("kind") == "computer_use"
-    if (not computer_use
-            and (vm.host.get("ai_trusted")
-                 or (task is not None and state.get("trusted_ai_task") is task))):
+    if (vm.host.get("ai_trusted")
+            or (task is not None and state.get("trusted_ai_task") is task)):
         return "allow_once"
     if task is None:
         raise ForthError("An AI approval proposal has no active Task.")
@@ -943,10 +941,7 @@ def _resolve_ai_approval_decision(vm: VM, state: dict, task, proposal: dict) -> 
     finally:
         del vm.stack[stack_depth:]
 
-    allowed_decisions = (
-        {"allow_once", "deny", "cancel"}
-        if computer_use else _AI_APPROVAL_DECISIONS
-    )
+    allowed_decisions = _AI_APPROVAL_DECISIONS
     if decision not in allowed_decisions:
         raise ForthError(f"{approval_name} returned an invalid decision: {decision!r}")
     if decision == "trust_task":
@@ -1046,9 +1041,8 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
                     vm.host.pop("ai_approval_result", None)
                     _clear_ai_task_trust(state, task)
                     continue
-                if (pending.get("kind") != "computer_use"
-                        and state.get("trusted_ai_task") is task and decision == "allow_once"):
-                    print("\nAI Forth proposal auto-approved for this AI task:")
+                if state.get("trusted_ai_task") is task and decision == "allow_once":
+                    print("\nAI proposal auto-approved for this AI task:")
                     print(f"Purpose: {pending['purpose']}\n---\n{pending['source']}\n---")
                 if decision in {"allow_once", "trust_task"}:
                     vm.host["ai_approval_result"] = True

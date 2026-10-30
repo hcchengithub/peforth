@@ -77,12 +77,24 @@ def _run_process(argv, input_text=None, timeout=_PROCESS_TIMEOUT):
     }
 
 
-def _herdr_process(args):
-    """Run one bounded Herdr CLI request and require a successful exit."""
+def _herdr_session_name(value):
+    if (not isinstance(value, str) or not value or value != value.strip()
+            or value.startswith("-") or len(value) > 256
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)):
+        raise ValueError("session must be a non-empty Herdr session name.")
+    return value
+
+
+def _herdr_process(args, session=None):
+    """Run one bounded Herdr CLI request in an optional named session."""
     executable = shutil.which("herdr")
     if not executable:
         raise RuntimeError("Herdr CLI is not available on this process PATH.")
-    result = _run_process([executable, *args], timeout=_HERDR_TIMEOUT)
+    argv = [executable]
+    if session is not None:
+        argv.extend(["--session", _herdr_session_name(session)])
+    argv.extend(args)
+    result = _run_process(argv, timeout=_HERDR_TIMEOUT)
     if result["timed_out"]:
         raise RuntimeError("Herdr CLI request timed out; inspect pane state before retrying.")
     if result.get("error"):
@@ -93,8 +105,8 @@ def _herdr_process(args):
     return result
 
 
-def _herdr_json(args):
-    result = _herdr_process(args)
+def _herdr_json(args, session=None):
+    result = _herdr_process(args, session=session)
     if result["truncated"]:
         raise RuntimeError("Herdr CLI JSON response exceeded the output limit.")
     try:
@@ -103,8 +115,8 @@ def _herdr_json(args):
         raise RuntimeError("Herdr CLI response was not valid JSON.") from None
 
 
-def _herdr_operation_response(args):
-    result = _herdr_process(args)
+def _herdr_operation_response(args, session=None):
+    result = _herdr_process(args, session=session)
     raw_stdout = result['stdout']
     try:
         response = json.loads(raw_stdout)
@@ -116,6 +128,7 @@ def _herdr_operation_response(args):
         'stderr': result['stderr'],
         'truncated': result['truncated'],
     }
+
 
 def _herdr_walk(value):
     if isinstance(value, dict):
@@ -152,11 +165,12 @@ def _herdr_context():
     return inherited_pane
 
 
-def _herdr_validate_pane(pane_id):
+def _herdr_validate_pane(pane_id, session=None):
     pane_id = _herdr_pane_id(pane_id)
-    _herdr_context()
+    if session is not None:
+        session = _herdr_session_name(session)
     workspace_id = pane_id.split(":", 1)[0]
-    listing = _herdr_json(["pane", "list", "--workspace", workspace_id])
+    listing = _herdr_json(["pane", "list", "--workspace", workspace_id], session=session)
     if not any(item.get("pane_id") == pane_id for item in _herdr_walk(listing)):
         raise RuntimeError(f"Herdr pane {pane_id} is not present in its workspace.")
     return pane_id
@@ -176,8 +190,10 @@ def _herdr_text_value(value):
     return ""
 
 
-def _herdr_screen_read(pane_id, source="visible", line_count=80):
-    pane_id = _herdr_validate_pane(pane_id)
+def _herdr_screen_read(pane_id, source="visible", line_count=80, session=None):
+    if session is not None:
+        session = _herdr_session_name(session)
+    pane_id = _herdr_validate_pane(pane_id, session=session)
     if source not in {"visible", "recent", "recent-unwrapped"}:
         raise ValueError("source must be visible, recent, or recent-unwrapped.")
     if isinstance(line_count, bool) or not isinstance(line_count, int) or line_count < 1:
@@ -186,7 +202,7 @@ def _herdr_screen_read(pane_id, source="visible", line_count=80):
     line_count = min(line_count, _HERDR_MAX_SCREEN_LINES)
     response = _herdr_process([
         "pane", "read", pane_id, "--source", source, "--lines", str(line_count),
-    ])
+    ], session=session)
     raw_text = response["stdout"]
     parsed = None
     try:
@@ -206,7 +222,7 @@ def _herdr_screen_read(pane_id, source="visible", line_count=80):
         truncation = truncation or any(
             item.get("truncated") is True for item in _herdr_walk(parsed)
         )
-    return {
+    snapshot = {
         "pane_id": pane_id,
         "source": source,
         "captured_at": datetime.now(timezone.utc).isoformat(),
@@ -220,6 +236,9 @@ def _herdr_screen_read(pane_id, source="visible", line_count=80):
             "truncated": response["truncated"],
         },
     }
+    if session is not None:
+        snapshot["session"] = session
+    return snapshot
 
 
 def _herdr_validate_operation_arguments(operation, arguments):
@@ -238,7 +257,7 @@ def _herdr_validate_operation_arguments(operation, arguments):
     return arguments
 
 
-def _herdr_activate_permit(vm, operation, pane_id, arguments):
+def _herdr_activate_permit(vm, operation, pane_id, arguments, session=None):
     token = secrets.token_bytes(32)
     _ACTIVE_HERDR_PERMITS.add(token)
     vm.host["_herdr_computer_use_permit"] = {
@@ -246,6 +265,7 @@ def _herdr_activate_permit(vm, operation, pane_id, arguments):
         "operation": operation,
         "pane_id": pane_id,
         "arguments": arguments,
+        "session": session,
         "used": False,
     }
     return token
@@ -258,16 +278,15 @@ def _herdr_deactivate_permit(vm, token):
         vm.host.pop("_herdr_computer_use_permit", None)
 
 
-def _herdr_forth_operation(vm, operation, pane_id, arguments):
+def _herdr_forth_operation(vm, operation, pane_id, arguments, session=None):
     _herdr_validate_operation_arguments(operation, arguments)
-    pane_id = _herdr_validate_pane(pane_id)
     permit = vm.host.get("_herdr_computer_use_permit")
+    if permit is not None:
+        session = permit.get("session", session)
+    if session is not None:
+        session = _herdr_session_name(session)
+    pane_id = _herdr_validate_pane(pane_id, session=session)
     if permit is None:
-        if vm.host.get("_ai_forth_execution"):
-            raise RuntimeError(
-                "Computer Use from peforth_run_forth is blocked; use computer_operate "
-                "so the dedicated ai-approve prompt can authorize this operation."
-            )
         includes_enter = (
             operation == "run"
             or (
@@ -276,11 +295,13 @@ def _herdr_forth_operation(vm, operation, pane_id, arguments):
                         for key in arguments)
             )
         )
+        approval_session = session if session is not None else "default"
         proposal = {
             "kind": "computer_use",
-            "purpose": f"Computer Use: {operation} on pane {pane_id}",
+            "purpose": f"Computer Use: {operation} on pane {pane_id} in session {approval_session}",
             "source": json.dumps(
                 {
+                    "session": approval_session,
                     "pane_id": pane_id,
                     "operation": operation,
                     "includes_enter": includes_enter,
@@ -300,7 +321,8 @@ def _herdr_forth_operation(vm, operation, pane_id, arguments):
           or permit.get("used")
           or permit.get("operation") != operation
           or permit.get("pane_id") != pane_id
-          or permit.get("arguments") != arguments):
+          or permit.get("arguments") != arguments
+          or permit.get("session") != session):
         raise RuntimeError("The pending Computer Use approval does not match this operation.")
     else:
         permit["used"] = True
@@ -312,7 +334,7 @@ def _herdr_forth_operation(vm, operation, pane_id, arguments):
     else:
         argv = ["pane", "run", pane_id, arguments]
     try:
-        result = _herdr_operation_response(argv)
+        result = _herdr_operation_response(argv, session=session)
     except Exception as exc:
         raise RuntimeError(
             f"Herdr operation result is unconfirmed; inspect pane {pane_id} before retrying. {exc}"
@@ -322,13 +344,16 @@ def _herdr_forth_operation(vm, operation, pane_id, arguments):
         'send_keys': 'keys',
         'run': 'command',
     }[operation]
-    return {
+    response = {
         'pane_id': pane_id,
         'operation': operation,
         argument_name: arguments,
         'success': True,
         'result': result,
     }
+    if session is not None:
+        response["session"] = session
+    return response
 
 
 def _http_body_text(raw, headers):

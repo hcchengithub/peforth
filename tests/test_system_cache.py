@@ -31,7 +31,7 @@ class SystemCacheTests(unittest.TestCase):
         self.assertEqual(detected["default_shell"], "pwsh")
 
     def test_default_shell_is_bash_on_wsl(self):
-        with patch.dict(os.environ, {"PEFORTH_CACHE_TTL": "0", "WSL_DISTRO_NAME": "Ubuntu"}), \
+        with patch.object(_f_mod.os, "name", "posix"), patch.dict(os.environ, {"PEFORTH_CACHE_TTL": "0", "WSL_DISTRO_NAME": "Ubuntu"}), \
                 patch.object(_f_mod.platform, "release", return_value="5.15.0-microsoft-standard-WSL2"), \
                 patch.object(_f_mod, "_latest_runtime_file_info", return_value=None):
             with patch.object(_f_mod, "_pwsh_info", return_value={"available": True, "path": "pwsh.exe", "version": "7"}), \

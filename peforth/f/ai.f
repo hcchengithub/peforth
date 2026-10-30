@@ -83,61 +83,42 @@ code (ai-approve-input)
     dim = "\x1b[2;37m"
     reset = "\x1b[0m"
     computer_use = proposal.get("kind") == "computer_use"
-    if computer_use:
-        print("\n"
-            f"{green_bold}Purpose: {purpose}{reset}\n\n"
-            f"{dim}Computer Use operation and complete parameters:{reset}\n"
-            f"{deep_green}{source}{reset}\n\n",
-            end="",
-            flush=True,
-        )
-        yield from vm.call(vm.tick("nokia"))
-        choice = read_numbered_choice(
-            "Choose 1-3: ",
-            choices=("1", "2", "3"),
-            default="2",
-            labels={
-                "1": "Allow this operation once",
-                "2": "Deny this operation",
-                "3": "Cancel this AI task",
-            },
-            styles={"1": green, "2": red, "3": dim},
-        )
-        decision = {"1": "allow_once", "2": "deny", "3": "cancel"}[choice]
-    else:
-        print("\n"
-            f"{green_bold}Purpose: {purpose}{reset}\n\n"
-            f"{dim}Forth action:{reset}\n"
-            f"{deep_green}{source}{reset}\n\n",
-            end="",
-            flush=True,
-        )
-        yield from vm.call(vm.tick("nokia"))
-        choice = read_numbered_choice(
-            "Choose 1-4: ",
-            default="1",
-            labels={
-                "1": "Allow Once",
-                "2": "Trust this AI task",
-                "3": "Deny this proposal",
-                "4": "Cancel this AI task",
-            },
-            styles={"1": green, "2": green, "3": red, "4": dim},
-        )
-        decision = {
-            "1": "allow_once",
-            "2": "trust_task",
-            "3": "deny",
-            "4": "cancel",
-        }[choice]
+    detail_label = (
+        "Computer Use operation and complete parameters:"
+        if computer_use else "Forth action:"
+    )
+    print("\n"
+        f"{green_bold}Purpose: {purpose}{reset}\n\n"
+        f"{dim}{detail_label}{reset}\n"
+        f"{deep_green}{source}{reset}\n\n",
+        end="",
+        flush=True,
+    )
+    yield from vm.call(vm.tick("nokia"))
+    choice = read_numbered_choice(
+        "Choose 1-4: ",
+        default="1",
+        labels={
+            "1": "Allow Once",
+            "2": "Trust this AI task",
+            "3": "Deny this proposal",
+            "4": "Cancel this AI task",
+        },
+        styles={"1": green, "2": green, "3": red, "4": dim},
+    )
+    decision = {
+        "1": "allow_once",
+        "2": "trust_task",
+        "3": "deny",
+        "4": "cancel",
+    }[choice]
+
     vm.push(decision)
     end-code
     // ( proposal -- decision ) Display the appropriate AI approval prompt.
     /// Proposal mapping requires string fields purpose and source.
-    /// proposal.kind chooses the flow: approval (or missing/unknown) uses the Forth proposal choices.
-    /// Forth proposals offer Allow Once, Trust this AI task, Deny, or Cancel.
-    /// computer_use displays exact pane operation parameters and offers Allow this operation once, Deny, or Cancel.
-    /// Task Trust and Runtime Trust never approve computer_use proposals.
+    /// All proposals offer Allow Once, Trust this AI task, Deny, or Cancel.
+    /// computer_use displays the exact pane operation parameters in the same approval flow.
 
 : ai-approve ( proposal -- decision )
     (ai-approve-input)
@@ -355,7 +336,7 @@ code herdr-screen-send-text
     result = yield from ai_tools._herdr_forth_operation(vm, "send_text", pane_id, text)
     vm.push(result)
     end-code
-    // ( pane-id text -- result ) Send text only with a live one-time Computer Use permit.
+    // ( pane-id text -- result ) Send text to the selected pane through the shared ai-approve flow.
 
 code herdr-screen-send-keys
     from peforth import ai_tools
@@ -380,7 +361,7 @@ code herdr-screen-run
     result = yield from ai_tools._herdr_forth_operation(vm, "run", pane_id, command)
     vm.push(result)
     end-code
-    // ( pane-id command -- result ) Run a command only with a live one-time Computer Use permit.
+    // ( pane-id command -- result ) Run a command in the selected pane through the shared ai-approve flow.
 
 code (ai)
     from peforth import ai_bridge
@@ -419,21 +400,41 @@ code (ai)
          "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "purpose": {"type": "string"}},
                         "required": ["source", "purpose"], "additionalProperties": False}},
         {"type": "function", "name": "computer_read_screen",
-         "description": "Read bounded text from an explicitly identified Herdr terminal pane. Read-only; requires a live Herdr-managed caller.",
+         "description": "Read bounded text from any pane in a selected Herdr session. Read-only; no caller pane, workspace, or session restriction. Omitted session uses default.",
          "parameters": {"type": "object", "properties": {
-             "pane_id": {"type": "string"},
-             "source": {"type": "string", "enum": ["visible", "recent-unwrapped"]},
-             "lines": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Maximum requested lines; requests above 1000 are capped. visible reads the current viewport."}},
+             "session": {"type": "string", "minLength": 1, "maxLength": 256, "default": "default",
+                         "description": "Herdr named session; defaults to default. No surrounding whitespace, control characters, or leading hyphen."},
+             "pane_id": {"type": "string", "pattern": "^w[0-9A-Za-z]+:p[0-9A-Za-z]+$"},
+             "source": {"type": "string", "enum": ["visible", "recent-unwrapped"], "default": "visible"},
+             "lines": {"type": "integer", "minimum": 1, "default": 80,
+                       "description": "Requested line count, default 80. Requests above 1000 are capped at 1000."}},
              "required": ["pane_id"], "additionalProperties": False}},
         {"type": "function", "name": "computer_operate",
-         "description": "Request one Herdr pane operation. Every operation requires a fresh one-time approval, including when Task Trust or Runtime Trust is active.",
-         "parameters": {"type": "object", "properties": {
-             "operation": {"type": "string", "enum": ["send_text", "send_keys", "run"]},
-             "pane_id": {"type": "string"},
-             "text": {"type": "string", "minLength": 1, "maxLength": 10000},
-             "keys": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 32}, "minItems": 1, "maxItems": 32},
-             "command": {"type": "string", "minLength": 1, "maxLength": 10000}},
-             "required": ["operation", "pane_id"], "additionalProperties": False}},
+         "description": "Request one operation in any pane of the selected Herdr session; no caller pane, workspace, or session restriction. The session defaults to default. Uses the shared ai-approve flow; Trust this AI task and Runtime Trust apply.",
+         "parameters": {"anyOf": [
+             {"type": "object", "properties": {
+                 "session": {"type": "string", "minLength": 1, "maxLength": 256, "default": "default",
+                             "description": "Herdr named session; defaults to default. No surrounding whitespace, control characters, or leading hyphen."},
+                 "operation": {"type": "string", "enum": ["send_text"]},
+                 "pane_id": {"type": "string", "pattern": "^w[0-9A-Za-z]+:p[0-9A-Za-z]+$"},
+                 "text": {"type": "string", "minLength": 1, "maxLength": 10000}},
+                 "required": ["operation", "pane_id", "text"], "additionalProperties": False},
+             {"type": "object", "properties": {
+                 "session": {"type": "string", "minLength": 1, "maxLength": 256, "default": "default",
+                             "description": "Herdr named session; defaults to default. No surrounding whitespace, control characters, or leading hyphen."},
+                 "operation": {"type": "string", "enum": ["send_keys"]},
+                 "pane_id": {"type": "string", "pattern": "^w[0-9A-Za-z]+:p[0-9A-Za-z]+$"},
+                 "keys": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 32},
+                          "minItems": 1, "maxItems": 32}},
+                 "required": ["operation", "pane_id", "keys"], "additionalProperties": False},
+             {"type": "object", "properties": {
+                 "session": {"type": "string", "minLength": 1, "maxLength": 256, "default": "default",
+                             "description": "Herdr named session; defaults to default. No surrounding whitespace, control characters, or leading hyphen."},
+                 "operation": {"type": "string", "enum": ["run"]},
+                 "pane_id": {"type": "string", "pattern": "^w[0-9A-Za-z]+:p[0-9A-Za-z]+$"},
+                 "command": {"type": "string", "minLength": 1, "maxLength": 10000}},
+                 "required": ["operation", "pane_id", "command"], "additionalProperties": False}
+         ]}},
     ]
     if vm.host.get("_diagnostic_tick_heartbeat_word") is None:
         tools = [tool for tool in tools if tool["name"] != "peforth_tick_heartbeat"]
@@ -753,6 +754,12 @@ code (ai)
                     elif name == "computer_read_screen":
                         from peforth import ai_tools
 
+                        allowed_arguments = {"session", "pane_id", "source", "lines"}
+                        if not set(arguments).issubset(allowed_arguments):
+                            raise ValueError(
+                                "computer_read_screen accepts only session, pane_id, source, and lines."
+                            )
+                        session = ai_tools._herdr_session_name(arguments.get("session", "default"))
                         pane_id = arguments.get("pane_id")
                         source = arguments.get("source", "visible")
                         line_count = arguments.get("lines", 80)
@@ -761,29 +768,19 @@ code (ai)
                         if isinstance(line_count, bool) or not isinstance(line_count, int) or line_count < 1:
                             raise ValueError("lines must be a positive integer.")
                         pane_id = ai_tools._herdr_pane_id(pane_id)
-                        word_name = "herdr-screen-read" if source == "visible" else "herdr-screen-tail"
-                        word = vm.tick(word_name)
-                        if word is None:
-                            raise RuntimeError(f"The {word_name} Forth word is not defined.")
-                        stack_depth = len(vm.stack)
-                        vm.push(pane_id)
-                        vm.push(line_count)
-                        try:
-                            yield from vm.call(word)
-                            if len(vm.stack) != stack_depth + 1:
-                                raise RuntimeError(f"{word_name} must return exactly one snapshot.")
-                            snapshot = vm.pop()
-                        finally:
-                            del vm.stack[stack_depth:]
+                        snapshot = ai_tools._herdr_screen_read(
+                            pane_id, source, line_count, session=session
+                        )
                         tool_result_text = json.dumps(snapshot, ensure_ascii=False, default=str)
                         ai_bridge._diagnostic_action_event(
                             diagnostic_context, "tool_call_completed", action,
                             elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
                             payload={
+                                "session": session,
                                 "pane_id": pane_id,
                                 "source": source,
-                                "line_count": snapshot.get("line_count") if isinstance(snapshot, dict) else None,
-                                "truncated": snapshot.get("truncated") if isinstance(snapshot, dict) else None,
+                                "line_count": snapshot.get("line_count"),
+                                "truncated": snapshot.get("truncated"),
                                 "result_persisted": False,
                             },
                         )
@@ -794,6 +791,7 @@ code (ai)
                     elif name == "computer_operate":
                         from peforth import ai_tools
 
+                        session = ai_tools._herdr_session_name(arguments.get("session", "default"))
                         operation = arguments.get("operation")
                         pane_id = ai_tools._herdr_pane_id(arguments.get("pane_id"))
                         operation_fields = {
@@ -804,13 +802,17 @@ code (ai)
                         if operation not in operation_fields:
                             raise ValueError("operation must be send_text, send_keys, or run.")
                         argument_key, word_name = operation_fields[operation]
-                        if set(arguments) != {"operation", "pane_id", argument_key}:
+                        expected_arguments = {"operation", "pane_id", argument_key}
+                        if "session" in arguments:
+                            expected_arguments.add("session")
+                        if set(arguments) != expected_arguments:
                             raise ValueError(
-                                f"{operation} requires exactly operation, pane_id, and {argument_key}."
+                                f"{operation} requires operation, pane_id, {argument_key}, "
+                                "and an optional session."
                             )
                         operation_arguments = arguments[argument_key]
                         ai_tools._herdr_validate_operation_arguments(operation, operation_arguments)
-                        ai_tools._herdr_validate_pane(pane_id)
+                        ai_tools._herdr_validate_pane(pane_id, session=session)
                         includes_enter = (
                             operation == "run"
                             or (
@@ -820,6 +822,7 @@ code (ai)
                             )
                         )
                         display = {
+                            "session": session,
                             "pane_id": pane_id,
                             "operation": operation,
                             "includes_enter": includes_enter,
@@ -828,16 +831,18 @@ code (ai)
                         proposal = {
                             "kind": "computer_use",
                             "action": action,
+                            "session": session,
                             "pane_id": pane_id,
                             "operation": operation,
                             "arguments": operation_arguments,
-                            "purpose": f"Computer Use: {operation} on pane {pane_id}",
+                            "purpose": f"Computer Use: {operation} on pane {pane_id} in session {session}",
                             "source": json.dumps(display, ensure_ascii=False, sort_keys=True),
                             "diagnostic_context": diagnostic_context,
                         }
                         diagnostic_operation = json.dumps(
                             {
                                 "kind": "computer_use",
+                                "session": session,
                                 "operation": operation,
                                 "pane_id": pane_id,
                                 "parameters_omitted": True,
@@ -851,7 +856,10 @@ code (ai)
                         ai_bridge._diagnostic_action_event(
                             diagnostic_context, "approval_requested", action,
                             content_id=proposal["source_content_id"],
-                            payload={"kind": "computer_use", "operation": operation, "pane_id": pane_id},
+                            payload={
+                                "kind": "computer_use", "session": session,
+                                "operation": operation, "pane_id": pane_id,
+                            },
                         )
                         proposal["approval_started_ns"] = approval_started_ns
                         vm.host["ai_pending_approval"] = proposal
@@ -893,7 +901,7 @@ code (ai)
                                 raise RuntimeError(f"The {word_name} Forth word is not defined.")
                             try:
                                 token = ai_tools._herdr_activate_permit(
-                                    vm, operation, pane_id, operation_arguments
+                                    vm, operation, pane_id, operation_arguments, session=session
                                 )
                                 stack_depth = len(vm.stack)
                                 vm.push(pane_id)
@@ -920,6 +928,7 @@ code (ai)
                                     payload={
                                         "stage": "herdr_operation",
                                         "approved": True,
+                                        "session": session,
                                         "operation": operation,
                                         "pane_id": pane_id,
                                     },
@@ -935,6 +944,7 @@ code (ai)
                                     elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
                                     payload={
                                         "approved": True,
+                                        "session": session,
                                         "operation": operation,
                                         "pane_id": pane_id,
                                         "result_persisted": False,

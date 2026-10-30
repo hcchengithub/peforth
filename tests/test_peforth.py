@@ -957,6 +957,24 @@ class ReplBootstrapTests(unittest.TestCase):
             vm.execute(vm.tick("(ai)"))
 
         functions = captured["agent"]["tools"]
+        read_spec = next(tool for tool in functions if tool["name"] == "computer_read_screen")
+        read_parameters = read_spec["parameters"]["properties"]
+        self.assertEqual(read_parameters["session"]["default"], "default")
+        self.assertEqual(read_parameters["source"]["default"], "visible")
+        self.assertEqual(read_parameters["lines"]["default"], 80)
+        self.assertNotIn("maximum", read_parameters["lines"])
+        self.assertIn("any pane", read_spec["description"])
+        operate_spec = next(tool for tool in functions if tool["name"] == "computer_operate")
+        self.assertIn("Runtime Trust apply", operate_spec["description"])
+        variants = operate_spec["parameters"]["anyOf"]
+        self.assertEqual(len(variants), 3)
+        for variant, operation, argument in zip(
+                variants, ("send_text", "send_keys", "run"), ("text", "keys", "command")):
+            self.assertEqual(variant["properties"]["operation"]["enum"], [operation])
+            self.assertIn("pane_id", variant["required"])
+            self.assertIn(argument, variant["required"])
+            self.assertEqual(variant["properties"]["session"]["default"], "default")
+            self.assertFalse(variant["additionalProperties"])
         self.assertEqual([tool["name"] for tool in functions],
                          ["peforth_search_words", "peforth_tick_heartbeat", "peforth_run_forth", "computer_read_screen", "computer_operate"])
         instructions = captured["agent"]["instructions"]
