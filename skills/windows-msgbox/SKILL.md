@@ -17,13 +17,13 @@ It automatically probes `/run/WSL/*_interop` to find a live WSL interop socket (
 ### 1. Non-blocking popup (returns immediately while dialog stays on screen)
 
 ```bash
-bash ~/.gemini/config/skills/windows-msgbox/scripts/send_msgbox.sh "時間到囉！記得休息一下～"
+bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh "時間到囉！記得休息一下～"
 ```
 
 ### 2. Custom title and icon
 
 ```bash
-bash ~/.gemini/config/skills/windows-msgbox/scripts/send_msgbox.sh \
+bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh \
   --title "🌬️ 頭痛熱敷提醒" \
   --icon Information \
   --message "記得拿吹風機給頭痛吹吹熱風喔！"
@@ -34,5 +34,5 @@ Supported `--icon` values: `Information` (default), `Warning`, `Error`, `Questio
 ### 3. Wait for user to click OK (`--wait`)
 
 ```bash
-bash ~/.gemini/config/skills/windows-msgbox/scripts/send_msgbox.sh --wait "請確認後按下確定繼續執行"
+bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh --wait "請確認後按下確定繼續執行"
 ```
