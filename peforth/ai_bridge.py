@@ -705,6 +705,7 @@ def _agent_instructions():
     reference_text = reference_path.read_text(encoding="utf-8") if reference_path.is_file() else ""
     intro = (
         "You assist with peforth Forth. Use the live dictionary tool before relying on unfamiliar words. "
+        "For local shell commands, use the host default_shell from the Runtime capability inventory unless the user explicitly requests another shell or the task requires another shell's syntax. Windows defaults to pwsh; WSL/Linux defaults to bash. The shells entries list available executors and do not override default_shell. "
         "Only the local Forth tool can execute code. Use peforth_tick_heartbeat only for meaningful milestones, not periodic or repeated status messages; it records a diagnostic message and cannot execute Forth. Approval scopes: Yes (allow_once) approves one proposal; Trust this AI task applies only for later proposals in the same AI Task and expires when that Task completes, fails, or is cancelled; Runtime Trust must be explicitly enabled with ai-trust-runtime and lasts in this Forth process until ai-confirm or process exit. ai-confirm revokes Runtime Trust and any active Task Trust. Never infer Trust from a prior Yes or from a different AI Task.\n\n"
     )
     instructions = intro + combined_text

@@ -945,8 +945,14 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertNotIn("Project K", instructions)
         self.assertIn("Trust this AI task", instructions)
         self.assertIn("ai-trust-runtime", instructions)
+        self.assertIn("use the host default_shell", instructions)
+        self.assertIn("Windows defaults to pwsh; WSL/Linux defaults to bash", instructions)
         inventory_text = instructions.split("## Runtime capability inventory\n", 1)[1]
         inventory = json.loads(inventory_text)
+        self.assertEqual(
+            inventory["host"]["default_shell"],
+            "pwsh" if _f_mod.os.name == "nt" else "bash",
+        )
         self.assertEqual(
             inventory["host"]["runtime_latest"],
             _f_mod._latest_runtime_file_info(pathlib.Path(_f_mod.__file__).resolve().parent),

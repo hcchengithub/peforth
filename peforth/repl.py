@@ -461,6 +461,7 @@ def _detect_system_info(cache_path: Path | None = None) -> dict:
             })
     return {
         "os": platform.system(), "platform": sys.platform,
+        "default_shell": "pwsh" if is_windows else "bash",
         "source_path": _reported_source_path(),
         "runtime_path": str(RUNTIME_PATH),
         "runtime_latest": _latest_runtime_file_info(RUNTIME_PATH),
