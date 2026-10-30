@@ -703,6 +703,23 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.dictate("cls")
         self.assertEqual(output.getvalue(), "\x1b[2J\x1b[H")
 
+    def test_pwsh_and_bash_words_are_defined_and_validate_inputs(self):
+        for name in ("bash", "(bash)", "pwsh", "(pwsh)"):
+            word = self.vm.tick(name)
+            self.assertIsNotNone(word, name)
+            self.assertTrue(word.help, name)
+            self.assertTrue(word.comment, name)
+
+        self.vm.push(123)
+        self.vm.dictate("(pwsh)")
+        self.assertEqual(self.vm.pop()["error"], "(pwsh) expects a command line string.")
+
+        self.vm.push("   ")
+        self.vm.dictate("(pwsh)")
+        self.assertEqual(self.vm.pop(), {
+            "exit_code": 2, "output": "", "truncated": False, "error": "empty command line",
+        })
+
     def test_bracket_conditionals_select_arms_and_handle_nested_skips(self):
         self.vm.dictate("1 [if] 11 [else] 22 [then]")
         self.vm.dictate("0 [if] 33 [else] 44 [then]")

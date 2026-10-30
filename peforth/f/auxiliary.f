@@ -517,3 +517,111 @@ code (bash)
     /// Submit multiline commands as one TIB input; separately submitted lines are not collected together.
     /// The command runs with the current user's privileges, not sudo.
     /// The result dictionary is left on the data stack; use stringify . in the next input to display it.
+
+code (pwsh)
+    import os
+    import shutil
+
+    command_line = vm.pop()
+    if not isinstance(command_line, str):
+        vm.push({
+            "exit_code": None,
+            "output": "",
+            "truncated": False,
+            "error": "(pwsh) expects a command line string.",
+        })
+        return
+
+    if not command_line.strip():
+        vm.push({
+            "exit_code": 2,
+            "output": "",
+            "truncated": False,
+            "error": "empty command line",
+        })
+        return
+
+    pwsh_info = (vm.host.get("system_info") or {}).get("shells", {}).get("pwsh", {})
+    pwsh_path = pwsh_info.get("path")
+    if not pwsh_path:
+        pwsh_path = shutil.which("pwsh") or shutil.which("pwsh.exe") or "pwsh"
+    if not pwsh_info.get("available") and not shutil.which(pwsh_path):
+        vm.push({
+            "exit_code": None,
+            "output": "",
+            "truncated": False,
+            "error": "PowerShell 7 (pwsh) is not available in this environment.",
+        })
+        return
+
+    output_limit = 65536
+    captured = bytearray()
+    truncated = [False]
+
+    try:
+        import pty
+        has_pty = True
+    except ImportError:
+        has_pty = False
+
+    if has_pty:
+        def read_master(fd):
+            try:
+                chunk = os.read(fd, 1024)
+            except OSError:
+                return b""
+
+            room = max(0, output_limit - len(captured))
+            if room:
+                captured.extend(chunk[:room])
+            if len(chunk) > room:
+                truncated[0] = True
+
+            return chunk
+
+        status = pty.spawn(
+            [pwsh_path, "-NoLogo", "-Command", command_line],
+            master_read=read_master,
+        )
+        exit_code = os.waitstatus_to_exitcode(status)
+    else:
+        import subprocess
+        import sys
+
+        proc = subprocess.Popen(
+            [pwsh_path, "-NoLogo", "-Command", command_line],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        while True:
+            chunk = proc.stdout.read(1024)
+            if not chunk:
+                break
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+            room = max(0, output_limit - len(captured))
+            if room:
+                captured.extend(chunk[:room])
+            if len(chunk) > room:
+                truncated[0] = True
+        proc.wait()
+        exit_code = proc.returncode
+
+    vm.push({
+        "exit_code": exit_code,
+        "output": captured.decode("utf-8", errors="replace"),
+        "truncated": truncated[0],
+    })
+    end-code
+    // ( command-line -- result-dict ) Execute a command script in PowerShell 7 (pwsh).
+    /// pwsh inherits the current working directory and environment.
+    /// Output is shown live and returned as combined output, capped at 65536 bytes.
+    /// Returns a dictionary with exit_code, output, and truncated.
+    /// Blocks until the command exits.
+
+: pwsh "" word (pwsh) ;
+    // ( -- result-dict ) Run the remaining TIB text in PowerShell 7 (pwsh).
+    /// Consumes all remaining TIB text, including newlines, and passes it to (pwsh).
+    /// Submit multiline commands as one TIB input; separately submitted lines are not collected together.
+    /// The command runs with the current user's privileges.
+    /// The result dictionary is left on the data stack; use stringify . in the next input to display it.
