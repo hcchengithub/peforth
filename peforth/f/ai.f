@@ -472,6 +472,7 @@ code (ai)
             },
             "host": {
                 "os": runtime_info.get("os"),
+                "default_shell": runtime_info.get("default_shell"),
                 "python": runtime_info.get("python"),
                 "venv": runtime_info.get("venv"),
                 "wsl": runtime_info.get("wsl"),

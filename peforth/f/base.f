@@ -20,6 +20,23 @@ code ///
         word.comment = (getattr(word, "comment", "") or "") + line
     end-code immediate
 
+code \
+    curr = vm.input.remaining
+    pos = curr.find("\n")
+    if pos < 0:
+        vm.input.consume(len(curr))
+    else:
+        vm.input.consume(pos + 1)
+    end-code immediate
+    // ( <line> -- ) Skip line comment to newline.
+    /// Immediate word that ignores all characters up to the next newline.
+
+code (
+    vm.input.read(until=")")
+    end-code immediate
+    // ( <comment> ) Skip parenthetical comment.
+    /// Immediate word that ignores all characters up to the matching right parenthesis.
+
 code (last)
     name = vm.input.read()
     if name is not None:
@@ -37,14 +54,6 @@ code (last)
 (last) end-code
     // ( -- ) Terminate a Python host code definition.
     /// Delimiter that ends a host code block and installs it into the dictionary.
-
-(last) \
-    // ( <line> -- ) Skip line comment to newline.
-    /// Immediate word that ignores all characters up to the next newline.
-
-(last) (
-    // ( <comment> ) Skip parenthetical comment.
-    /// Immediate word that ignores all characters up to the matching right parenthesis.
 
 (last) immediate
     // ( -- ) Mark the most recently defined word as immediate.
@@ -1220,3 +1229,16 @@ code trim
     if not isinstance(value,str): raise TypeError("trim expects a string")
     vm.push(value.strip())
     end-code // ( string -- string' ) Strip leading and trailing whitespace.
+
+\ REPL greeting text after the Python-printed heading.
+: greeting ( -- )
+    cr
+    ." Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth."
+    cr cr
+    ." Enter submits / Ctrl+J or Esc then Enter adds a line."
+    cr
+    ." chat  AI chat / forth  Forth mode / bye or Ctrl-D  Exit"
+    cr cr ;
+
+\ Load default system extensions and modules.
+include peforth.f

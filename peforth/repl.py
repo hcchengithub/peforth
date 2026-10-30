@@ -56,7 +56,7 @@ def _latest_runtime_file_info(runtime_path: Path = RUNTIME_PATH) -> dict | None:
 
 
 def _greeting_fragments(system_info: dict) -> list[tuple[str, str]]:
-    """Build styled text fragments for the interactive REPL greeting."""
+    """Build styled fragments for the two-line REPL heading."""
     latest = system_info.get("runtime_latest")
     modified = latest.get("modified") if isinstance(latest, dict) else None
     fragments = [
@@ -68,29 +68,20 @@ def _greeting_fragments(system_info: dict) -> list[tuple[str, str]]:
             ("", " · Runtime modified: "),
             ("class:greeting.metadata", modified),
         ])
-    fragments.extend([
-        ("", "\n\nEnter submits / Ctrl+J or Esc then Enter adds a line.\n"),
-        ("class:greeting.command", "chat"),
-        ("", "  AI chat / "),
-        ("class:greeting.command", "forth"),
-        ("", "  Forth mode / "),
-        ("class:greeting.command", "bye"),
-        ("", " or "),
-        ("class:greeting.key", "Ctrl-D"),
-        ("", "  Exit"),
-    ])
     return fragments
 
 
-def _print_greeting(system_info: dict) -> None:
-    """Print the REPL greeting with restrained prompt_toolkit styling."""
+def _print_greeting_heading(system_info: dict) -> None:
+    """Print only the title and REPL metadata; base.f prints the rest."""
     style = Style.from_dict({
         "greeting.title": "bold #5fd7ff",
         "greeting.metadata": "#888888",
-        "greeting.command": "bold #87d787",
-        "greeting.key": "bold #87d787",
+        "greeting.command": "#87d787",
+        "greeting.key": "#87d787",
     })
-    print_formatted_text(FormattedText(_greeting_fragments(system_info)), style=style, end="\n\n")
+    print_formatted_text(
+        FormattedText(_greeting_fragments(system_info)), style=style, end=""
+    )
 
 
 def _chat_turn_width() -> int:
@@ -289,21 +280,6 @@ def _run_process(argv, input_text=None, timeout=_PROCESS_TIMEOUT):
 
 
 BASE_F_PATH = FORTH_SOURCE_ROOT.joinpath("base.f")
-AI_F_PATH = FORTH_SOURCE_ROOT.joinpath("ai.f")
-AUXILIARY_F_PATH = FORTH_SOURCE_ROOT.joinpath("auxiliary.f")
-
-
-def _comment_line(vm: VM) -> None:
-    curr = vm.input.remaining
-    pos = curr.find("\n")
-    if pos < 0:
-        vm.input.consume(len(curr))
-    else:
-        vm.input.consume(pos + 1)
-
-
-def _comment_paren(vm: VM) -> None:
-    vm.input.read(until=")")
 
 
 def _program_info(name, version_args):
@@ -470,6 +446,7 @@ def _detect_system_info(cache_path: Path | None = None) -> dict:
             })
     return {
         "os": platform.system(), "platform": sys.platform,
+        "default_shell": "pwsh" if is_windows else "bash",
         "source_path": _reported_source_path(),
         "runtime_path": str(RUNTIME_PATH),
         "runtime_latest": _latest_runtime_file_info(RUNTIME_PATH),
@@ -554,6 +531,7 @@ def create_vm(base_file: str | None = None, *, launch_context: dict | None = Non
         "initial_repl_mode": initial_repl_mode,
     }
     diagnostic_mode = _diagnostic_log_mode()
+    system_info.setdefault("runtime_path", str(RUNTIME_PATH))
     config = system_info.setdefault("config", {})
     config["PEFORTH_AI_LOG_MODE"] = diagnostic_mode
     diagnostic_log = None
@@ -599,10 +577,6 @@ def create_vm(base_file: str | None = None, *, launch_context: dict | None = Non
         vm, "repl_input_mode_state",
         payload={"mode": initial_repl_mode, "reason": "startup"},
     )
-    # Comments support
-    vm.define("\\", _comment_line, immediate=True)
-    vm.define("(", _comment_paren, immediate=True)
-
     target_base = base_file or BASE_F_PATH
     if hasattr(target_base, "read_text"):
         bootstrap = target_base.read_text(encoding="utf-8")
@@ -615,8 +589,6 @@ def create_vm(base_file: str | None = None, *, launch_context: dict | None = Non
     heartbeat_word = vm.tick("tickHeartbeat")
     if heartbeat_word is not None:
         vm.host["_diagnostic_tick_heartbeat_word"] = heartbeat_word
-    vm.dictate(AUXILIARY_F_PATH.read_text(encoding="utf-8"))
-    vm.dictate(AI_F_PATH.read_text(encoding="utf-8"))
     return vm
 
 
@@ -1025,7 +997,8 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
     )
 
     if show_greeting:
-        _print_greeting(vm.host.get("system_info") or {})
+        _print_greeting_heading(vm.host.get("system_info") or {})
+        vm.dictate("greeting")
 
     vm.host.setdefault("repl_mode", "forth")
     state = {"in_code_block": False, "code_buffer": [], "ai_task": initial_task,

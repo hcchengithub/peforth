@@ -669,12 +669,14 @@ class ReplBootstrapTests(unittest.TestCase):
     def test_forth_sources_are_loaded_from_f_package(self):
         self.assertEqual(_f_mod.FORTH_SOURCE_ROOT.name, "f")
         self.assertEqual(_f_mod.BASE_F_PATH.name, "base.f")
-        self.assertEqual(_f_mod.AI_F_PATH.name, "ai.f")
-        self.assertEqual(_f_mod.AUXILIARY_F_PATH.name, "auxiliary.f")
+        self.assertFalse(hasattr(_f_mod, "AI_F_PATH"))
+        self.assertFalse(hasattr(_f_mod, "AUXILIARY_F_PATH"))
+        self.assertFalse(hasattr(_f_mod, "_comment_line"))
+        self.assertFalse(hasattr(_f_mod, "_comment_paren"))
         package_dir = pathlib.Path(_f_mod.__file__).resolve().parent
-        self.assertFalse((package_dir / "base.f").exists())
-        self.assertFalse((package_dir / "ai.f").exists())
-        self.assertFalse((package_dir / "auxiliary.f").exists())
+        for name in ("base.f", "peforth.f", "ai.f", "auxiliary.f"):
+            self.assertTrue((package_dir / "f" / name).is_file(), name)
+            self.assertFalse((package_dir / name).exists(), name)
 
     def test_question_dup_is_loaded_from_bootstrap(self):
         self.vm.dictate("0 ?dup 1 ?dup")
@@ -700,6 +702,23 @@ class ReplBootstrapTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             self.vm.dictate("cls")
         self.assertEqual(output.getvalue(), "\x1b[2J\x1b[H")
+
+    def test_pwsh_and_bash_words_are_defined_and_validate_inputs(self):
+        for name in ("bash", "(bash)", "pwsh", "(pwsh)"):
+            word = self.vm.tick(name)
+            self.assertIsNotNone(word, name)
+            self.assertTrue(word.help, name)
+            self.assertTrue(word.comment, name)
+
+        self.vm.push(123)
+        self.vm.dictate("(pwsh)")
+        self.assertEqual(self.vm.pop()["error"], "(pwsh) expects a command line string.")
+
+        self.vm.push("   ")
+        self.vm.dictate("(pwsh)")
+        self.assertEqual(self.vm.pop(), {
+            "exit_code": 2, "output": "", "truncated": False, "error": "empty command line",
+        })
 
     def test_bracket_conditionals_select_arms_and_handle_nested_skips(self):
         self.vm.dictate("1 [if] 11 [else] 22 [then]")
@@ -945,8 +964,14 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertNotIn("Project K", instructions)
         self.assertIn("Trust this AI task", instructions)
         self.assertIn("ai-trust-runtime", instructions)
+        self.assertIn("use the host default_shell", instructions)
+        self.assertIn("Windows defaults to pwsh; WSL/Linux defaults to bash", instructions)
         inventory_text = instructions.split("## Runtime capability inventory\n", 1)[1]
         inventory = json.loads(inventory_text)
+        self.assertEqual(
+            inventory["host"]["default_shell"],
+            "pwsh" if _f_mod.os.name == "nt" else "bash",
+        )
         self.assertEqual(
             inventory["host"]["runtime_latest"],
             _f_mod._latest_runtime_file_info(pathlib.Path(_f_mod.__file__).resolve().parent),
@@ -1006,17 +1031,15 @@ class ReplBootstrapTests(unittest.TestCase):
             info = _f_mod._latest_runtime_file_info(pathlib.Path(directory))
         self.assertIsNone(info)
 
-    def test_repl_greeting_fragments_include_runtime_and_command_hints(self):
+    def test_repl_greeting_fragments_only_include_runtime_heading(self):
         info = {"runtime_latest": {"file": "f/auxiliary.f", "modified": "2026-10-12 23:37:29"}}
         fragments = _f_mod._greeting_fragments(info)
         self.assertEqual(
             "".join(text for _style, text in fragments),
-            "\np e f o r t h   v 2\nForth REPL · Runtime modified: 2026-10-12 23:37:29"
-            "\n\nEnter submits / Ctrl+J or Esc then Enter adds a line.\n"
-            "chat  AI chat / forth  Forth mode / bye or Ctrl-D  Exit",
+            "\np e f o r t h   v 2\nForth REPL · Runtime modified: 2026-10-12 23:37:29",
         )
         self.assertEqual(fragments[0][0], "class:greeting.title")
-        self.assertEqual(_f_mod._greeting_fragments({})[0][1], "\np e f o r t h   v 2")
+        self.assertEqual(_f_mod._greeting_fragments({})[-1][1], "\nForth REPL")
 
     def test_reported_source_path_expands_windows_userprofile_placeholder(self):
         configured = r"%USERPROFILE%\OneDrive\Documents\GitHub\peforth"

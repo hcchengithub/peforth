@@ -18,6 +18,28 @@ class SystemCacheTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_default_shell_is_pwsh_on_windows(self):
+        with patch.object(_f_mod.os, "name", "nt"), \
+                patch.object(_f_mod.platform, "system", return_value="Windows"), \
+                patch.dict(os.environ, {"PEFORTH_CACHE_TTL": "0"}), \
+                patch.object(_f_mod, "_latest_runtime_file_info", return_value=None):
+            with patch.object(_f_mod, "_pwsh_info", return_value={"available": True, "path": "pwsh.exe", "version": "7"}), \
+                    patch.object(_f_mod, "_windows_wsl_info", return_value={"available": False, "distros": []}), \
+                    patch.object(_f_mod, "_program_info", return_value={"available": True, "path": "bash", "version": "bash"}):
+                detected = _f_mod._detect_system_info(cache_path=self.cache_path)
+
+        self.assertEqual(detected["default_shell"], "pwsh")
+
+    def test_default_shell_is_bash_on_wsl(self):
+        with patch.dict(os.environ, {"PEFORTH_CACHE_TTL": "0", "WSL_DISTRO_NAME": "Ubuntu"}), \
+                patch.object(_f_mod.platform, "release", return_value="5.15.0-microsoft-standard-WSL2"), \
+                patch.object(_f_mod, "_latest_runtime_file_info", return_value=None):
+            with patch.object(_f_mod, "_pwsh_info", return_value={"available": True, "path": "pwsh.exe", "version": "7"}), \
+                    patch.object(_f_mod, "_program_info", return_value={"available": True, "path": "/usr/bin/bash", "version": "bash"}):
+                detected = _f_mod._detect_system_info(cache_path=self.cache_path)
+
+        self.assertEqual(detected["default_shell"], "bash")
+
     def test_cache_is_created_on_first_run_and_hit_on_second_run(self):
         calls = []
 
