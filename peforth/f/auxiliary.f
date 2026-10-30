@@ -452,3 +452,68 @@ code (sudo)
     /// Submit multiline commands as one TIB input; separately submitted lines are not collected together.
     /// Put sudo last in the Forth submission: all following text becomes the root shell script.
     /// The result dictionary is left on the data stack; use stringify . in the next input to display it.
+
+code (bash)
+    import os
+    import pty
+
+    command_line = vm.pop()
+    if not isinstance(command_line, str):
+        vm.push({
+            "exit_code": None,
+            "output": "",
+            "truncated": False,
+            "error": "(bash) expects a command line string.",
+        })
+        return
+
+    if not command_line.strip():
+        vm.push({
+            "exit_code": 2,
+            "output": "",
+            "truncated": False,
+            "error": "empty command line",
+        })
+        return
+
+    output_limit = 65536
+    captured = bytearray()
+    truncated = [False]
+
+    def read_master(fd):
+        try:
+            chunk = os.read(fd, 1024)
+        except OSError:
+            return b""
+
+        room = max(0, output_limit - len(captured))
+        if room:
+            captured.extend(chunk[:room])
+        if len(chunk) > room:
+            truncated[0] = True
+
+        return chunk
+
+    status = pty.spawn(
+        ["bash", "-i", "-c", command_line],
+        master_read=read_master,
+    )
+
+    vm.push({
+        "exit_code": os.waitstatus_to_exitcode(status),
+        "output": captured.decode("utf-8", errors="replace"),
+        "truncated": truncated[0],
+    })
+    end-code
+    // ( command-line -- result-dict ) Execute a command script in interactive Bash on a PTY.
+    /// Bash inherits the current working directory and environment, and reads interactive startup configuration.
+    /// PTY output is shown live and returned as combined output, capped at 65536 bytes.
+    /// Returns a dictionary with exit_code, output, and truncated.
+    /// Blocks until the command exits; terminal input and control keys are forwarded to Bash.
+
+: bash "" word (bash) ;
+    // ( -- result-dict ) Run the remaining TIB text in interactive Bash.
+    /// Consumes all remaining TIB text, including newlines, and passes it to (bash).
+    /// Submit multiline commands as one TIB input; separately submitted lines are not collected together.
+    /// The command runs with the current user's privileges, not sudo.
+    /// The result dictionary is left on the data stack; use stringify . in the next input to display it.
