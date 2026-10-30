@@ -669,12 +669,14 @@ class ReplBootstrapTests(unittest.TestCase):
     def test_forth_sources_are_loaded_from_f_package(self):
         self.assertEqual(_f_mod.FORTH_SOURCE_ROOT.name, "f")
         self.assertEqual(_f_mod.BASE_F_PATH.name, "base.f")
-        self.assertEqual(_f_mod.AI_F_PATH.name, "ai.f")
-        self.assertEqual(_f_mod.AUXILIARY_F_PATH.name, "auxiliary.f")
+        self.assertFalse(hasattr(_f_mod, "AI_F_PATH"))
+        self.assertFalse(hasattr(_f_mod, "AUXILIARY_F_PATH"))
+        self.assertFalse(hasattr(_f_mod, "_comment_line"))
+        self.assertFalse(hasattr(_f_mod, "_comment_paren"))
         package_dir = pathlib.Path(_f_mod.__file__).resolve().parent
-        self.assertFalse((package_dir / "base.f").exists())
-        self.assertFalse((package_dir / "ai.f").exists())
-        self.assertFalse((package_dir / "auxiliary.f").exists())
+        for name in ("base.f", "peforth.f", "ai.f", "auxiliary.f"):
+            self.assertTrue((package_dir / "f" / name).is_file(), name)
+            self.assertFalse((package_dir / name).exists(), name)
 
     def test_question_dup_is_loaded_from_bootstrap(self):
         self.vm.dictate("0 ?dup 1 ?dup")

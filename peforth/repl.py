@@ -280,21 +280,6 @@ def _run_process(argv, input_text=None, timeout=_PROCESS_TIMEOUT):
 
 
 BASE_F_PATH = FORTH_SOURCE_ROOT.joinpath("base.f")
-AI_F_PATH = FORTH_SOURCE_ROOT.joinpath("ai.f")
-AUXILIARY_F_PATH = FORTH_SOURCE_ROOT.joinpath("auxiliary.f")
-
-
-def _comment_line(vm: VM) -> None:
-    curr = vm.input.remaining
-    pos = curr.find("\n")
-    if pos < 0:
-        vm.input.consume(len(curr))
-    else:
-        vm.input.consume(pos + 1)
-
-
-def _comment_paren(vm: VM) -> None:
-    vm.input.read(until=")")
 
 
 def _program_info(name, version_args):
@@ -546,6 +531,7 @@ def create_vm(base_file: str | None = None, *, launch_context: dict | None = Non
         "initial_repl_mode": initial_repl_mode,
     }
     diagnostic_mode = _diagnostic_log_mode()
+    system_info.setdefault("runtime_path", str(RUNTIME_PATH))
     config = system_info.setdefault("config", {})
     config["PEFORTH_AI_LOG_MODE"] = diagnostic_mode
     diagnostic_log = None
@@ -591,10 +577,6 @@ def create_vm(base_file: str | None = None, *, launch_context: dict | None = Non
         vm, "repl_input_mode_state",
         payload={"mode": initial_repl_mode, "reason": "startup"},
     )
-    # Comments support
-    vm.define("\\", _comment_line, immediate=True)
-    vm.define("(", _comment_paren, immediate=True)
-
     target_base = base_file or BASE_F_PATH
     if hasattr(target_base, "read_text"):
         bootstrap = target_base.read_text(encoding="utf-8")
@@ -607,8 +589,6 @@ def create_vm(base_file: str | None = None, *, launch_context: dict | None = Non
     heartbeat_word = vm.tick("tickHeartbeat")
     if heartbeat_word is not None:
         vm.host["_diagnostic_tick_heartbeat_word"] = heartbeat_word
-    vm.dictate(AUXILIARY_F_PATH.read_text(encoding="utf-8"))
-    vm.dictate(AI_F_PATH.read_text(encoding="utf-8"))
     return vm
 
 
