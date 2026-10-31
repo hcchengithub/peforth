@@ -393,6 +393,18 @@ class _LoggedResponse:
             )
 
 
+def _redact_image_urls(value):
+    if isinstance(value, dict):
+        return {
+            key: "[redacted image URL]"
+            if key == "image_url" and value.get("type") == "input_image"
+            else _redact_image_urls(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_image_urls(item) for item in value]
+    return value
+
 def _request(method, path, payload=None, stream=False, *, diagnostic=None,
              operation=None, timeout=None, headers=None):
     load_dotenv()
@@ -424,8 +436,11 @@ def _request(method, path, payload=None, stream=False, *, diagnostic=None,
     request_payload_content_id = None
     if verbose:
         if request_text is not None:
+            diagnostic_request_text = json.dumps(
+                _redact_image_urls(payload), ensure_ascii=False
+            )
             request_payload_content_id = _diagnostic_store_content(
-                context, "http_request_payload", request_text
+                context, "http_request_payload", diagnostic_request_text
             )
             request_details["request_payload_content_id"] = request_payload_content_id
         request_details["request_headers"] = _safe_headers(dict(request.header_items()))

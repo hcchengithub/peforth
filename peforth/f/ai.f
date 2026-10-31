@@ -298,79 +298,25 @@ code run_http
     /// Request fields: url (required), method (default GET), headers (string mapping), and body (optional string).
 
 
-code herdr-current-pane
-    from peforth import ai_tools
-
-    vm.push(ai_tools._herdr_current_pane())
-    end-code
-    // ( -- pane-id ) Resolve and verify this process's live Herdr pane context.
-
-code herdr-screen-read
-    from peforth import ai_tools
-
-    line_count = 80
-    if vm.stack and type(vm.stack[-1]) is int:
-        line_count = vm.pop()
-    pane_id = vm.pop()
-    vm.push(ai_tools._herdr_screen_read(pane_id, "visible", line_count))
-    end-code
-    // ( pane-id [line-count] -- snapshot ) Read visible text; line-count defaults to 80.
-
-code herdr-screen-tail
-    from peforth import ai_tools
-
-    line_count = 80
-    if vm.stack and type(vm.stack[-1]) is int:
-        line_count = vm.pop()
-    pane_id = vm.pop()
-    vm.push(ai_tools._herdr_screen_read(pane_id, "recent-unwrapped", line_count))
-    end-code
-    // ( pane-id [line-count] -- snapshot ) Read recent unwrapped output; line-count defaults to 80.
-
-code herdr-screen-send-text
-    from peforth import ai_tools
-
-    text = vm.pop()
-    pane_id = vm.pop()
-    result = yield from ai_tools._herdr_forth_operation(vm, "send_text", pane_id, text)
-    vm.push(result)
-    end-code
-    // ( pane-id text -- result ) Send text to the selected pane through the shared ai-approve flow.
-
-code herdr-screen-send-keys
-    from peforth import ai_tools
-
-    keys = vm.pop()
-    pane_id = vm.pop()
-    result = yield from ai_tools._herdr_forth_operation(vm, "send_keys", pane_id, keys)
-    vm.push(result)
-    end-code
-    // ( pane-id keys -- result ) Send key names. Example: char w2:p4 char ctrl+a -1 slice herdr-screen-send-keys.
-    /// Key names are passed through to Herdr CLI; syntax is version-specific, with no fixed peforth key list.
-    /// Examples: printable characters, backspace, enter, tab, esc/escape, arrows, f12; modifiers ctrl/shift/alt/cmd/super can combine (ctrl+shift+alt+left).
-    /// Named punctuation includes minus, comma, ampersand, plus, and backtick. On the tested Herdr build, backspace works; home/end/delete did not.
-    /// These examples are not exhaustive; check herdr pane send-keys --help and do not assume undocumented names.
-    /// For two keys: char w2:p4 char ctrl+a char enter -2 slice herdr-screen-send-keys.
-
-code herdr-screen-run
-    from peforth import ai_tools
-
-    command = vm.pop()
-    pane_id = vm.pop()
-    result = yield from ai_tools._herdr_forth_operation(vm, "run", pane_id, command)
-    vm.push(result)
-    end-code
-    // ( pane-id command -- result ) Run a command in the selected pane through the shared ai-approve flow.
-
 code (ai)
     from peforth import ai_bridge
     import json
     import os
     import time
+    import urllib.parse
 
     stream_response = vm.pop()
     api_stream = vm.host.pop("ai_transport_stream_once", True)
     prompt = vm.pop()
+    image_url = vm.host.pop("ai_image_url_once", None)
+    isolated_session = vm.host.pop("ai_isolated_session_once", False)
+    if image_url is not None:
+        if not isinstance(image_url, str) or not image_url.strip():
+            raise RuntimeError("Image URL must be a non-empty string.")
+        image_url = image_url.strip()
+        parsed_image_url = urllib.parse.urlsplit(image_url)
+        if not (image_url.startswith("data:image/") or (parsed_image_url.scheme.casefold() == "https" and parsed_image_url.netloc)):
+            raise RuntimeError("Image URL must be an absolute HTTPS URL or a data:image/... URI.")
     if not isinstance(prompt, str):
         raise RuntimeError("(ai) expects a string on the data stack.")
     if not isinstance(stream_response, bool):
@@ -437,11 +383,13 @@ code (ai)
     ]
     if vm.host.get("_diagnostic_tick_heartbeat_word") is None:
         tools = [tool for tool in tools if tool["name"] != "peforth_tick_heartbeat"]
-    session_id = ai_bridge._saved_session(vm)
+    session_id = "" if isolated_session else ai_bridge._saved_session(vm)
     answer = []
     turn_completed = False
-    message = {"type": "agent.session.input.message", "input": [{"role": "user", "content": [
-        {"type": "input_text", "text": prompt}]}]}
+    user_content = [{"type": "input_text", "text": prompt}]
+    if image_url is not None:
+        user_content.append({"type": "input_image", "image_url": image_url})
+    message = {"type": "agent.session.input.message", "input": [{"role": "user", "content": user_content}]}
     if session_id:
         diagnostic_turn_id = ai_bridge._diagnostic_start_turn(
             vm, prompt, session_id=session_id,
@@ -491,9 +439,11 @@ code (ai)
             raise RuntimeError("peforth runtime capability instructions are too large.")
         payload = {
             "agent": {"model": vm.tick("aiModel").value,
-                      "tools": tools, "instructions": instructions},
+                      "tools": [] if isolated_session else tools, "instructions": instructions},
             "environment": {"type": "none"}, "input": prompt, "stream": api_stream,
         }
+        if image_url is not None:
+            payload["input"] = [{"role": "user", "content": user_content}]
         diagnostic_turn_id = ai_bridge._diagnostic_start_turn(
             vm, prompt, instructions=instructions,
             terminal_output_stream=stream_response, api_transport_stream=api_stream,
@@ -561,7 +511,8 @@ code (ai)
             if not session_id:
                 session_id = ai_bridge._session_id_from_event(event)
                 if session_id:
-                    vm.host["ai_active_session_id"] = session_id
+                    if not isolated_session:
+                        vm.host["ai_active_session_id"] = session_id
                     ai_bridge._diagnostic_update_session(
                         vm, diagnostic_turn_id, session_id, created=True
                     )
@@ -1196,6 +1147,67 @@ code (ai)
     end-code
     // ( prompt-string stream? -- [response-string] ) Run one AI turn; stream or return its text.
     /// Local Forth tool calls pause for the REPL's Trust/Yes/No/Cancel approval flow.
+
+code ai-image-url
+    from urllib.parse import urlsplit
+    stream_response = vm.pop()
+    image_url = vm.pop()
+    prompt = vm.pop()
+    if not isinstance(prompt, str):
+        raise RuntimeError("ai-image-url expects prompt text.")
+    if not isinstance(image_url, str) or not image_url.strip():
+        raise RuntimeError("ai-image-url expects a non-empty HTTPS URL.")
+    image_url = image_url.strip()
+    parsed = urlsplit(image_url)
+    if parsed.scheme.casefold() != "https" or not parsed.netloc:
+        raise RuntimeError("ai-image-url only accepts absolute HTTPS URLs.")
+    if type(stream_response) is not bool:
+        raise RuntimeError("ai-image-url expects a Boolean output mode.")
+    vm.host["ai_image_url_once"] = image_url
+    vm.host["ai_isolated_session_once"] = True
+    vm.push(prompt)
+    vm.push(stream_response)
+    try:
+        yield from vm.call(vm.tick("(ai)"))
+    finally:
+        vm.host.pop("ai_image_url_once", None)
+        vm.host.pop("ai_isolated_session_once", None)
+    end-code
+    // ( prompt-string image-url-string stream? -- [response-string] ) Send a remote image URL as an input_image item; the model fetches it.
+    /// Requires an HTTPS image URL accessible to the Agents API. Does not download the image into this runtime.
+
+code ai-image-file
+    import base64
+    import mimetypes
+    import os
+    stream_response = vm.pop()
+    file_path = vm.pop()
+    prompt = vm.pop()
+    if not isinstance(prompt, str):
+        raise RuntimeError("ai-image-file expects prompt text.")
+    if not isinstance(file_path, str) or not file_path.strip():
+        raise RuntimeError("ai-image-file expects a valid file path.")
+    abs_path = os.path.abspath(os.path.expanduser(file_path.strip()))
+    if not os.path.isfile(abs_path):
+        raise RuntimeError(f"File not found: {abs_path}")
+    mime_type, _ = mimetypes.guess_type(abs_path)
+    if not mime_type or not mime_type.startswith("image/"):
+        mime_type = "image/jpeg"
+    with open(abs_path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("ascii")
+    data_uri = f"data:{mime_type};base64,{encoded}"
+    vm.host["ai_image_url_once"] = data_uri
+    vm.host["ai_isolated_session_once"] = True
+    vm.push(prompt)
+    vm.push(stream_response)
+    try:
+        yield from vm.call(vm.tick("(ai)"))
+    finally:
+        vm.host.pop("ai_image_url_once", None)
+        vm.host.pop("ai_isolated_session_once", None)
+    end-code
+    // ( prompt-string file-path-string stream? -- [response-string] ) Send a local image file as an input_image data URI.
+    /// Does not pass image data through terminal stdout.
 
 code (ai-monotonic-time)
     import time

@@ -1,4 +1,4 @@
-"""Python-only host operations used by the AI Forth words in ai.f."""
+"""Python-only host operations used by AI and Herdr Forth words."""
 from __future__ import annotations
 
 import subprocess
