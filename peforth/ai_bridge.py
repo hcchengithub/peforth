@@ -9,7 +9,6 @@ import os
 import re
 import socket
 import sys
-import tempfile
 import time
 import uuid
 from contextlib import redirect_stderr, redirect_stdout
@@ -17,6 +16,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+from .session_store import (
+    SessionStore,
+    build_session_description,
+    extract_first_sentence,
+    extract_first_user_message_text,
+    format_description_time,
+)
 
 RUNTIME_ROOT = Path(__file__).resolve().parent.parent
 USER_HOME = Path.home() / ".peforth"
@@ -58,15 +65,13 @@ def _runtime_config_path():
     return USER_HOME
 
 
-SESSION_FILE = USER_HOME / ".ai_session.json"
+def _session_db_path():
+    """Return the path to the local SQLite session mirror database."""
+    return _runtime_config_path() / "sessions" / "sessions.sqlite3"
 
 
-def _session_file():
-    """Resolve the configured session index, honoring explicit test overrides."""
-    default_path = USER_HOME / ".ai_session.json"
-    if "SESSION_FILE" in globals() and SESSION_FILE != default_path:
-        return SESSION_FILE
-    return _runtime_config_path() / ".ai_session.json"
+def _open_session_store():
+    return SessionStore(_session_db_path())
 
 
 def _source_skills_dir():
@@ -596,64 +601,6 @@ def _api_delete(path, *, diagnostic=None, operation=None):
         return json.load(response)
 
 
-def _session_titles():
-    """Read user-maintained titles from the shared session index."""
-    session_file = _session_file()
-    try:
-        value = json.loads(session_file.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"Invalid session title JSON in {session_file.name} at line {exc.lineno}, column {exc.colno}."
-        ) from None
-    except OSError as exc:
-        raise RuntimeError(f"Cannot read {session_file.name}: {exc}") from None
-    if not isinstance(value, dict):
-        raise RuntimeError(f"{session_file.name} must contain a JSON object.")
-    rows = value.get("sessions", [])
-    if not isinstance(rows, list):
-        raise RuntimeError(f"The 'sessions' field in {session_file.name} must be a list.")
-    return {row["id"]: row["title"] for row in rows
-            if isinstance(row, dict) and isinstance(row.get("id"), str)
-            and isinstance(row.get("title"), str) and row["title"].strip()}
-
-
-def _write_session_index(rows):
-    """Atomically replace the local index so readers never see partial JSON."""
-    session_file = _session_file()
-    session_file.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(prefix=session_file.name + ".", suffix=".tmp",
-                                     dir=str(session_file.parent))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
-            json.dump({"sessions": rows}, stream, ensure_ascii=False, indent=2)
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temp_name, session_file)
-    except Exception:
-        try:
-            os.unlink(temp_name)
-        except OSError:
-            pass
-        raise
-
-
-def _sync_session_index(remote_sessions):
-    titles = _session_titles()
-    rows = []
-    for session in remote_sessions:
-        session_id = session.get("id")
-        if isinstance(session_id, str) and session_id:
-            rows.append({"id": session_id, "title": titles.get(session_id, "")})
-    try:
-        _write_session_index(rows)
-    except OSError as exc:
-        raise RuntimeError(f"Cannot update {_session_file().name}: {exc}") from None
-    return {row["id"]: row["title"] for row in rows if row["title"].strip()}
-
-
 def _short_id(session_id):
     return str(session_id or "")[-8:]
 
@@ -666,7 +613,7 @@ def _resolve_session_selector(rows, selector):
         raise RuntimeError(f"No session number {selector}; the current list has {len(rows)} entries.")
     if isinstance(selector, str) and selector:
         matches = [(index, row) for index, row in enumerate(rows, 1)
-                   if row.get("id") == selector]
+                   if (row.get("id") or row.get("session_id")) == selector]
         if len(matches) == 1:
             return matches[0]
         if not matches:
@@ -675,9 +622,15 @@ def _resolve_session_selector(rows, selector):
     raise RuntimeError("Expected a session number or full session ID.")
 
 
-def _session_title(session_id, titles=None):
-    titles = _session_titles() if titles is None else titles
-    return titles.get(session_id, "")
+def _session_title(session_id):
+    """Return the session description from the local SQLite mirror if present."""
+    if not isinstance(session_id, str) or not session_id:
+        return ""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        return ""
+    with _open_session_store() as store:
+        return store.get_description(session_id)
 
 
 def _format_time(value):
@@ -702,12 +655,218 @@ def _list_remote_sessions():
         after = page["last_id"]
 
 
-def refresh_session_index(vm=None):
-    rows = _list_remote_sessions()
-    _sync_session_index(rows)
+def _fetch_session_items(session_id, *, diagnostic=None):
+    """Fetch all remote items for a session in ascending sequence order."""
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    items = []
+    after = None
+    while True:
+        query = {"limit": 100, "order": "asc"}
+        if after:
+            query["after"] = after
+        page = _api_get(
+            f"/sessions/{encoded_id}/items?{urllib.parse.urlencode(query)}",
+            diagnostic=diagnostic, operation="list_session_items",
+        )
+        items.extend(page.get("data") or [])
+        last_id = page.get("last_id")
+        if not page.get("has_more") or not last_id or last_id == after:
+            break
+        after = last_id
+    return items
+
+
+def sync_sessions(vm=None):
+    """Incrementally sync remote sessions and items into the local SQLite mirror."""
+    remote_sessions = _list_remote_sessions()
+    synced = 0
+    skipped = 0
+    remote_ids = []
+    with _open_session_store() as store:
+        for remote in remote_sessions:
+            if not isinstance(remote, dict):
+                continue
+            session_id = remote.get("id") or remote.get("session_id")
+            if not isinstance(session_id, str) or not session_id:
+                continue
+            remote_ids.append(session_id)
+            if store.needs_item_sync(remote):
+                items = _fetch_session_items(session_id)
+                store.sync_session(remote, items)
+                synced += 1
+            else:
+                store.update_session_metadata(remote)
+                skipped += 1
+        deleted = store.mark_missing_remote_deleted(remote_ids)
+        local_by_id = {
+            row["id"]: row for row in store.list_sessions(include_deleted=False)
+        }
+        rows = [local_by_id[sid] for sid in remote_ids if sid in local_by_id]
+    if vm is not None:
+        vm.host["ai_session_rows"] = rows
+    return {
+        "total": len(remote_ids),
+        "synced": synced,
+        "skipped": skipped,
+        "deleted": deleted,
+        "rows": rows,
+    }
+
+
+def list_local_sessions(vm=None, *, include_deleted=False):
+    """Read sessions from the local SQLite mirror."""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        rows = []
+    else:
+        with _open_session_store() as store:
+            rows = store.list_sessions(include_deleted=include_deleted)
     if vm is not None:
         vm.host["ai_session_rows"] = rows
     return rows
+
+
+def export_session_json(selector, output_path=None, *, vm=None):
+    """Export a session's items from the local SQLite mirror to a JSON array file."""
+    with _open_session_store() as store:
+        rows = (vm.host.get("ai_session_rows") if vm is not None else None)
+        if rows is None:
+            rows = store.list_sessions(include_deleted=True)
+        if isinstance(selector, int) and not isinstance(selector, bool):
+            _, row = _resolve_session_selector(rows, selector)
+            session_id = row.get("id") or row.get("session_id")
+        elif isinstance(selector, str) and selector:
+            all_local = store.list_sessions(include_deleted=True)
+            candidates = rows or all_local
+            exact = [
+                r for r in candidates
+                if (r.get("id") or r.get("session_id")) == selector
+            ]
+            if len(exact) == 1:
+                session_id = exact[0].get("id") or exact[0].get("session_id")
+            elif store.get_session(selector) is not None:
+                session_id = selector
+            else:
+                suffix = [
+                    r for r in candidates
+                    if _short_id(r.get("id") or r.get("session_id")) == selector
+                ]
+                if len(suffix) == 1:
+                    session_id = suffix[0].get("id") or suffix[0].get("session_id")
+                elif len(suffix) > 1:
+                    raise RuntimeError(f"Session ID suffix {selector!r} is ambiguous; use the full ID.")
+                else:
+                    session_id = selector
+        else:
+            raise RuntimeError("Expected a session number or session ID.")
+
+        local = store.get_session(session_id)
+        if local is None or not local.get("synced_at"):
+            items = _fetch_session_items(session_id)
+            store.sync_session({"id": session_id}, items)
+
+        if output_path is None or (isinstance(output_path, str) and not output_path.strip()):
+            stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+            output_path = f"ai-session-full-{stamp}.json"
+        return store.export_session_json(session_id, output_path)
+
+
+_READONLY_AI_SEARCH_LINE_RE = re.compile(
+    r'^(?:s"\s[^"]*"\s+ai-search|ai-search(?:\s+\S.*)?|\(ai-sessions-list\))$'
+)
+
+
+def _is_readonly_session_search_forth(source):
+    """Return True if Forth source only runs read-only local session searches/listings."""
+    if not isinstance(source, str):
+        return False
+    lines = [line.strip() for line in source.splitlines() if line.strip()]
+    if not lines:
+        return False
+    return all(bool(_READONLY_AI_SEARCH_LINE_RE.match(line)) for line in lines)
+
+
+def search_local_sessions(query, *, include_deleted=True):
+    """Search descriptions and item contents in the local SQLite mirror."""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        return []
+    with _open_session_store() as store:
+        return store.search_sessions(str(query or ""), include_deleted=include_deleted)
+
+
+def query_local_sessions(*, query=None, session_id=None, limit=20, include_deleted=True):
+    """Read-only search or message inspection against the local SQLite session mirror."""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        return {"sessions": [], "messages": []}
+    limit = max(1, min(int(limit or 20), 100))
+    with _open_session_store() as store:
+        if isinstance(session_id, str) and session_id.strip():
+            target_id = session_id.strip()
+            session = store.get_session(target_id)
+            if session is None:
+                all_sessions = store.list_sessions(include_deleted=include_deleted)
+                suffix_matches = [
+                    row for row in all_sessions
+                    if _short_id(row.get("session_id")) == target_id
+                ]
+                if len(suffix_matches) == 1:
+                    target_id = suffix_matches[0]["session_id"]
+                    session = suffix_matches[0]
+                elif len(suffix_matches) > 1:
+                    raise ValueError(f"Session ID suffix {target_id!r} is ambiguous; use the full ID.")
+                else:
+                    return {"session": None, "messages": []}
+            messages = store.get_session_messages(target_id, limit=limit)
+            if isinstance(query, str) and query.strip():
+                terms = [t.casefold() for t in query.split() if t.strip()]
+                messages = [
+                    msg for msg in messages
+                    if any(term in msg["text"].casefold() for term in terms)
+                ][:limit]
+            return {
+                "session": {
+                    "session_id": session["session_id"],
+                    "description": session.get("description") or "",
+                    "created_at": session.get("created_at"),
+                    "last_active_at": session.get("last_active_at"),
+                    "status": session.get("status"),
+                    "model": session.get("model"),
+                    "remote_deleted": session.get("remote_deleted", 0),
+                },
+                "messages": messages,
+            }
+        if isinstance(query, str) and query.strip():
+            matches = store.search_sessions(query.strip(), include_deleted=include_deleted)
+            return {
+                "sessions": [
+                    {
+                        "session_id": row["session_id"],
+                        "description": row.get("description") or "",
+                        "created_at": row.get("created_at"),
+                        "last_active_at": row.get("last_active_at"),
+                        "remote_deleted": row.get("remote_deleted", 0),
+                        "matches": row.get("matches") or [],
+                    }
+                    for row in matches[:limit]
+                ]
+            }
+        recent = store.list_sessions(include_deleted=include_deleted)
+        return {
+            "sessions": [
+                {
+                    "session_id": row["session_id"],
+                    "description": row.get("description") or "",
+                    "created_at": row.get("created_at"),
+                    "last_active_at": row.get("last_active_at"),
+                    "status": row.get("status"),
+                    "model": row.get("model"),
+                    "remote_deleted": row.get("remote_deleted", 0),
+                }
+                for row in recent[:limit]
+            ]
+        }
 
 
 def _agent_instructions():
@@ -720,6 +879,7 @@ def _agent_instructions():
     reference_text = reference_path.read_text(encoding="utf-8") if reference_path.is_file() else ""
     intro = (
         "You assist with peforth Forth. Use the live dictionary tool before relying on unfamiliar words. "
+        "To recall or search past conversations from the local SQLite session mirror, use the read-only peforth_search_sessions tool (or ai-search), which runs without user approval. "
         "For local shell commands, use the host default_shell from the Runtime capability inventory unless the user explicitly requests another shell or the task requires another shell's syntax. Windows defaults to pwsh; WSL/Linux defaults to bash. The shells entries list available executors and do not override default_shell. "
         "Only the local Forth tool can execute code. Use peforth_tick_heartbeat only for meaningful milestones, not periodic or repeated status messages; it records a diagnostic message and cannot execute Forth. Approval scopes: Yes (allow_once) approves one proposal; Trust this AI task applies only for later proposals in the same AI Task and expires when that Task completes, fails, or is cancelled; Runtime Trust must be explicitly enabled with ai-trust-runtime and lasts in this Forth process until ai-confirm or process exit. ai-confirm revokes Runtime Trust and any active Task Trust. Never infer Trust from a prior Yes or from a different AI Task.\n\n"
     )
@@ -774,22 +934,7 @@ def _latest_turn(session_id, *, diagnostic=None):
 
 
 def _session_turn_output_text(session_id, turn_id, *, diagnostic=None):
-    encoded_id = urllib.parse.quote(session_id, safe="")
-    items = []
-    after = None
-    while True:
-        query = {"limit": 100, "order": "asc"}
-        if after:
-            query["after"] = after
-        page = _api_get(
-            f"/sessions/{encoded_id}/items?{urllib.parse.urlencode(query)}",
-            diagnostic=diagnostic, operation="list_session_items",
-        )
-        items.extend(page.get("data") or [])
-        last_id = page.get("last_id")
-        if not page.get("has_more") or not last_id or last_id == after:
-            break
-        after = last_id
+    items = _fetch_session_items(session_id, diagnostic=diagnostic)
 
     messages = []
     for item in items:

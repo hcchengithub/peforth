@@ -336,6 +336,13 @@ code (ai)
          "description": "Search the current Forth dictionary and documentation.",
          "parameters": {"type": "object", "properties": {"query": {"type": "string"}},
                         "required": ["query"], "additionalProperties": False}},
+        {"type": "function", "name": "peforth_search_sessions",
+         "description": "Search or read past AI conversations in the local SQLite session mirror (sessions.sqlite3). Read-only; runs without user approval. Pass query to search across all sessions, or session_id to read messages from a specific session.",
+         "parameters": {"type": "object", "properties": {
+             "query": {"type": "string", "description": "Search terms to match against session descriptions and conversation items."},
+             "session_id": {"type": "string", "description": "Optional session ID (or unambiguous suffix) to read conversation messages from."},
+             "limit": {"type": "integer", "minimum": 1, "default": 20, "description": "Maximum number of matching sessions or messages to return."}},
+             "additionalProperties": False}},
         {"type": "function", "name": "peforth_tick_heartbeat",
          "description": "Record a brief self-reported progress milestone in peforth diagnostics. This cannot execute Forth.",
          "parameters": {"type": "object", "properties": {"message": {"type": "string"}},
@@ -481,19 +488,39 @@ code (ai)
 
 
     def reconcile_current_turn():
+        nonlocal ai_started, ai_line_start
         if not remote_turn_id:
             return None, False
         status, recovered = ai_bridge._reconcile_stream_turn(
             session_id, remote_turn_id, diagnostic=diagnostic_context
         )
         if status == "completed":
-            had_answer = bool(answer)
+            previous_answer = "".join(answer)
             if recovered:
                 answer[:] = [recovered]
-                if stream_response and not had_answer:
-                    print()
-                    _print_chat_turn("assistant", recovered)
-                    print()
+                if stream_response and recovered != previous_answer:
+                    if not previous_answer and not chat_box_state["open"]:
+                        print()
+                        _print_chat_turn("assistant", recovered)
+                        print()
+                    else:
+                        unprinted = (
+                            recovered[len(previous_answer):]
+                            if previous_answer and recovered.startswith(previous_answer)
+                            else recovered
+                        )
+                        if unprinted:
+                            if not ai_started:
+                                print()
+                                if not chat_box_state["open"]:
+                                    print(_chat_turn_header("assistant"))
+                                    chat_box_state["open"] = True
+                                ai_started = True
+                            for part in unprinted.splitlines(keepends=True):
+                                if ai_line_start:
+                                    print("  ", end="")
+                                print(part, end="", flush=True)
+                                ai_line_start = part.endswith("\n") or part.endswith("\r")
             return status, True
         if status in {"failed", "cancelled", "incomplete"}:
             raise RuntimeError(
@@ -688,6 +715,39 @@ code (ai)
                             if len(matches) >= 30:
                                 break
                         tool_result_text = json.dumps(matches, ensure_ascii=False)
+                        tool_result_id = ai_bridge._diagnostic_store_content(
+                            diagnostic_context, "tool_result", tool_result_text
+                        )
+                        ai_bridge._diagnostic_action_event(
+                            diagnostic_context, "tool_call_completed", action,
+                            content_id=tool_result_id,
+                            elapsed_ms=(time.monotonic_ns() - call_started_ns) / 1_000_000,
+                        )
+                        ai_bridge._tool_result(
+                            session_id, action, True, tool_result_text,
+                            diagnostic=diagnostic_context,
+                        )
+                    elif name == "peforth_search_sessions":
+                        allowed_arguments = {"query", "session_id", "limit"}
+                        if not set(arguments).issubset(allowed_arguments):
+                            raise ValueError(
+                                "peforth_search_sessions accepts only query, session_id, and limit."
+                            )
+                        session_query = arguments.get("query")
+                        if session_query is not None and not isinstance(session_query, str):
+                            raise TypeError("query must be a string")
+                        target_session_id = arguments.get("session_id")
+                        if target_session_id is not None and not isinstance(target_session_id, str):
+                            raise TypeError("session_id must be a string")
+                        result_limit = arguments.get("limit", 20)
+                        if isinstance(result_limit, bool) or not isinstance(result_limit, int) or result_limit < 1:
+                            raise ValueError("limit must be a positive integer")
+                        result_payload = ai_bridge.query_local_sessions(
+                            query=session_query,
+                            session_id=target_session_id,
+                            limit=result_limit,
+                        )
+                        tool_result_text = json.dumps(result_payload, ensure_ascii=False)
                         tool_result_id = ai_bridge._diagnostic_store_content(
                             diagnostic_context, "tool_result", tool_result_text
                         )
@@ -928,7 +988,20 @@ code (ai)
                             content_id=proposal["source_content_id"],
                             payload={"purpose": proposal["purpose"]},
                         )
-                        if vm.host.get("ai_trusted", False):
+                        if ai_bridge._is_readonly_session_search_forth(proposal["source"]):
+                            approved = True
+                            approval_decision = "readonly_session_search"
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_decision_received", action,
+                                content_id=proposal["source_content_id"],
+                                payload={"decision": approval_decision},
+                            )
+                            ai_bridge._diagnostic_action_event(
+                                diagnostic_context, "approval_wait_ended", action,
+                                content_id=proposal["source_content_id"], elapsed_ms=0,
+                                payload={"decision": approval_decision},
+                            )
+                        elif vm.host.get("ai_trusted", False):
                             print("\n🤖 AI proposes this Forth program (auto-approved for this Forth run):")
                             print(f"Purpose: {proposal['purpose']}\n---\n{proposal['source']}\n---")
                             approved = True
@@ -1233,33 +1306,35 @@ code (ai-monotonic-time)
 
 code (ai-sessions)
     from peforth import ai_bridge
-    rows = ai_bridge._list_remote_sessions()
-    titles = ai_bridge._sync_session_index(rows)
-    vm.host["ai_session_rows"] = rows
-    vm.host["ai_session_titles"] = titles
+    ai_bridge.sync_sessions(vm)
     end-code
-    // ( -- ) Refresh the session snapshot silently.
-    /// Fetches remote sessions, synchronizes the local title index, and updates the VM snapshot.
-    /// Stores session rows and titles in vm.host. Prints nothing and leaves the data stack unchanged.
+    // ( -- ) Incrementally synchronize remote sessions into the local SQLite mirror and update the VM snapshot.
+    /// Fetches remote session metadata, downloads items only for new or updated sessions, and stores session rows in vm.host.
+    /// Prints nothing and leaves the data stack unchanged.
 
 code (ai-sessions-list)
     from peforth import ai_bridge
     rows = vm.host.get("ai_session_rows")
-    titles = vm.host.get("ai_session_titles") or {}
+    if rows is None:
+        rows = ai_bridge.list_local_sessions(vm)
     if not rows:
         print("No remote sessions found.")
     else:
         active_id = ai_bridge._saved_session(vm)
         print(f"Remote sessions: {len(rows)} (newest first)")
         for index, row in enumerate(rows, 1):
-            session_id = row.get("id") or ""
-            title = titles.get(session_id) or "(untitled)"
+            session_id = row.get("id") or row.get("session_id") or ""
+            title = (
+                row.get("description")
+                or ai_bridge._session_title(session_id)
+                or "(untitled)"
+            )
             marker = " *" if session_id == active_id else ""
-            print(f"{index:>3}. {title} [{session_id}]{marker}")
+            model = row.get("model") or (row.get("agent") or {}).get("model") or "unknown"
+            print(f"{index:>3}. {title}{marker}")
             print(f"     Started: {ai_bridge._format_time(row.get('created_at'))}  "
                   f"Last active: {ai_bridge._format_time(row.get('last_active_at'))}")
-            print(f"     {row.get('status', 'unknown')}  "
-                  f"{(row.get('agent') or {}).get('model', 'unknown')}")
+            print(f"     {row.get('status') or 'unknown'}  {model}\t{session_id}\n")
     end-code
     // ( -- ) Print the session snapshot prepared by (ai-sessions).
 
@@ -1267,9 +1342,21 @@ code (ai-sessions-list)
     (ai-sessions)
     (ai-sessions-list)
     ;
-    // ( session-number | full-session-ID -- ) Show remote session details.
-    /// Fetches and displays timestamps, status, model, usage, and any API error.
-    /// Refreshes the remote list when needed; numeric selectors use its current ordering.
+    // ( -- ) Synchronize remote AI sessions into the local SQLite mirror and list them.
+    /// Fetches remote session index metadata, performs differential item synchronization, and prints the numbered session list.
+
+code ai-sync
+    from peforth import ai_bridge
+    stats = ai_bridge.sync_sessions(vm)
+    print(
+        f"Synced AI sessions: {stats['synced']} updated, "
+        f"{stats['skipped']} unchanged, "
+        f"{stats['deleted']} marked remote-deleted "
+        f"({stats['total']} remote)."
+    )
+    end-code
+    // ( -- ) Incrementally synchronize remote AI sessions into the local SQLite mirror.
+    /// Fetches remote session metadata, downloads items only for new or updated sessions, and prints a brief sync summary.
 
 code ai-session
     from peforth import ai_bridge
@@ -1277,14 +1364,12 @@ code ai-session
     selector = vm.pop()
     rows = vm.host.get("ai_session_rows")
     if rows is None or (isinstance(selector, str) and
-                        not any(row.get("id") == selector for row in rows)):
+                        not any((row.get("id") or row.get("session_id")) == selector for row in rows)):
         rows = ai_bridge._list_remote_sessions()
-        titles = ai_bridge._sync_session_index(rows)
         vm.host["ai_session_rows"] = rows
-        vm.host["ai_session_titles"] = titles
     index, row = ai_bridge._resolve_session_selector(rows, selector)
     vm.push(index)
-    vm.push(row["id"])
+    vm.push(row.get("id") or row.get("session_id"))
     yield from vm.call(vm.tick("(ai-session-details)"))
     end-code
     // ( session-number | full-session-ID -- ) Show remote session details.
@@ -1334,27 +1419,84 @@ code ai-cleanup
     if rows is None:
         raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
     index, row = ai_bridge._resolve_session_selector(rows, selector)
-    session_id = row["id"]
+    session_id = row.get("id") or row.get("session_id")
     print(f"This permanently deletes session {index}: {session_id} and its conversation.")
     result = ai_bridge._api_delete(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
     if result.get("deleted") is not True:
         raise RuntimeError("Agents API did not confirm session deletion.")
+    db_path = ai_bridge._session_db_path()
+    if db_path.is_file():
+        with ai_bridge._open_session_store() as store:
+            store.mark_remote_deleted(session_id, True)
     if vm.host.get("ai_active_session_id") == session_id:
         vm.host.pop("ai_active_session_id", None)
     vm.host.pop("ai_session_rows", None)
-    vm.host.pop("ai_session_titles", None)
 
     print("AI session deleted from the API.")
     end-code
     // ( session-number | session-ID -- ) Delete the selected remote session immediately.
-    /// Permanently deletes the selected session and its conversation without prompting.
-    /// Run ai-sessions first to refresh the session list. Cached session rows and titles are cleared after deletion.
+    /// Permanently deletes the selected session from the remote API without prompting, and marks it remote_deleted in the local SQLite mirror.
+    /// Run ai-sessions first to refresh the session list. Cached session rows are cleared after deletion.
     /// Example: keep the 20 newest sessions (requires more than 20 sessions):
     ///   (ai-sessions)
     ///   py> len(ai_session_rows) (length) 20 - [for]
     ///       t@ . space 21 ai-cleanup (ai-sessions)
     ///   [next]
     /// [for] runs once for a zero count, so use the example only when there are more than 20 sessions.
+
+code ai-export-session
+    from peforth import ai_bridge
+
+    if not vm.stack:
+        raise RuntimeError("ai-export-session expects a session number or session ID.")
+    top = vm.pop()
+    output_path = None
+    if (
+        isinstance(top, str)
+        and vm.stack
+        and (top.endswith(".json") or "/" in top or "\\" in top)
+        and isinstance(vm.peek(), (int, str))
+        and not isinstance(vm.peek(), bool)
+    ):
+        output_path = top
+        selector = vm.pop()
+    else:
+        selector = top
+    exported = ai_bridge.export_session_json(selector, output_path, vm=vm)
+    print(f"Exported session to {exported}")
+    end-code
+    // ( session-number | session-ID [output-path] -- ) Export a session's items from the local SQLite mirror to a JSON file.
+    /// Reconstructs the full JSON array of session items in ascending sequence order (default: ai-session-full-YYYYMMDD-HHMMSS.json).
+
+code ai-search
+    from peforth import ai_bridge
+
+    if vm.stack and isinstance(vm.peek(), str):
+        query = vm.pop().strip()
+    elif vm.input is not None and vm.input.remaining.strip():
+        query = (
+            vm.input.read(until=chr(10))
+            if chr(10) in vm.input.remaining
+            else vm.input.rest()
+        ).strip()
+    else:
+        raise RuntimeError("ai-search expects a search query string.")
+    if not query:
+        raise RuntimeError("ai-search expects a non-empty search query.")
+    results = ai_bridge.search_local_sessions(query)
+    if not results:
+        print(f"No local sessions matched {query!r}.")
+    else:
+        print(f"Matched {len(results)} local session(s) for {query!r}:")
+        for index, row in enumerate(results, 1):
+            session_id = row.get("id") or row.get("session_id") or ""
+            title = row.get("description") or "(untitled)"
+            deleted_tag = " [remote-deleted]" if row.get("remote_deleted") else ""
+            print(f"{index:>3}. {title} [{session_id}]{deleted_tag}")
+            for snippet in row.get("matches") or []:
+                print(f"     {snippet}")
+    end-code
+    // ( "query" | <query> -- ) Search session descriptions and item contents in the local SQLite mirror.
 
 code ai-cancel
     from peforth import ai_bridge

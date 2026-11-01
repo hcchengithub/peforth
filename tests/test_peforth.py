@@ -782,7 +782,7 @@ class ReplBootstrapTests(unittest.TestCase):
                   "last_active_at": 1791470192, "status": "idle",
                   "agent": {"model": "gpt-test"},
                   "usage": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3}}
-        with patch.object(bridge, "_session_titles", return_value={"sess_current_12345678": "peforth"}):
+        with patch.object(bridge, "_session_title", return_value="peforth"):
             with patch.object(bridge, "_api_get", return_value=detail) as api_get:
                 output = io.StringIO()
                 with contextlib.redirect_stdout(output):
@@ -851,7 +851,7 @@ class ReplBootstrapTests(unittest.TestCase):
                   "agent": {"model": "gpt-test"}, "usage": {}}
         output = io.StringIO()
         with patch.object(bridge, "_list_remote_sessions", return_value=[{"id": session_id}]) as list_sessions:
-            with patch.object(bridge, "_sync_session_index", return_value={session_id: "Design"}):
+            with patch.object(bridge, "_session_title", return_value="Design"):
                 with patch.object(bridge, "_api_get", return_value=detail) as api_get:
                     with contextlib.redirect_stdout(output):
                         self.vm.push(session_id)
@@ -861,25 +861,26 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertIn("[sess_full_12345678]", output.getvalue())
 
         self.vm.host["ai_session_rows"] = [{"id": session_id}]
-        self.vm.host["ai_session_titles"] = {session_id: "Design"}
         output = io.StringIO()
-        with patch.object(bridge, "_api_delete", return_value={"deleted": True}) as api_delete:
-            with contextlib.redirect_stdout(output):
-                self.vm.push(session_id)
-                self.vm.execute(self.vm.tick("ai-cleanup"))
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict("os.environ", {"PEFORTH_CONFIG_DIR": directory}), \
+                    patch.object(bridge, "_api_delete", return_value={"deleted": True}) as api_delete:
+                with contextlib.redirect_stdout(output):
+                    self.vm.push(session_id)
+                    self.vm.execute(self.vm.tick("ai-cleanup"))
         api_delete.assert_called_once_with("/sessions/sess_full_12345678")
         self.assertIn("sess_full_12345678", output.getvalue())
         self.assertNotIn("ai_session_rows", self.vm.host)
 
-    def test_bye_refreshes_session_index_and_prints_resume_command(self):
+    def test_bye_does_not_sync_remote_sessions_and_prints_resume_command(self):
         bridge = _f_mod.ai_bridge
         self.vm.host["ai_active_session_id"] = "sess_current_12345678"
         output = io.StringIO()
-        with patch.object(bridge, "refresh_session_index") as refresh, \
+        with patch.object(bridge, "sync_sessions") as sync_sessions, \
                 patch.object(bridge, "_session_title", return_value="peforth"), \
                 contextlib.redirect_stdout(output):
             _f_mod._farewell(self.vm)
-        refresh.assert_called_once_with(self.vm)
+        sync_sessions.assert_not_called()
         self.assertIn('To resume it in a future Forth run, enter: s" sess_current_12345678" ai-use', output.getvalue())
 
         self.vm.host["ai_trusted"] = True
@@ -887,51 +888,60 @@ class ReplBootstrapTests(unittest.TestCase):
             self.vm.dictate("ai-confirm")
         self.assertNotIn("ai_trusted", self.vm.host)
 
-    def test_session_files_follow_config_dir(self):
+    def test_session_db_follows_config_dir(self):
         bridge = _f_mod.ai_bridge
         with tempfile.TemporaryDirectory() as directory:
             config_dir = pathlib.Path(directory) / "user config"
-            with patch.dict("os.environ", {"PEFORTH_CONFIG_DIR": str(config_dir)}), \
-                patch.object(bridge, "SESSION_FILE", config_dir / ".ai_session.json"):
-                bridge._write_session_index([{"id": "sess_config", "title": "Local"}])
+            with patch.dict("os.environ", {"PEFORTH_CONFIG_DIR": str(config_dir)}):
                 self.assertEqual(
-                    json.loads((config_dir / ".ai_session.json").read_text(encoding="utf-8")),
-                    {"sessions": [{"id": "sess_config", "title": "Local"}]},
+                    bridge._session_db_path(),
+                    config_dir / "sessions" / "sessions.sqlite3",
                 )
-                self.assertEqual(bridge._session_titles(), {"sess_config": "Local"})
+                with bridge._open_session_store() as store:
+                    store.set_description("sess_config", "Local")
+                self.assertTrue((config_dir / "sessions" / "sessions.sqlite3").is_file())
+                self.assertFalse((config_dir / ".ai_session.json").exists())
+                self.assertEqual(bridge._session_title("sess_config"), "Local")
 
-    def test_session_title_reader_ignores_legacy_fields(self):
+    def test_session_title_preserved_across_sync(self):
         bridge = _f_mod.ai_bridge
-        original = '{"active_session_id":"legacy","sessions":[{"id":"sess_1","title":"Design","last_used_at":"old"}]}'
-
-        class ReadOnlyFile:
-            name = ".ai_session.json"
-
-            def read_text(self, encoding=None):
-                return original
-
-        session_file = ReadOnlyFile()
-        with patch.object(bridge, "SESSION_FILE", session_file):
-            self.assertEqual(bridge._session_titles(), {"sess_1": "Design"})
-            self.assertEqual(session_file.read_text(encoding="utf-8"), original)
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict("os.environ", {"PEFORTH_CONFIG_DIR": directory}):
+                with bridge._open_session_store() as store:
+                    store.set_description("sess_1", "Custom User Title")
+                    store.sync_session(
+                        {"id": "sess_1", "created_at": 1791466592, "last_active_at": 1791470192},
+                        [{"id": "item_1", "type": "message", "role": "user", "content": [{"type": "input_text", "text": "Hello world."}]}],
+                    )
+                self.assertEqual(bridge._session_title("sess_1"), "Custom User Title")
 
     def test_ai_sessions_display_title_cloud_times_and_full_id(self):
         bridge = _f_mod.ai_bridge
         remote = [{"id": "sess_full_12345678", "created_at": 1791466592,
                    "last_active_at": 1791470192, "status": "idle",
                    "agent": {"model": "gpt-test"}, "environment": {"type": "none"}}]
-        saved = []
-        with patch.object(bridge, "_list_remote_sessions", return_value=remote), \
-                patch.object(bridge, "_session_titles", return_value={"sess_full_12345678": "Design chat"}), \
-                patch.object(bridge, "_write_session_index", side_effect=lambda rows: saved.extend(rows)):
-            output = io.StringIO()
-            with contextlib.redirect_stdout(output):
-                self.vm.dictate("ai-sessions")
-        rendered = output.getvalue()
-        self.assertIn("Design chat [sess_full_12345678]", rendered)
-        self.assertIn("Started:", rendered)
-        self.assertIn("Last active:", rendered)
-        self.assertEqual(saved, [{"id": "sess_full_12345678", "title": "Design chat"}])
+        items = [
+            {
+                "id": "item_user_1",
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Design chat. Follow-up details."}],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict("os.environ", {"PEFORTH_CONFIG_DIR": directory}), \
+                    patch.object(bridge, "_list_remote_sessions", return_value=remote), \
+                    patch.object(bridge, "_fetch_session_items", return_value=items) as fetch_items:
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.vm.dictate("ai-sessions")
+                rendered = output.getvalue()
+                self.assertIn(" | Design chat\n", rendered)
+                self.assertIn("Started:", rendered)
+                self.assertIn("Last active:", rendered)
+                self.assertIn("     idle  gpt-test\tsess_full_12345678\n\n", rendered)
+                fetch_items.assert_called_once_with("sess_full_12345678")
+                self.assertTrue((pathlib.Path(directory) / "sessions" / "sessions.sqlite3").is_file())
 
     def test_agent_tool_names_are_peforth_branded_and_package_skill_is_found(self):
         import json
@@ -976,7 +986,7 @@ class ReplBootstrapTests(unittest.TestCase):
             self.assertEqual(variant["properties"]["session"]["default"], "default")
             self.assertFalse(variant["additionalProperties"])
         self.assertEqual([tool["name"] for tool in functions],
-                         ["peforth_search_words", "peforth_tick_heartbeat", "peforth_run_forth", "computer_read_screen", "computer_operate"])
+                         ["peforth_search_words", "peforth_search_sessions", "peforth_tick_heartbeat", "peforth_run_forth", "computer_read_screen", "computer_operate"])
         instructions = captured["agent"]["instructions"]
         self.assertIn("peforth Forth", instructions)
         self.assertNotIn("Project K", instructions)
@@ -1585,7 +1595,7 @@ class ReplBootstrapTests(unittest.TestCase):
         _f_mod._load_prompt_toolkit()
         with patch.object(_f_mod, "PromptSession", QuietPromptSession), \
                 patch.object(_f_mod, "_make_multiline_key_bindings", return_value=None), \
-                patch.object(_f_mod.ai_bridge, "refresh_session_index") as refresh, \
+                patch.object(_f_mod.ai_bridge, "sync_sessions") as sync_sessions, \
                 patch.object(_f_mod, "_farewell") as farewell, \
                 contextlib.redirect_stdout(output):
             _f_mod.repl(self.vm, initial_task=CompletedTask(), exit_when_idle=True,
@@ -1595,7 +1605,7 @@ class ReplBootstrapTests(unittest.TestCase):
         self.assertFalse(session_options["complete_while_typing"])
         self.assertIs(session_options["complete_style"], CompleteStyle.MULTI_COLUMN)
         self.assertIsNotNone(session_options["key_bindings"])
-        refresh.assert_called_once_with(self.vm)
+        sync_sessions.assert_not_called()
         farewell.assert_not_called()
 
     def test_cli_help_is_available(self):

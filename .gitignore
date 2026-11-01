@@ -7,6 +7,7 @@
 .system_cache.json.*.tmp
 .system_cache.json.tmp.*
 ai-diagnostics.sqlite3*
+sessions/
 __pycache__/
 *.py[cod]
 .venv/

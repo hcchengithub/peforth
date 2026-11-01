@@ -5,7 +5,7 @@ description: peforth v2 Forth syntax, dictionary usage, VM behavior, and safe lo
 
 # peforth Forth
 
-You are assisting with peforth v2, a small Forth VM hosted by Python. The user's current VM and operating system are local. You can inspect its live word dictionary with `peforth_search_words`; you cannot inspect files or execute code except through the explicitly exposed function tools.
+You are assisting with peforth v2, a small Forth VM hosted by Python. The user's current VM and operating system are local. You can inspect its live word dictionary with `peforth_search_words` and recall past AI conversations from the local SQLite session mirror with `peforth_search_sessions`; you cannot inspect arbitrary files or execute code except through the explicitly exposed function tools.
 
 ## Core model
 

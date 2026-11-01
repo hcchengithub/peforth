@@ -39,15 +39,18 @@ Objective progress means an actual remote-turn state change, a new tool/action/c
 
 AI-created sessions receive the fixed-scope `peforth_tick_heartbeat` tool. It only records a diagnostic message; arbitrary Forth continues through the existing approval flow. Agents API tools are fixed when a remote session is created, so an older session will not gain the heartbeat tool; objective progress monitoring still works for its recorded events.
 - `ai-status` shows the current process's selected session and its full ID. Each new process starts without an active session.
-- `ai-sessions` fetches remote sessions newest-first and refreshes `~/.peforth/.ai_session.json`, preserving local titles. It displays each full Session ID along with creation and last-active times.
+- `ai-sessions` fetches remote sessions newest-first, incrementally synchronizes new or updated session items into `<PEFORTH_CONFIG_DIR>/sessions/sessions.sqlite3`, and prints the numbered list with local descriptions, full Session IDs, and creation/last-active times.
+- `ai-sync` runs the same incremental SQLite synchronization as `ai-sessions` and prints a brief sync summary without printing the full session list.
 - `n ai-session` shows details for a listed session; it also accepts `s" <full-session-id>" ai-session`. `n ai-use` selects a listed session for this process; it accepts the full ID and retains support for an unambiguous ID suffix.
+- `n ai-export-session` (or `n s" path.json" ai-export-session`) exports a session's items from the local SQLite mirror to a JSON array file (`ai-session-full-YYYYMMDD-HHMMSS.json` by default).
+- `ai-search <query>` (or `s" <query>" ai-search`) searches session descriptions and item contents in the local SQLite mirror.
 - `ai-context n count [chat|json]` returns recent user-initiated turns on the data stack; `chat` returns user/assistant text and `json` includes tool calls/results. `count` must be positive. Run `ai-sessions` before numbered words; print results with `stringify .`.
-- `n ai-cleanup` accepts either a list number or full ID and immediately, permanently removes that remote session and conversation without a confirmation prompt. This cannot be undone.
+- `n ai-cleanup` accepts either a list number or full ID, permanently removes that remote session from the API without a confirmation prompt, and marks it `remote_deleted` in the local SQLite mirror.
 - `ai-cancel` requests cancellation of an active API turn and can close the locally paused task. Already completed local side effects are not undone.
 
 ## Session state
 
-`~/.peforth/.ai_session.json` is a local title overlay and session index, not an active-session resume mechanism. `ai-sessions` and REPL exit refresh its session list from the remote API while preserving titles. The active selection is held only in the current VM. Writes are atomic; simultaneous refreshes/manual edits are last-writer-wins. Separate devices syncing this file may conflict. Session state never restores the local VM stack, dictionary, or files.
+`~/.peforth/sessions/sessions.sqlite3` is a local read-only SQLite mirror of remote sessions and their items, not an active-session resume mechanism. `ai-sessions` and `ai-sync` incrementally synchronize remote sessions into SQLite while preserving existing or manually customized `description` values (`YYYY-MM-DD HH:mm:ss | first sentence`). REPL startup, `ai:`, and REPL exit do not perform background session synchronization. The active selection is held only in the current VM. Session state never restores the local VM stack, dictionary, or files.
 
 `PEFORTH_CONFIG_DIR` selects the local config/session directory. Its default is `~/.peforth`; keep it separate from the source checkout and Forth resources. `PEFORTH_SKILLS_DIR` can select a custom skill directory. The repository's `skills/` and `plugins/` are source assets; they are not automatically installed into another AI CLI's global directories.
 

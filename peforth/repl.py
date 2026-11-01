@@ -654,29 +654,11 @@ def _process_repl_input(vm: VM, line: str, state: dict) -> None:
 
 
 def _farewell(vm: VM) -> None:
-    try:
-        ai_bridge.refresh_session_index(vm)
-    except Exception as err:
-        print(f"Could not refresh the local AI session list: {err}")
-
     session_id = ai_bridge._saved_session(vm)
     if session_id:
-        title = ai_bridge._session_title(session_id) or "(untitled)"
-        short_id = ai_bridge._short_id(session_id)
         print(f'To resume it in a future Forth run, enter: s" {session_id}" ai-use\n')
     else:
         print("No AI session is selected in this Forth run.\n")
-
-
-def _refresh_quiet_session_index(vm: VM) -> None:
-    rows = vm.host.get("ai_session_rows")
-    if rows is None:
-        ai_bridge.refresh_session_index(vm)
-        return
-    session_id = ai_bridge._saved_session(vm)
-    if session_id and not any(row.get("id") == session_id for row in rows):
-        rows.insert(0, {"id": session_id})
-    ai_bridge._sync_session_index(rows)
 
 
 def _make_multiline_key_bindings(bindings_type=None):
@@ -1023,10 +1005,6 @@ def repl(vm: VM | None = None, initial_task=None, *, exit_when_idle: bool = Fals
             task = state.get("ai_task")
             if (exit_when_idle and not pending and not state["queued"]
                     and (task is None or task.status in {"done", "aborted", "failed"})):
-                try:
-                    _refresh_quiet_session_index(vm)
-                except Exception as err:
-                    print(f"Could not refresh the local AI session list: {err}", file=sys.stderr)
                 break
             if pending:
                 try:
