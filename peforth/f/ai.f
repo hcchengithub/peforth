@@ -1250,9 +1250,7 @@ code ai-image-url
     /// Requires an HTTPS image URL accessible to the Agents API. Does not download the image into this runtime.
 
 code ai-image-file
-    import base64
-    import mimetypes
-    import os
+    from peforth import ai_tools
     stream_response = vm.pop()
     file_path = vm.pop()
     prompt = vm.pop()
@@ -1260,15 +1258,9 @@ code ai-image-file
         raise RuntimeError("ai-image-file expects prompt text.")
     if not isinstance(file_path, str) or not file_path.strip():
         raise RuntimeError("ai-image-file expects a valid file path.")
-    abs_path = os.path.abspath(os.path.expanduser(file_path.strip()))
-    if not os.path.isfile(abs_path):
-        raise RuntimeError(f"File not found: {abs_path}")
-    mime_type, _ = mimetypes.guess_type(abs_path)
-    if not mime_type or not mime_type.startswith("image/"):
-        mime_type = "image/jpeg"
-    with open(abs_path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("ascii")
-    data_uri = f"data:{mime_type};base64,{encoded}"
+    if type(stream_response) is not bool:
+        raise RuntimeError("ai-image-file expects a Boolean output mode.")
+    data_uri = ai_tools.encode_image_file_data_uri(file_path, vm=vm)
     vm.host["ai_image_url_once"] = data_uri
     vm.host["ai_isolated_session_once"] = True
     vm.push(prompt)
@@ -1280,7 +1272,79 @@ code ai-image-file
         vm.host.pop("ai_isolated_session_once", None)
     end-code
     // ( prompt-string file-path-string stream? -- [response-string] ) Send a local image file as an input_image data URI.
-    /// Does not pass image data through terminal stdout.
+    /// Automatically downscales/compresses images that exceed the Agents API 1 MiB data URI limit. Does not pass image data through terminal stdout.
+
+code desktop-capture
+    from peforth import ai_tools
+    import json
+    meta = ai_tools.capture_desktop(vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(meta["path"])
+    end-code
+    // ( -- path-string ) Capture a DPI-aware live Windows desktop screenshot sized for AI inspection.
+    /// Saves a unique JPEG in TEMP, prints capture metadata JSON, and pushes the file path. Runs without approval in peforth_run_forth.
+
+code desktop-capture-region
+    from peforth import ai_tools
+    import json
+    height = vm.pop()
+    width = vm.pop()
+    y = vm.pop()
+    x = vm.pop()
+    meta = ai_tools.capture_desktop(region=(x, y, width, height), vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(meta["path"])
+    end-code
+    // ( x y width height -- path-string ) Capture a pixel or normalized (0.0..1.0) region of the live Windows desktop.
+    /// Saves a unique JPEG in TEMP, prints capture metadata JSON, and pushes the file path. Runs without approval in peforth_run_forth.
+
+code ai-screen
+    from peforth import ai_tools
+    import json
+    top = vm.pop()
+    if type(top) is bool:
+        stream_response = top
+        prompt = vm.pop()
+    else:
+        prompt = top
+        stream_response = not bool(vm.host.get("_ai_forth_execution"))
+    if not isinstance(prompt, str):
+        raise RuntimeError("ai-screen expects prompt text.")
+    meta = ai_tools.capture_desktop(vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(prompt)
+    vm.push(meta["path"])
+    vm.push(stream_response)
+    yield from vm.call(vm.tick("ai-image-file"))
+    end-code
+    // ( prompt-string [stream?] -- [response-string] ) Capture the live Windows desktop and inspect it with ai-image-file in one step.
+    /// Runs without user approval when proposed via peforth_run_forth.
+
+code ai-screen-region
+    from peforth import ai_tools
+    import json
+    top = vm.pop()
+    if type(top) is bool:
+        stream_response = top
+        height = vm.pop()
+    else:
+        height = top
+        stream_response = not bool(vm.host.get("_ai_forth_execution"))
+    width = vm.pop()
+    y = vm.pop()
+    x = vm.pop()
+    prompt = vm.pop()
+    if not isinstance(prompt, str):
+        raise RuntimeError("ai-screen-region expects prompt text.")
+    meta = ai_tools.capture_desktop(region=(x, y, width, height), vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(prompt)
+    vm.push(meta["path"])
+    vm.push(stream_response)
+    yield from vm.call(vm.tick("ai-image-file"))
+    end-code
+    // ( prompt-string x y width height [stream?] -- [response-string] ) Capture a live desktop region and inspect it with ai-image-file in one step.
+    /// Coordinates may be pixels or normalized floats in 0.0..1.0. Runs without user approval when proposed via peforth_run_forth.
 
 code (ai-monotonic-time)
     import time

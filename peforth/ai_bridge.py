@@ -771,13 +771,30 @@ def export_session_json(selector, output_path=None, *, vm=None):
         return store.export_session_json(session_id, output_path)
 
 
+_NUM_RE = r'[+-]?(?:\d+(?:\.\d+)?|\.\d+)'
+_REGION4_RE = rf'{_NUM_RE}\s+{_NUM_RE}\s+{_NUM_RE}\s+{_NUM_RE}'
+_STR_RE = r's"\s[^"]*"'
+_BOOL_RE = r'(?:true|false)'
+_TRAIL_RE = r'(?:\s+(?:\.|cr|drop))*'
+
 _READONLY_AI_SEARCH_LINE_RE = re.compile(
-    r'^(?:s"\s[^"]*"\s+ai-search|ai-search(?:\s+\S.*)?|\(ai-sessions-list\))$'
+    rf'^(?:'
+    rf'{_STR_RE}\s+ai-search'
+    rf'|ai-search(?:\s+\S.*)?'
+    rf'|\(ai-sessions-list\)'
+    rf'|desktop-capture{_TRAIL_RE}'
+    rf'|{_REGION4_RE}\s+desktop-capture-region{_TRAIL_RE}'
+    rf'|{_STR_RE}(?:\s+{_BOOL_RE})?\s+ai-screen{_TRAIL_RE}'
+    rf'|{_STR_RE}\s+{_REGION4_RE}(?:\s+{_BOOL_RE})?\s+ai-screen-region{_TRAIL_RE}'
+    rf'|{_STR_RE}\s+desktop-capture\s+{_BOOL_RE}\s+ai-image-file{_TRAIL_RE}'
+    rf'|{_STR_RE}\s+{_REGION4_RE}\s+desktop-capture-region\s+{_BOOL_RE}\s+ai-image-file{_TRAIL_RE}'
+    rf'|{_STR_RE}\s+{_STR_RE}\s+{_BOOL_RE}\s+ai-image-file{_TRAIL_RE}'
+    rf')$'
 )
 
 
 def _is_readonly_session_search_forth(source):
-    """Return True if Forth source only runs read-only local session searches/listings."""
+    """Return True if Forth source only runs read-only session searches or desktop screen inspection."""
     if not isinstance(source, str):
         return False
     lines = [line.strip() for line in source.splitlines() if line.strip()]

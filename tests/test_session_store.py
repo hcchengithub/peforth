@@ -537,5 +537,122 @@ class SessionStoreAndSyncTests(unittest.TestCase):
         self.assertEqual(submitted_json["sessions"][0]["session_id"], "sess_direct_12345678")
 
 
+    def test_readonly_screen_capture_and_image_inspection_auto_approval(self):
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth('desktop-capture'))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth('desktop-capture .'))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth('0.5 0.0 0.5 0.5 desktop-capture-region'))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth(
+            's" Describe the upper-right corner." false ai-screen'
+        ))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth(
+            's" Describe the upper-right corner." ai-screen .'
+        ))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth(
+            's" Zoom into upper-right." 0.5 0.0 0.5 0.5 false ai-screen-region'
+        ))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth(
+            's" Inspect screenshot." desktop-capture false ai-image-file'
+        ))
+        self.assertTrue(ai_bridge._is_readonly_session_search_forth(
+            's" Inspect screenshot." s" C:\\Temp\\test.jpg" false ai-image-file'
+        ))
+        # Arbitrary Forth or shell execution must still require approval
+        self.assertFalse(ai_bridge._is_readonly_session_search_forth('s" Write-Host hi" run_pwsh'))
+        self.assertFalse(ai_bridge._is_readonly_session_search_forth('desktop-capture bye'))
+
+    def test_ai_screen_in_peforth_run_forth_executes_without_approval(self):
+        from peforth import ai_tools
+
+        img_path = self.config_dir / "sample.jpg"
+        img_path.write_bytes(b"\xff\xd8\xff\xe0fake-jpeg-bytes\xff\xd9")
+        fake_meta = {
+            "path": str(img_path),
+            "size": img_path.stat().st_size,
+            "width": 1920,
+            "height": 1080,
+            "orig_width": 3840,
+            "height_orig": 2160,
+            "captured_at": "2026-11-01T19:20:00Z",
+        }
+        action = {
+            "type": "function_call",
+            "turn_id": "turn_screen_1",
+            "call_id": "call_screen_1",
+            "name": "peforth_run_forth",
+            "arguments": {
+                "purpose": "Inspect the live desktop screenshot",
+                "source": 's" Look at the upper-right corner." false ai-screen',
+            },
+        }
+
+        call_count = 0
+
+        def fake_create(payload, *, diagnostic=None, stream=True):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                yield {"type": "agent.session.created", "session": {"id": "sess_outer"}}
+                yield {"type": "agent.session.turn.created", "turn": {"id": "turn_screen_1"}}
+                yield {"type": "agent.session.requires_action", "session": {"status": "requires_action"}}
+                yield {"type": "agent.session.turn.output_text.done", "text": "There is a photo of three people."}
+                yield {"type": "agent.session.turn.completed", "turn_id": "turn_screen_1"}
+            else:
+                # Inner isolated vision session from ai-image-file
+                self.assertEqual(payload["agent"]["tools"], [])
+                content = payload["input"][0]["content"]
+                self.assertEqual(content[0]["type"], "input_text")
+                self.assertEqual(content[1]["type"], "input_image")
+                self.assertTrue(content[1]["image_url"].startswith("data:image/jpeg;base64,"))
+                yield {"type": "agent.session.created", "session": {"id": "sess_isolated_vision"}}
+                yield {"type": "agent.session.turn.created", "turn": {"id": "turn_vision_1"}}
+                yield {"type": "agent.session.turn.output_text.done", "text": "Three people posing in front of an aquarium."}
+                yield {"type": "agent.session.turn.completed", "turn_id": "turn_vision_1"}
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key", "PEFORTH_AI_POLL_INTERVAL": "0.001"}), \
+                patch.object(ai_bridge, "load_dotenv"), \
+                patch.object(ai_bridge, "_agent_instructions", return_value="instructions"), \
+                patch.object(ai_bridge, "_create_session", side_effect=fake_create), \
+                patch.object(
+                    ai_bridge,
+                    "_current_actions",
+                    side_effect=[("requires_action", [action]), ("requires_action", [action]), ("idle", [])],
+                ), \
+                patch.object(ai_tools, "capture_desktop", return_value=fake_meta) as cap_mock, \
+                patch.object(ai_bridge, "_tool_result") as tool_result_mock, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.vm.push("What is in the upper-right corner?")
+            self.vm.push(False)
+            task = self.vm.dictate("(ai)")
+
+        self.assertEqual(task.status, "done")
+        self.assertFalse(self.vm.host.get("ai_pending_approval"))
+        self.assertEqual(self.vm.pop(), "There is a photo of three people.")
+        cap_mock.assert_called_once()
+        tool_result_mock.assert_called_once()
+        execution_json = json.loads(tool_result_mock.call_args.args[3])
+        self.assertEqual(execution_json["status"], "done")
+        self.assertIn("Three people posing in front of an aquarium.", execution_json["stack"])
+
+    def test_encode_image_file_data_uri_compresses_oversized_images(self):
+        from peforth import ai_tools
+
+        small_path = self.config_dir / "small.png"
+        small_path.write_bytes(b"\x89PNG\r\n\x1a\nsmall")
+        uri = ai_tools.encode_image_file_data_uri(str(small_path))
+        self.assertTrue(uri.startswith("data:image/png;base64,"))
+        self.assertLessEqual(len(uri), ai_tools._IMAGE_DATA_URI_MAX_LEN)
+
+        large_path = self.config_dir / "oversized.png"
+        large_path.write_bytes(b"x" * 900_000)  # Base64 > 1,048,576 chars
+        with patch.object(
+            ai_tools,
+            "_compress_image_file_for_ai",
+            return_value=("image/jpeg", "YWJjZA=="),
+        ) as compress_mock:
+            compressed_uri = ai_tools.encode_image_file_data_uri(str(large_path))
+        compress_mock.assert_called_once()
+        self.assertEqual(compressed_uri, "data:image/jpeg;base64,YWJjZA==")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,68 +1,58 @@
 ---
 name: windows-screen-capture
-description: Capture the Windows desktop at its real pixel resolution and deliver screenshots as image content. Use when inspecting a Windows UI, terminal pane, cursor, selection, or highlight.
+description: Capture the Windows desktop or a specific screen region with DPI awareness and inspect it via AI vision without user approval prompts. Use when inspecting a Windows UI, photo, terminal pane, cursor, selection, or highlight.
 ---
 
 # Windows screen capture
 
-Use this workflow when a user asks you to inspect what is visibly shown on a Windows desktop. A text-only terminal read cannot reveal the visual location of a cursor or highlight.
+Use the built-in peforth screen capture and vision words when a user asks you to inspect what is visibly shown on the Windows desktop (such as a photo, GUI window, cursor, or highlight).
 
-## Capture the desktop
+All read-only screen capture and image inspection commands listed below are **auto-approved** in `peforth_run_forth` (they execute immediately without pausing for user confirmation).
 
-Run PowerShell in the same interactive Windows user session as the desktop. In this peforth runtime, use the local PowerShell route exposed by the live dictionary, such as run_pwsh.
+## 1. One-step live desktop inspection (`ai-screen`)
 
-Enable DPI awareness before loading Windows Forms or asking Windows for screen bounds. Without it, a 3840x2160 desktop was reported as 1920x1080 and the capture contained only part of the desktop.
-
-```powershell
-$ErrorActionPreference = 'Stop'
-
-Add-Type -TypeDefinition @'
-using System.Runtime.InteropServices;
-public static class PeForthCaptureDpi {
-    [DllImport("user32.dll")]
-    public static extern bool SetProcessDPIAware();
-}
-'@
-[void][PeForthCaptureDpi]::SetProcessDPIAware()
-
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-
-# VirtualScreen covers the full virtual desktop, including multiple monitors.
-# Use Screen.PrimaryScreen.Bounds instead when only the primary monitor is wanted.
-$bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
-$bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
-$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-try {
-    $source = [System.Drawing.Point]::new($bounds.Left, $bounds.Top)
-    $graphics.CopyFromScreen($source, [System.Drawing.Point]::Empty, $bounds.Size)
-    $path = Join-Path $env:TEMP 'desktop-capture.png'
-    $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    Get-Item $path | Select-Object FullName, Length
-} finally {
-    $graphics.Dispose()
-    $bitmap.Dispose()
-}
-```
-
-Check the reported width, height, and saved file size. Keep the full-resolution capture as the source. For a wide desktop, first make a scaled overview, then crop the relevant screen area from the original image for details such as a small terminal highlight. A corner-only crop can miss a UI located elsewhere.
-
-## Show the screenshot as an image
-
-Pass the screenshot through `ai-image-file`, which reads the captured file locally, encodes it into an `input_image` Data URI in memory, and submits it directly to the model:
+To capture the full Windows virtual desktop and inspect it with AI vision in a single step:
 
 ```forth
-s" Inspect the screenshot for the visual location of the cursor or highlight." s" C:\path\to\desktop-capture.png" false ai-image-file
+s" Describe what is visible on the desktop, especially in the upper-right corner." false ai-screen
 ```
 
-Do not paste Base64 into terminal stdout or treat image bytes as ordinary text. Using `ai-image-file` avoids relying on external image viewers (which may fail if no GUI execution environment is attached). Furthermore, `ai-image-file` runs with session isolation protection, so it can be called safely within an active AI agent turn without causing session turn conflicts (HTTP 409).
+- Stack effect: `( prompt-string [stream?] -- [response-string] )`
+- Passing `false` pushes the vision answer string onto the Forth stack (and prints the capture metadata JSON `{path, width, height, orig_width, orig_height, size, captured_at}` to stdout).
 
-## Respect output limits
+## 2. One-step region / zoomed-in inspection (`ai-screen-region`)
 
-In this peforth runtime, `run_pwsh` stdout and stderr are each capped at 65,536 bytes. This is a local process-output limit, not an Agents API image-size limit and not a token-window limit.
+When you need to zoom into a specific corner, window, or UI detail at higher effective resolution, use `ai-screen-region` with either **normalized coordinates (`0.0` to `1.0`)** or **pixel coordinates (`x y width height`)**:
 
-Because `ai-image-file` transfers image data directly into the API request payload in memory, **it completely bypasses the 65,536-byte stdout bottleneck**. You do not need to downscale, compress, or slice Base64 strings across terminal turns. The full-resolution capture or cropped region can be fed straight into `ai-image-file`.
+```forth
+\ Inspect the upper-right quadrant using normalized coordinates (x=0.5, y=0.0, w=0.5, h=0.5):
+s" Describe the photo and details in the upper-right corner." 0.5 0.0 0.5 0.5 false ai-screen-region
 
-## What the experiment established
+\ Or using pixel coordinates (x=1920, y=0, w=1920, h=1080):
+s" Read the text in this region." 1920 0 1920 1080 false ai-screen-region
+```
 
-On a 3840x2160 Windows desktop, querying screen bounds before setting DPI awareness yielded 1920x1080. Calling SetProcessDPIAware first exposed the full 3840x2160 dimensions. A full screenshot and a focused crop then made Midnight Commander's left-panel highlight visible. The exact local capture method worked; earlier `view_image` failures and stdout buffer limitations were completely resolved by adopting `ai-image-file` for image delivery.
+- Stack effect: `( prompt-string x y width height [stream?] -- [response-string] )`
+
+## 3. Capture-only words (`desktop-capture` and `desktop-capture-region`)
+
+If you only need to capture a fresh screenshot file (or inspect an existing local image file with `ai-image-file`):
+
+```forth
+\ Capture full desktop (prints metadata JSON and pushes the unique JPEG path):
+desktop-capture
+
+\ Capture a specific region:
+0.5 0.0 0.5 0.5 desktop-capture-region
+
+\ Inspect any local image file (auto-approved in peforth_run_forth):
+s" Inspect the screenshot." s" C:\path\to\image.png" false ai-image-file
+```
+
+## Why you should use these built-in words instead of raw `run_pwsh`
+
+1. **Zero approval friction**: `ai-screen`, `ai-screen-region`, `desktop-capture`, `desktop-capture-region`, and `ai-image-file` are recognized as read-only inspection commands and run without prompting the user for approval.
+2. **Automatic DPI awareness**: Calls `SetProcessDPIAware()` before reading `SystemInformation.VirtualScreen`, ensuring 4K / high-DPI desktops (`3840x2160`) are captured in full rather than clipped at `1920x1080`.
+3. **Unique timestamped filenames**: Saves each capture as `$env:TEMP\desktop-live-YYYYMMDD-HHMMSS-<id>.jpg` and verifies the file on disk, eliminating stale-screenshot bugs caused by reusing a fixed `desktop-capture.png` filename.
+4. **Automatic 1 MiB Data URI compliance**: The OpenAI Agents API enforces a strict `1,048,576`-character limit on `input_image.image_url` (`string_above_max_length`). Both `desktop-capture` and `ai-image-file` automatically downscale and JPEG-compress large images (`<= 750 KB`) so they never fail with HTTP 400.
+5. **Isolated vision turn**: `ai-image-file`, `ai-screen`, and `ai-screen-region` run in an isolated one-shot session so they can be called safely inside an active AI turn without HTTP 409 session conflicts.

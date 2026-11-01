@@ -393,3 +393,376 @@ def _http_request(url, method, headers, body):
             exc.close()
     except Exception as exc:
         return {"error": str(exc)}
+
+
+_IMAGE_DATA_URI_MAX_LEN = 1_048_576
+_SCREENSHOT_MAX_BYTES = 750_000
+_SCREENSHOT_MAX_DIMENSION = 1920
+
+
+def _powershell_executable(vm=None):
+    """Locate a PowerShell executable capable of running Windows System.Drawing."""
+    if vm is not None:
+        info = vm.host.get("system_info")
+        if isinstance(info, dict):
+            pwsh = (info.get("shells") or {}).get("pwsh") or {}
+            if pwsh.get("available") and pwsh.get("path"):
+                return str(pwsh["path"])
+    for candidate in ("pwsh", "powershell", "pwsh.exe", "powershell.exe"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    wsl_fallback = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+    if os.path.isfile(wsl_fallback):
+        return wsl_fallback
+    raise RuntimeError("PowerShell is not available for Windows desktop capture.")
+
+
+def _windows_to_local_path(win_path):
+    """Convert a Windows path to a local filesystem path when running under WSL."""
+    if not isinstance(win_path, str) or not win_path:
+        return win_path
+    if os.name == "nt":
+        return win_path
+    match = re.match(r"^([A-Za-z]):[\\/](.*)$", win_path)
+    if match:
+        drive = match.group(1).lower()
+        rest = match.group(2).replace("\\", "/")
+        return f"/mnt/{drive}/{rest}"
+    return win_path
+
+
+def _local_to_windows_path(local_path):
+    """Convert a WSL /mnt/<drive>/... path to a Windows path when needed."""
+    if not isinstance(local_path, str) or not local_path or os.name == "nt":
+        return local_path
+    match = re.match(r"^/mnt/([A-Za-z])/(.*)$", local_path)
+    if match:
+        drive = match.group(1).upper()
+        rest = match.group(2).replace("/", "\\")
+        return f"{drive}:\\{rest}"
+    return local_path
+
+
+def _run_powershell_encoded(script, vm=None, timeout=_PROCESS_TIMEOUT):
+    """Execute a multi-line PowerShell script safely via UTF-16LE -EncodedCommand."""
+    import base64
+
+    executable = _powershell_executable(vm=vm)
+    preamble = (
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+        "$ErrorActionPreference = 'Stop'\n"
+    )
+    encoded = base64.b64encode((preamble + script).encode("utf-16le")).decode("ascii")
+    result = _run_process(
+        [
+            executable,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-OutputFormat",
+            "Text",
+            "-EncodedCommand",
+            encoded,
+        ],
+        timeout=timeout,
+    )
+    if result["timed_out"]:
+        raise RuntimeError(result.get("error") or "PowerShell desktop capture timed out.")
+    if result.get("error"):
+        raise RuntimeError(f"Could not run PowerShell: {result['error']}")
+    if result["exit_code"] != 0:
+        detail = result["stderr"].strip() or result["stdout"].strip()
+        raise RuntimeError(f"PowerShell failed (exit code {result['exit_code']}): {detail}")
+    return result
+
+
+def capture_desktop(
+    region=None,
+    max_dimension=_SCREENSHOT_MAX_DIMENSION,
+    quality=82,
+    max_bytes=_SCREENSHOT_MAX_BYTES,
+    vm=None,
+):
+    """Capture a DPI-aware live Windows desktop screenshot sized for AI inspection.
+
+    If ``region`` is provided as ``(x, y, width, height)``, values may be either
+    normalized floats in ``0.0..1.0`` (fractions of VirtualScreen) or pixel
+    coordinates. The captured image is saved to a unique timestamped JPEG in
+    ``TEMP`` guaranteed not to exceed ``max_bytes`` so that its Base64 data URI
+    always fits within the Agents API ``1,048,576``-character limit.
+    """
+    if isinstance(max_dimension, bool) or not isinstance(max_dimension, int) or max_dimension < 64:
+        raise ValueError("max_dimension must be an integer >= 64.")
+    if isinstance(quality, bool) or not isinstance(quality, int) or not (10 <= quality <= 100):
+        raise ValueError("quality must be an integer between 10 and 100.")
+    if isinstance(max_bytes, bool) or not isinstance(max_bytes, int) or max_bytes < 10_000:
+        raise ValueError("max_bytes must be an integer >= 10000.")
+
+    has_region = region is not None
+    rx = ry = rw = rh = 0.0
+    normalized_region = False
+    if has_region:
+        if not isinstance(region, (list, tuple)) or len(region) != 4:
+            raise ValueError("region must be a 4-item (x, y, width, height) sequence.")
+        for item in region:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                raise ValueError("region coordinates must be numbers.")
+        rx, ry, rw, rh = (float(region[0]), float(region[1]), float(region[2]), float(region[3]))
+        if rw <= 0 or rh <= 0:
+            raise ValueError("region width and height must be positive.")
+        if (
+            0.0 <= rx <= 1.0
+            and 0.0 <= ry <= 1.0
+            and 0.0 < rw <= 1.0
+            and 0.0 < rh <= 1.0
+            and (any(isinstance(v, float) for v in region) or (rw <= 1.0 and rh <= 1.0))
+        ):
+            normalized_region = True
+
+    script = f"""
+Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class PeForthDpi {{ [DllImport("user32.dll")] public static extern bool SetProcessDPIAware(); }}'
+[void][PeForthDpi]::SetProcessDPIAware()
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+try {{
+    Get-ChildItem -Path $env:TEMP -Filter 'desktop-live-*' -ErrorAction SilentlyContinue |
+        Where-Object {{ $_.LastWriteTimeUtc -lt (Get-Date).ToUniversalTime().AddHours(-1) }} |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}} catch {{}}
+
+$bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+$hasRegion = {'$true' if has_region else '$false'}
+$normalized = {'$true' if normalized_region else '$false'}
+if ($hasRegion) {{
+    if ($normalized) {{
+        $capX = $bounds.Left + [int][Math]::Round({rx!r} * $bounds.Width)
+        $capY = $bounds.Top + [int][Math]::Round({ry!r} * $bounds.Height)
+        $capW = [Math]::Max(1, [int][Math]::Round({rw!r} * $bounds.Width))
+        $capH = [Math]::Max(1, [int][Math]::Round({rh!r} * $bounds.Height))
+    }} else {{
+        $capX = [int][Math]::Round({rx!r})
+        $capY = [int][Math]::Round({ry!r})
+        $capW = [Math]::Max(1, [int][Math]::Round({rw!r}))
+        $capH = [Math]::Max(1, [int][Math]::Round({rh!r}))
+    }}
+    $right = [Math]::Min($bounds.Right, $capX + $capW)
+    $bottom = [Math]::Min($bounds.Bottom, $capY + $capH)
+    $capX = [Math]::Max($bounds.Left, [Math]::Min($capX, $bounds.Right - 1))
+    $capY = [Math]::Max($bounds.Top, [Math]::Min($capY, $bounds.Bottom - 1))
+    $capW = [Math]::Max(1, $right - $capX)
+    $capH = [Math]::Max(1, $bottom - $capY)
+}} else {{
+    $capX = $bounds.Left
+    $capY = $bounds.Top
+    $capW = $bounds.Width
+    $capH = $bounds.Height
+}}
+
+$origBmp = [System.Drawing.Bitmap]::new($capW, $capH)
+$g = [System.Drawing.Graphics]::FromImage($origBmp)
+try {{
+    $sourcePt = [System.Drawing.Point]::new($capX, $capY)
+    $g.CopyFromScreen($sourcePt, [System.Drawing.Point]::Empty, [System.Drawing.Size]::new($capW, $capH))
+
+    $maxDim = {int(max_dimension)}
+    $maxBytes = {int(max_bytes)}
+    $qual = {int(quality)}
+    $scale = 1.0
+    if ($capW -gt $maxDim -or $capH -gt $maxDim) {{
+        $scale = [Math]::Min($maxDim / $capW, $maxDim / $capH)
+    }}
+
+    $encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+        Where-Object {{ $_.MimeType -eq 'image/jpeg' }} | Select-Object -First 1
+
+    $jpegBytes = $null
+    $tw = [Math]::Max(1, [int][Math]::Round($capW * $scale))
+    $th = [Math]::Max(1, [int][Math]::Round($capH * $scale))
+
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {{
+        $tw = [Math]::Max(1, [int][Math]::Round($capW * $scale))
+        $th = [Math]::Max(1, [int][Math]::Round($capH * $scale))
+        $targetBmp = [System.Drawing.Bitmap]::new($tw, $th)
+        $tg = [System.Drawing.Graphics]::FromImage($targetBmp)
+        $ms = [System.IO.MemoryStream]::new()
+        try {{
+            $tg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $tg.DrawImage($origBmp, 0, 0, $tw, $th)
+            $encParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
+            $encParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new(
+                [System.Drawing.Imaging.Encoder]::Quality, [long]$qual
+            )
+            $targetBmp.Save($ms, $encoder, $encParams)
+            $jpegBytes = $ms.ToArray()
+        }} finally {{
+            $ms.Dispose()
+            $tg.Dispose()
+            $targetBmp.Dispose()
+        }}
+        if ($jpegBytes.Length -le $maxBytes) {{
+            break
+        }}
+        if ($qual -gt 55) {{
+            $qual = [Math]::Max(50, $qual - 15)
+        }} else {{
+            $scale = $scale * 0.75
+        }}
+    }}
+
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+    $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $outPath = Join-Path $env:TEMP ('desktop-live-' + $stamp + '-' + $id + '.jpg')
+    [System.IO.File]::WriteAllBytes($outPath, $jpegBytes)
+    $info = Get-Item -LiteralPath $outPath
+    [PSCustomObject]@{{
+        path = $info.FullName
+        size = $info.Length
+        width = $tw
+        height = $th
+        orig_width = $capW
+        orig_height = $capH
+        screen_width = $bounds.Width
+        screen_height = $bounds.Height
+        region = [PSCustomObject]@{{ x = $capX; y = $capY; width = $capW; height = $capH }}
+        captured_at = $info.LastWriteTimeUtc.ToString('o')
+    }} | ConvertTo-Json -Compress
+}} finally {{
+    $g.Dispose()
+    $origBmp.Dispose()
+}}
+"""
+    result = _run_powershell_encoded(script, vm=vm)
+    lines = [line.strip() for line in result["stdout"].splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("Desktop capture produced no metadata output.")
+    try:
+        meta = json.loads(lines[-1])
+    except ValueError as exc:
+        raise RuntimeError(f"Desktop capture returned invalid JSON: {lines[-1]!r}") from exc
+    local_path = _windows_to_local_path(meta.get("path", ""))
+    if not local_path or not os.path.isfile(local_path) or os.path.getsize(local_path) <= 0:
+        raise RuntimeError(f"Captured screenshot file is missing or empty: {local_path!r}")
+    meta["path"] = local_path
+    return meta
+
+
+def _compress_image_file_for_ai(
+    abs_path,
+    max_dimension=_SCREENSHOT_MAX_DIMENSION,
+    quality=82,
+    max_bytes=_SCREENSHOT_MAX_BYTES,
+    vm=None,
+):
+    """Downscale and JPEG-compress an existing image file so it fits inside max_bytes."""
+    import base64
+
+    win_path = _local_to_windows_path(abs_path)
+    escaped_path = win_path.replace("'", "''")
+    script = f"""
+Add-Type -AssemblyName System.Drawing
+$src = [System.Drawing.Image]::FromFile('{escaped_path}')
+try {{
+    $ow = $src.Width
+    $oh = $src.Height
+    $maxDim = {int(max_dimension)}
+    $maxBytes = {int(max_bytes)}
+    $qual = {int(quality)}
+    $scale = 1.0
+    if ($ow -gt $maxDim -or $oh -gt $maxDim) {{
+        $scale = [Math]::Min($maxDim / $ow, $maxDim / $oh)
+    }}
+    $encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+        Where-Object {{ $_.MimeType -eq 'image/jpeg' }} | Select-Object -First 1
+    $jpegBytes = $null
+    for ($attempt = 0; $attempt -lt 6; $attempt++) {{
+        $tw = [Math]::Max(1, [int][Math]::Round($ow * $scale))
+        $th = [Math]::Max(1, [int][Math]::Round($oh * $scale))
+        $targetBmp = [System.Drawing.Bitmap]::new($tw, $th)
+        $tg = [System.Drawing.Graphics]::FromImage($targetBmp)
+        $ms = [System.IO.MemoryStream]::new()
+        try {{
+            $tg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $tg.DrawImage($src, 0, 0, $tw, $th)
+            $encParams = [System.Drawing.Imaging.EncoderParameters]::new(1)
+            $encParams.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new(
+                [System.Drawing.Imaging.Encoder]::Quality, [long]$qual
+            )
+            $targetBmp.Save($ms, $encoder, $encParams)
+            $jpegBytes = $ms.ToArray()
+        }} finally {{
+            $ms.Dispose()
+            $tg.Dispose()
+            $targetBmp.Dispose()
+        }}
+        if ($jpegBytes.Length -le $maxBytes) {{
+            break
+        }}
+        if ($qual -gt 55) {{
+            $qual = [Math]::Max(50, $qual - 15)
+        }} else {{
+            $scale = $scale * 0.75
+        }}
+    }}
+    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
+    $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $outPath = Join-Path $env:TEMP ('desktop-scaled-' + $stamp + '-' + $id + '.jpg')
+    [System.IO.File]::WriteAllBytes($outPath, $jpegBytes)
+    Write-Output $outPath
+}} finally {{
+    $src.Dispose()
+}}
+"""
+    result = _run_powershell_encoded(script, vm=vm)
+    lines = [line.strip() for line in result["stdout"].splitlines() if line.strip()]
+    if not lines:
+        raise RuntimeError("Image compression produced no output path.")
+    temp_local_path = _windows_to_local_path(lines[-1])
+    try:
+        with open(temp_local_path, "rb") as f:
+            data = f.read()
+    finally:
+        try:
+            os.remove(temp_local_path)
+        except OSError:
+            pass
+    return "image/jpeg", base64.b64encode(data).decode("ascii")
+
+
+def encode_image_file_data_uri(file_path, max_data_uri_len=_IMAGE_DATA_URI_MAX_LEN, vm=None):
+    """Read a local image file and return a ``data:image/...;base64,...`` URI.
+
+    If the raw file's Base64 Data URI exceeds ``max_data_uri_len`` (1,048,576 chars
+    on the OpenAI Agents API), the image is automatically downscaled and compressed
+    to a JPEG that fits within the limit.
+    """
+    import base64
+    import mimetypes
+
+    if not isinstance(file_path, str) or not file_path.strip():
+        raise RuntimeError("ai-image-file expects a valid file path.")
+    abs_path = os.path.abspath(os.path.expanduser(file_path.strip()))
+    if not os.path.isfile(abs_path):
+        raise RuntimeError(f"File not found: {abs_path}")
+    mime_type, _ = mimetypes.guess_type(abs_path)
+    if not mime_type or not mime_type.startswith("image/"):
+        mime_type = "image/jpeg"
+    with open(abs_path, "rb") as f:
+        raw_bytes = f.read()
+    prefix = f"data:{mime_type};base64,"
+    encoded_len = ((len(raw_bytes) + 2) // 3) * 4
+    if len(prefix) + encoded_len <= max_data_uri_len:
+        encoded = base64.b64encode(raw_bytes).decode("ascii")
+        return prefix + encoded
+    max_raw_bytes = min(_SCREENSHOT_MAX_BYTES, ((max_data_uri_len - 32) // 4) * 3)
+    compressed_mime, encoded = _compress_image_file_for_ai(
+        abs_path, max_bytes=max_raw_bytes, vm=vm
+    )
+    data_uri = f"data:{compressed_mime};base64,{encoded}"
+    if len(data_uri) > max_data_uri_len:
+        raise RuntimeError(
+            f"Compressed image Data URI ({len(data_uri)} chars) still exceeds the "
+            f"{max_data_uri_len}-character limit."
+        )
+    return data_uri
