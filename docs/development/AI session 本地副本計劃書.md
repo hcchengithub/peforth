@@ -1,286 +1,138 @@
-# peforth AI session 本地副本計劃書
+# peforth AI Session 本地副本規格書 (SPEC)
 
-作者： peforth LBB2 WSL Active AI session: (untitled) [sess_078cfd7e70c0121e006adb2f5b2e708192b8db2288b836d87d]
+作者： Antigravity Conversation ID： f4b68893-4920-4729-88a4-cb853de528b5
 
-**狀態：** 討論草案；目前只記錄設計，不代表已開始實作。
+**狀態：** 規格定案（已根據實體資料驗證並大幅簡化）
 
-**目標：**
+**核心設計哲學：**
 
-建立遠端 AI sessions 的本地可搜尋副本，讓使用者能列出、描述、回顧和再次參考曾經的對話。同步由獨立命令明確觸發，避免啟動或正常結束 REPL 時意外下載大量歷史資料。
-
-**範圍：**
-
-本計畫涵蓋本地儲存、description、遠端差異檢查、同步流程，以及將 `.ai_session.json` 的現有標題遷移到新儲存。診斷 logging 維持原用途，不把 session archive 寫進 diagnostics database。
+真正的 Sessions 是由遠端 OpenAI（Agents API）管理的，遠端才是唯一權威來源（Single Source of Truth）。因此，**本地 SQLite 資料庫的定位是遠端的「唯讀鏡像快取（Read-Only Mirror）」**。
+既然是唯讀鏡像，同步流程應保持極簡與自動化——只需比對時間戳記、將有更新的內容抓回本地即可，不需要繁瑣的二階段預覽或互動確認選單。
 
 ---
 
-## 一、現況與設計依據
+## 一、背景與設計決策
 
-1. 遠端 session 索引提供 session ID、建立時間、最後活動時間、狀態和模型等資訊。舊 session 之後仍可能增加對話，所以「REPL 正常結束時存一次」不能作為唯一同步時機。
-2. 現有 `ai-context` 取得指定 session 最近幾輪對話，會依 API 分頁；它不是完整 archive 的專用同步介面。
-3. `.ai_session.json` 目前保存 session ID 與 title，適合遷移為每個 session 的本地 description，不應在同步時被遠端資料覆蓋。
-4. `~/.peforth/ai-diagnostics.sqlite3` 的資料模型是 runtimes、AI turns、timeline events 和診斷用 contents。檢查當下有 137 個 turns、21 個 remote session IDs，而遠端索引有 38 個 sessions，內容並非完整 session archive。
-5. diagnostics logger 是多 runtime 共用的 SQLite writer，採 WAL，且寫入期限短。長時間的 archive 同步不應和診斷記錄競爭同一個資料庫。
+1. **獨立於 Diagnostics DB：** `~/.peforth/ai-diagnostics.sqlite3` 是多 runtime 共用的短交易診斷紀錄，並非完整的對話歸檔。Session 本地副本使用獨立的 SQLite 檔案，避免寫入競爭與職責混淆。
+2. **直接廢棄 `.ai_session.json`（無需遷移）：** 經實際檢查現有 `.ai_session.json`，裡面的 `title` 欄位全部為空字串 `""`，沒有任何歷史資料需要保留。新機制直接停用並移除 `.ai_session.json` 的讀寫邏輯即可，完全不必編寫遷移程式。
+3. **支援隨時增量同步：** 舊 session 日後仍可能繼續對話，只要比對遠端 `last_active_at` 有更新，即同步最新 items。
 
 ---
 
-## 二、儲存位置與責任
+## 二、儲存位置
 
-使用獨立 SQLite 檔案，保留 `sessions/` 子目錄：
+使用獨立的 SQLite 資料庫檔案：
 
 ```text
 <runtime-config-root>/sessions/sessions.sqlite3
 ```
 
-WSL 預設位置為 `~/.peforth/sessions/sessions.sqlite3`；實際路徑應由 runtime config root（`ai_bridge._runtime_config_path()`）推導，避免硬編碼使用者家目錄。Windows 和 WSL 各自使用其 runtime config root。
-
-SQLite 是 sessions 的主要本地副本。Session ID 是資料庫主鍵，不再是一個 session 一個檔案。必要時可以另行設計匯出功能，但匯出檔不作為同步的權威來源。
-
-Diagnostics DB 保持獨立；session 對話內容、description 和同步狀態都不寫入 diagnostics tables。
+- 實際路徑由 `ai_bridge._runtime_config_path()` 推導（例如 `~/.peforth/sessions/sessions.sqlite3`），Windows 與 WSL 各自使用其 runtime config root。
+- 資料庫具備獨立的 `schema_version` 管理。
 
 ---
 
-## 三、資料模型草案
+## 三、資料模型 (Schema)
 
-最少需要兩類資料：
+經實體樣本（`ai-session-full-20261101-220954.json`）驗證，遠端回傳的每筆 item 均帶有唯一且格式規範的 `id`（`msg_*`、`rs_*`、`exec_*`、`fco_*`），且帶有 `turn_id`，但 item 本身不含個別時間戳記。
 
-- **Session metadata：** `session_id`、`description`、description 來源、遠端 `created_at`、遠端 `last_active_at`、`synced_at`、archive 是否完整，以及必要的同步狀態。
-- **Session items：** session 內按遠端順序保存的 API items；保留原始 JSON，以免遺失 assistant 回覆、工具互動或其他 item 類型。
+資料庫分為兩張表：
 
-概念上可分成 `sessions` 與 `session_items` 兩張表。實際主鍵、cursor 和去重方式需先確認 API item ID 的穩定性；若 item ID 可穩定識別，按 ID 合併。若無法確認，第一版對有變更的 session 重新取得完整快照，再以單一 session 為單位替換。
+### 1. `sessions` 表（Session Metadata）
 
-SQLite schema 需有自己的版本遷移機制，與 diagnostics DB 的 schema version 分開。
+| 欄位 | 類型 | 說明 |
+| :--- | :--- | :--- |
+| `session_id` | TEXT PRIMARY KEY | 遠端 session ID（如 `sess_...`） |
+| `description` | TEXT | 本地顯示摘要（自動生成或使用者自訂） |
+| `created_at` | TEXT / INTEGER | 遠端建立時間 |
+| `last_active_at` | TEXT / INTEGER | 遠端最後活動時間（用於判斷是否需同步） |
+| `synced_at` | TEXT / INTEGER | 本地最後一次完成 items 同步的時間 |
+| `status` | TEXT | 遠端狀態（如 `completed`, `active` 等） |
+| `model` | TEXT | 使用的模型名稱 |
+| `remote_deleted` | INTEGER | 遠端是否已不存在（預設 `0`；遠端刪除時標為 `1`，不自動刪本地資料） |
+
+### 2. `session_items` 表（對話與操作明細）
+
+| 欄位 | 類型 | 說明 |
+| :--- | :--- | :--- |
+| `id` | TEXT PRIMARY KEY | 遠端 item 唯一 ID（`msg_*`, `rs_*`, `exec_*`, `fco_*`） |
+| `session_id` | TEXT | 所屬 `session_id`（建立索引） |
+| `seq` | INTEGER | 在該 session 內的陣列順序（從 0 開始，查詢時 `ORDER BY seq ASC`） |
+| `turn_id` | TEXT | 所屬對話輪次 ID（`turn_*`） |
+| `type` | TEXT | `message` / `reasoning` / `function_call` / `function_call_output` |
+| `role` | TEXT | `user` / `assistant`（非 message 類型為 NULL） |
+| `raw_json` | TEXT | 該 item 的完整原始 JSON 字串 |
 
 ---
 
-## 四、Description 規則
+## 四、Description 生成規則
 
-新 session 的初始 description 格式：
+每個 session 的初始 `description` 格式為：
 
 ```text
 YYYY-MM-DD HH:mm:ss | 第一則使用者訊息的第一句（最多 80 個字）
 ```
 
-- 時間使用建立 session 時的 runtime 當地時間；內部仍保存遠端原始時間，方便排序與轉換。
-- 80 個字按 Unicode 字元截取，不按 UTF-8 位元組截取。
-- 建立時尚無使用者訊息，就先只保存時間；收到第一則訊息後補上第一句。
-- 後續同步不重建 description。若使用者手動修改，修改後的內容一直優先保留。
-
-遷移與初始化的優先順序：
-
-1. 新 sessions DB 已有 description：保留。
-2. 否則 `.ai_session.json` 有舊 title：將 title 搬成 description。
-3. 兩者都沒有：才用遠端建立時間和第一則使用者訊息生成 description。
-
-遠端對話只用來填補空 description，不覆蓋任何既有本地 description 或遷移來的 title。
-
----
-
-## 五、檢查與同步流程
-
-### `ai-sessions`：列出本地狀態並預覽差異
-
-1. 先列出本地資料庫已有的 sessions 和 descriptions。
-2. 取得遠端 session 索引的輕量 metadata。
-3. 依 session ID 對照本地與遠端，分類為：
-   - 本地沒有：新 session。
-   - 本地有，遠端 `last_active_at` 較新：可能需要更新。
-   - 本地有，遠端索引找不到：遠端已不存在；保留本地資料並提示，不自動刪除。
-   - 時間沒有變化：目前不需下載內容。
-4. 顯示候選數量與 description，讓使用者知道同步可能涉及哪些 sessions。
-
-### `ai-sync-sessions`：取得完整內容
-
-1. 顯示候選清單並詢問是否同步；允許同步全部、選取項目或取消。
-2. 只對使用者選中的新 session 或變更 session 讀取完整 item pages。
-3. 網路下載期間不持有 SQLite 寫入交易。單一 session 的所有頁面成功取得後，再以短交易提交該 session 的 items 與同步 metadata。
-4. 只有內容完整提交成功後才更新本地 `last_active_at`／`synced_at`。失敗時保留舊副本，供下次重試。
-5. 以遠端 `last_active_at` 作為便宜的變更提示；同步前需檢查時間精度及分頁 cursor 行為。若時間相同但 API 可提供穩定 item ID，使用最新 item ID 作補充判斷；若無法可靠增量下載，對候選 session 重新抓取完整快照。
-
-不在一般 REPL 關閉時自動同步所有 sessions。舊 session 可能日後續用，明確的同步命令才是更新本地副本的可靠入口。
+1. **時間格式：** 將 session 的 `created_at` 轉為建立當下的本地時區時間。生成後即作為靜態文字保存，日後若系統切換時區，維持原文字不重算。
+2. **第一句提取與斷句規則：**
+   - 尋找該 session 第一筆 `type == "message"` 且 `role == "user"` 的文字內容。
+   - 依序尋找最早出現的斷句位置：
+     1. 換行符號 `\n`
+     2. 中文終止標點：`。`、`？`、`！`、`；`
+     3. 英文終止標點：`?`、`!`、或**後接空白的句點** `. `（避免截斷小數點如 `3.14` 或檔名如 `ai.f`）
+   - 若斷句前超過 80 個 Unicode 字元（或整段無標點且超過 80 字），則截取前 80 個 Unicode 字元並加上 `...`。
+3. **保護規則：**
+   - 建立時若尚無使用者訊息，先保存時間部分；待同步抓到第一則使用者訊息後再補齊。
+   - 一旦 `description` 已經有完整內容（或經使用者手動修改），後續同步**絕不覆蓋**。
 
 ---
 
-## 六、遷移並退役 `.ai_session.json`
+## 五、同步與操作流程
 
-1. 讀取舊檔的 session ID/title，將 title 以「只補空值」方式寫入 sessions DB。
-2. 若該 session 尚未下載對話，建立標示為未完整的 metadata row，避免舊 title 遺失。
-3. 遷移需可重複執行：中斷後重跑不覆蓋現有 description，也不重複建立 session items。
-4. 驗證所有舊 title 都已存在於 DB 後，程式停止讀寫 `.ai_session.json`，並在遷移成功後退役該檔。
-5. 若任何項目遷移失敗，保留舊檔並提供可診斷錯誤；不以部分成功冒充完成。
+由於本地 SQLite 是遠端的唯讀鏡像，同步機制直接且單純：
 
----
+### 1. 同步觸發時機與 Forth 命令
 
-## 七、程式分層與錯誤處理
+- **`ai-sessions`（主要入口）：** 使用者欲查看、列出 sessions 時觸發。執行流程為：
+  1. 向遠端取得最新 session 索引 metadata。
+  2. 自動執行差異同步（僅抓取本地缺失或有變更的 session items 寫入 SQLite，並自動生成/補充 description）。
+  3. 從本地 SQLite 讀取並印出包含序號、標題（description）、建立時間與狀態的最新清單。
+- **`ai-sync`（純同步命令）：** 獨立保留的同步指令。僅執行差異同步與資料庫更新，回報同步狀態（如更新了幾筆 session），不印出完整 sessions 清單。
+- **不干擾核心流程：** REPL 啟動時秒開、REPL 退出時秒關、一般對話 `ai:` 時不額外同步，確保完全不被非必要的網路下載卡住。
 
-- 使用者命令與 Forth 流程放在 `ai.f`，以 colon definitions 組合命令。
-- SQLite 持久化使用不註冊 Forth words、也不承擔應用流程的 Python helper；遠端 HTTP 分頁沿用目前的 AI bridge／HTTP 邊界。
-- 同步命令只在使用者確認後下載對話；preview 階段只取遠端索引 metadata。
-- 取消、網路錯誤或資料解析錯誤不刪除本地 archive，也不把不完整資料標成已同步。
-- 本地 cleanup 是獨立且明確的操作，不跟遠端同步或遠端刪除綁在一起。
+### 2. 差異比對與寫入邏輯
 
----
+1. 向遠端取得 session 索引列表（輕量 metadata，僅含 ID 與時間戳記）。
+2. 逐一與本地 `sessions` 表比對：
+   - **本地不存在**，或 **遠端 `last_active_at` 較新**（或尚未同步過 items）：向遠端拉取該 session 的所有 items。
+   - **時間未變動**：直接跳過，不消耗多餘流量與時間。
+   - **本地有、但遠端索引已消失**：將 `remote_deleted` 標記為 `1`，保留本地歷史資料不刪除。
+3. 下載單一 session 的 items 後，以單一 SQLite 短交易寫入 `session_items`（依 `id` 做 `INSERT OR REPLACE` 並寫入 `seq`），同時更新 `sessions` 的 `last_active_at`、`synced_at` 及 `description`。若網路中途失敗，交易回滾，下次執行時自動重試。
 
-## 八、實施階段與驗收條件
-
-### 階段 1：確認遠端 item API
-
-確認完整分頁方式、排序、cursor、item ID 穩定性及建立時間欄位。完成後凍結第一版 schema 和同步策略。
-
-### 階段 2：新增本地資料庫
-
-建立獨立的 `sessions/sessions.sqlite3`、schema version、metadata 與 item 儲存 helper；不改動 diagnostics DB。
-
-### 階段 3：建立差異預覽與同步命令
-
-實作本地列表、遠端 metadata 對照、候選確認、分頁下載、每 session 原子提交和失敗重試。
-
-### 階段 4：description 與舊檔遷移
-
-實作當地時間和第一句生成規則；將 `.ai_session.json` title 遷移到空 description，驗證後退役舊檔。
-
-**完成條件：**
-
-- 未變更的 sessions 不下載完整內容；新增與遠端時間變新的 sessions 會列為候選。
-- 取消或同步失敗不會破壞先前完整的本地副本。
-- description 的時間、第一句與 80 字上限正確，既有 description 不被同步覆蓋。
-- 舊 title 可遷移且遷移可安全重跑；驗證成功後不再依賴 `.ai_session.json`。
-- diagnostics DB 的 schema 和用途不變，session archive 寫入獨立 DB。
+### 3. 匯出單一 Session 為 JSON (`ai-export-session`)
+- 提供匯出命令（如 `ai-export-session`），將指定 session 在 `session_items` 中的所有 `raw_json` 按 `seq ASC` 取出，組合成標準 JSON 陣列輸出至檔案（格式與 `ai-session-full-YYYYMMDD-HHMMSS.json` 完全一致），供備份或離線分析使用。
 
 ---
 
-## 九、尚待討論
+## 六、程式分層
 
-1. 遠端 item 的穩定 ID 與 cursor 語意，決定增量合併或完整替換。
-2. `ai-sessions` 的差異預覽是否直接詢問同步，或完全由 `ai-sync-sessions` 負責確認。
-3. 是否需要匯出單一 session 為 JSON，供備份或攜帶使用。
-4. Description 的第一句分界標點規則，以及當地時區變更後是否維持建立當下的文字。
-
+- **Forth 層 (`ai.f`)：** 定義使用者互動命令（列表、同步、搜尋、匯出）。
+- **Python Helper 層：** 負責 SQLite 讀寫與遠端 API 分頁抓取，不直接註冊 Forth words，保持介面乾淨。
+- **清理舊包袱：** 移除程式碼中所有對 `.ai_session.json` 的讀寫依賴。
 
 ---
 
-╭─ 👋 user ───────────────────────────────────────────────────────────────╮
-  read this plan : "AI session 本地副本計劃書.md"
-╰─────────────────────────────────────────────────────────────────────────╯
+## 七、實作階段與驗收條件
 
-╭─ 🪄 peforth ────────────────────────────────────────────────────────────╮
-  我會用目前的 peforth 本機環境讀取這份計劃書。先確認可用的本機讀檔方式，再回報文件內容。
+1. **階段 1：建立本地 SQLite Helper**
+   - 建立 `sessions/sessions.sqlite3`、`sessions` 與 `session_items` 表，以及 description 斷句生成函式。
+2. **階段 2：實作差異同步與列表**
+   - 比對遠端 `last_active_at`，自動拉取新增或變更的 session items 寫入資料庫，並移除 `.ai_session.json` 相關邏輯。
+3. **階段 3：實作 JSON 匯出與本地查詢**
+   - 支援從本地 DB 快速列出 sessions、搜尋對話內容，以及將單一 session 匯出為 JSON 檔。
 
-AI permission requested
-Purpose: Read the requested local Markdown plan
-
-Forth action:
-py>> __import__('pathlib').Path("AI session 本地副本計劃書.md").read_text(encoding="utf-8")
-
-1. Allow Once
-2. Trust this AI task only
-3. Deny this proposal
-4. Cancel this AI task
-
-Choose 1-4: 2
-
-AI Forth proposal auto-approved for this AI task:
-Purpose: Locate the requested Markdown file in the current project
----
-py>> [str(p) for p in __import__('pathlib').Path.cwd().rglob("AI session 本地副本計劃書.md")]
----
-
-AI Forth proposal auto-approved for this AI task:
-Purpose: Read the plan from the project documentation folder
----
-py>> __import__('pathlib').Path(r"C:\Users\hcche\OneDrive\Documents\GitHub\peforth\docs\development\AI session 本地副本計劃書.md").read_text(encoding="utf-8")
----
-
-  檔案不在目前工作目錄的根目錄。我會在目前的 peforth 專案目錄內找同名文件，再讀取它。
-╰─────────────────────────────────────────────────────────────────────────╯
-
- ok
-> ai: 你怎麼話說一半停下來了？ the path is here: c:\Users\hcche\OneDrive\D
-... ocuments\GitHub\peforth\docs\development\terminal-ui-style-guide.md
-╭─ 👋 user ───────────────────────────────────────────────────────────────╮
-  你怎麼話說一半停下來了？ the path is here: c:\Users\hcche\OneDrive\Documents\GitHub\peforth\docs\development\terminal-ui-style-guide.md
-╰─────────────────────────────────────────────────────────────────────────╯
-
-<interrupted>
-> ai: 你怎麼話說一半停下來了？ the path is here: "c:\Users\hcche\OneDrive\
-... Documents\GitHub\peforth\docs\development\AI session 本地副本計劃書.md
-... "
-╭─ 👋 user ───────────────────────────────────────────────────────────────╮
-  你怎麼話說一半停下來了？ the path is here: "c:\Users\hcche\OneDrive\Documents\GitHub\peforth\docs\development\AI session 本地副本計劃書.md"
-╰─────────────────────────────────────────────────────────────────────────╯
-
-╭─ 🪄 peforth ────────────────────────────────────────────────────────────╮
-  明白，是原本那份「AI session 本地副本計劃書」，不是 style guide。我前一個讀檔請求還在等待本機執行結果；我正在等它完成，接著會針對這份計劃書回覆。
-
-  抱歉，剛才我只給了幾句摘要，讓你以為我讀到一半就停了。你說得對，目標檔案是 `C:\Users\hcche\OneDrive\Documents\GitHub\peforth\docs\development\AI session 本地副本計劃書.md`。我已讀完，以下是完整整理。
-
-  ## 計劃目標與狀態
-
-  這份文件是**討論草案，尚未開始實作**。目標是建立遠端 AI sessions 的本機可搜尋副本，讓使用者能列出、描述、回顧和再次參考過去的對話。同步由使用者明確執行；REPL 啟動或正常關閉時不自動下載歷史資料。
-
-  Session 對話會存入獨立 SQLite 資料庫，與 diagnostics DB 分開。現有 `.ai_session.json` 裡的 session 標題會遷移成新資料庫中的 description。
-
-  ## 儲存與資料設計
-
-  資料庫預定放在：
-
-  ```text
-  <runtime-config-root>/sessions/sessions.sqlite3
-  ```
-
-  runtime config root 由 `ai_bridge._runtime_config_path()` 推導；WSL 預設為 `~/.peforth/sessions/sessions.sqlite3`，Windows 和 WSL 各用自己的設定目錄。SQLite 是本地副本的權威來源；diagnostics DB 不保存 session 對話、description 或同步狀態。
-
-  資料至少分成兩類：
-
-  - Session metadata：session ID、description、description 來源、遠端建立和最後活動時間、同步時間、是否完整等。
-  - Session items：依遠端順序保存 API items，保留原始 JSON，以免遺失 assistant 回覆、工具互動或其他 item 類型。
-
-  Schema 需要獨立版本遷移。item 的去重與更新方式，則取決於遠端 item ID 是否穩定：若穩定，可按 ID 合併；若不能確認，第一版就對有變更的 session 重抓完整快照，再以單一 session 為單位替換。
-
-  ## Description 規則
-
-  新 session 的 description 格式預定為：
-
-  ```text
-  YYYY-MM-DD HH:mm:ss | 第一則使用者訊息的第一句（最多 80 個字）
-  ```
-
-  時間採建立 session 時的 runtime 當地時間，遠端原始時間也會保留。80 字按 Unicode 字元計算。建立時還沒有使用者訊息，就先只存時間，之後再補上第一句。
-
-  description 的優先順序是：
-
-  1. 新資料庫已有 description，就保留。
-  2. 否則，若 `.ai_session.json` 有舊 title，就遷移 title。
-  3. 兩者都沒有，才根據遠端建立時間與第一則使用者訊息產生 description。
-
-  後續同步只用遠端對話補上空 description，不覆蓋任何既有 description 或遷移來的 title。
-
-  ## 預覽與同步流程
-
-  `ai-sessions` 會先列出本地 sessions 和 descriptions，再取得遠端索引的輕量 metadata，依 session ID 對照並分類：
-
-  - 本地沒有：新 session。
-  - 本地有、遠端 `last_active_at` 較新：可能需要更新。
-  - 本地有、遠端找不到：提示遠端項目已不存在，但保留本地副本。
-  - 時間沒有變化：目前不需下載內容。
-
-  `ai-sync-sessions` 負責完整同步。它會先顯示候選清單，讓使用者選擇全部、部分或取消；只下載選中的新增或變更 sessions。下載期間不持有 SQLite 寫入交易，等單一 session 的所有頁面都成功取得後，才用短交易提交 items 和同步 metadata。只有完整提交成功後才更新本地的 `last_active_at` 和 `synced_at`；失敗時保留舊副本供重試。
-
-  遠端 `last_active_at` 先作為低成本的變更提示，但需確認時間精度和分頁 cursor 行為。若時間相同，可考慮用穩定 item ID 判斷；若增量下載不可靠，就重抓完整快照。
-
-  ## 舊標題遷移與程式分層
-
-  遷移 `.ai_session.json` 時，舊 title 只補入空 description；即使 session 對話尚未下載，也建立標示為未完整的 metadata row。遷移必須可安全重跑：不覆蓋已有 description、不重複建立 items。所有舊 title 驗證已寫入資料庫後，程式才停止讀寫並退役舊檔；任何項目失敗時都保留舊檔並回報錯誤。
-
-  使用者命令和 Forth 流程放在 `ai.f`；SQLite 持久化放在不註冊 Forth words、也不承擔應用流程的 Python helper。遠端 HTTP 分頁沿用目前 AI bridge／HTTP 邊界。取消、網路錯誤或解析錯誤都不能破壞本地副本或把不完整資料標成已同步。Local cleanup 是獨立且明確的操作。
-
-  ## 實施階段與尚待決定事項
-
-  文件把實作分成四階段：先確認遠端 item API 的分頁、排序、cursor、ID 穩定性和時間欄位；接著建立獨立資料庫與 helper；再實作差異預覽及同步命令；最後實作 description 規則與舊檔遷移。
-
-  完成條件包括：未變更的 sessions 不下載完整內容；新增或變更的 sessions 會出現在候選中；取消或失敗不破壞舊副本；description 規則正確且不被同步覆蓋；舊 title 可安全重跑遷移；diagnostics DB 維持原用途。
-
-  尚待討論的事項有四項：遠端 item ID 和 cursor 的語意、由哪個命令負責詢問同步確認、是否需要匯出單一 session 為 JSON，以及第一句的標點分界和時區變更後如何處理既有 description。
-╰─────────────────────────────────────────────────────────────────────────╯
-
- ok
+**驗收條件：**
+- 未變更的 sessions 不會重複下載 items；有新增或更新的 sessions 能正確拉取並依 `id` 合併。
+- Description 符合本地時間、標點斷句與 80 Unicode 字元上限，且既有 description 不被同步覆蓋。
+- 可將任一本地 session 完整匯出為標準 JSON 陣列檔案。
+- 完全移除 `.ai_session.json` 依賴，且不影響既有 `ai-diagnostics.sqlite3` 運作。
