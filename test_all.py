@@ -187,7 +187,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertEqual(self.vm.host.get("repl_mode"), "forth")
 
     def test_nokia_chime_words_exist_and_are_safe(self):
-        for name in ("nokia", "nokia2"):
+        for name in ("nokia", "nokia2", "nokia-full"):
             word = self.vm.tick(name)
             self.assertIsNotNone(word, f"Word '{name}' should be in dictionary")
             self.assertTrue(word.properties.get("safe"), f"Word '{name}' should be safe")

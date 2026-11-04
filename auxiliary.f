@@ -33,13 +33,19 @@ code (play-notes)
     last :: safe=True
 
 : nokia ( -- )
-    py> [[1319,160],[1175,160],[740,320],[831,320]] (play-notes)
+    py> [[659,120],[587,120],[370,240],[415,240]] (play-notes)
     ;
-    // ( -- ) Play the first Nokia Tune phrase (4 notes) asynchronously.
+    // ( -- ) Play the gentle first Nokia Tune phrase (4 notes) asynchronously.
     last :: safe=True
 
 : nokia2 ( -- )
-    py> [[988,160],[880,160],[554,320],[659,320],[880,640]] (play-notes)
+    py> [[494,120],[440,120],[277,240],[330,240],[440,480]] (play-notes)
     ;
-    // ( -- ) Play the final Nokia Tune phrase (5 notes, long finish) asynchronously.
+    // ( -- ) Play the gentle final Nokia Tune phrase (5 notes, long finish) asynchronously.
+    last :: safe=True
+
+: nokia-full ( -- )
+    py> [[659,120],[587,120],[370,240],[415,240],[554,120],[494,120],[294,240],[330,240],[494,120],[440,120],[277,240],[330,240],[440,480]] (play-notes)
+    ;
+    // ( -- ) Play the complete gentle Nokia Tune (13 notes) asynchronously.
     last :: safe=True
