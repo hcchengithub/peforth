@@ -303,6 +303,37 @@ class TestSecurityTaskApproval(unittest.TestCase):
         self.assertEqual(task.status, "done")
         self.assertIn("dangerous_executed", self.vm.dstack)
 
+    def test_interactive_ai_approve_for_unsafe_words(self):
+        from projectk import Task
+        # In non-headless mode, unsafe words trigger ai-approve
+        self.vm.host["headless"] = False
+        self.vm.define("risky_cmd", lambda v: v.push("risky_done"), properties={"safe": False})
+
+        # Mock ai-approve returning 'allow_once'
+        approval_calls = []
+        def mock_approve(v):
+            proposal = v.pop()
+            approval_calls.append(proposal)
+            v.push("allow_once")
+        self.vm.define("ai-approve", mock_approve, properties={"safe": True})
+
+        task = Task(self.vm, self.vm.evaluate("risky_cmd"))
+        self.vm.host["in_ai_task"] = task
+        task.resume()
+
+        self.assertEqual(task.status, "done")
+        self.assertIn("risky_done", self.vm.dstack)
+        self.assertEqual(len(approval_calls), 1)
+        self.assertIn("risky_cmd", approval_calls[0]["purpose"])
+
+        # Safe words must NEVER trigger ai-approve
+        approval_calls.clear()
+        task2 = Task(self.vm, self.vm.evaluate("10 20 +"))
+        self.vm.host["in_ai_task"] = task2
+        task2.resume()
+        self.assertEqual(task2.status, "done")
+        self.assertEqual(len(approval_calls), 0)
+
 
 class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
     """Verifies SQLite diagnostic logging, monitoring renderer, and watchdog supervision."""

@@ -5,5 +5,11 @@ from projectk import VM
 
 HERE = Path(__file__).resolve().parent
 
-vm = VM({"__file__dir__": str(HERE)})
-vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+def main():
+    vm = VM({"__file__dir__": str(HERE)})
+    vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    main()

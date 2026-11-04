@@ -17,6 +17,8 @@ import urllib.error
 import urllib.request
 import uuid
 
+from projectk import KernelError
+
 
 def load_dotenv(env_path=None):
     """Load environment variables from .env file using only standard library."""
@@ -207,6 +209,37 @@ def install_security_guard(vm):
 
                 if not is_safe:
                     name = getattr(resolved, "name", repr(resolved))
+                    turn_id = vm.host.get("ai_current_turn_id")
+
+                    # In interactive mode (not headless), use ai-approve UI
+                    if not vm.host.get("headless", False):
+                        approval_word = vm.tick("ai-approve")
+                        if approval_word:
+                            proposal = {
+                                "purpose": f"Execution of unsafe word '{name}'",
+                                "source": name,
+                            }
+                            stack_depth = len(vm.dstack)
+                            vm.push(proposal)
+                            _log_event(vm, "approval_requested", turn_id=turn_id,
+                                       operation=name, payload=proposal)
+                            yield from vm.call(approval_word)
+                            decision = vm.pop() if len(vm.dstack) > stack_depth else "deny"
+                            _log_event(vm, "approval_received", turn_id=turn_id,
+                                       operation=name, payload={"decision": decision})
+
+                            if decision == "trust_task":
+                                trusted_tasks.add(task)
+                            elif decision == "deny":
+                                raise KernelError(f"Security: Execution of word '{name}' was denied.")
+                            elif decision == "cancel":
+                                task.cancel()
+                                raise KernelError("Security: AI task was cancelled.")
+                            # "allow_once": execute this call once without adding to trusted_tasks
+                            yield from original_call(operation)
+                            return
+
+                    # Fallback for headless / non-interactive test mode: pause task
                     sys.__stdout__.write(f"\n[Security] Word '{name}' is not marked as safe.\n")
                     sys.__stdout__.write("Task paused for review. Type 'resume' for single step, 'trust-task resume' to trust this task.\n")
                     sys.__stdout__.flush()
@@ -242,7 +275,11 @@ TOOLS_DEFINITION = [
         "type": "function",
         "function": {
             "name": "peforth_run_forth",
-            "description": "Propose Forth source code to execute in the user's local VM. Subject to task security review.",
+            "description": (
+                "Execute Forth source code in the user's local VM. "
+                "ONLY use this tool when you genuinely need to run Forth/Python code, define words, inspect Forth state, or perform computations in Forth. "
+                "NEVER use this tool for conversational responses, greetings, explanations, or telling jokes — reply directly in text instead."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -308,6 +345,13 @@ def tool_search_words(vm, query):
 
 SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside the peforth Forth environment.
 peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges Forth with Python: you can run native Forth, write Python host definitions, and execute Python code directly inside Forth!
+
+=== When to Respond Directly vs. When to Use Tools ===
+- CONVERSATION & Q&A: For general conversation, greetings, questions, explanations, discussions, or telling jokes, respond DIRECTLY with natural language text! Your text reply is streamed immediately to the user's terminal.
+  DO NOT use peforth_run_forth or print statements (e.g. s" ..." . cr) just to speak to the user or tell a joke!
+- CODE EXECUTION: ONLY call peforth_run_forth when you genuinely need to execute Forth code, define new words, test behavior in the VM, perform calculations, or run Python interop requested by the user.
+- AVOID DUPLICATE OUTPUT: When you use peforth_run_forth to execute code that produces output in the terminal, DO NOT repeat or echo that entire stdout in your final assistant reply; just briefly explain the result if necessary.
+- DICTIONARY SEARCH: Use peforth_search_words when you need to look up available Forth words, syntax, or documentation before proposing code.
 
 You have access to two tools:
 1. peforth_search_words: search available Forth vocabulary, words, help strings, and comments.
@@ -760,75 +804,21 @@ def ai_turn(vm, prompt, stream_response):
                     source = args.get("source", "")
                     purpose = args.get("purpose", "")
 
-                    trusted_tasks = vm.host.get("trusted_ai_tasks", set())
-                    is_trusted = (vm.task in trusted_tasks) or vm.host.get("ai_trusted", False)
+                    if stream_response:
+                        sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
+                        sys.stdout.flush()
 
-                    decision = "allow_once"
-                    if not is_trusted:
-                        _log_event(vm, "approval_requested", turn_id=turn_id,
-                                   call_id=call_id, operation=fn_name,
-                                   payload={"purpose": purpose, "source": source})
-                        approval_word = vm.tick("ai-approve")
-                        if approval_word:
-                            stack_depth = len(vm.dstack)
-                            vm.push({"purpose": purpose, "source": source})
-                            yield from vm.call(approval_word)
-                            decision = vm.pop() if len(vm.dstack) > stack_depth else "deny"
-                        else:
-                            if stream_response:
-                                sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
-                                sys.stdout.flush()
-                        _log_event(vm, "approval_received", turn_id=turn_id,
-                                   call_id=call_id, operation=fn_name,
-                                   payload={"decision": decision})
-
-                    if decision == "trust_task":
-                        vm.host.setdefault("trusted_ai_tasks", set()).add(vm.task)
-                    elif decision == "deny":
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "content": json.dumps({
-                                "stdout": "",
-                                "dstack": [repr(x) for x in vm.dstack],
-                                "error": "User denied this proposal."
-                            }, ensure_ascii=False)
-                        })
-                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
-                                   call_id=call_id, operation=fn_name,
-                                   payload={"decision": "deny"})
-                        continue
-                    elif decision == "cancel":
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "content": json.dumps({
-                                "stdout": "",
-                                "dstack": [repr(x) for x in vm.dstack],
-                                "error": "User cancelled the AI task."
-                            }, ensure_ascii=False)
-                        })
-                        _finish_turn(vm, turn_id,
-                                     output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
-                                     output_status="partial" if accumulated_full_text else "empty",
-                                     status="cancelled")
-                        vm.host["ai_current_turn_id"] = None
-                        return
-
-                    # Execute the Forth code
+                    # Execute Forth code under AI task context.
+                    # Individual words are verified against safe=True in security_aware_call.
                     prev_ai_task = vm.host.get("in_ai_task")
                     vm.host["in_ai_task"] = vm.task
-
-                    trusted_set = vm.host.setdefault("trusted_ai_tasks", set())
-                    was_in_trusted = vm.task in trusted_set
-                    trusted_set.add(vm.task)
 
                     tee = TeeOutput(sys.stdout)
                     old_stdout = sys.stdout
                     error_msg = None
                     _log_event(vm, "forth_execution_started", turn_id=turn_id,
                                call_id=call_id, operation=fn_name,
-                               payload={"source": source})
+                               payload={"purpose": purpose, "source": source})
                     try:
                         sys.stdout = tee
                         yield from vm.evaluate(source)
@@ -839,8 +829,6 @@ def ai_turn(vm, prompt, stream_response):
                     finally:
                         sys.stdout = old_stdout
                         vm.host["in_ai_task"] = prev_ai_task
-                        if not was_in_trusted and decision != "trust_task":
-                            trusted_set.discard(vm.task)
                         _log_event(vm, "forth_execution_finished", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name,
                                    payload={"stdout": tee.getvalue(), "error": error_msg})
