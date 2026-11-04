@@ -1028,16 +1028,38 @@ code (::)
     stmt = vm.pop().strip()
     if not stmt:
         raise KernelError("Expected member or expression after ::")
-    if stmt.startswith("[") or stmt.startswith("("):
-        code_str = f"vm.pop(){stmt}"
-    else:
-        code_str = f"vm.pop().{stmt}"
     if vm.compiling:
-        def op(v):
-            exec(code_str, {"vm": v, **v.host})
+        def op(v, s=stmt):
+            target = v.pop()
+            if "=" in s and not s.startswith("(") and not s.startswith("[") and hasattr(target, "properties"):
+                key, val_str = s.split("=", 1)
+                key = key.strip()
+                val_str = val_str.strip()
+                val = True if val_str.lower() == "true" else False if val_str.lower() == "false" else val_str
+                target.properties[key] = val
+                try:
+                    setattr(target, key, val)
+                except Exception:
+                    pass
+            else:
+                code_str = f"obj{s}" if s.startswith("[") or s.startswith("(") else f"obj.{s}"
+                exec(code_str, {"vm": v, "obj": target, **v.host})
         vm.comma(op)
     else:
-        exec(code_str, {"vm": vm, **vm.host})
+        target = vm.pop()
+        if "=" in stmt and not stmt.startswith("(") and not stmt.startswith("[") and hasattr(target, "properties"):
+            key, val_str = stmt.split("=", 1)
+            key = key.strip()
+            val_str = val_str.strip()
+            val = True if val_str.lower() == "true" else False if val_str.lower() == "false" else val_str
+            target.properties[key] = val
+            try:
+                setattr(target, key, val)
+            except Exception:
+                pass
+        else:
+            code_str = f"obj{stmt}" if stmt.startswith("[") or stmt.startswith("(") else f"obj.{stmt}"
+            exec(code_str, {"vm": vm, "obj": target, **vm.host})
     end-code
     // ( str -- ) Access member or call method on TOS without pushing result.
 

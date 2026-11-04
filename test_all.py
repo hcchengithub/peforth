@@ -112,8 +112,10 @@ class TestArchitecturalContracts(unittest.TestCase):
 
     def test_peforth_f_orchestrates_extensions_and_repl(self):
         peforth_f = (HERE / "peforth.f").read_text(encoding="utf-8")
-        self.assertIn("include ai.f", peforth_f)
         self.assertIn("include base.f", peforth_f)
+        self.assertIn("include auxiliary.f", peforth_f)
+        self.assertIn("include herdr.f", peforth_f)
+        self.assertIn("include ai.f", peforth_f)
         self.assertIn("include repl.f", peforth_f)
         self.assertIn("repl", peforth_f)
 
@@ -177,6 +179,18 @@ class TestSafePropertyAudit(unittest.TestCase):
         matched_names = [w["name"] for w in res["words"]]
         self.assertIn("execute", matched_names)
         self.assertTrue(any("py" in name for name in matched_names))
+
+    def test_chat_and_forth_mode_switching(self):
+        self.vm.dictate("chat")
+        self.assertEqual(self.vm.host.get("repl_mode"), "chat")
+        self.vm.dictate("forth")
+        self.assertEqual(self.vm.host.get("repl_mode"), "forth")
+
+    def test_nokia_chime_words_exist_and_are_safe(self):
+        for name in ("nokia", "nokia2"):
+            word = self.vm.tick(name)
+            self.assertIsNotNone(word, f"Word '{name}' should be in dictionary")
+            self.assertTrue(word.properties.get("safe"), f"Word '{name}' should be safe")
 
 
 class TestSecurityTaskApproval(unittest.TestCase):

@@ -9,7 +9,7 @@ code repl
     code_buffer = []
 
     print("peforth 2.1.0 (with AI support)")
-    print("Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'bye' to exit.")
+    print("Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode, 'bye' to exit.")
     if sys.stdin.isatty():
         print("Keys: [Enter] submit, [Ctrl+J] or [Shift+Enter] multiline newline.")
 
@@ -51,7 +51,13 @@ code repl
     try:
         while True:
             is_continuing = bool(code_buffer) or vm.compiling
-            prompt_str = "... " if is_continuing else "forth> "
+            mode = vm.host.get("repl_mode", "forth")
+            if is_continuing:
+                prompt_str = "... "
+            elif mode == "chat":
+                prompt_str = "chat> "
+            else:
+                prompt_str = "> "
 
             try:
                 if pt_session:
@@ -86,7 +92,13 @@ code repl
                     continue
 
             try:
-                task = vm.dictate(clean_text)
+                if mode == "chat" and not is_continuing:
+                    if clean_text in ("forth", "bye") or clean_text.startswith("forth ") or clean_text.startswith("bye "):
+                        task = vm.dictate(clean_text)
+                    else:
+                        task = vm.dictate(f"ai: {clean_text}")
+                else:
+                    task = vm.dictate(clean_text)
                 if vm.host.get("exit_requested"):
                     break
                 if task.status == "paused":

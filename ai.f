@@ -42,7 +42,29 @@ code cancel-task
     /// Abort the task and remove it from active and trusted task tracking.
     last :: safe=True
 
-\ --- 3. Core AI Words: (ai) and ai: ---
+\ --- 3. REPL Mode Switching (chat / forth) ---
+
+code chat
+    vm.host["repl_mode"] = "chat"
+    print("Switched to chat mode (chat>). Type 'forth' to return to Forth mode.")
+    end-code
+    // ( -- ) Switch REPL to chat mode (chat>).
+    last :: safe=True
+
+code forth
+    vm.host["repl_mode"] = "forth"
+    print("Switched to Forth mode (>).")
+    end-code
+    // ( -- ) Switch REPL to Forth mode (>).
+    last :: safe=True
+
+\ --- 4. Core AI Words: (ai), ai:, AI: ---
+
+code (ai-monotonic-time)
+    import time
+    vm.push(time.monotonic())
+    end-code
+    last :: safe=True
 
 code (ai)
     import ai
@@ -59,7 +81,19 @@ code (ai)
     /// If stream? is False, push the full reply string onto the data stack.
 
 : ai:
-    rest true (ai)
+    rest
+    (ai-monotonic-time) >t
+    true (ai)
+    (ai-monotonic-time) t> -
+    [ last literal ] :> nokia2_after_seconds
+    > if nokia2 then
     ; immediate
-    // ( <prompt> -- ) Stream prompt to AI assistant.
-    /// Read remaining line from input buffer and send to AI with streaming enabled.
+    // ( <prompt> -- ) Stream prompt to AI; play nokia2 if duration exceeds nokia2_after_seconds.
+' ai: :: nokia2_after_seconds=30
+last :: safe=True
+
+: AI:
+    rest true (ai) nokia2
+    ; immediate
+    // ( <prompt> -- ) Stream prompt to AI and always play nokia2 chime upon completion.
+last :: safe=True
