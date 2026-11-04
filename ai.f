@@ -3,11 +3,10 @@
 
 \ --- 1. Install AI Security Guard ---
 
-code (setup-ai)
-    import ai
-    ai.install_security_guard(vm)
-    end-code
-(setup-ai)
+<py>
+import ai
+ai.install_security_guard(vm)
+</py>
 
 \ --- 2. Task Approval & Management Words ---
 
@@ -64,6 +63,8 @@ code (ai-monotonic-time)
     import time
     vm.push(time.monotonic())
     end-code
+    // ( -- timestamp ) Push monotonic clock in fractional seconds.
+    /// Used for turn elapsed time measurement and nokia2 threshold notification.
     last :: safe=True
 
 code (ai)

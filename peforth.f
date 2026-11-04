@@ -12,4 +12,6 @@ code ?repl
     if not vm.host.get("headless", False):
         yield from vm.call(vm.tick("repl"))
     end-code
+    // ( -- ) Launch interactive REPL if not running in headless mode.
+    /// Checks vm.host['headless']; if false, transfers execution to repl loop.
 ?repl

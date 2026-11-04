@@ -219,6 +219,23 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertEqual(roles, ["user", "assistant", "tool", "user"])
         self.assertEqual(sanitized[2]["tool_call_id"], "call_123")
 
+    def test_words_have_documentation(self):
+        words_to_check = [
+            "begin", "until", "again", "if", "ahead", "then", "else", "?dup",
+            "while", "repeat", "aft", "for", "next",
+            "constant", "variable", "value",
+            "py:", "py>", "py::", "py>>", ":>",
+            "?repl", "(ai-monotonic-time)"
+        ]
+        for name in words_to_check:
+            word = self.vm.tick(name)
+            self.assertIsNotNone(word, f"Word '{name}' must exist in dictionary")
+            help_text = getattr(word, "help", "") or ""
+            self.assertTrue(bool(help_text.strip()), f"Word '{name}' must have help documentation")
+
+        # (setup-ai) must no longer exist
+        self.assertNotIn("(setup-ai)", self.vm.words, "(setup-ai) should not exist in dictionary")
+
 
 class TestSecurityTaskApproval(unittest.TestCase):
     """Verifies that the task security guard halts on non-safe words and resumes on trust-task."""

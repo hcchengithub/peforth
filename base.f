@@ -741,30 +741,68 @@ code [compile]
     last :: safe=True
 
 : begin     here ; immediate
+    // ( -- addr ) Mark the start of an indefinite loop.
+    /// Push current compilation address (here) as backward branch destination.
     last :: safe=True
+
 : until     ['] 0branch , , ; immediate
+    // ( addr -- ) Conditional loop termination: repeat if flag is false.
+    /// Compile 0branch back to addr. Exit loop when flag is true.
     last :: safe=True
+
 : again     ['] branch , , ; immediate
+    // ( addr -- ) Unconditional loop repeat: loop forever.
+    /// Compile branch back to addr.
     last :: safe=True
+
 : if        ['] 0branch , here 0 , ; immediate
+    // ( flag -- ) Conditional forward branch: execute following code if flag is true.
+    /// Compile 0branch and reserve a forward patch address on the compilation stack.
     last :: safe=True
+
 : ahead     ['] branch , here 0 , ; immediate
+    // ( -- addr ) Unconditional forward branch.
+    /// Compile branch and reserve a forward patch address on the compilation stack.
     last :: safe=True
+
 : then      here swap ! ; immediate
+    // ( addr -- ) Resolve a forward branch target for if/else/ahead.
+    /// Patch target cell at addr to point to current compilation address (here).
     last :: safe=True
+
 : else      [compile] ahead swap [compile] then ; immediate
+    // ( addr1 -- addr2 ) Alternate branch clause for if ... else ... then.
+    /// Compile ahead branch past false block and resolve preceding if branch.
     last :: safe=True
+
 : ?dup      dup if dup then ;
+    // ( x -- x x | x ) Duplicate TOS if it is logically true.
+    /// Tests TOS using Python truthiness. If true, leaves two copies of x; if false, leaves x.
     last :: safe=True
+
 : while     [compile] if swap ; immediate
+    // ( addr1 -- addr2 addr1 ) Test loop condition in begin ... while ... repeat.
+    /// Compile if check; if false, exit past repeat.
     last :: safe=True
+
 : repeat    [compile] again [compile] then ; immediate
+    // ( addr2 addr1 -- ) End a begin ... while ... repeat loop.
+    /// Compile again back to addr1 and resolve the forward branch from while at addr2.
     last :: safe=True
+
 : aft       drop [compile] ahead [compile] begin swap ; immediate
+    // ( addr1 -- addr2 addr1 ) Jump past code on the first loop iteration.
+    /// Used in for ... aft ... then ... next loops to skip first iteration logic.
     last :: safe=True
+
 : for       ['] >r , here ; immediate
+    // ( count -- ) ( R: -- count ) Begin a for ... next counted loop.
+    /// Compile >r to put count on rstack and leave loop start address (here) on stack.
     last :: safe=True
+
 : next      ['] doNext , , ; immediate
+    // ( addr -- ) End a for ... next counted loop.
+    /// Compile doNext and target address back to the beginning of the for loop.
     last :: safe=True
 
 \ =====================================================================
@@ -811,14 +849,20 @@ code does>
 
 : constant ( val <name> -- )
     create , does> @ ;
+    // ( val <name> -- ) Define a named constant with value val.
+    /// Defined via create ... does>. Executing the constant pushes val.
     last :: safe=True
 
 : variable ( <name> -- )
     create 0 , does> ;
+    // ( <name> -- ) Define a named variable initialized to 0.
+    /// Executing pushes variable's body list. Use @ to fetch and ! to store.
     last :: safe=True
 
 : value ( val <name> -- )
     create , does> @ ;
+    // ( val <name> -- ) Define a named reassignable value initialized to val.
+    /// Defined via create ... does>. Executing pushes current value. Update via 'to'.
     last :: safe=True
 
 code to
@@ -1020,9 +1064,20 @@ code </pyV>
     // ( string -- result ) Evaluate Python expression and push result onto stack.
 
 : py:  BL word [compile] </py>  ; immediate
+    // ( <python_token> -- ) Execute next single-token Python code without return value.
+    /// Read one whitespace-free word of Python code and execute it in host environment.
+
 : py>  BL word [compile] </pyV> ; immediate
+    // ( <python_expr> -- result ) Evaluate next single-token Python expression.
+    /// Read one whitespace-free word of Python expression, evaluate it, and push result onto stack.
+
 : py:: CR word [compile] </py>  ; immediate
+    // ( <python_line> -- ) Execute Python code up to newline without return value.
+    /// Read remainder of line as Python code (spaces allowed) and execute in host environment.
+
 : py>> CR word [compile] </pyV> ; immediate
+    // ( <python_expr> -- result ) Evaluate Python expression up to newline.
+    /// Read remainder of line as Python expression (spaces allowed) and push result onto stack.
 
 code (::)
     stmt = vm.pop().strip()
@@ -1098,3 +1153,5 @@ code (:>)
     // ( str -- result ) Access member or call method on TOS and push result.
 
 : :> BL word (:>) ; immediate
+    // ( <member> -- result ) Access member on TOS and push result onto data stack.
+    /// Read next token as attribute or method call, evaluate on TOS, and push the result.

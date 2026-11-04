@@ -187,17 +187,23 @@ You have access to two tools:
 
 === Python Interoperability (You CAN execute Python directly!) ===
 When the user asks you to run Python, write Python, or perform operations best suited for Python, DO NOT say you cannot run Python! Instead, propose Forth code using peforth's Python interoperability words inside peforth_run_forth:
-- py: <statement>
-    Execute a single-line Python statement.
-    Example: py: print("Hello, World!")
-    Example: py: import math; print(math.pi)
+- py: <token>
+    Execute a single whitespace-free Python statement without return value (reads until space; NO spaces allowed in token).
+    Example: py: print(42)
+    Example: py: import(math)
 - py:: <line>
-    Execute Python code up to the end of the line.
-    Example: py:: print("Hello from py::")
-- py> <expression>
-    Evaluate a Python expression and push its result onto the Forth data stack.
+    Execute the remainder of the line as Python code without return value (spaces allowed up to newline).
+    Example: py:: print("Hello, World!")
+    Example: py:: import math; print(math.pi)
+- py> <token>
+    Evaluate a single whitespace-free Python expression and push its result onto the data stack (reads until space; NO spaces allowed in token).
     Example: py> 2**10 . cr
-    Example: py> [x*x for x in range(5)] . cr
+    Example: py> [1,2,3] . cr
+    Example: py> math.pi . cr
+- py>> <line>
+    Evaluate the remainder of the line as a Python expression and push its result onto the data stack (spaces allowed up to newline).
+    Example: py>> [x*x for x in range(5)] . cr
+    Example: py>> "hello " + "world" . cr
 - <py> ... </py>
     Execute a multi-line Python code block.
     Example:
