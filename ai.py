@@ -1,8 +1,8 @@
-"""Project K - AI Extension Module (v2.1.0)
+"""peforth - AI Extension Module (v2.1.0)
 
 Implements:
 - Security Guard Decorator for vm.call (Task-level approval scope)
-- Tools: projectk_search_words, projectk_run_forth
+- Tools: peforth_search_words, peforth_run_forth
 - (ai) cooperative turn generator with OpenAI-compatible SSE streaming
 """
 
@@ -94,7 +94,7 @@ TOOLS_DEFINITION = [
     {
         "type": "function",
         "function": {
-            "name": "projectk_search_words",
+            "name": "peforth_search_words",
             "description": "Search the current Forth dictionary (words, category, help, comments, source). Pure read-only.",
             "parameters": {
                 "type": "object",
@@ -112,7 +112,7 @@ TOOLS_DEFINITION = [
     {
         "type": "function",
         "function": {
-            "name": "projectk_run_forth",
+            "name": "peforth_run_forth",
             "description": "Propose Forth source code to execute in the user's local VM. Subject to task security review.",
             "parameters": {
                 "type": "object",
@@ -156,14 +156,14 @@ def tool_search_words(vm, query):
     return {"query": query, "count": len(matches), "words": matches[:30]}
 
 
-SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside Project K Forth VM.
+SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside peforth VM.
 You have access to two tools:
-1. projectk_search_words: search available Forth vocabulary, words, and documentation.
-2. projectk_run_forth: propose and execute Forth code in the user's local VM.
+1. peforth_search_words: search available Forth vocabulary, words, and documentation.
+2. peforth_run_forth: propose and execute Forth code in the user's local VM.
 
 Important Rules:
-- When asked to perform calculations, check dictionary, or solve problems in Forth, propose Forth code using projectk_run_forth.
-- Project K Forth stack words include: dup, drop, swap, over, rot, pick, roll, depth, dropall.
+- When asked to perform calculations, check dictionary, or solve problems in Forth, propose Forth code using peforth_run_forth.
+- peforth stack words include: dup, drop, swap, over, rot, pick, roll, depth, dropall.
 - Math words include: +, -, *, /, mod, =, <, >, 0=, 0<, 1+, 1-, not, and, or.
 - Display words include: ., .s, cr, space, words, see.
 - To print numbers or strings, use '.' (e.g. 's" text" .' or '123 .'). There is no 'type' word; '.' prints both strings and numbers without a trailing newline. Use 'cr' for newline.
@@ -342,7 +342,7 @@ def ai_turn(vm, prompt, stream_response):
                 except json.JSONDecodeError:
                     args = {}
 
-                if fn_name == "projectk_search_words":
+                if fn_name == "peforth_search_words":
                     query = args.get("query", "")
                     if stream_response:
                         sys.stdout.write(f"\n[AI Tool] Searching dictionary for: {query!r}...\n")
@@ -354,7 +354,7 @@ def ai_turn(vm, prompt, stream_response):
                         "content": json.dumps(result_data, ensure_ascii=False)
                     })
 
-                elif fn_name == "projectk_run_forth":
+                elif fn_name == "peforth_run_forth":
                     source = args.get("source", "")
                     purpose = args.get("purpose", "")
                     if stream_response:

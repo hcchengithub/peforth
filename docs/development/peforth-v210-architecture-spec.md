@@ -75,7 +75,7 @@ flowchart TD
    - Setting `vm.host["headless"] = True` allows automated tests and Python libraries to import peforth without blocking on terminal input.
 
 4. **`ai.f` & `ai.py`**:
-   - `ai.py`: Stateless HTTP SSE client using standard library `urllib`, tools definitions (`projectk_search_words`, `projectk_run_forth`), and the `security_aware_call` decorator.
+   - `ai.py`: Stateless HTTP SSE client using standard library `urllib`, tools definitions (`peforth_search_words`, `peforth_run_forth`), and the `security_aware_call` decorator.
    - `ai.f`: Defines `trust-task`, `cancel-task`, and `ai:`.
 
 5. **`base.f`**:
@@ -140,7 +140,7 @@ Every word registered in the dictionary carries a metadata property `safe` (bool
 1. The security guard wraps `vm.call` during `ai.install_security_guard(vm)`.
 2. **Human Exemption**: When a human interacts directly with the Forth REPL or runs scripts, `vm.host.get("in_ai_task")` is `None`. Human commands run unrestricted with full host privileges.
 3. **AI Task Interception**:
-   - When the AI assistant proposes Forth source via `projectk_run_forth`, the task is flagged in `vm.host["in_ai_task"]`.
+   - When the AI assistant proposes Forth source via `peforth_run_forth`, the task is flagged in `vm.host["in_ai_task"]`.
    - Before executing any word, `security_aware_call` checks if `task in trusted_ai_tasks`.
    - If untrusted and the word is **not** `safe=True`, the task halts immediately via `yield vm.pause()`, outputting:
      ```text
