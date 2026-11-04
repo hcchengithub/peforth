@@ -42,10 +42,10 @@ peforth distinguishes between the **development repository** and **runtime execu
 For WSL, keep this Linux checkout inside its native Linux filesystem (`~/.peforth`), not under `/mnt/c`:
 
 ```bash
-git clone https://github.com/hcchengithub/peforth.git ~/.peforth
+git clone -b develop-210 https://github.com/hcchengithub/peforth.git ~/.peforth
 cd ~/.peforth
 uv venv
-uv pip install -e .
+uv pip install --python .venv -e .
 ~/.peforth/.venv/bin/f
 ```
 
@@ -61,10 +61,10 @@ f
 ### 2. Windows PowerShell Runtime
 
 ```powershell
-git clone https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
+git clone -b develop-210 https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
 Set-Location "$HOME\.peforth"
 uv venv
-uv pip install -e .
+uv pip install --python .venv -e .
 & "$HOME\.peforth\.venv\Scripts\f.exe"
 ```
 
