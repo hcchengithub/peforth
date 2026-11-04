@@ -1024,6 +1024,26 @@ code </pyV>
 : py:: CR word [compile] </py>  ; immediate
 : py>> CR word [compile] </pyV> ; immediate
 
+code (::)
+    stmt = vm.pop().strip()
+    if not stmt:
+        raise KernelError("Expected member or expression after ::")
+    if stmt.startswith("[") or stmt.startswith("("):
+        code_str = f"vm.pop(){stmt}"
+    else:
+        code_str = f"vm.pop().{stmt}"
+    if vm.compiling:
+        def op(v):
+            exec(code_str, {"vm": v, **v.host})
+        vm.comma(op)
+    else:
+        exec(code_str, {"vm": vm, **vm.host})
+    end-code
+    // ( str -- ) Access member or call method on TOS without pushing result.
+
+: :: BL word (::) ; immediate
+    // ( <member> -- ) Invoke member or statement on TOS without return value.
+
 code (:>)
     stmt = vm.pop().strip()
     if not stmt:

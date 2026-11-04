@@ -118,6 +118,8 @@ _TEST_VAL 50 = s" value initial" ?assert
     \ --- Python Interoperability ---
     py> 6*7 42 = s" py> expr" ?assert
     s" HELLO" :> lower() s" hello" = s" :> method call" ?assert
+    py> [1,2] dup :: append(3) :> __len__() 3 = s" :: method invocation" ?assert
+    py> {'k':1} dup :: ['k']=42 :> get('k') 42 = s" :: indexing assign" ?assert
 
     cr ." [PASS] All Forth assertions completed successfully." cr
     ;

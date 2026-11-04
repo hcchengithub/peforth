@@ -207,10 +207,15 @@ When the user asks you to run Python, write Python, or perform operations best s
         </py>
 - <py> ... </pyV>
     Evaluate a multi-line Python expression and push its result onto the data stack.
+- :: <method/statement>
+    Invoke a method or statement on the Python object at the top of the data stack WITHOUT pushing a return value (in-place mutation, attribute assignment, void methods).
+    Example: py> [3, 1, 2] dup :: sort() ( list is sorted in-place )
+    Example: py> [1, 2] dup :: append(3)
+    Example: ' myword :: safe=True
 - :> <method/property>
-    Invoke a method or attribute on the Python object at the top of the data stack.
+    Invoke a method or property on the Python object at the top of the data stack and push its return value onto the stack.
     Example: s" hello world" :> upper() . cr
-    Example: py> [3, 1, 2] :> sort()
+    Example: py> [1, 2, 3] :> __len__() . cr
 - code <name> <python-body> end-code
     Define a new Forth word implemented directly in Python.
     Example:
