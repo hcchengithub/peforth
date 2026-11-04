@@ -1,5 +1,31 @@
 \ repl.f - Interactive Multiline REPL for Project K (v2.1.0)
 
+code (setup-completer)
+    try:
+        from prompt_toolkit.completion import Completer, Completion
+        class ForthWordCompleter(Completer):
+            def __init__(self, vm_ref):
+                self.vm = vm_ref
+
+            def get_completions(self, document, complete_event=None):
+                text = document.text_before_cursor
+                if not text or text[-1].isspace():
+                    return
+                prefix = text.rsplit(None, 1)[-1]
+                folded = prefix.casefold()
+                for name in self.vm.words:
+                    if isinstance(name, str) and name.casefold().startswith(folded):
+                        yield Completion(
+                            name,
+                            start_position=-len(prefix),
+                            display_meta="Space: select | Esc: cancel",
+                        )
+        vm.host["ForthWordCompleter"] = ForthWordCompleter
+    except ImportError:
+        vm.host["ForthWordCompleter"] = None
+    end-code
+(setup-completer)
+
 code repl
     import re
     import sys
@@ -13,40 +39,113 @@ code repl
     if sys.stdin.isatty():
         print("Keys: [Enter] submit, [Ctrl+J] or [Shift+Enter] multiline newline.")
 
-    # Try prompt_toolkit for modern CLI multiline support if connected to an interactive TTY
+    # Try prompt_toolkit for modern CLI multiline & tab completion support if connected to an interactive TTY
     pt_session = None
     if sys.stdin.isatty():
         try:
             from prompt_toolkit import PromptSession
-            from prompt_toolkit.key_binding import KeyBindings
+            from prompt_toolkit.filters import has_completions
             from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
+            from prompt_toolkit.key_binding import KeyBindings
             from prompt_toolkit.keys import Keys
+            from prompt_toolkit.layout.menus import MultiColumnCompletionMenuControl
+            from prompt_toolkit.shortcuts import CompleteStyle
+
+            completer_cls = vm.host.get("ForthWordCompleter")
+            completer = completer_cls(vm) if completer_cls else None
+
+
 
             bindings = KeyBindings()
 
             @bindings.add("c-m")
             def _submit(event):
-                event.current_buffer.validate_and_handle()
+                buf = event.current_buffer
+                if buf.complete_state is not None:
+                    buf.cancel_completion()
+                buf.validate_and_handle()
 
             @bindings.add("c-j")
             def _newline(event):
-                event.current_buffer.insert_text("\n")
+                buf = event.current_buffer
+                if buf.complete_state is not None:
+                    buf.cancel_completion()
+                buf.insert_text("\n")
 
             @bindings.add("escape", "c-m")
             def _newline_alt_enter(event):
-                event.current_buffer.insert_text("\n")
+                buf = event.current_buffer
+                if buf.complete_state is not None:
+                    buf.cancel_completion()
+                buf.insert_text("\n")
 
             # Map Shift+Enter / Ctrl+Enter terminal sequences to ControlJ
             for seq in ("\x1b[27;2;13~", "\x1b[13;2u"):
                 ANSI_SEQUENCES[seq] = Keys.ControlJ
 
+            # --- Tab Completion Controls (Unified for all modes) ---
+
+            @bindings.add("c-i", eager=True)
+            def _tab_complete(event):
+                buf = event.current_buffer
+                if buf.complete_state is None:
+                    buf.start_completion(select_first=True)
+
+            def _move_vertical(event, step):
+                buf = event.current_buffer
+                state = buf.complete_state
+                if state is None or state.complete_index is None:
+                    return
+                rows = 1
+                for window in event.app.layout.visible_windows:
+                    if isinstance(window.content, MultiColumnCompletionMenuControl):
+                        rows = max(1, getattr(window.content, "_rendered_rows", 1))
+                        break
+                current_idx = state.complete_index
+                next_idx = current_idx + step
+                if 0 <= next_idx < len(state.completions) and (next_idx // rows == current_idx // rows):
+                    buf.go_to_completion(next_idx)
+
+            @bindings.add(Keys.Up, filter=has_completions, eager=True)
+            def _prev_completion(event):
+                _move_vertical(event, -1)
+
+            @bindings.add(Keys.Down, filter=has_completions, eager=True)
+            def _next_completion(event):
+                _move_vertical(event, 1)
+
+            @bindings.add(" ", filter=has_completions, eager=True)
+            def _accept_completion_with_space(event):
+                buf = event.current_buffer
+                state = buf.complete_state
+                completion = state.current_completion if state is not None else None
+                if completion is not None:
+                    buf.apply_completion(completion)
+                buf.cancel_completion()
+                buf.insert_text(" ")
+
+            @bindings.add("escape", filter=has_completions, eager=True)
+            def _cancel_completion_esc(event):
+                event.current_buffer.cancel_completion()
+
+            @bindings.add("backspace", filter=has_completions, eager=True)
+            def _backspace_completion(event):
+                buf = event.current_buffer
+                buf.cancel_completion()
+                buf.delete_before_cursor()
+
             pt_session = PromptSession(
                 multiline=True,
                 key_bindings=bindings,
+                completer=completer,
+                complete_while_typing=False,
+                complete_style=CompleteStyle.MULTI_COLUMN,
                 prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
             )
+
         except ImportError:
             pt_session = None
+
 
     try:
         while True:

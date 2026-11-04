@@ -273,6 +273,45 @@ class TestSafePropertyAudit(unittest.TestCase):
         output = buf.getvalue()
         self.assertIn("No word matching 'non_existent_word_xyz'.", output)
 
+    def test_forth_word_completer_matches_dictionary_in_all_modes(self):
+        try:
+            from prompt_toolkit.document import Document
+        except ImportError:
+            self.skipTest("prompt_toolkit is not installed in this environment")
+
+        completer_cls = self.vm.host.get("ForthWordCompleter")
+        if completer_cls is None:
+            self.skipTest("prompt_toolkit is not installed in this environment")
+
+        completer = completer_cls(self.vm)
+
+
+        # 1. Test in Forth mode
+        self.vm.host["repl_mode"] = "forth"
+        doc = Document("nok", 3)
+        completions = [c.text for c in completer.get_completions(doc, None)]
+        self.assertIn("nokia", completions)
+        self.assertIn("nokia2", completions)
+        self.assertIn("nokia-full", completions)
+
+        # 2. Test in Chat mode (Unified completion applies to all modes)
+        self.vm.host["repl_mode"] = "chat"
+        doc_chat = Document("ai-app", 6)
+        completions_chat = [c.text for c in completer.get_completions(doc_chat, None)]
+        self.assertIn("ai-approve", completions_chat)
+
+
+        # 3. Test run-monitor completion
+        doc_mon = Document("run-mon", 7)
+        completions_mon = [c.text for c in completer.get_completions(doc_mon, None)]
+        self.assertIn("run-monitor", completions_mon)
+
+        # 4. Trailing space should not trigger completion
+        doc_space = Document("nokia ", 6)
+        completions_space = list(completer.get_completions(doc_space, None))
+        self.assertEqual(len(completions_space), 0)
+
+
 
 class TestSecurityTaskApproval(unittest.TestCase):
     """Verifies that the task security guard halts on non-safe words and resumes on trust-task."""
