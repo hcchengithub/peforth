@@ -121,3 +121,149 @@ code repl
     // ( -- ) Start interactive Forth REPL loop.
     /// Run Forth prompt loop (forth>) until bye or EOF.
     last :: safe=True
+
+code ?cli
+    import os
+    import sys
+
+    if vm.host.get("headless", False):
+        return
+
+    args = list(vm.host.get("argv", []))
+
+    def _print_cli_help(file=None):
+        print("""Usage: f [-h] [-i] [-id <session-id>] [-l, --load <path>]... [-e <Forth tokens...> | -c <prompt tokens...>]
+
+Run peforth Forth source or start the interactive REPL.
+
+Options:
+  -h, --help         Show this help message and exit
+  -i, --interactive  Enter the REPL after executing source or completing chat
+  -id <session-id>   Continue the conversation in this session
+  -l, --load <path>  Include a Forth source file (may be repeated; before -e or -c)
+  -e <tokens...>     Execute all remaining command-line tokens as one TIB,
+                     joined with one space between tokens
+                     Example: f -e run-monitor
+  -c <tokens...>     Submit all remaining command-line tokens as an AI prompt
+
+Each -c run writes SESSION_ID=<session-id> to stderr after completion.
+
+With no source argument, the REPL starts. Loaded files run in order before -e
+or -c. Put -i before -e or -c when you want to continue interactively; all
+tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
+
+    if not args:
+        yield from vm.call(vm.tick("repl"))
+        return
+
+    interactive = False
+    source = None
+    chat_prompt = None
+    session_id = None
+    load_files = []
+    index = 0
+
+    while index < len(args):
+        arg = args[index]
+        if arg in ("-h", "--help"):
+            _print_cli_help()
+            return
+        if arg in ("-i", "--interactive"):
+            interactive = True
+            index += 1
+            continue
+        if arg == "-id":
+            if session_id is not None:
+                print("Error: -id may be specified only once.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                sys.exit(2)
+            if index + 1 >= len(args) or not args[index + 1] or args[index + 1].startswith("-"):
+                print("Error: -id requires a session ID before -c.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                sys.exit(2)
+            session_id = args[index + 1]
+            index += 2
+            continue
+        if arg in ("-l", "--load"):
+            if index + 1 >= len(args) or not args[index + 1] or args[index + 1].startswith("-"):
+                print(f"Error: {arg} requires a source file path.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                sys.exit(2)
+            load_files.append(args[index + 1])
+            index += 2
+            continue
+        if arg in ("-e", "--execute"):
+            source = " ".join(args[index + 1:])
+            if not source:
+                print("Error: -e requires Forth input.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                sys.exit(2)
+            index = len(args)
+            break
+        if arg in ("-c", "--chat"):
+            chat_prompt = " ".join(args[index + 1:])
+            if not chat_prompt:
+                print("Error: -c requires an AI prompt.", file=sys.stderr)
+                _print_cli_help(sys.stderr)
+                sys.exit(2)
+            index = len(args)
+            break
+        if arg.startswith("-"):
+            print(f"Unknown option: {arg}", file=sys.stderr)
+            _print_cli_help(sys.stderr)
+            sys.exit(2)
+        print(f"Unexpected argument: {arg}", file=sys.stderr)
+        _print_cli_help(sys.stderr)
+        sys.exit(2)
+
+    if session_id is not None and chat_prompt is None:
+        print("Error: -id applies only to -c/--chat.", file=sys.stderr)
+        _print_cli_help(sys.stderr)
+        sys.exit(2)
+
+    for path in load_files:
+        if not os.path.isfile(path):
+            print(f"Forth source file not found: {path}", file=sys.stderr)
+            sys.exit(2)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            yield from vm.evaluate(content)
+        except Exception as err:
+            print(f"Error loading {path}: {err}", file=sys.stderr)
+            sys.exit(1)
+
+    if chat_prompt is not None:
+        if session_id is not None:
+            vm.host["ai_active_session_id"] = session_id
+        try:
+            vm.push(chat_prompt)
+            vm.push(True)
+            yield from vm.call(vm.tick("(ai)"))
+        except Exception as err:
+            print(f"Error: {err}", file=sys.stderr)
+            sys.exit(1)
+        active_session = vm.host.get("ai_active_session_id")
+        if active_session:
+            print(f"SESSION_ID={active_session}", file=sys.stderr)
+        if interactive:
+            yield from vm.call(vm.tick("repl"))
+        return
+
+    if source is not None:
+        try:
+            yield from vm.evaluate(source)
+        except Exception as err:
+            print(f"Error: {err}", file=sys.stderr)
+            sys.exit(1)
+        if interactive:
+            yield from vm.call(vm.tick("repl"))
+        return
+
+    if interactive or not load_files:
+        yield from vm.call(vm.tick("repl"))
+    end-code
+    // ( -- ) Dispatch command-line arguments or start interactive REPL.
+    /// Parses vm.host['argv'] for -h, -i, -l, -e, -c, and starts REPL if requested.
+    last :: safe=True
+

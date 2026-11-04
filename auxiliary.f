@@ -49,3 +49,27 @@ code (play-notes)
     ;
     // ( -- ) Play the complete gentle Nokia Tune (13 notes) asynchronously.
     last :: safe=True
+
+\ --- 3. Diagnostics & System Tools ---
+
+code run-monitor
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    base = Path(vm.host.get("__file__dir__", "."))
+    monitor = base / "tools" / "peforth_logging_monitor.py"
+    if not monitor.is_file():
+        monitor = Path(sys.prefix).parent / "tools" / "peforth_logging_monitor.py"
+    if not monitor.is_file():
+        raise RuntimeError(f"Monitor script not found: {monitor}")
+
+    env = os.environ.copy()
+    subprocess.run([sys.executable, str(monitor)], env=env, check=False)
+    end-code
+    // ( -- ) Run the peforth diagnostic logging monitor in the foreground.
+    /// Uses the current Python VENV and configured SQLite diagnostics database.
+    /// Press Ctrl-C to stop the monitor and return to Forth.
+    last :: safe=True
+

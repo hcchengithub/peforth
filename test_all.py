@@ -384,6 +384,8 @@ class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
             self.assertIn("tool_result_submitted", event_types)
             self.assertIn("runtime_finished", event_types)
             conn.close()
+            logger.close()
+
 
     def test_ai_py_init_diagnostics_and_heartbeat(self):
         import ai
@@ -408,6 +410,8 @@ class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
             payload = json.loads(rows[0]["payload_json"])
             self.assertEqual(payload.get("message"), "compiling word")
             conn.close()
+            logger.close()
+
 
     def test_peforth_logging_monitor_render_events(self):
         from tools.peforth_logging_monitor import render_events
@@ -445,6 +449,7 @@ class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
             self.assertEqual(runtimes[0]["runtime_id"], rid)
             conn.close()
 
+
     def test_peforth_watchdog_issue_tracking(self):
         from diagnostic_log import DiagnosticLog
         from tools.peforth_watchdog import Watchdog
@@ -468,6 +473,7 @@ class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
             conn.close()
             logger.finish_runtime(rid)
             logger.close()
+
 
 
 class TestForthSelfTestExecution(unittest.TestCase):
@@ -498,6 +504,54 @@ class TestCLISmoke(unittest.TestCase):
         self.assertIn("peforth 2.1.0 (with AI support)", proc.stdout)
         self.assertIn("3", proc.stdout)
         self.assertIn("17", proc.stdout)  # len of "smoke test passed"
+
+    def test_cli_help_flag(self):
+        cmd = [sys.executable, str(HERE / "main.py"), "-h"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("Usage: f", proc.stdout)
+        self.assertIn("-h, --help", proc.stdout)
+        self.assertIn("-l, --load", proc.stdout)
+        self.assertIn("-e <tokens...>", proc.stdout)
+        self.assertIn("run-monitor", proc.stdout)
+
+    def test_cli_execute_option(self):
+        cmd = [sys.executable, str(HERE / "main.py"), "-e", "10", "20", "+", ".", "cr"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        self.assertEqual(proc.returncode, 0, f"Error: {proc.stderr}")
+        self.assertIn("30", proc.stdout)
+
+    def test_cli_load_files_in_order(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = Path(tmpdir) / "first.f"
+            second = Path(tmpdir) / "second.f"
+            first.write_text(": loaded-first 40 ;\n", encoding="utf-8")
+            second.write_text(": loaded-second loaded-first 2 + ;\n", encoding="utf-8")
+
+            cmd = [
+                sys.executable,
+                str(HERE / "main.py"),
+                "-l", str(first),
+                "--load", str(second),
+                "-e", "loaded-second . cr",
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            self.assertEqual(proc.returncode, 0, f"Error: {proc.stderr}")
+            self.assertIn("42", proc.stdout)
+
+    def test_cli_unknown_option_exits_2(self):
+        cmd = [sys.executable, str(HERE / "main.py"), "--bad-flag"]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("Unknown option", proc.stderr)
+
+    def test_run_monitor_word_defined(self):
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        self.assertIn("run-monitor", vm.words)
+        word = vm.words["run-monitor"]
+        self.assertIn("diagnostic logging monitor", getattr(word, "help", ""))
+
 
 
 if __name__ == "__main__":

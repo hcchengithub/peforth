@@ -7,11 +7,11 @@ include herdr.f
 include ai.f
 include repl.f
 
-\ --- Launch REPL if not headless ---
+\ --- Launch CLI or REPL if not headless ---
 code ?repl
-    if not vm.host.get("headless", False):
-        yield from vm.call(vm.tick("repl"))
+    yield from vm.call(vm.tick("?cli"))
     end-code
-    // ( -- ) Launch interactive REPL if not running in headless mode.
-    /// Checks vm.host['headless']; if false, transfers execution to repl loop.
+    // ( -- ) Launch CLI dispatcher or interactive REPL if not headless.
+    /// Delegates to ?cli.
 ?repl
+
