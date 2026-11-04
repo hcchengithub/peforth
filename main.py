@@ -1,0 +1,9 @@
+"""peforth 2.1.0"""
+
+from pathlib import Path
+from projectk import VM
+
+HERE = Path(__file__).resolve().parent
+
+vm = VM({"__file__dir__": str(HERE)})
+vm.dictate((HERE / "base.f").read_text(encoding="utf-8"))

@@ -1,0 +1,12 @@
+.env
+.env.*.tmp
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+*.log
+docs/development/peforth-devlog.txt
