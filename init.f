@@ -235,28 +235,48 @@ code '
 \ --- 7. Help Word ---
 
 code help
-    tokens = vm.input.rest().strip().split()
-    if tokens:
-        name = tokens[0]
-        word = vm.tick(name)
-        if word is None:
-            print(f"Unknown word: {name}")
-            return
-        header = f"{word.name} {word.help}" if getattr(word, "help", "") else word.name
-        print(header)
-        comment = getattr(word, "comment", "") or ""
-        for line in comment.splitlines():
-            print(f"    {line}")
+    line = vm.input.read(until="\n") if "\n" in vm.input.remaining else vm.input.rest()
+    pattern = line.strip()
+
+    if not pattern:
+        matched_words = list(vm.words.values())
     else:
-        for word in vm.words.values():
-            header = f"{word.name} {word.help}" if getattr(word, "help", "") else word.name
-            print(header)
+        target = pattern.casefold()
+        exact = [w for name, w in vm.words.items() if name.casefold() == target]
+        if exact:
+            matched_words = exact
+        else:
+            patterns = [p.casefold() for p in pattern.split() if p.strip()]
+            matched_words = [
+                w for name, w in vm.words.items()
+                if all(
+                    p in name.casefold()
+                    or p in (getattr(w, "help", "") or "").casefold()
+                    or p in (getattr(w, "comment", "") or "").casefold()
+                    for p in patterns
+                )
+            ]
+
+    if pattern and not matched_words:
+        print(f"No word matching {pattern!r}.")
+    else:
+        entries = []
+        for word in matched_words:
+            w_help = getattr(word, "help", "")
+            header = f"{word.name} {w_help}" if w_help else word.name
             comment = getattr(word, "comment", "") or ""
-            for line in comment.splitlines():
-                print(f"    {line}")
+            if comment:
+                indented = "\n".join("    " + c_line for c_line in comment.splitlines())
+                entries.append(header + "\n" + indented)
+            else:
+                entries.append(header)
+        if entries:
+            print("\n\n".join(entries))
     end-code immediate
-    // ( [<name>] -- ) Print help and comments for a word or all words.
-    /// Consume remainder of TIB and display help for the first token, or all words if omitted.
+    // ( [<pattern>] -- ) Display help for an exact word, matching words, or all words.
+    /// Exact match prints full documentation.
+    /// Substring match filters words whose name, help, or comments contain the pattern.
+    /// With no arguments, lists help for all words in dictionary.
     last :: safe=True
 
 \ --- 8. Load Master peforth ---

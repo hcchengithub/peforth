@@ -549,9 +549,18 @@ code space
     last :: safe=True
 
 code words
-    print(" ".join(vm.words))
+    line = vm.input.read(until="\n") if "\n" in vm.input.remaining else vm.input.rest()
+    patterns = [p.lower() for p in line.strip().split() if p.strip()]
+    if not patterns:
+        matched = list(vm.words.keys())
+    else:
+        matched = [name for name in vm.words.keys() if all(p in name.lower() for p in patterns)]
+    if matched:
+        print(" ".join(matched))
     end-code immediate
-    // ( -- ) List all words in the dictionary.
+    // ( [<patterns>] -- ) List words in dictionary filtered by pattern(s).
+    /// If no patterns given, list all word names.
+    /// If patterns given, list names containing all patterns (case-insensitive AND).
     last :: safe=True
 
 code see

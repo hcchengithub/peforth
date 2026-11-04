@@ -236,6 +236,40 @@ class TestSafePropertyAudit(unittest.TestCase):
         # (setup-ai) must no longer exist
         self.assertNotIn("(setup-ai)", self.vm.words, "(setup-ai) should not exist in dictionary")
 
+    def test_words_and_help_pattern_filtering(self):
+        import io
+        from contextlib import redirect_stdout
+
+        # Test words pattern filtering
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("words py >>")
+        output = buf.getvalue().strip()
+        self.assertIn("py>>", output)
+        self.assertNotIn("dup", output)
+        self.assertNotIn("swap", output)
+
+        # Test help exact match
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("help dup")
+        output = buf.getvalue()
+        self.assertIn("dup ( x -- x x )", output)
+
+        # Test help substring filtering
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("help py:")
+        output = buf.getvalue()
+        self.assertIn("py:", output)
+
+        # Test help non-matching
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("help non_existent_word_xyz")
+        output = buf.getvalue()
+        self.assertIn("No word matching 'non_existent_word_xyz'.", output)
+
 
 class TestSecurityTaskApproval(unittest.TestCase):
     """Verifies that the task security guard halts on non-safe words and resumes on trust-task."""
