@@ -171,6 +171,13 @@ class TestSafePropertyAudit(unittest.TestCase):
                     f"Dangerous word {name!r} must NOT be marked safe=True!"
                 )
 
+    def test_tokenized_word_search_finds_python_interop_words(self):
+        import ai
+        res = ai.tool_search_words(self.vm, "python execute eval")
+        matched_names = [w["name"] for w in res["words"]]
+        self.assertIn("execute", matched_names)
+        self.assertTrue(any("py" in name for name in matched_names))
+
 
 class TestSecurityTaskApproval(unittest.TestCase):
     """Verifies that the task security guard halts on non-safe words and resumes on trust-task."""

@@ -135,40 +135,110 @@ TOOLS_DEFINITION = [
 
 
 def tool_search_words(vm, query):
-    """Search words in vm.words matching query."""
-    q = query.lower()
-    matches = []
+    """Search words in vm.words matching query (supports multi-token relevance scoring)."""
+    tokens = [t.strip().lower() for t in query.split() if t.strip()]
+    if not tokens:
+        tokens = [query.strip().lower()]
+
+    scored = []
     for name, word in vm.words.items():
-        help_text = getattr(word, "help", "")
-        comment = getattr(word, "comment", "")
-        source = getattr(word, "source", "")
-        if (q in name.lower() or
-            q in help_text.lower() or
-            q in comment.lower() or
-            q in source.lower()):
-            matches.append({
+        score = 0
+        name_lower = name.lower()
+        help_text = getattr(word, "help", "") or ""
+        help_lower = help_text.lower()
+        comment = getattr(word, "comment", "") or ""
+        comment_lower = comment.lower()
+        source = getattr(word, "source", "") or ""
+        source_lower = source.lower()
+
+        for tok in tokens:
+            if tok == name_lower:
+                score += 100
+            elif tok in name_lower:
+                score += 30
+            if tok in help_lower:
+                score += 20
+            if tok in comment_lower:
+                score += 10
+            if tok in source_lower:
+                score += 5
+
+        if score > 0:
+            scored.append((score, {
                 "name": name,
                 "category": getattr(word, "category", "host"),
                 "help": help_text,
                 "comment": comment,
                 "safe": word.properties.get("safe", False) if hasattr(word, "properties") else False
-            })
-    return {"query": query, "count": len(matches), "words": matches[:30]}
+            }))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    matches = [item[1] for item in scored[:30]]
+    return {"query": query, "count": len(matches), "words": matches}
 
 
-SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside peforth VM.
+SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside the peforth Forth environment.
+peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges Forth with Python: you can run native Forth, write Python host definitions, and execute Python code directly inside Forth!
+
 You have access to two tools:
-1. peforth_search_words: search available Forth vocabulary, words, and documentation.
-2. peforth_run_forth: propose and execute Forth code in the user's local VM.
+1. peforth_search_words: search available Forth vocabulary, words, help strings, and comments.
+   *IMPORTANT*: peforth is a rich, evolving environment. When unsure whether a word exists, ALWAYS search the dictionary first!
+2. peforth_run_forth: propose and execute Forth source code in the user's local VM.
 
-Important Rules:
-- When asked to perform calculations, check dictionary, or solve problems in Forth, propose Forth code using peforth_run_forth.
-- peforth stack words include: dup, drop, swap, over, rot, pick, roll, depth, dropall.
-- Math words include: +, -, *, /, mod, =, <, >, 0=, 0<, 1+, 1-, not, and, or.
-- Display words include: ., .s, cr, space, words, see.
-- To print numbers or strings, use '.' (e.g. 's" text" .' or '123 .'). There is no 'type' word; '.' prints both strings and numbers without a trailing newline. Use 'cr' for newline.
-- Colon definitions use ': name ... ;'.
-- If your code uses non-safe words, the user will be prompted to approve the execution.
+=== Python Interoperability (You CAN execute Python directly!) ===
+When the user asks you to run Python, write Python, or perform operations best suited for Python, DO NOT say you cannot run Python! Instead, propose Forth code using peforth's Python interoperability words inside peforth_run_forth:
+- py: <statement>
+    Execute a single-line Python statement.
+    Example: py: print("Hello, World!")
+    Example: py: import math; print(math.pi)
+- py:: <line>
+    Execute Python code up to the end of the line.
+    Example: py:: print("Hello from py::")
+- py> <expression>
+    Evaluate a Python expression and push its result onto the Forth data stack.
+    Example: py> 2**10 . cr
+    Example: py> [x*x for x in range(5)] . cr
+- <py> ... </py>
+    Execute a multi-line Python code block.
+    Example:
+        <py>
+        for i in range(3):
+            print(f"Count: {i}")
+        </py>
+- <py> ... </pyV>
+    Evaluate a multi-line Python expression and push its result onto the data stack.
+- :> <method/property>
+    Invoke a method or attribute on the Python object at the top of the data stack.
+    Example: s" hello world" :> upper() . cr
+    Example: py> [3, 1, 2] :> sort()
+- code <name> <python-body> end-code
+    Define a new Forth word implemented directly in Python.
+    Example:
+        code greet
+            print("Hello from custom Python word!")
+        end-code
+        greet
+
+=== Forth Vocabulary & Fundamentals ===
+- Stack manipulation: dup, drop, swap, over, rot, -rot, nip, 2dup, 2drop, depth, dropall, pick, roll, slice.
+- Return/Temp stacks (task-private): >r, r>, r@, rdrop, >t, t@, t>.
+- Math: +, -, *, /, mod, 1+, 1-, 2+, 2-, abs, negate, max, min.
+- Comparisons: =, <>, !=, ==, <, >, <=, >=, 0=, 0<, within.
+- Logic & Bitwise: not, and, or, AND, OR, NOT, XOR, <<, >>.
+- Strings & Types: s" text", ." text", char <tok>, BL, CR, none, "", int, float, bool, str, list, dict, set, tuple, type, {}, [].
+- Output: '.' prints TOS without newline (both numbers and strings); '.s' displays stack; 'cr' prints newline; 'space' prints a space.
+- Colon definitions: ': name ... ;'
+- Control structures:
+    if ... else ... then
+    for ... next (r@ is loop index)
+    begin ... until
+    begin ... while ... repeat
+    case ... of ... endof ... endcase
+- Defining words: constant, variable, value, to, create, does>.
+
+=== Important Rules ===
+- When executing code, always explain your purpose and propose clean Forth source code.
+- If your proposed code executes non-safe words (such as <py>, file operations, or system commands), the VM task-level security guard will pause and ask the user for approval. This is normal and expected.
 - Be concise, accurate, and helpful.
 """
 
