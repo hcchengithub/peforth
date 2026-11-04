@@ -1028,14 +1028,29 @@ code (::)
     stmt = vm.pop().strip()
     if not stmt:
         raise KernelError("Expected member or expression after ::")
+
+    def _parse_val(raw):
+        s = raw.strip()
+        low = s.lower()
+        if low == "true":
+            return True
+        if low == "false":
+            return False
+        try:
+            return int(s)
+        except ValueError:
+            try:
+                return float(s)
+            except ValueError:
+                return s
+
     if vm.compiling:
         def op(v, s=stmt):
             target = v.pop()
             if "=" in s and not s.startswith("(") and not s.startswith("[") and hasattr(target, "properties"):
                 key, val_str = s.split("=", 1)
                 key = key.strip()
-                val_str = val_str.strip()
-                val = True if val_str.lower() == "true" else False if val_str.lower() == "false" else val_str
+                val = _parse_val(val_str)
                 target.properties[key] = val
                 try:
                     setattr(target, key, val)
@@ -1050,8 +1065,7 @@ code (::)
         if "=" in stmt and not stmt.startswith("(") and not stmt.startswith("[") and hasattr(target, "properties"):
             key, val_str = stmt.split("=", 1)
             key = key.strip()
-            val_str = val_str.strip()
-            val = True if val_str.lower() == "true" else False if val_str.lower() == "false" else val_str
+            val = _parse_val(val_str)
             target.properties[key] = val
             try:
                 setattr(target, key, val)

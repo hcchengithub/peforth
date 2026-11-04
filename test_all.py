@@ -192,6 +192,33 @@ class TestSafePropertyAudit(unittest.TestCase):
             self.assertIsNotNone(word, f"Word '{name}' should be in dictionary")
             self.assertTrue(word.properties.get("safe"), f"Word '{name}' should be safe")
 
+    def test_ai_approve_and_nokia2_property_types(self):
+        # Verify ai-approve is defined and marked safe
+        approve_word = self.vm.tick("ai-approve")
+        self.assertIsNotNone(approve_word, "ai-approve word must exist")
+        self.assertTrue(approve_word.properties.get("safe"), "ai-approve must be marked safe")
+
+        # Verify nokia2_after_seconds is parsed as an int (not str)
+        ai_word = self.vm.tick("ai:")
+        self.assertIsNotNone(ai_word)
+        self.assertIsInstance(ai_word.properties.get("nokia2_after_seconds"), int)
+        self.assertEqual(ai_word.properties.get("nokia2_after_seconds"), 30)
+
+    def test_sanitize_messages_heals_incomplete_tool_calls(self):
+        import ai
+        broken_messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "call_123", "type": "function", "function": {"name": "peforth_run_forth", "arguments": "{}"}}
+            ]},
+            {"role": "user", "content": "next turn"}
+        ]
+        sanitized = ai._sanitize_messages(broken_messages)
+        # Should contain tool response between assistant and next user turn
+        roles = [m["role"] for m in sanitized]
+        self.assertEqual(roles, ["user", "assistant", "tool", "user"])
+        self.assertEqual(sanitized[2]["tool_call_id"], "call_123")
+
 
 class TestSecurityTaskApproval(unittest.TestCase):
     """Verifies that the task security guard halts on non-safe words and resumes on trust-task."""

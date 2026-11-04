@@ -248,6 +248,128 @@ When the user asks you to run Python, write Python, or perform operations best s
 """
 
 
+def _sanitize_messages(messages):
+    """Ensure every assistant message with tool_calls is properly closed by tool messages."""
+    sanitized = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        sanitized.append(msg)
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            expected_ids = {tc["id"] for tc in msg["tool_calls"] if "id" in tc}
+            j = i + 1
+            tool_msgs = []
+            while j < len(messages) and messages[j].get("role") == "tool":
+                tool_msgs.append(messages[j])
+                j += 1
+            responded_ids = {tm.get("tool_call_id") for tm in tool_msgs}
+            missing_ids = expected_ids - responded_ids
+            for mid in missing_ids:
+                tool_msgs.append({
+                    "role": "tool",
+                    "tool_call_id": mid,
+                    "content": json.dumps({"error": "Tool execution was not completed."}, ensure_ascii=False)
+                })
+            sanitized.extend(tool_msgs)
+            i = j
+        else:
+            i += 1
+    return sanitized
+
+
+def read_numbered_choice(
+    prompt: str = "Choose 1-4: ",
+    choices: tuple = ("1", "2", "3", "4"),
+    default: str = "1",
+    *,
+    labels: dict = None,
+    styles: dict = None,
+) -> str:
+    """Read a single-key or numbered choice with prompt_toolkit, falling back to input()."""
+    labels = labels or {
+        "1": "Allow Once",
+        "2": "Trust this AI task",
+        "3": "Deny this proposal",
+        "4": "Cancel this AI task",
+    }
+    styles = styles or {}
+
+    if not sys.stdin.isatty():
+        return default
+
+    try:
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.keys import Keys
+        from prompt_toolkit.formatted_text import ANSI
+        import asyncio
+
+        selected_index = [choices.index(default) if default in choices else 0]
+        bindings = KeyBindings()
+
+        def _confirm(event):
+            event.current_buffer.text = choices[selected_index[0]]
+            event.current_buffer.validate_and_handle()
+
+        @bindings.add("c-m", eager=True)
+        def _enter(event):
+            _confirm(event)
+
+        @bindings.add(" ", eager=True)
+        def _space(event):
+            _confirm(event)
+
+        def _move_selection(event, step):
+            selected_index[0] = (selected_index[0] + step) % len(choices)
+            event.app.invalidate()
+
+        @bindings.add(Keys.Up, eager=True)
+        def _prev(event):
+            _move_selection(event, -1)
+
+        @bindings.add(Keys.Down, eager=True)
+        def _next(event):
+            _move_selection(event, 1)
+
+        def _confirm_selected_choice(app, buffer):
+            async def confirm_after_render():
+                await asyncio.sleep(0.05)
+                buffer.validate_and_handle()
+            app.create_background_task(confirm_after_render())
+
+        for choice in choices:
+            def _select(event, selected=choice):
+                selected_index[0] = choices.index(selected)
+                event.current_buffer.text = selected
+                event.app.invalidate()
+                _confirm_selected_choice(event.app, event.current_buffer)
+            bindings.add(choice, eager=True)(_select)
+
+        def choice_prompt():
+            selected = choices[selected_index[0]]
+            selected_style = "\x1b[1;48;2;255;255;255;38;2;0;100;0m"
+            reset = "\x1b[0m"
+            rows = []
+            for choice in choices:
+                style = selected_style if choice == selected else styles.get(choice, "")
+                suffix = reset if style else ""
+                rows.append(f"{style}{choice}. {labels.get(choice, choice)}{suffix}")
+            rows.extend(("", prompt))
+            return ANSI("\n".join(rows))
+
+        session = PromptSession(multiline=False, key_bindings=bindings)
+        result = session.prompt(choice_prompt)
+        return result.strip() if result and result.strip() in choices else default
+    except Exception:
+        for choice in choices:
+            print(f"{choice}. {labels.get(choice, choice)}")
+        try:
+            val = input(prompt).strip()
+            return val if val in choices else default
+        except Exception:
+            return default
+
+
 def _http_chat_stream(base_url, api_key, model, messages, tools):
     """Send streaming Chat Completion request to OpenAI-compatible endpoint."""
     url = f"{base_url.rstrip('/')}/chat/completions"
@@ -309,7 +431,9 @@ def ai_turn(vm, prompt, stream_response):
     messages = vm.host.setdefault("ai_messages", [
         {"role": "system", "content": SYSTEM_PROMPT}
     ])
+    messages = _sanitize_messages(messages)
     messages.append({"role": "user", "content": prompt})
+    vm.host["ai_messages"] = messages
 
     accumulated_full_text = []
 
@@ -432,20 +556,61 @@ def ai_turn(vm, prompt, stream_response):
                 elif fn_name == "peforth_run_forth":
                     source = args.get("source", "")
                     purpose = args.get("purpose", "")
-                    if stream_response:
-                        sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
-                        sys.stdout.flush()
 
-                    # Set in_ai_task so security decorator inspects words
+                    trusted_tasks = vm.host.get("trusted_ai_tasks", set())
+                    is_trusted = (vm.task in trusted_tasks) or vm.host.get("ai_trusted", False)
+
+                    decision = "allow_once"
+                    if not is_trusted:
+                        approval_word = vm.tick("ai-approve")
+                        if approval_word:
+                            stack_depth = len(vm.dstack)
+                            vm.push({"purpose": purpose, "source": source})
+                            yield from vm.call(approval_word)
+                            decision = vm.pop() if len(vm.dstack) > stack_depth else "deny"
+                        else:
+                            if stream_response:
+                                sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
+                                sys.stdout.flush()
+
+                    if decision == "trust_task":
+                        vm.host.setdefault("trusted_ai_tasks", set()).add(vm.task)
+                    elif decision == "deny":
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps({
+                                "stdout": "",
+                                "dstack": [repr(x) for x in vm.dstack],
+                                "error": "User denied this proposal."
+                            }, ensure_ascii=False)
+                        })
+                        continue
+                    elif decision == "cancel":
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps({
+                                "stdout": "",
+                                "dstack": [repr(x) for x in vm.dstack],
+                                "error": "User cancelled the AI task."
+                            }, ensure_ascii=False)
+                        })
+                        return
+
+                    # Execute the Forth code
                     prev_ai_task = vm.host.get("in_ai_task")
                     vm.host["in_ai_task"] = vm.task
+
+                    trusted_set = vm.host.setdefault("trusted_ai_tasks", set())
+                    was_in_trusted = vm.task in trusted_set
+                    trusted_set.add(vm.task)
 
                     tee = TeeOutput(sys.stdout)
                     old_stdout = sys.stdout
                     error_msg = None
                     try:
                         sys.stdout = tee
-                        # Yield from evaluate so any security pause or words pause cooperative execution
                         yield from vm.evaluate(source)
                     except Exception as e:
                         error_msg = f"{type(e).__name__}: {e}"
@@ -454,6 +619,8 @@ def ai_turn(vm, prompt, stream_response):
                     finally:
                         sys.stdout = old_stdout
                         vm.host["in_ai_task"] = prev_ai_task
+                        if not was_in_trusted and decision != "trust_task":
+                            trusted_set.discard(vm.task)
 
                     exec_result = {
                         "stdout": tee.getvalue(),

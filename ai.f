@@ -97,3 +97,55 @@ last :: safe=True
     ; immediate
     // ( <prompt> -- ) Stream prompt to AI and always play nokia2 chime upon completion.
 last :: safe=True
+
+\ --- 5. Interactive Proposal Approval (ai-approve) ---
+
+code (ai-approve-input)
+    import ai
+
+    proposal = vm.pop()
+    if not isinstance(proposal, dict):
+        raise KernelError("ai-approve expects a proposal mapping.")
+    purpose = proposal.get("purpose", "")
+    source = proposal.get("source", "")
+
+    green = "\x1b[38;2;135;215;135m"
+    green_bold = "\x1b[1;38;2;135;215;135m"
+    deep_green = "\x1b[38;2;0;100;0m"
+    dim = "\x1b[2;37m"
+    reset = "\x1b[0m"
+
+    print(f"\n{green_bold}Purpose: {purpose}{reset}\n")
+    print(f"{dim}Forth action:{reset}")
+    print(f"{deep_green}{source.strip()}{reset}\n")
+
+    yield from vm.call(vm.tick("nokia"))
+
+    choice = ai.read_numbered_choice(
+        "Choose 1-4: ",
+        default="1",
+        labels={
+            "1": "Allow Once",
+            "2": "Trust this AI task",
+            "3": "Deny this proposal",
+            "4": "Cancel this AI task",
+        },
+        styles={"1": green, "2": green, "3": dim, "4": dim},
+    )
+    decision = {
+        "1": "allow_once",
+        "2": "trust_task",
+        "3": "deny",
+        "4": "cancel",
+    }.get(choice, "allow_once")
+
+    vm.push(decision)
+    end-code
+    // ( proposal -- decision ) Display AI approval prompt and read 1-4 choice.
+    last :: safe=True
+
+: ai-approve ( proposal -- decision )
+    (ai-approve-input)
+    ;
+    // ( proposal -- decision ) Interactive approval workflow for AI proposed code.
+    last :: safe=True
