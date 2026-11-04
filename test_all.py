@@ -11,10 +11,13 @@ Protects against regressions, accidental architectural deviations, and safe-prop
 
 import ast
 import io
+import json
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
+import tempfile
 import unittest
 
 HERE = Path(__file__).resolve().parent
@@ -299,6 +302,141 @@ class TestSecurityTaskApproval(unittest.TestCase):
         task.resume()
         self.assertEqual(task.status, "done")
         self.assertIn("dangerous_executed", self.vm.dstack)
+
+
+class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
+    """Verifies SQLite diagnostic logging, monitoring renderer, and watchdog supervision."""
+
+    def test_diagnostic_log_schema_and_lifecycle(self):
+        from diagnostic_log import DiagnosticLog
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test_diag.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+
+            runtime_id = logger.start_runtime(runtime_version="test-2.1.0")
+            self.assertTrue(runtime_id)
+
+            prompt_cid = logger.store_content("prompt", "Calculate 2+2 in Forth")
+            instr_cid = logger.store_content("agent_instructions", "You are an assistant.")
+            self.assertIsInstance(prompt_cid, int)
+            self.assertIsInstance(instr_cid, int)
+
+            turn_id = logger.start_turn(runtime_id, prompt_content_id=prompt_cid, instructions_content_id=instr_cid)
+            self.assertTrue(turn_id)
+
+            ev1 = logger.append_event(runtime_id, turn_id, "ai_turn_started")
+            ev2 = logger.append_event(runtime_id, turn_id, "tool_call_started", operation="peforth_run_forth", call_id="c1")
+            ev3 = logger.append_event(runtime_id, turn_id, "tool_result_submitted", operation="peforth_run_forth", call_id="c1")
+            self.assertGreater(ev3, ev2)
+
+            logger.finish_turn(turn_id, output_text="The answer is 4.", output_status="complete", status="completed")
+            logger.finish_runtime(runtime_id)
+            logger.close()
+
+            # Query database directly
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            runtime_row = conn.execute("SELECT * FROM runtimes WHERE runtime_id = ?", (runtime_id,)).fetchone()
+            self.assertIsNotNone(runtime_row)
+            self.assertIsNotNone(runtime_row["finished_at"])
+
+            turn_row = conn.execute("SELECT * FROM turns WHERE turn_id = ?", (turn_id,)).fetchone()
+            self.assertIsNotNone(turn_row)
+            self.assertEqual(turn_row["status"], "completed")
+
+            events = conn.execute("SELECT event_type FROM timeline WHERE runtime_id = ? ORDER BY event_id", (runtime_id,)).fetchall()
+            event_types = [e["event_type"] for e in events]
+            self.assertIn("runtime_started", event_types)
+            self.assertIn("ai_turn_started", event_types)
+            self.assertIn("tool_call_started", event_types)
+            self.assertIn("tool_result_submitted", event_types)
+            self.assertIn("runtime_finished", event_types)
+            conn.close()
+
+    def test_ai_py_init_diagnostics_and_heartbeat(self):
+        import ai
+        vm = VM()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "diag.sqlite3"
+            logger = ai.init_diagnostics(vm, database_path=db_path, force=True)
+            self.assertIsNotNone(logger)
+            self.assertIn("diagnostic_log", vm.host)
+            self.assertIn("diagnostic_runtime_id", vm.host)
+
+            runtime_id = vm.host["diagnostic_runtime_id"]
+            turn_id = logger.start_turn(runtime_id)
+            vm.host["ai_current_turn_id"] = turn_id
+            logged = ai.log_heartbeat(vm, "compiling word")
+            self.assertTrue(logged)
+
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM timeline WHERE event_type = 'ai_heartbeat'").fetchall()
+            self.assertEqual(len(rows), 1)
+            payload = json.loads(rows[0]["payload_json"])
+            self.assertEqual(payload.get("message"), "compiling word")
+            conn.close()
+
+    def test_peforth_logging_monitor_render_events(self):
+        from tools.peforth_logging_monitor import render_events
+
+        test_events = [
+            {"runtime_id": "12345678-abcd", "event_type": "runtime_started", "recorded_at": "2026-11-05T06:00:00Z"},
+            {"runtime_id": "12345678-abcd", "event_type": "http_request_started", "recorded_at": "2026-11-05T06:00:01Z"},
+            {"runtime_id": "12345678-abcd", "event_type": "sse_event_received", "recorded_at": "2026-11-05T06:00:02Z"},
+            {"runtime_id": "12345678-abcd", "event_type": "sse_event_received", "recorded_at": "2026-11-05T06:00:03Z"},
+            {"runtime_id": "12345678-abcd", "event_type": "tool_call_started", "operation": "peforth_run_forth", "recorded_at": "2026-11-05T06:00:04Z"},
+        ]
+        rendered = render_events(test_events)
+        self.assertEqual(len(rendered), 4)  # 2 sse_event_received are collapsed into 1 with ×2
+        self.assertIn("🚀", rendered[0])
+        self.assertIn("🌐", rendered[1])
+        self.assertIn("📨", rendered[2])
+        self.assertIn("×2", rendered[2])
+        self.assertIn("🛠️", rendered[3])
+        self.assertIn("peforth_run_forth", rendered[3])
+
+    def test_ai_diagnostics_query_tool(self):
+        from diagnostic_log import DiagnosticLog
+        import tools.ai_diagnostics as diag_tool
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "diag.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+            rid = logger.start_runtime(runtime_version="2.1.0")
+            logger.close()
+
+            conn = diag_tool.connect_readonly(db_path)
+            runtimes = diag_tool.list_runtimes(conn)
+            self.assertEqual(len(runtimes), 1)
+            self.assertEqual(runtimes[0]["runtime_id"], rid)
+            conn.close()
+
+    def test_peforth_watchdog_issue_tracking(self):
+        from diagnostic_log import DiagnosticLog
+        from tools.peforth_watchdog import Watchdog
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "watchdog.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+            rid = logger.start_runtime(runtime_version="2.1.0")
+
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            watchdog = Watchdog(conn, orphan_lookback_hours=0)
+            high_water = watchdog.initialize()
+            self.assertGreaterEqual(high_water, 0)
+
+            # Polling new events with no active turn should report no issues
+            new_events = watchdog.poll()
+            issues = watchdog.current_issues()
+            self.assertEqual(len(issues), 0)
+
+            conn.close()
+            logger.finish_runtime(rid)
+            logger.close()
 
 
 class TestForthSelfTestExecution(unittest.TestCase):

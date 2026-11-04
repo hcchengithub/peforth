@@ -6,13 +6,16 @@ Implements:
 - (ai) cooperative turn generator with OpenAI-compatible SSE streaming
 """
 
+import atexit
 import io
 import json
 import os
 from pathlib import Path
 import sys
+import time
 import urllib.error
 import urllib.request
+import uuid
 
 
 def load_dotenv(env_path=None):
@@ -53,8 +56,134 @@ class TeeOutput(io.StringIO):
         return super().write(s)
 
 
+def init_diagnostics(vm, *, database_path=None, force=False):
+    """Initialize SQLite-backed diagnostic logging for the peforth runtime."""
+    if not force and getattr(vm, "_diagnostics_initialized", False):
+        return vm.host.get("diagnostic_log")
+    vm._diagnostics_initialized = True
+
+    load_dotenv()
+    log_mode = os.environ.get("PEFORTH_AI_LOG_MODE", "normal").strip().lower()
+    vm.host["diagnostic_log_mode"] = log_mode
+    if log_mode == "disabled":
+        return None
+
+    try:
+        from diagnostic_log import DiagnosticLog
+    except ImportError:
+        try:
+            from peforth.diagnostic_log import DiagnosticLog
+        except ImportError:
+            return None
+
+    try:
+        env = "windows" if os.name == "nt" else "wsl"
+        if database_path is None:
+            config_dir = os.environ.get("PEFORTH_CONFIG_DIR")
+            db_dir = Path(config_dir).expanduser() if config_dir else Path.home() / ".peforth"
+            database_path = db_dir / "ai-diagnostics.sqlite3"
+
+        logger = DiagnosticLog(database_path, environment=env)
+        metadata = {
+            "argv": sys.argv,
+            "version": "2.1.0",
+        }
+        runtime_id = logger.start_runtime(
+            runtime_version=sys.version.split()[0],
+            metadata=metadata,
+        )
+        vm.host["diagnostic_log"] = logger
+        vm.host["diagnostic_runtime_id"] = runtime_id
+
+        def _cleanup():
+            try:
+                logger.finish_runtime(runtime_id)
+            except Exception:
+                pass
+            try:
+                logger.close()
+            except Exception:
+                pass
+        atexit.register(_cleanup)
+        return logger
+    except Exception:
+        return None
+
+
+def _log_event(vm, event_type, turn_id=None, *, payload=None, call_id=None,
+               operation=None, http_method=None, url=None, http_status=None,
+               elapsed_ms=None, error=None):
+    """Append a diagnostic event to the timeline table if logging is enabled."""
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None:
+        return None
+    try:
+        return logger.append_event(
+            runtime_id, turn_id, event_type,
+            session_id=vm.host.get("ai_active_session_id"),
+            call_id=call_id,
+            operation=operation,
+            http_method=http_method,
+            url=url,
+            http_status=http_status,
+            elapsed_ms=elapsed_ms,
+            payload=payload,
+            error_type=type(error).__name__ if error is not None else None,
+            error_message=str(error) if error is not None else None,
+        )
+    except Exception:
+        return None
+
+
+def _finish_turn(vm, turn_id, *, output_text=None, output_status="complete", status="completed", error=None):
+    """Mark a turn finished and append the completion/failure event in the timeline."""
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None or turn_id is None:
+        return
+    try:
+        logger.finish_turn(
+            turn_id,
+            output_text=output_text,
+            output_status=output_status,
+            status=status,
+            error_type=type(error).__name__ if error is not None else None,
+            error_message=str(error) if error is not None else None,
+        )
+        event_type = {
+            "completed": "ai_turn_completed",
+            "cancelled": "ai_turn_cancel_requested",
+        }.get(status, "ai_turn_failed")
+        logger.append_event(
+            runtime_id, turn_id, event_type,
+            session_id=vm.host.get("ai_active_session_id"),
+            error_type=type(error).__name__ if error is not None else None,
+            error_message=str(error) if error is not None else None,
+        )
+    except Exception:
+        pass
+
+
+def log_heartbeat(vm, message="heartbeat"):
+    """Record an AI heartbeat in the diagnostic log for watchdog progress tracking."""
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    if logger is None or runtime_id is None:
+        return False
+    try:
+        logger.append_event(
+            runtime_id, vm.host.get("ai_current_turn_id"), "ai_heartbeat",
+            payload={"message": str(message)}
+        )
+        return True
+    except Exception:
+        return False
+
+
 def install_security_guard(vm):
     """Install security decorator on vm.call to protect against unsafe AI execution."""
+    init_diagnostics(vm)
     if getattr(vm, "_security_guard_installed", False):
         return
     vm._security_guard_installed = True
@@ -417,6 +546,7 @@ def _http_chat_stream(base_url, api_key, model, messages, tools):
 
 def ai_turn(vm, prompt, stream_response):
     """Cooperative generator for one AI conversation turn."""
+    init_diagnostics(vm)
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip()
@@ -433,6 +563,27 @@ def ai_turn(vm, prompt, stream_response):
             vm.push(msg)
         return
 
+    # Start diagnostic turn tracking if enabled
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    turn_id = None
+    if logger is not None and runtime_id is not None:
+        try:
+            prompt_cid = logger.store_content("prompt", prompt)
+            instr_cid = logger.store_content("agent_instructions", SYSTEM_PROMPT)
+            turn_id = logger.start_turn(
+                runtime_id,
+                prompt_content_id=prompt_cid,
+                instructions_content_id=instr_cid,
+            )
+            vm.host["ai_current_turn_id"] = turn_id
+            logger.append_event(
+                runtime_id, turn_id, "ai_turn_started",
+                payload={"model": model, "stream_response": bool(stream_response)},
+            )
+        except Exception:
+            turn_id = None
+
     # Initialize or continue conversation session
     messages = vm.host.setdefault("ai_messages", [
         {"role": "system", "content": SYSTEM_PROMPT}
@@ -445,9 +596,25 @@ def ai_turn(vm, prompt, stream_response):
 
     # Outer loop for handling multi-turn tool calling
     while True:
+        t0 = time.monotonic()
+        req_url = f"{base_url.rstrip('/')}/chat/completions"
+        _log_event(vm, "http_request_started", turn_id=turn_id,
+                   http_method="POST", url=req_url, payload={"model": model})
         try:
             response = _http_chat_stream(base_url, api_key, model, messages, TOOLS_DEFINITION)
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            http_status = getattr(response, "status", 200)
+            _log_event(vm, "http_response_received", turn_id=turn_id,
+                       http_status=http_status, elapsed_ms=elapsed_ms)
         except urllib.error.HTTPError as e:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            _log_event(vm, "http_request_failed", turn_id=turn_id,
+                       http_status=e.code, elapsed_ms=elapsed_ms, error=e)
+            _finish_turn(vm, turn_id,
+                         output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                         output_status="partial" if accumulated_full_text else "failed_before_output",
+                         status="failed", error=e)
+            vm.host["ai_current_turn_id"] = None
             err_body = e.read().decode("utf-8", errors="replace")
             err_msg = f"\n[AI Error] HTTP {e.code}: {err_body}\n"
             if stream_response:
@@ -457,6 +624,14 @@ def ai_turn(vm, prompt, stream_response):
                 vm.push(err_msg)
             return
         except Exception as e:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            _log_event(vm, "http_request_failed", turn_id=turn_id,
+                       elapsed_ms=elapsed_ms, error=e)
+            _finish_turn(vm, turn_id,
+                         output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                         output_status="partial" if accumulated_full_text else "failed_before_output",
+                         status="failed", error=e)
+            vm.host["ai_current_turn_id"] = None
             err_msg = f"\n[AI Error] Network request failed: {e}\n"
             if stream_response:
                 sys.stdout.write(err_msg)
@@ -468,49 +643,65 @@ def ai_turn(vm, prompt, stream_response):
         assistant_content = ""
         tool_calls_map = {}  # index -> {id, name, arguments}
 
-        with response:
-            for raw_line in response:
-                line = raw_line.decode("utf-8").strip()
-                if not line or not line.startswith("data:"):
-                    continue
-                data_str = line[5:].strip()
-                if data_str == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data_str)
-                except json.JSONDecodeError:
-                    continue
+        _log_event(vm, "sse_stream_opened", turn_id=turn_id)
+        first_chunk_logged = False
+        try:
+            with response:
+                for raw_line in response:
+                    line = raw_line.decode("utf-8").strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
 
-                choices = chunk.get("choices", [])
-                if not choices:
-                    continue
-                delta = choices[0].get("delta", {})
+                    if not first_chunk_logged:
+                        _log_event(vm, "sse_event_received", turn_id=turn_id)
+                        first_chunk_logged = True
 
-                # Text streaming
-                content_chunk = delta.get("content")
-                if content_chunk:
-                    assistant_content += content_chunk
-                    if stream_response:
-                        sys.stdout.write(content_chunk)
-                        sys.stdout.flush()
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
 
-                # Tool calls streaming
-                if "tool_calls" in delta:
-                    for tc in delta["tool_calls"]:
-                        idx = tc.get("index", 0)
-                        if idx not in tool_calls_map:
-                            tool_calls_map[idx] = {
-                                "id": "",
-                                "name": "",
-                                "arguments": ""
-                            }
-                        if tc.get("id"):
-                            tool_calls_map[idx]["id"] += tc["id"]
-                        fn = tc.get("function", {})
-                        if fn.get("name"):
-                            tool_calls_map[idx]["name"] += fn["name"]
-                        if fn.get("arguments"):
-                            tool_calls_map[idx]["arguments"] += fn["arguments"]
+                    # Text streaming
+                    content_chunk = delta.get("content")
+                    if content_chunk:
+                        assistant_content += content_chunk
+                        if stream_response:
+                            sys.stdout.write(content_chunk)
+                            sys.stdout.flush()
+
+                    # Tool calls streaming
+                    if "tool_calls" in delta:
+                        for tc in delta["tool_calls"]:
+                            idx = tc.get("index", 0)
+                            if idx not in tool_calls_map:
+                                tool_calls_map[idx] = {
+                                    "id": "",
+                                    "name": "",
+                                    "arguments": ""
+                                }
+                            if tc.get("id"):
+                                tool_calls_map[idx]["id"] += tc["id"]
+                            fn = tc.get("function", {})
+                            if fn.get("name"):
+                                tool_calls_map[idx]["name"] += fn["name"]
+                            if fn.get("arguments"):
+                                tool_calls_map[idx]["arguments"] += fn["arguments"]
+            _log_event(vm, "sse_stream_completed", turn_id=turn_id)
+        except Exception as e:
+            _log_event(vm, "sse_stream_failed", turn_id=turn_id, error=e)
+            _finish_turn(vm, turn_id,
+                         output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                         output_status="partial" if accumulated_full_text else "failed_before_output",
+                         status="failed", error=e)
+            vm.host["ai_current_turn_id"] = None
+            raise
 
         if assistant_content:
             accumulated_full_text.append(assistant_content)
@@ -547,6 +738,10 @@ def ai_turn(vm, prompt, stream_response):
                 except json.JSONDecodeError:
                     args = {}
 
+                _log_event(vm, "tool_call_started", turn_id=turn_id,
+                           call_id=call_id, operation=fn_name,
+                           payload={"arguments": args_str})
+
                 if fn_name == "peforth_search_words":
                     query = args.get("query", "")
                     if stream_response:
@@ -558,6 +753,8 @@ def ai_turn(vm, prompt, stream_response):
                         "tool_call_id": call_id,
                         "content": json.dumps(result_data, ensure_ascii=False)
                     })
+                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name)
 
                 elif fn_name == "peforth_run_forth":
                     source = args.get("source", "")
@@ -568,6 +765,9 @@ def ai_turn(vm, prompt, stream_response):
 
                     decision = "allow_once"
                     if not is_trusted:
+                        _log_event(vm, "approval_requested", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name,
+                                   payload={"purpose": purpose, "source": source})
                         approval_word = vm.tick("ai-approve")
                         if approval_word:
                             stack_depth = len(vm.dstack)
@@ -578,6 +778,9 @@ def ai_turn(vm, prompt, stream_response):
                             if stream_response:
                                 sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
                                 sys.stdout.flush()
+                        _log_event(vm, "approval_received", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name,
+                                   payload={"decision": decision})
 
                     if decision == "trust_task":
                         vm.host.setdefault("trusted_ai_tasks", set()).add(vm.task)
@@ -591,6 +794,9 @@ def ai_turn(vm, prompt, stream_response):
                                 "error": "User denied this proposal."
                             }, ensure_ascii=False)
                         })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name,
+                                   payload={"decision": "deny"})
                         continue
                     elif decision == "cancel":
                         messages.append({
@@ -602,6 +808,11 @@ def ai_turn(vm, prompt, stream_response):
                                 "error": "User cancelled the AI task."
                             }, ensure_ascii=False)
                         })
+                        _finish_turn(vm, turn_id,
+                                     output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                                     output_status="partial" if accumulated_full_text else "empty",
+                                     status="cancelled")
+                        vm.host["ai_current_turn_id"] = None
                         return
 
                     # Execute the Forth code
@@ -615,6 +826,9 @@ def ai_turn(vm, prompt, stream_response):
                     tee = TeeOutput(sys.stdout)
                     old_stdout = sys.stdout
                     error_msg = None
+                    _log_event(vm, "forth_execution_started", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name,
+                               payload={"source": source})
                     try:
                         sys.stdout = tee
                         yield from vm.evaluate(source)
@@ -627,6 +841,9 @@ def ai_turn(vm, prompt, stream_response):
                         vm.host["in_ai_task"] = prev_ai_task
                         if not was_in_trusted and decision != "trust_task":
                             trusted_set.discard(vm.task)
+                        _log_event(vm, "forth_execution_finished", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name,
+                                   payload={"stdout": tee.getvalue(), "error": error_msg})
 
                     exec_result = {
                         "stdout": tee.getvalue(),
@@ -638,12 +855,16 @@ def ai_turn(vm, prompt, stream_response):
                         "tool_call_id": call_id,
                         "content": json.dumps(exec_result, ensure_ascii=False)
                     })
+                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name)
                 else:
                     messages.append({
                         "role": "tool",
                         "tool_call_id": call_id,
                         "content": json.dumps({"error": f"Unknown tool: {fn_name}"})
                     })
+                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name)
             # Continue loop to stream the assistant's follow-up
             continue
         else:
@@ -656,6 +877,12 @@ def ai_turn(vm, prompt, stream_response):
     if trusted_tasks and vm.task in trusted_tasks:
         trusted_tasks.remove(vm.task)
     vm.host["pending_ai_task"] = None
+
+    _finish_turn(vm, turn_id,
+                 output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                 output_status="complete" if accumulated_full_text else "empty",
+                 status="completed")
+    vm.host["ai_current_turn_id"] = None
 
     if stream_response:
         sys.stdout.write("\n")
