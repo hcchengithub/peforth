@@ -1,0 +1,37 @@
+#!/bin/sh
+# peforth Git Pre-commit Hook
+# Runs architectural contracts, safe property audit, and Forth self-tests before committing.
+
+echo ">>> [pre-commit] Running peforth self-test suite..."
+
+PYTHON_CMD=""
+
+if python3 -c "import sys" >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+elif python -c "import sys" >/dev/null 2>&1; then
+    PYTHON_CMD="python"
+elif py -3 -c "import sys" >/dev/null 2>&1; then
+    PYTHON_CMD="py -3"
+elif command -v wsl >/dev/null 2>&1 && wsl python3 -c "import sys" >/dev/null 2>&1; then
+    PYTHON_CMD="wsl python3"
+fi
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo "[pre-commit ERROR] No working Python 3 environment found (tried python3, python, py, wsl python3)."
+    exit 1
+fi
+
+$PYTHON_CMD test_all.py
+RESULT=$?
+
+if [ $RESULT -ne 0 ]; then
+    echo ""
+    echo "=================================================================="
+    echo " [pre-commit REJECTED] Self-test failed!"
+    echo " Please fix the errors or architectural violations before committing."
+    echo "=================================================================="
+    exit 1
+fi
+
+echo ">>> [pre-commit] All tests passed. Proceeding with commit."
+exit 0

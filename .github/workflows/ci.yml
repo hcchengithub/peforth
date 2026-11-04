@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop-210
+      - develop
+      - master
+  pull_request:
+    branches:
+      - develop-210
+      - develop
+      - master
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }} on ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies (optional prompt_toolkit)
+        run: |
+          python -m pip install --upgrade pip
+          pip install prompt_toolkit
+
+      - name: Run Architectural & Self-Test Suite
+        run: |
+          python test_all.py
+
+      - name: Smoke test CLI piping
+        shell: bash
+        run: |
+          echo "10 20 + . cr bye" | python main.py
