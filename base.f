@@ -1,368 +1,557 @@
-code immediate
-    vm.latest.immediate = True
-    end-code immediate
+\ base.f - peforth v2.1.0 standard vocabulary
+\ Inherited from peforth 2.0.0, aligned with Project K v2.1.0 kernel and task security model.
 
-code \
-    curr = vm.input.remaining
-    pos = curr.find("\n")
-    if pos < 0:
-        vm.input.consume(len(curr))
-    else:
-        vm.input.consume(pos + 1)
-    end-code immediate
-
-\ base.f - Core Foundation Vocabulary for Project K
-\ Project K 2.1.0
-
-\ --- 1. Early Documentation and Property Words ---
-
-code (
-    vm.input.read(until=")")
-    end-code immediate
-
-code //
-    s = vm.input.read(until="\n") if "\n" in vm.input.remaining else vm.input.rest()
-    if vm.latest is not None:
-        vm.latest.help = s.strip()
-    end-code immediate
-
-code ///
-    s = vm.input.read(until="\n") if "\n" in vm.input.remaining else vm.input.rest()
-    if vm.latest is not None:
-        vm.latest.comment = (getattr(vm.latest, "comment", "") or "") + s.strip() + "\n"
-    end-code immediate
-
-code (last)
-    name = vm.input.read()
-    if name is not None:
-        vm.latest = vm.words.get(name)
-    end-code
-
-code last
-    vm.push(vm.latest)
-    end-code
-
-code ::
-    token = vm.input.read()
-    if "=" not in token:
-        raise KernelError(f"Expected key=value, got {token}")
-    key, val_str = token.split("=", 1)
-    target = vm.pop()
-    if val_str.lower() == "true":
-        val = True
-    elif val_str.lower() == "false":
-        val = False
-    else:
-        try:
-            val = int(val_str)
-        except ValueError:
-            try:
-                val = float(val_str)
-            except ValueError:
-                val = val_str
-    if hasattr(target, "properties") and isinstance(target.properties, dict):
-        target.properties[key] = val
-    elif isinstance(target, dict):
-        target[key] = val
-    else:
-        setattr(target, key, val)
-    end-code
-
-\ Retroactively document and configure early words
-
-(last) code
-    // ( <name> -- ) Begin a Python host code definition.
-    /// Read word name and Python body up to matching end-code keyword.
-
-(last) end-code
-    // ( -- ) Terminate a Python host code definition.
-    /// Delimiter ending a host code block and compiling it into dictionary.
-
-(last) immediate
-    // ( -- ) Mark the latest definition as immediate.
-    /// Toggle word.immediate to True so it executes during compilation.
-
-(last) \
-    // ( <comment> -- ) Skip line comment to newline.
-    /// Ignore all characters up to the next newline.
-    last :: safe=True
-
-(last) (
-    // ( <comment> ) Skip parenthetical comment.
-    /// Ignore all characters up to matching right parenthesis.
-    last :: safe=True
-
-(last) //
-    // ( <text> -- ) Set one-line help string for the latest word.
-    /// Read remainder of the line and assign to word.help.
-    last :: safe=True
-
-(last) ///
-    // ( <text> -- ) Append detailed comment line for the latest word.
-    /// Read remainder of the line and append to word.comment.
-    last :: safe=True
-
-(last) (last)
-    // ( <name> -- ) Select a word as latest definition.
-    /// Set vm.latest to the named word so help or comments can be attached.
-
-(last) last
-    // ( -- word ) Push the latest defined word onto the data stack.
-    /// Provide reference to the word just defined so properties can be configured.
-    last :: safe=True
-
-(last) ::
-    // ( word <key=value> -- ) Set property on the target word.
-    /// Parse key=value and store in word.properties.
-    last :: safe=True
-
-\ --- 2. Colon Definition Words ---
-
-code :
-    vm.begin(vm.input.read())
-    end-code
-    // ( <name> -- ) Begin a colon definition.
-    /// Read next token as word name and start compiling a new colon definition.
-
-code ;
-    vm.finish()
-    end-code immediate
-    // ( -- ) Terminate a colon definition.
-    /// Finish compiling current colon definition and publish it to dictionary.
-
-\ --- 3. Stack Manipulation ---
+\ =====================================================================
+\ 1. Stack Manipulation
+\ =====================================================================
 
 code pick
-    vm.push(vm.peek(vm.pop()))
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n >= len(vm.dstack):
+        raise KernelError("pick index out of range")
+    vm.push(vm.dstack[-n-1])
     end-code
-    // ( ... n -- ... x ) Copy the nth stack item to top.
-    /// 0 pick is dup, 1 pick is over. n is 0-indexed from top of stack.
+    // ( ... xj ... j -- ... xj ... xj ) Copy the j-th item to top.
     last :: safe=True
 
 code roll
-    vm.push(vm.pop(vm.pop()))
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n >= len(vm.dstack):
+        raise KernelError("roll index out of range")
+    vm.push(vm.dstack.pop(-n-1))
     end-code
-    // ( ... n -- ... x ) Move the nth stack item to top.
-    /// Remove nth item from depth and push to top. 1 roll is swap, 2 roll is rot.
+    // ( ... xj ... j -- ... xj ) Move the j-th item to TOS.
     last :: safe=True
 
-: dup
-    0 pick
-    ;
-    // ( x -- x x ) Duplicate the top stack item.
-    /// Push a copy of the top data stack value.
-    last :: safe=True
-
-: over
-    1 pick
-    ;
-    // ( x1 x2 -- x1 x2 x1 ) Copy the second stack item to top.
-    /// Push a copy of the item beneath the top of stack.
-    last :: safe=True
-
-: swap
-    1 roll
-    ;
-    // ( x1 x2 -- x2 x1 ) Exchange the top two stack items.
-    /// Swap the top two elements on the data stack.
-    last :: safe=True
-
-: rot
-    2 roll
-    ;
-    // ( x1 x2 x3 -- x2 x3 x1 ) Rotate top three stack items.
-    /// Move the third stack item to the top.
+code dup
+    if not vm.dstack:
+        raise KernelError("stack underflow")
+    vm.push(vm.dstack[-1])
+    end-code
+    // ( x -- x x ) Duplicate the top item on the data stack.
     last :: safe=True
 
 code drop
+    if not vm.dstack:
+        raise KernelError("stack underflow")
     vm.pop()
     end-code
-    // ( x -- ) Discard top stack item.
-    /// Remove and discard the top element of the data stack.
+    // ( x -- ) Discard top item.
     last :: safe=True
 
 code dropall
     vm.dstack.clear()
     end-code
     // ( ... -- ) Clear the entire data stack.
-    /// Remove all elements from the data stack leaving it empty.
+    last :: safe=True
+
+code swap
+    if len(vm.dstack) < 2:
+        raise KernelError("swap needs two stack items")
+    b, a = vm.pop(), vm.pop()
+    vm.push(b, a)
+    end-code
+    // ( x1 x2 -- x2 x1 ) Exchange top two stack items.
+    last :: safe=True
+
+code over
+    if len(vm.dstack) < 2:
+        raise KernelError("over needs two stack items")
+    vm.push(vm.dstack[-2])
+    end-code
+    // ( x1 x2 -- x1 x2 x1 ) Copy second item to top.
+    last :: safe=True
+
+code rot
+    if len(vm.dstack) < 3:
+        raise KernelError("rot needs three stack items")
+    c, b, a = vm.pop(), vm.pop(), vm.pop()
+    vm.push(b, c, a)
+    end-code
+    // ( x1 x2 x3 -- x2 x3 x1 ) Rotate top three items.
+    last :: safe=True
+
+: -rot
+    rot rot ;
+    // ( x1 x2 x3 -- x3 x1 x2 ) Rotate top three items in reverse.
+    last :: safe=True
+
+: nip
+    swap drop ;
+    // ( x1 x2 -- x2 ) Drop the second item.
+    last :: safe=True
+
+: 2dup
+    over over ;
+    // ( x1 x2 -- x1 x2 x1 x2 ) Duplicate top two items.
+    last :: safe=True
+
+: 2drop
+    drop drop ;
+    // ( x1 x2 -- ) Drop top two items.
     last :: safe=True
 
 code depth
     vm.push(len(vm.dstack))
     end-code
-    // ( -- n ) Return number of items on the data stack.
-    /// Push current data stack depth.
+    // ( -- n ) Return number of items on data stack.
     last :: safe=True
 
-\ --- 4. Arithmetic and Logic ---
+code slice
+    n = vm.pop()
+    if not isinstance(n, int) or isinstance(n, bool):
+        raise KernelError("slice expects an integer")
+    start = max(0, len(vm.dstack) + n) if n < 0 else 0
+    end = len(vm.dstack) if n < 0 else min(n, len(vm.dstack))
+    result = vm.dstack[start:end]
+    del vm.dstack[start:end]
+    vm.push(result)
+    end-code
+    // ( ... cells -n -- ... [cells] ) Move the last -n cells into a list.
+    last :: safe=True
+
+\ =====================================================================
+\ 2. Return Stack and Temporary Stack (Task Private)
+\ =====================================================================
+
+code >r
+    vm.rstack.append(vm.pop())
+    end-code
+    // ( x -- ) ( R: -- x ) Move item to return stack.
+    last :: safe=True
+
+code r>
+    if not vm.rstack:
+        raise KernelError("rstack underflow")
+    vm.push(vm.rstack.pop())
+    end-code
+    // ( -- x ) ( R: x -- ) Move item from return stack.
+    last :: safe=True
+
+code r@
+    if not vm.rstack:
+        raise KernelError("rstack underflow")
+    vm.push(vm.rstack[-1])
+    end-code
+    // ( -- x ) ( R: x -- x ) Copy top of return stack.
+    last :: safe=True
+
+code rdrop
+    if not vm.rstack:
+        raise KernelError("rstack underflow")
+    vm.rstack.pop()
+    end-code
+    // ( -- ) ( R: x -- ) Drop top of return stack.
+    last :: safe=True
+
+code >t
+    vm.tstack.append(vm.pop())
+    end-code
+    // ( x -- ) ( T: -- x ) Push onto temporary stack.
+    last :: safe=True
+
+code t@
+    if not vm.tstack:
+        raise KernelError("tstack underflow")
+    vm.push(vm.tstack[-1])
+    end-code
+    // ( -- x ) ( T: x -- x ) Copy top of temporary stack.
+    last :: safe=True
+
+code t>
+    if not vm.tstack:
+        raise KernelError("tstack underflow")
+    vm.push(vm.tstack.pop())
+    end-code
+    // ( -- x ) ( T: x -- ) Pop from temporary stack.
+    last :: safe=True
+
+\ =====================================================================
+\ 3. Arithmetic and Logic
+\ =====================================================================
 
 code +
-    right, left = vm.pop(), vm.pop()
-    vm.push(left + right)
+    b, a = vm.pop(), vm.pop()
+    vm.push(a + b)
     end-code
-    // ( n1 n2 -- n3 ) Add n1 and n2.
-    /// Pop two numbers and push their sum.
+    // ( n1 n2 -- n3 ) Add.
     last :: safe=True
 
 code -
-    right, left = vm.pop(), vm.pop()
-    vm.push(left - right)
+    b, a = vm.pop(), vm.pop()
+    vm.push(a - b)
     end-code
-    // ( n1 n2 -- n3 ) Subtract n2 from n1.
-    /// Pop two numbers and push left minus right.
+    // ( n1 n2 -- n3 ) Subtract.
     last :: safe=True
 
 code *
-    right, left = vm.pop(), vm.pop()
-    vm.push(left * right)
+    b, a = vm.pop(), vm.pop()
+    vm.push(a * b)
     end-code
-    // ( n1 n2 -- n3 ) Multiply n1 and n2.
-    /// Pop two numbers and push their product.
+    // ( n1 n2 -- n3 ) Multiply.
     last :: safe=True
 
 code /
-    right, left = vm.pop(), vm.pop()
-    vm.push(left / right)
+    b, a = vm.pop(), vm.pop()
+    vm.push(a / b)
     end-code
-    // ( n1 n2 -- n3 ) Divide n1 by n2.
-    /// Pop two numbers and push left divided by right.
+    // ( n1 n2 -- n3 ) Divide.
     last :: safe=True
 
 code mod
-    right, left = vm.pop(), vm.pop()
-    vm.push(left % right)
+    b, a = vm.pop(), vm.pop()
+    vm.push(a % b)
     end-code
-    // ( n1 n2 -- rem ) Remainder of n1 divided by n2.
-    /// Pop two numbers and push left modulo right.
-    last :: safe=True
-
-code =
-    right, left = vm.pop(), vm.pop()
-    vm.push(left == right)
-    end-code
-    // ( x1 x2 -- flag ) Test for equality.
-    /// Return True if top two items are equal, otherwise False.
-    last :: safe=True
-
-code <
-    right, left = vm.pop(), vm.pop()
-    vm.push(left < right)
-    end-code
-    // ( n1 n2 -- flag ) Test if n1 is less than n2.
-    /// Return True if left is strictly less than right.
-    last :: safe=True
-
-code >
-    right, left = vm.pop(), vm.pop()
-    vm.push(left > right)
-    end-code
-    // ( n1 n2 -- flag ) Test if n1 is greater than n2.
-    /// Return True if left is strictly greater than right.
-    last :: safe=True
-
-code 0=
-    vm.push(vm.pop() == 0)
-    end-code
-    // ( x -- flag ) Test if top of stack is zero.
-    /// Return True if x equals 0.
-    last :: safe=True
-
-code 0<
-    vm.push(vm.pop() < 0)
-    end-code
-    // ( n -- flag ) Test if top of stack is negative.
-    /// Return True if n is less than 0.
+    // ( n1 n2 -- rem ) Remainder.
     last :: safe=True
 
 code 1+
     vm.push(vm.pop() + 1)
     end-code
-    // ( n -- n+1 ) Increment top of stack by 1.
-    /// Add 1 to top stack value.
+    // ( n -- n+1 ) Increment by 1.
     last :: safe=True
 
 code 1-
     vm.push(vm.pop() - 1)
     end-code
-    // ( n -- n-1 ) Decrement top of stack by 1.
-    /// Subtract 1 from top stack value.
+    // ( n -- n-1 ) Decrement by 1.
+    last :: safe=True
+
+code 2+
+    vm.push(vm.pop() + 2)
+    end-code
+    // ( n -- n+2 ) Increment by 2.
+    last :: safe=True
+
+code 2-
+    vm.push(vm.pop() - 2)
+    end-code
+    // ( n -- n-2 ) Decrement by 2.
+    last :: safe=True
+
+code abs
+    vm.push(abs(vm.pop()))
+    end-code
+    // ( n -- |n| ) Absolute value.
+    last :: safe=True
+
+code negate
+    vm.push(-vm.pop())
+    end-code
+    // ( n -- -n ) Negate.
+    last :: safe=True
+
+code max
+    b, a = vm.pop(), vm.pop()
+    vm.push(max(a, b))
+    end-code
+    // ( a b -- max ) Keep the larger value.
+    last :: safe=True
+
+code min
+    b, a = vm.pop(), vm.pop()
+    vm.push(min(a, b))
+    end-code
+    // ( a b -- min ) Keep the smaller value.
+    last :: safe=True
+
+code =
+    b, a = vm.pop(), vm.pop()
+    vm.push(a == b)
+    end-code
+    // ( x1 x2 -- flag ) Test equality.
+    last :: safe=True
+
+code <>
+    b, a = vm.pop(), vm.pop()
+    vm.push(a != b)
+    end-code
+    // ( x1 x2 -- flag ) Test inequality.
+    last :: safe=True
+
+code !=
+    b, a = vm.pop(), vm.pop()
+    vm.push(a != b)
+    end-code
+    // ( x1 x2 -- flag ) Test inequality.
+    last :: safe=True
+
+code ==
+    b, a = vm.pop(), vm.pop()
+    vm.push(bool(a) == bool(b))
+    end-code
+    // ( a b -- flag ) Compare truth values.
+    last :: safe=True
+
+code <
+    b, a = vm.pop(), vm.pop()
+    vm.push(a < b)
+    end-code
+    // ( n1 n2 -- flag ) Test less than.
+    last :: safe=True
+
+code >
+    b, a = vm.pop(), vm.pop()
+    vm.push(a > b)
+    end-code
+    // ( n1 n2 -- flag ) Test greater than.
+    last :: safe=True
+
+code <=
+    b, a = vm.pop(), vm.pop()
+    vm.push(a <= b)
+    end-code
+    // ( n1 n2 -- flag ) Test less than or equal.
+    last :: safe=True
+
+code >=
+    b, a = vm.pop(), vm.pop()
+    vm.push(a >= b)
+    end-code
+    // ( n1 n2 -- flag ) Test greater than or equal.
+    last :: safe=True
+
+code 0=
+    vm.push(vm.pop() == 0)
+    end-code
+    // ( x -- flag ) Test zero.
+    last :: safe=True
+
+code 0<
+    vm.push(vm.pop() < 0)
+    end-code
+    // ( n -- flag ) Test negative.
     last :: safe=True
 
 code not
     vm.push(not vm.pop())
     end-code
     // ( x -- flag ) Logical NOT.
-    /// Invert boolean truth value of top stack item.
     last :: safe=True
 
 code and
-    right, left = vm.pop(), vm.pop()
-    vm.push(bool(left and right))
+    b, a = vm.pop(), vm.pop()
+    vm.push(bool(a and b))
     end-code
     // ( x1 x2 -- flag ) Logical AND.
-    /// Return True if both items are truthy.
     last :: safe=True
 
 code or
-    right, left = vm.pop(), vm.pop()
-    vm.push(bool(left or right))
+    b, a = vm.pop(), vm.pop()
+    vm.push(bool(a or b))
     end-code
     // ( x1 x2 -- flag ) Logical OR.
-    /// Return True if either item is truthy.
     last :: safe=True
 
-\ --- 5. Constants & Literals ---
-
-code true
-    vm.push(True)
+code AND
+    b, a = vm.pop(), vm.pop()
+    vm.push(a & b)
     end-code
-    // ( -- True ) Push boolean True.
-    /// Constant for boolean True.
+    // ( n1 n2 -- n3 ) Bitwise AND.
     last :: safe=True
 
-code false
-    vm.push(False)
+code OR
+    b, a = vm.pop(), vm.pop()
+    vm.push(a | b)
     end-code
-    // ( -- False ) Push boolean False.
-    /// Constant for boolean False.
+    // ( n1 n2 -- n3 ) Bitwise OR.
     last :: safe=True
 
-\ --- 6. Strings and Display ---
+code NOT
+    vm.push(~vm.pop())
+    end-code
+    // ( n -- ~n ) Bitwise NOT.
+    last :: safe=True
+
+code XOR
+    b, a = vm.pop(), vm.pop()
+    vm.push(a ^ b)
+    end-code
+    // ( n1 n2 -- n3 ) Bitwise XOR.
+    last :: safe=True
+
+code <<
+    b, a = vm.pop(), vm.pop()
+    vm.push(a << b)
+    end-code
+    // ( value n -- value<<n ) Shift left n bits.
+    last :: safe=True
+
+code >>
+    b, a = vm.pop(), vm.pop()
+    vm.push(a >> b)
+    end-code
+    // ( value n -- value>>n ) Shift right n bits.
+    last :: safe=True
+
+code within
+    high, low, val = vm.pop(), vm.pop(), vm.pop()
+    vm.push(low <= val < high)
+    end-code
+    // ( x low high -- flag ) Test if low <= x < high.
+    last :: safe=True
+
+\ =====================================================================
+\ 4. Literals, Constants, and Python Types
+\ =====================================================================
+
+code BL
+    vm.push(" ")
+    end-code
+    // ( -- " " ) Push a space string.
+    last :: safe=True
+
+code CR
+    vm.push("\n")
+    end-code
+    // ( -- "\n" ) Push a newline string.
+    last :: safe=True
+
+code none
+    vm.push(None)
+    end-code
+    // ( -- None ) Push Python None.
+    last :: safe=True
+
+code ""
+    vm.push("")
+    end-code
+    // ( -- "" ) Push an empty string.
+    last :: safe=True
+
+code inf
+    vm.push(float("inf"))
+    end-code
+    // ( -- inf ) Push infinity.
+    last :: safe=True
+
+code -inf
+    vm.push(float("-inf"))
+    end-code
+    // ( -- -inf ) Push negative infinity.
+    last :: safe=True
+
+code nan
+    vm.push(float("nan"))
+    end-code
+    // ( -- nan ) Push NaN.
+    last :: safe=True
+
+code int
+    vm.push(int(vm.pop()))
+    end-code
+    // ( x -- int ) Convert to integer.
+    last :: safe=True
+
+code float
+    vm.push(float(vm.pop()))
+    end-code
+    // ( x -- float ) Convert to float.
+    last :: safe=True
+
+code bool
+    vm.push(bool(vm.pop()))
+    end-code
+    // ( x -- bool ) Convert to boolean.
+    last :: safe=True
+
+code str
+    vm.push(str(vm.pop()))
+    end-code
+    // ( x -- str ) Convert to string.
+    last :: safe=True
+
+code list
+    vm.push(list(vm.pop()))
+    end-code
+    // ( x -- list ) Convert to list.
+    last :: safe=True
+
+code dict
+    vm.push(dict(vm.pop()))
+    end-code
+    // ( x -- dict ) Convert to dictionary.
+    last :: safe=True
+
+code set
+    vm.push(set(vm.pop()))
+    end-code
+    // ( x -- set ) Convert to set.
+    last :: safe=True
+
+code tuple
+    vm.push(tuple(vm.pop()))
+    end-code
+    // ( x -- tuple ) Convert to tuple.
+    last :: safe=True
+
+code type
+    vm.push(type(vm.pop()))
+    end-code
+    // ( x -- type ) Return Python type.
+    last :: safe=True
+
+code {}
+    vm.push({})
+    end-code
+    // ( -- dict ) Push an empty dictionary.
+    last :: safe=True
+
+code []
+    vm.push([])
+    end-code
+    // ( -- list ) Push an empty list.
+    last :: safe=True
+
+code count
+    if not vm.dstack:
+        raise KernelError("count needs a stack item")
+    vm.push(len(vm.dstack[-1]))
+    end-code
+    // ( x -- x n ) Leave x and push its length.
+    last :: safe=True
+
+code trim
+    val = vm.pop()
+    if not isinstance(val, str):
+        raise KernelError("trim expects a string")
+    vm.push(val.strip())
+    end-code
+    // ( string -- string' ) Strip leading and trailing whitespace.
+    last :: safe=True
+
+\ =====================================================================
+\ 5. Strings and Display
+\ =====================================================================
 
 code .
     print(vm.pop(), end="", flush=True)
     end-code
     // ( x -- ) Output top stack value without trailing newline.
-    /// Print top item to stdout and flush buffer.
     last :: safe=True
 
 code .s
     print(vm.dstack)
     end-code immediate
     // ( -- ) Display data stack non-destructively.
-    /// Print the data stack list representation.
     last :: safe=True
 
 code cr
     print()
     end-code
     // ( -- ) Print a newline.
-    /// Output a newline to stdout.
     last :: safe=True
 
 code space
     print(" ", end="", flush=True)
     end-code
     // ( -- ) Print a single space.
-    /// Output one space character to stdout.
     last :: safe=True
 
 code words
     print(" ".join(vm.words))
     end-code immediate
     // ( -- ) List all words in the dictionary.
-    /// Print all word names separated by spaces.
     last :: safe=True
 
 code see
@@ -374,7 +563,6 @@ code see
     print(word.source or word.action)
     end-code immediate
     // ( <name> -- ) Display a word's definition and source.
-    /// Print word metadata, source code, or colon action tuple.
     last :: safe=True
 
 code s"
@@ -387,7 +575,6 @@ code s"
         vm.push(text)
     end-code immediate
     // ( <string"> -- text ) Parse string up to closing quote.
-    /// Push text string or compile literal into colon definition.
     last :: safe=True
 
 code ."
@@ -401,124 +588,457 @@ code ."
         print(text, end="", flush=True)
     end-code immediate
     // ( <string"> -- ) Print string up to closing quote.
-    /// Print text directly or compile code to print it.
     last :: safe=True
 
-\ --- 7. Input Helper ---
-
-code rest
-    vm.push(vm.input.rest().strip())
-    end-code
-    // ( -- text ) Consume and return remainder of current input buffer.
-    /// Return trimmed text remaining in the active TIB.
-    last :: safe=True
-
-\ --- 8. Task Control & Lifecycle ---
-
-code pause
-    yield vm.pause()
-    end-code
-    // ( -- ) Cooperatively suspend the current task.
-    /// Yield pause signal returning control to host.
-
-code resume
-    tasks = vm.host.setdefault('paused_tasks', [])
-    if not tasks:
-        raise KernelError('No paused task')
-    task = tasks.pop()
-    try:
-        task.resume()
-    finally:
-        if task.status == 'paused':
-            tasks.append(task)
-        else:
-            if task is vm.host.get('pending_ai_task'):
-                vm.host['pending_ai_task'] = None
-            trusted = vm.host.get('trusted_ai_tasks')
-            if trusted and task in trusted:
-                trusted.remove(task)
+code char
+    tok = vm.input.read()
+    if tok is None:
+        raise KernelError("char expects a token")
+    if vm.compiling:
+        vm.literal(tok)
+    else:
+        vm.push(tok)
     end-code immediate
-    // ( -- ) Resume the most recently paused task.
-    /// Pop last paused task and resume its continuation.
+    // ( <token> -- string ) Read next token as string and push/compile it.
+    last :: safe=True
 
-code abort
+code word
+    delim = vm.pop()
+    if not delim:
+        val = vm.input.rest()
+    elif delim == " " or delim == "\\s":
+        val = vm.input.read()
+    elif delim == chr(10) or delim == "\\n":
+        val = vm.input.read(until=chr(10)) if chr(10) in vm.input.remaining else vm.input.rest()
+    else:
+        val = vm.input.read(until=delim)
+    vm.push(val if val is not None else "")
+    end-code
+    // ( delim -- text ) Read text from input buffer up to delimiter.
+    last :: safe=True
+
+code tib.append
+    txt = vm.pop()
+    if not isinstance(txt, str):
+        raise KernelError("tib.append expects string")
+    vm.input.append(txt)
+    end-code
+    // ( text -- ) Append text to current input buffer.
+
+\ =====================================================================
+\ 6. Control Flow Engine and Structures
+\ =====================================================================
+
+code branch
+    vm.frame.ip = vm.frame.colon_code[vm.frame.ip]
+    end-code
+    // ( -- ) Unconditional branch at runtime.
+    last :: safe=True
+
+code 0branch
+    if not vm.pop():
+        vm.frame.ip = vm.frame.colon_code[vm.frame.ip]
+    else:
+        vm.frame.ip += 1
+    end-code
+    // ( flag -- ) Conditional branch if flag is false at runtime.
+    last :: safe=True
+
+code doNext
+    r = vm.rstack
+    if not r:
+        raise KernelError("rstack underflow in doNext")
+    count = r[-1] - 1
+    if count >= 0:
+        r[-1] = count
+        vm.frame.ip = vm.frame.colon_code[vm.frame.ip]
+    else:
+        r.pop()
+        vm.frame.ip += 1
+    end-code
+    // ( -- ) Runtime loop counter step for 'next'.
+    last :: safe=True
+
+code here
+    if not vm.compiling:
+        raise KernelError("here only valid during compilation")
+    vm.push(len(vm._builder.colon_code))
+    end-code
+    // ( -- addr ) Return the current compilation address in the definition body.
+    last :: safe=True
+
+code ,
+    val = vm.pop()
+    if vm.compiling:
+        vm._builder.colon_code.append(val)
+    else:
+        target = vm.latest
+        if target is None or not hasattr(target, "body") or target.body is None:
+            raise KernelError("No created word body being populated")
+        target.body.append(val)
+    end-code
+    // ( x -- ) Compile an operation into definition, or append to created word body.
+    last :: safe=True
+
+code !
+    addr = vm.pop()
+    val = vm.pop()
+    if isinstance(addr, list):
+        if not addr:
+            addr.append(val)
+        else:
+            addr[0] = val
+    elif isinstance(addr, int):
+        if vm.compiling:
+            vm._builder.colon_code[addr] = val
+        else:
+            raise KernelError("Integer address only valid during compilation")
+    else:
+        raise KernelError("! expects list or integer compilation address")
+    end-code
+    // ( val addr -- ) Store value into memory cell or compilation address.
+    last :: safe=True
+
+code @
+    addr = vm.pop()
+    if isinstance(addr, list):
+        if not addr:
+            raise KernelError("Fetch from empty body")
+        vm.push(addr[0])
+    elif isinstance(addr, int):
+        if vm.compiling:
+            vm.push(vm._builder.colon_code[addr])
+        else:
+            raise KernelError("Integer address only valid during compilation")
+    else:
+        raise KernelError("@ expects list or integer compilation address")
+    end-code
+    // ( addr -- val ) Fetch value from memory cell or compilation address.
+    last :: safe=True
+
+code [']
+    tok = vm.input.read()
+    if tok is None:
+        raise KernelError("['] expects a word name")
+    word = vm.tick(tok)
+    if word is None:
+        raise KernelError(f"['] unknown word: {tok}")
+    vm.literal(word)
+    end-code immediate
+    // ( <name> -- ) Compile word reference as literal.
+    last :: safe=True
+
+code [compile]
+    tok = vm.input.read()
+    if tok is None:
+        raise KernelError("[compile] expects a word name")
+    word = vm.tick(tok)
+    if word is None:
+        raise KernelError(f"[compile] unknown word: {tok}")
+    vm.comma(word)
+    end-code immediate
+    // ( <name> -- ) Compile an immediate word into current definition.
+    last :: safe=True
+
+: begin     here ; immediate
+    last :: safe=True
+: until     ['] 0branch , , ; immediate
+    last :: safe=True
+: again     ['] branch , , ; immediate
+    last :: safe=True
+: if        ['] 0branch , here 0 , ; immediate
+    last :: safe=True
+: ahead     ['] branch , here 0 , ; immediate
+    last :: safe=True
+: then      here swap ! ; immediate
+    last :: safe=True
+: else      [compile] ahead swap [compile] then ; immediate
+    last :: safe=True
+: ?dup      dup if dup then ;
+    last :: safe=True
+: while     [compile] if swap ; immediate
+    last :: safe=True
+: repeat    [compile] again [compile] then ; immediate
+    last :: safe=True
+: aft       drop [compile] ahead [compile] begin swap ; immediate
+    last :: safe=True
+: for       ['] >r , here ; immediate
+    last :: safe=True
+: next      ['] doNext , , ; immediate
+    last :: safe=True
+
+\ =====================================================================
+\ 7. Defining Words: create, does>, constant, variable, value, to
+\ =====================================================================
+
+code create
+    name = vm.input.read()
+    if not name:
+        raise KernelError("create expects a name")
+    body = []
+    def default_action(v, b=body):
+        v.push(b)
+    word = vm.define(name, default_action, category="created")
+    word.body = body
+    end-code
+    // ( <name> -- ) Create a new word with an initialized data body.
+    last :: safe=True
+
+code (does>)
+    child = vm.latest
+    if child is None or not hasattr(child, "body"):
+        raise KernelError("does> needs a created word")
+    frame = vm.frame
+    if frame is None or not isinstance(frame.colon_code, tuple):
+        raise KernelError("does> runtime called outside colon definition")
+    steps = frame.colon_code[frame.ip:]
+    defining_word = getattr(frame, "word", None)
+    if defining_word:
+        child.category = defining_word.name
+    def child_action(v, w=child, s=steps):
+        v.push(w.body)
+        yield from v.call(s)
+    child.action = child_action
+    frame.ip = len(frame.colon_code)
+    end-code
+    // ( -- ) Runtime helper for does>.
+
+code does>
+    vm.comma(vm.words["(does>)"])
+    end-code immediate
+    // ( -- ) Define runtime behavior for words built by the current defining word.
+    last :: safe=True
+
+: constant ( val <name> -- )
+    create , does> @ ;
+    last :: safe=True
+
+: variable ( <name> -- )
+    create 0 , does> ;
+    last :: safe=True
+
+: value ( val <name> -- )
+    create , does> @ ;
+    last :: safe=True
+
+code to
+    tok = vm.input.read()
+    if tok is None:
+        raise KernelError("to expects a value word name")
+    word = vm.tick(tok)
+    if word is None or not hasattr(word, "body") or not word.body:
+        raise KernelError(f"to expects a value word, got {tok}")
+    val = vm.pop()
+    word.body[0] = val
+    end-code
+    // ( val <name> -- ) Set value of a word created by value.
+    last :: safe=True
+
+\ =====================================================================
+\ 8. Compilation Control and Meta-Programming
+\ =====================================================================
+
+code [
+    vm.host.setdefault('_base2_brackets', []).append(vm._builder)
+    vm._builder = None
+    end-code immediate
+    // ( -- ) Enter interpretation state while compiling.
+    last :: safe=True
+
+code ]
+    brackets = vm.host.get('_base2_brackets')
+    if not brackets:
+        raise KernelError("] without matching [")
+    vm._builder = brackets.pop()
+    end-code immediate
+    // ( -- ) Resume compilation after [.
+    last :: safe=True
+
+code compiling
+    vm.push(vm.compiling)
+    end-code
+    // ( -- flag ) Report whether compilation is active.
+    last :: safe=True
+
+code literal
+    val = vm.pop()
+    if vm.compiling:
+        vm.literal(val)
+    elif vm.host.get("_base2_brackets"):
+        builder = vm._builder
+        vm._builder = vm.host["_base2_brackets"][-1]
+        try:
+            vm.literal(val)
+        finally:
+            vm._builder = builder
+    else:
+        raise KernelError("literal requires an active definition")
+    end-code immediate
+    // ( x -- ) Compile literal into active definition.
+    last :: safe=True
+
+code compile
+    tok = vm.input.read()
+    if tok is None:
+        raise KernelError("compile expects a word name")
+    word = vm.tick(tok)
+    if word is None:
+        raise KernelError(f"compile: unknown word {tok}")
+    vm.comma(word)
+    end-code immediate
+    // ( <name> -- ) Compile the named word into current definition.
+    last :: safe=True
+
+code compile-only
+    if vm.latest is not None:
+        vm.latest.compileonly = True
+    end-code
+    // ( -- ) Mark latest word as compile-only.
+    last :: safe=True
+
+code interpret-only
+    if vm.latest is not None:
+        vm.latest.interpretonly = True
+    end-code
+    // ( -- ) Mark latest word as interpret-only.
+    last :: safe=True
+
+code nop
+    pass
+    end-code
+    // ( -- ) No operation.
+    last :: safe=True
+
+code alias
+    target_name = vm.input.read()
+    new_name = vm.input.read()
+    if not target_name or not new_name:
+        raise KernelError("alias expects <target> <new_name>")
+    word = vm.tick(target_name)
+    if word is None:
+        raise KernelError(f"alias: unknown word {target_name}")
+    vm.define(new_name, word.action, immediate=word.immediate, category="alias",
+              source=word.source, help=word.help, comment=word.comment, properties=word.properties)
+    end-code
+    // ( <target> <new_name> -- ) Create alias for an existing word.
+    last :: safe=True
+
+code perform
+    target = vm.pop()
+    yield from vm.call(target)
+    end-code
+    // ( word|callable -- ) Execute word or callable.
+
+: execute perform ;
+    // ( word|callable -- ) Execute word or callable.
+
+code stop
     vm.abort()
     end-code
-    // ( -- ) Abort active task.
-    /// Discard unfinished colon definition and abort task.
+    // ( -- ) Abort the current Forth task.
 
-code (bye)
-    vm.host['exit_requested'] = True
+code ?stop
+    if vm.pop():
+        vm.abort()
     end-code
-    // ( -- ) Set host exit requested flag.
-    /// Request host REPL loop to exit.
+    // ( flag -- ) Abort current task when flag is true.
 
-: bye
-    (bye) abort
-    ; immediate
-    // ( -- ) Exit Forth REPL back to Python host.
-    /// Signal exit and abort current task.
-
-\ --- 9. File Loading ---
-
-code include
-    filename = vm.input.read()
-    import os
-    if not os.path.isabs(filename):
-        here = vm.host.get("__file__dir__", ".")
-        candidate = os.path.join(here, filename)
-        if os.path.exists(candidate):
-            filename = candidate
-    with open(filename, "r", encoding="utf-8") as f:
-        content = f.read()
-    yield from vm.evaluate(content)
-    end-code
-    // ( <filename> -- ) Load and evaluate a Forth file.
-    /// Read file content and evaluate it in current task.
-
-\ --- 10. Tick Word ---
-
-code '
+code forget
     name = vm.input.read()
-    word = vm.tick(name)
-    if word is None:
-        raise KernelError(f"Unknown word: {name}")
+    if name is None:
+        raise KernelError("forget expects a name")
+    if name not in vm.words:
+        raise KernelError(f"forget: unknown word {name}")
+    del vm.words[name]
+    end-code immediate
+    // ( <name> -- ) Remove word from dictionary.
+
+\ =====================================================================
+\ 9. Case Structure
+\ =====================================================================
+
+: case // ( -- 0 ) Begin a case ... of ... endof ... endcase structure.
+    0 ; immediate
+    last :: safe=True
+
+: of // ( -- ) Compare selector with case value.
+    ['] over , ['] = , [compile] if ['] drop , ; immediate
+    last :: safe=True
+
+: endof // ( -- ) Finish a case branch.
+    [compile] else ; immediate
+    last :: safe=True
+
+: endcase // ( -- ) Resolve case branches and drop selector.
+    ['] drop ,
+    begin
+        ?dup
+    while
+        [compile] then
+    repeat ; immediate
+    last :: safe=True
+
+\ =====================================================================
+\ 10. Python Interoperability
+\ =====================================================================
+
+code <py>
+    import re
+    curr = vm.input.remaining
+    match = re.search(r"</py>|</pyV>", curr)
+    if not match:
+        raise KernelError("Expected </py> or </pyV>")
+    code_str = curr[:match.start()]
+    vm.input.consume(match.start())
+    vm.push(code_str)
+    end-code immediate
+    // ( <python> -- string ) Read Python code until </py> or </pyV>.
+
+code </py>
+    source = vm.pop()
+    import textwrap
+    source = textwrap.dedent(source)
     if vm.compiling:
-        vm.literal(word)
+        def op(v):
+            exec(source, {"vm": v, **v.host})
+        vm.comma(op)
     else:
-        vm.push(word)
+        exec(source, {"vm": vm, **vm.host})
     end-code immediate
-    // ( <name> -- word ) Look up word and push its reference.
-    /// Push word object onto stack or compile as literal.
-    last :: safe=True
+    // ( string -- ) Execute Python code block without pushing a result.
 
-\ --- 11. Help Word ---
-
-code help
-    tokens = vm.input.rest().strip().split()
-    if tokens:
-        name = tokens[0]
-        word = vm.tick(name)
-        if word is None:
-            print(f"Unknown word: {name}")
-            return
-        header = f"{word.name} {word.help}" if getattr(word, "help", "") else word.name
-        print(header)
-        comment = getattr(word, "comment", "") or ""
-        for line in comment.splitlines():
-            print(f"    {line}")
+code </pyV>
+    source = vm.pop().strip()
+    wrapped = f"vm.push({source})"
+    if vm.compiling:
+        def op(v):
+            exec(wrapped, {"vm": v, **v.host})
+        vm.comma(op)
     else:
-        for word in vm.words.values():
-            header = f"{word.name} {word.help}" if getattr(word, "help", "") else word.name
-            print(header)
-            comment = getattr(word, "comment", "") or ""
-            for line in comment.splitlines():
-                print(f"    {line}")
+        exec(wrapped, {"vm": vm, **vm.host})
     end-code immediate
-    // ( [<name>] -- ) Print help and comments for a word or all words.
-    /// Consume remainder of TIB and display help for the first token, or all words if omitted.
-    last :: safe=True
+    // ( string -- result ) Evaluate Python expression and push result onto stack.
 
-\ --- 12. Load Extensions ---
+: py:  BL word [compile] </py>  ; immediate
+: py>  BL word [compile] </pyV> ; immediate
+: py:: CR word [compile] </py>  ; immediate
+: py>> CR word [compile] </pyV> ; immediate
 
-    include peforth.f
+code (:>)
+    stmt = vm.pop().strip()
+    if not stmt:
+        raise KernelError("Expected member or expression after :>")
+    if stmt.startswith("[") or stmt.startswith("("):
+        code_str = f"vm.push(vm.pop(){stmt})"
+    else:
+        code_str = f"vm.push(vm.pop().{stmt})"
+    if vm.compiling:
+        def op(v):
+            exec(code_str, {"vm": v, **v.host})
+        vm.comma(op)
+    else:
+        exec(code_str, {"vm": vm, **vm.host})
+    end-code
+    // ( str -- result ) Access member or call method on TOS and push result.
+
+: :> BL word (:>) ; immediate
