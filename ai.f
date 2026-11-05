@@ -212,7 +212,7 @@ code (ai)
 last :: safe=True
 
 : ai:
-    rest
+    "" word
     (ai-monotonic-time) >t
     true (ai)
     (ai-monotonic-time) t> -
@@ -224,7 +224,7 @@ last :: safe=True
 last :: safe=True
 
 : AI:
-    rest true (ai) nokia2
+    "" word true (ai) nokia2
     ; immediate
     // ( <prompt> -- ) Stream prompt to AI and always play nokia2 chime upon completion.
 last :: safe=True

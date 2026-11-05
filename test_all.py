@@ -254,6 +254,25 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIsInstance(ai_word.properties.get("nokia2_after_seconds"), int)
         self.assertEqual(ai_word.properties.get("nokia2_after_seconds"), 30)
 
+    def test_word_falsy_delimiter_and_ai_colon_prompt_preservation(self):
+        # 1. word with empty string delimiter consumes entire remaining TIB without stripping
+        self.vm.dictate('"" word   def foo():\n        return 42   ')
+        raw_result = self.vm.pop()
+        self.assertEqual(raw_result, "   def foo():\n        return 42   ")
+
+        # 2. Mock (ai) action to capture the exact prompt passed by ai:
+        captured = []
+        def mock_ai(v):
+            stream_flag = v.pop()
+            prompt = v.pop()
+            captured.append((prompt, stream_flag))
+        self.vm.words["(ai)"].action = mock_ai
+
+        self.vm.dictate("ai:   code indented prompt\n  second line  ")
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0][0], "   code indented prompt\n  second line  ")
+        self.assertTrue(captured[0][1])
+
     def test_sanitize_messages_heals_incomplete_tool_calls(self):
         import ai
         broken_messages = [
