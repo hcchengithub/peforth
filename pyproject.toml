@@ -20,7 +20,7 @@ peforth = "main:main"
 peforth-monitor = "tools.peforth_logging_monitor:main"
 
 [tool.setuptools]
-py-modules = ["main", "projectk", "ai", "diagnostic_log"]
+py-modules = ["main", "projectk", "ai", "diagnostic_log", "session_store"]
 packages = ["tools"]
 
 [tool.setuptools.package-data]
