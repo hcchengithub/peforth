@@ -1,38 +1,51 @@
 ---
 name: windows-msgbox
 description: >-
-  Display a native Windows top-most Message Box on the user's desktop from WSL using PowerShell.
+  Display a native Windows top-most Message Box on the user's desktop (works natively on Windows and from WSL).
   Activate this skill when the user wants a desktop popup alert, local reminder, or free alternative
   to LINE notifications on their Windows machine.
 ---
 
-# Windows MessageBox Notification Skill (WSL -> Windows)
+# Windows MessageBox Notification Skill
 
-This skill pops up a system-wide, top-most Windows dialog box (`System.Windows.Forms.MessageBox` with `ServiceNotification`) from inside WSL using [send_msgbox.sh](./scripts/send_msgbox.sh).
+This skill pops up a system-wide, top-most Windows dialog box (`System.Windows.Forms.MessageBox` with `ServiceNotification`) on the user's desktop. It works natively under Windows (PowerShell) and cross-environment from WSL.
 
-It automatically probes `/run/WSL/*_interop` to find a live WSL interop socket (avoiding hangs when `WSL_INTEROP` in a long-running shell session becomes stale) and encodes the PowerShell payload in UTF-16LE Base64 (`-EncodedCommand`) so multi-line text, quotes, and emojis render cleanly.
+## Usage in peforth
 
-## Usage
+Check the current active environment (from `=== System Environment ===` or `system_info`):
 
-### 1. Non-blocking popup (returns immediately while dialog stays on screen)
+### 1. Under Windows (PowerShell 7)
+Execute directly in PowerShell using `run_pwsh`:
 
-```bash
-bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh "時間到囉！記得休息一下～"
+#### Non-blocking popup (Recommended — returns immediately so the Forth REPL is not blocked):
+```forth
+s" Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-Command','Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.MessageBox]::Show(''''時間到囉！記得休息一下～'''',''''💡 peforth 提醒'''',''''OK'''',''''Information'''',''''Button1'''',''''ServiceNotification'''')'" run_pwsh stringify . cr
+```
+Or run the helper script:
+```forth
+s" pwsh.exe -NoProfile -File ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.ps1 -Message '時間到囉！記得休息一下～'" run_pwsh stringify . cr
 ```
 
-### 2. Custom title and icon
-
-```bash
-bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh \
-  --title "🌬️ 頭痛熱敷提醒" \
-  --icon Information \
-  --message "記得拿吹風機給頭痛吹吹熱風喔！"
+#### Wait for user to click OK:
+```forth
+s" Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.MessageBox]::Show('請確認後按下確定繼續執行','💡 peforth 提醒','OK','Information','Button1','ServiceNotification')" run_pwsh stringify . cr
 ```
 
-Supported `--icon` values: `Information` (default), `Warning`, `Error`, `Question`, `None`.
+### 2. Under WSL (Linux -> Windows Desktop)
+Execute via `run_bash` using the helper script `send_msgbox.sh`:
 
-### 3. Wait for user to click OK (`--wait`)
+#### Non-blocking popup:
+```forth
+s" bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh '時間到囉！記得休息一下～'" run_bash stringify . cr
+```
 
-```bash
-bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh --wait "請確認後按下確定繼續執行"
+#### Custom title and icon:
+```forth
+s" bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh --title '🌬️ 頭痛熱敷提醒' --icon Information --message '記得拿吹風機吹吹熱風喔！'" run_bash stringify . cr
+```
+Supported icon values: `Information` (default), `Warning`, `Error`, `Question`, `None`.
+
+#### Wait for user to click OK:
+```forth
+s" bash ~/.peforth/skills/windows-msgbox/scripts/send_msgbox.sh --wait '請確認後按下確定繼續執行'" run_bash stringify . cr
 ```
