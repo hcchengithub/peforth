@@ -24,4 +24,5 @@ py-modules = ["main", "projectk", "ai", "diagnostic_log"]
 packages = ["tools"]
 
 [tool.setuptools.package-data]
-"*" = ["*.f", "*.md"]
+"*" = ["*.f", "*.md", "skills/**/*"]
+

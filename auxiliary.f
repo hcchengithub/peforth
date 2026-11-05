@@ -9,6 +9,18 @@ code cls
     // ( -- ) Clear visible terminal screen and move cursor to top-left.
     last :: safe=True
 
+code stringify
+    import json
+    val = vm.pop()
+    try:
+        vm.push(json.dumps(val, indent=2, ensure_ascii=False))
+    except Exception:
+        vm.push(str(val))
+    end-code
+    // ( object -- pretty-string ) Convert a Python or JSON object to indented string.
+    last :: safe=True
+
+
 \ --- 2. Audio Chimes & Notifications ---
 
 code (play-notes)

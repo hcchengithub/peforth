@@ -57,6 +57,15 @@ code forth
     // ( -- ) Switch REPL to Forth mode (>).
     last :: safe=True
 
+code list-skills
+    import ai
+    names, _ = ai.load_all_skills(ai.get_skills_dir(vm))
+    vm.push(" ".join(names))
+    end-code
+    // ( -- names-string ) Return a space-separated list of sorted skill names.
+    last :: safe=True
+
+
 \ --- 4. Core AI Words: (ai), ai:, AI: ---
 
 code (ai-monotonic-time)

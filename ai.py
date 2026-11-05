@@ -11,11 +11,13 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
 import uuid
+
 
 from projectk import KernelError
 
@@ -427,6 +429,70 @@ When the user asks you to run Python, write Python, or perform operations best s
 """
 
 
+def get_skills_dir(vm=None) -> Path:
+    """Resolve the active skills directory from environment, VM, or package location."""
+    configured = os.environ.get("PEFORTH_SKILLS_DIR")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    if vm is not None:
+        file_dir = vm.host.get("__file__dir__")
+        if file_dir:
+            candidate = Path(file_dir) / "skills"
+            if candidate.is_dir():
+                return candidate.resolve()
+    candidate = Path(__file__).resolve().parent / "skills"
+    if candidate.is_dir():
+        return candidate.resolve()
+    runtime_skills = Path.home() / ".peforth" / "skills"
+    if runtime_skills.is_dir():
+        return runtime_skills.resolve()
+    return candidate
+
+
+def load_all_skills(skills_root=None) -> tuple[list[str], str]:
+    """Collect the markdown text of every skill bundle under skills_root."""
+    if skills_root is None:
+        skills_root = get_skills_dir()
+    if not isinstance(skills_root, Path):
+        skills_root = Path(skills_root)
+    if not skills_root.is_dir():
+        return [], ""
+
+    skill_names = []
+    parts = []
+    for entry in sorted(skills_root.iterdir()):
+        if not entry.is_dir():
+            continue
+        skill_file = entry / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        skill_names.append(entry.name)
+        text = skill_file.read_text(encoding="utf-8")
+        # Strip leading YAML frontmatter (--- ... ---)
+        text = re.sub(r"\A---\s*\n.*?\n---\s*\n", "", text, count=1, flags=re.S)
+        parts.append(f"## Skill: {entry.name}\n\n{text}\n")
+    return skill_names, "\n".join(parts)
+
+
+def get_system_prompt(vm=None) -> str:
+    """Build full agent system prompt dynamically composed with loaded skills."""
+    skills_root = get_skills_dir(vm)
+    skill_names, combined_skills = load_all_skills(skills_root)
+    reference_path = skills_root / "peforth-forth" / "references" / "forth-reference.md"
+    reference_text = reference_path.read_text(encoding="utf-8") if reference_path.is_file() else ""
+
+    instructions = SYSTEM_PROMPT
+    if combined_skills:
+        instructions += "\n\n=== Available Skills ===\n\n" + combined_skills
+    if reference_text:
+        instructions += "\n\n=== Forth Reference ===\n\n" + reference_text
+
+    if len(instructions.encode("utf-8")) > 100_000:
+        raise RuntimeError("Combined skill texts are too large to include in agent instructions.")
+    return instructions
+
+
+
 def _sanitize_messages(messages):
     """Ensure every assistant message with tool_calls is properly closed by tool messages."""
     sanitized = []
@@ -608,13 +674,14 @@ def ai_turn(vm, prompt, stream_response):
         return
 
     # Start diagnostic turn tracking if enabled
+    system_instructions = get_system_prompt(vm)
     logger = vm.host.get("diagnostic_log")
     runtime_id = vm.host.get("diagnostic_runtime_id")
     turn_id = None
     if logger is not None and runtime_id is not None:
         try:
             prompt_cid = logger.store_content("prompt", prompt)
-            instr_cid = logger.store_content("agent_instructions", SYSTEM_PROMPT)
+            instr_cid = logger.store_content("agent_instructions", system_instructions)
             turn_id = logger.start_turn(
                 runtime_id,
                 prompt_content_id=prompt_cid,
@@ -630,8 +697,9 @@ def ai_turn(vm, prompt, stream_response):
 
     # Initialize or continue conversation session
     messages = vm.host.setdefault("ai_messages", [
-        {"role": "system", "content": SYSTEM_PROMPT}
+        {"role": "system", "content": system_instructions}
     ])
+
     messages = _sanitize_messages(messages)
     messages.append({"role": "user", "content": prompt})
     vm.host["ai_messages"] = messages

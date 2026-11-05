@@ -311,6 +311,50 @@ class TestSafePropertyAudit(unittest.TestCase):
         completions_space = list(completer.get_completions(doc_space, None))
         self.assertEqual(len(completions_space), 0)
 
+    def test_skills_loading_and_list_skills_word(self):
+        import ai
+        names, text = ai.load_all_skills(HERE / "skills")
+        self.assertIn("herdr", names)
+        self.assertIn("peforth-forth", names)
+        self.assertIn("windows-screen-capture", names)
+        self.assertIn("windows-msgbox", names)
+        self.assertIn("ai-diagnostics-log-inspector", names)
+        self.assertIn("line-notify", names)
+
+        # Prompt includes skills and reference
+        prompt = ai.get_system_prompt(self.vm)
+        self.assertIn("## Skill: herdr", prompt)
+        self.assertIn("## Skill: peforth-forth", prompt)
+        self.assertIn("Forth Reference", prompt)
+        self.assertLessEqual(len(prompt.encode("utf-8")), 100_000)
+
+        # list-skills word in Forth
+        task = self.vm.dictate("list-skills")
+        self.assertEqual(task.status, "done")
+        skills_str = self.vm.pop()
+        self.assertIn("herdr", skills_str)
+        self.assertIn("peforth-forth", skills_str)
+
+    def test_herdr_words_and_security_annotations(self):
+        safe_words = [
+            "herdr-current-pane", "herdr-screen-read", "herdr-screen-tail",
+            "herdr-show-pane-id", "herdr-clear-pane-id", "stringify"
+        ]
+        unsafe_words = [
+            "herdr-screen-send-text", "herdr-screen-send-keys", "herdr-screen-run"
+        ]
+
+        for name in safe_words:
+            w = self.vm.tick(name)
+            self.assertIsNotNone(w, f"Word '{name}' must exist in dictionary")
+            self.assertTrue(w.properties.get("safe"), f"Word '{name}' must have safe=True")
+
+        for name in unsafe_words:
+            w = self.vm.tick(name)
+            self.assertIsNotNone(w, f"Word '{name}' must exist in dictionary")
+            self.assertFalse(w.properties.get("safe", False), f"Word '{name}' must NOT have safe=True")
+
+
 
 
 class TestSecurityTaskApproval(unittest.TestCase):
