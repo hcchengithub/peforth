@@ -736,11 +736,20 @@ def install_security_guard(vm):
 
             # Inherited Frame Safety:
             # If the current execution is within a Frame whose word is marked safe=True,
-            # all operations within this parent frame inherit safety and execute freely.
+            # internal helper operations (like unannotated python closures) within this
+            # parent frame inherit safety and execute freely.
+            # Frames below ai_task_base_frame_depth belong to the outer orchestrator
+            # (such as ai: or (ai)) and must never leak safety to untrusted AI code.
+            base_depth = vm.host.get("ai_task_base_frame_depth", 0)
+            frames = getattr(task, "frames", [])
+            relevant_frames = frames[base_depth:] if base_depth < len(frames) else []
             if any(getattr(getattr(f, "word", None), "properties", {}).get("safe")
-                   for f in getattr(task, "frames", [])):
-                yield from original_call(operation)
-                return
+                   for f in relevant_frames):
+                resolved = vm._resolve(operation)
+                # An explicitly unsafe word (safe=False) must NEVER inherit safety
+                if not (hasattr(resolved, "properties") and resolved.properties.get("safe") is False):
+                    yield from original_call(operation)
+                    return
 
             trusted_tasks = vm.host.setdefault("trusted_ai_tasks", set())
             if task not in trusted_tasks:
@@ -1765,7 +1774,9 @@ def ai_turn(vm, prompt, stream_response):
                     # Execute Forth code under AI task context.
                     # Individual words are verified against safe=True in security_aware_call.
                     prev_ai_task = vm.host.get("in_ai_task")
+                    prev_base_depth = vm.host.get("ai_task_base_frame_depth")
                     vm.host["in_ai_task"] = vm.task
+                    vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
 
                     tee = TeeOutput(sys.stdout)
                     old_stdout = sys.stdout
@@ -1783,6 +1794,10 @@ def ai_turn(vm, prompt, stream_response):
                     finally:
                         sys.stdout = old_stdout
                         vm.host["in_ai_task"] = prev_ai_task
+                        if prev_base_depth is None:
+                            vm.host.pop("ai_task_base_frame_depth", None)
+                        else:
+                            vm.host["ai_task_base_frame_depth"] = prev_base_depth
                         _log_event(vm, "forth_execution_finished", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name,
                                    payload={"stdout": tee.getvalue(), "error": error_msg})

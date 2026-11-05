@@ -703,6 +703,39 @@ class TestSecurityTaskApproval(unittest.TestCase):
         # Verify it displays the actual source code rather than '<function ...>'
         self.assertEqual(approval_calls[0]["source"], "unsafe_wrapper")
 
+    def test_ai_task_base_frame_depth_prevents_outer_frame_leak(self):
+        from projectk import Task, Frame
+        # Define an unsafe action
+        self.vm.define("dangerous_action", lambda v: v.push("dangerous_executed"), properties={"safe": False})
+        # Define an outer harness word with safe=True (simulating ai: or (ai))
+        self.vm.dictate(": outer_ai_word ; ' outer_ai_word :: safe=True")
+        outer_word = self.vm.words["outer_ai_word"]
+
+        task = Task(self.vm, self.vm.evaluate("dangerous_action"))
+        # Push outer safe frame
+        task.frames.append(Frame(outer_word, iter([])))
+        self.vm.host["in_ai_task"] = task
+        # Set base frame depth to 1 (outer frame belongs to orchestrator)
+        self.vm.host["ai_task_base_frame_depth"] = 1
+        task.resume()
+
+        # Must pause for review and NOT inherit safe=True from outer_ai_word
+        self.assertEqual(task.status, "paused")
+
+    def test_safe_parent_cannot_inherit_explicit_unsafe_word(self):
+        from projectk import Task
+        # Define an unsafe action with safe=False
+        self.vm.define("unsafe_leaf", lambda v: v.push("ran_unsafe"), properties={"safe": False})
+        # Define a parent word with safe=True calling the unsafe leaf
+        self.vm.dictate(": safe_parent unsafe_leaf ; ' safe_parent :: safe=True")
+        task = Task(self.vm, self.vm.evaluate("safe_parent"))
+        self.vm.host["in_ai_task"] = task
+        self.vm.host["ai_task_base_frame_depth"] = 0
+        task.resume()
+
+        # Explicitly unsafe words (safe=False) must NEVER inherit safety even if called from safe_parent
+        self.assertEqual(task.status, "paused")
+
 
 class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
     """Verifies SQLite diagnostic logging, monitoring renderer, and watchdog supervision."""
