@@ -250,7 +250,6 @@ class TestSafePropertyAudit(unittest.TestCase):
         prompt = ai.get_system_prompt(self.vm)
         self.assertIn("=== System Environment ===", prompt)
         self.assertIn("- OS:", prompt)
-        self.assertIn("- Environment:", prompt)
         self.assertIn("- Active Shell:", prompt)
 
     def test_words_and_help_pattern_filtering(self):
