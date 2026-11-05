@@ -7,6 +7,7 @@ Implements:
 """
 
 import atexit
+from datetime import datetime, timezone
 import io
 import json
 import os
@@ -18,11 +19,21 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 
-
 from projectk import KernelError
+from session_store import (
+    SCHEMA_VERSION,
+    SessionStore,
+    build_session_description,
+    extract_first_sentence,
+    extract_first_user_message_text,
+    extract_item_text,
+    format_description_time,
+    is_complete_description,
+)
 
 
 _OUTPUT_LIMIT = 64 * 1024
@@ -834,6 +845,33 @@ TOOLS_DEFINITION = [
     {
         "type": "function",
         "function": {
+            "name": "peforth_search_sessions",
+            "description": "Search or read past AI conversations in the local SQLite session mirror (sessions.sqlite3). Read-only. Pass query to search across all sessions, or session_id to read messages from a specific session.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search terms to match against session descriptions and conversation items.",
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Optional session ID (or unambiguous suffix) to read conversation messages from.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "default": 20,
+                        "description": "Maximum number of matching sessions or messages to return.",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "peforth_run_forth",
             "description": (
                 "Execute Forth source code in the user's local VM. "
@@ -904,6 +942,297 @@ def tool_search_words(vm, query):
     return {"query": query, "count": len(matches), "words": matches}
 
 
+# --- Session Store & Local SQLite Mirror Helpers ---
+
+def _runtime_config_path() -> Path:
+    configured = os.environ.get("PEFORTH_CONFIG_DIR")
+    if configured:
+        path = Path(configured).expanduser()
+        return path if path.is_absolute() else (Path.cwd() / path).resolve()
+    return Path.home() / ".peforth"
+
+
+def _session_db_path() -> Path:
+    """Return the path to the local SQLite session mirror database."""
+    return _runtime_config_path() / "sessions" / "sessions.sqlite3"
+
+
+def _open_session_store() -> SessionStore:
+    return SessionStore(_session_db_path())
+
+
+def _short_id(session_id):
+    return str(session_id or "")[-8:]
+
+
+def _resolve_session_selector(rows, selector):
+    """Return (1-based index, row) for a numeric index or exact session ID."""
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        if 1 <= selector <= len(rows):
+            return selector, rows[selector - 1]
+        raise RuntimeError(f"No session number {selector}; the current list has {len(rows)} entries.")
+    if isinstance(selector, str) and selector:
+        matches = [(index, row) for index, row in enumerate(rows, 1)
+                   if (row.get("id") or row.get("session_id")) == selector]
+        if len(matches) == 1:
+            return matches[0]
+        if not matches:
+            raise RuntimeError(f"No session ID matches {selector!r} in the current list.")
+        raise RuntimeError(f"Session ID {selector!r} is duplicated in the current list.")
+    raise RuntimeError("Expected a session number or full session ID.")
+
+
+def _session_title(session_id):
+    """Return the session description from the local SQLite mirror if present."""
+    if not isinstance(session_id, str) or not session_id:
+        return ""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        return ""
+    with _open_session_store() as store:
+        return store.get_description(session_id)
+
+
+def _format_time(value):
+    if not value:
+        return "unknown"
+    try:
+        return datetime.fromtimestamp(int(value), timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    except (ValueError, TypeError, OSError, OverflowError):
+        return str(value)
+
+
+def _saved_session(vm):
+    return vm.host.get("ai_active_session_id") or ""
+
+
+def _api_request(method, path, payload=None, stream=False, timeout=30):
+    load_dotenv()
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("Set OPENAI_API_KEY in ~/.peforth/.env or the process environment to use AI.")
+    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+    url = f"{base_url}{path}" if path.startswith("/") else f"{base_url}/{path}"
+    request_text = None if payload is None else json.dumps(payload, ensure_ascii=False)
+    body = request_text.encode("utf-8") if request_text is not None else None
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "agents=v1",
+        "Accept": "text/event-stream" if stream else "application/json",
+    }
+    req = urllib.request.Request(url, data=body, method=method.upper(), headers=headers)
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def _api_get(path, timeout=30):
+    with _api_request("GET", path, timeout=timeout) as response:
+        return json.load(response)
+
+
+def _api_delete(path, timeout=30):
+    with _api_request("DELETE", path, timeout=timeout) as response:
+        return json.load(response)
+
+
+def _list_remote_sessions():
+    """Fetch remote session records using the API's cursor pagination."""
+    sessions = []
+    after = ""
+    while True:
+        query = urllib.parse.urlencode({"limit": 100, "order": "desc", **({"after": after} if after else {})})
+        page = _api_get(f"/sessions?{query}")
+        sessions.extend(page.get("data") or [])
+        if not page.get("has_more") or not page.get("last_id") or page["last_id"] == after:
+            return sessions
+        after = page["last_id"]
+
+
+def _fetch_session_items(session_id):
+    """Fetch all remote items for a session in ascending sequence order."""
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    items = []
+    after = None
+    while True:
+        query = {"limit": 100, "order": "asc"}
+        if after:
+            query["after"] = after
+        page = _api_get(
+            f"/sessions/{encoded_id}/items?{urllib.parse.urlencode(query)}"
+        )
+        items.extend(page.get("data") or [])
+        last_id = page.get("last_id")
+        if not page.get("has_more") or not last_id or last_id == after:
+            break
+        after = last_id
+    return items
+
+
+def sync_sessions(vm=None):
+    """Incrementally sync remote sessions and items into the local SQLite mirror."""
+    remote_sessions = _list_remote_sessions()
+    synced = 0
+    skipped = 0
+    remote_ids = []
+    with _open_session_store() as store:
+        for remote in remote_sessions:
+            if not isinstance(remote, dict):
+                continue
+            session_id = remote.get("id") or remote.get("session_id")
+            if not isinstance(session_id, str) or not session_id:
+                continue
+            remote_ids.append(session_id)
+            if store.needs_item_sync(remote):
+                items = _fetch_session_items(session_id)
+                store.sync_session(remote, items)
+                synced += 1
+            else:
+                store.update_session_metadata(remote)
+                skipped += 1
+        deleted = store.mark_missing_remote_deleted(remote_ids)
+        local_by_id = {
+            row["id"]: row for row in store.list_sessions(include_deleted=False)
+        }
+        rows = [local_by_id[sid] for sid in remote_ids if sid in local_by_id]
+    if vm is not None:
+        vm.host["ai_session_rows"] = rows
+    return {
+        "total": len(remote_ids),
+        "synced": synced,
+        "skipped": skipped,
+        "deleted": deleted,
+        "rows": rows,
+    }
+
+
+def list_local_sessions(vm=None, *, include_deleted=False):
+    """Read sessions from the local SQLite mirror."""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        rows = []
+    else:
+        with _open_session_store() as store:
+            rows = store.list_sessions(include_deleted=include_deleted)
+    if vm is not None:
+        vm.host["ai_session_rows"] = rows
+    return rows
+
+
+def export_session_json(selector, output_path=None, *, vm=None):
+    """Export a session's items from the local SQLite mirror to a JSON array file."""
+    with _open_session_store() as store:
+        rows = (vm.host.get("ai_session_rows") if vm is not None else None)
+        if rows is None:
+            rows = store.list_sessions(include_deleted=True)
+        if isinstance(selector, int) and not isinstance(selector, bool):
+            _, row = _resolve_session_selector(rows, selector)
+            session_id = row.get("id") or row.get("session_id")
+        elif isinstance(selector, str) and selector:
+            all_local = store.list_sessions(include_deleted=True)
+            candidates = rows or all_local
+            exact = [
+                r for r in candidates
+                if (r.get("id") or r.get("session_id")) == selector
+            ]
+            if len(exact) == 1:
+                session_id = exact[0].get("id") or exact[0].get("session_id")
+            elif store.get_session(selector) is not None:
+                session_id = selector
+            else:
+                suffix = [
+                    r for r in candidates
+                    if _short_id(r.get("id") or r.get("session_id")) == selector
+                ]
+                if len(suffix) == 1:
+                    session_id = suffix[0].get("id") or suffix[0].get("session_id")
+                elif len(suffix) > 1:
+                    raise RuntimeError(f"Session ID suffix {selector!r} is ambiguous; use the full ID.")
+                else:
+                    session_id = selector
+        else:
+            raise RuntimeError("Expected a session number or session ID.")
+
+        local = store.get_session(session_id)
+        if local is None or not local.get("synced_at"):
+            items = _fetch_session_items(session_id)
+            store.sync_session({"id": session_id}, items)
+
+        if output_path is None or (isinstance(output_path, str) and not output_path.strip()):
+            stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+            output_path = f"ai-session-full-{stamp}.json"
+        return store.export_session_json(session_id, output_path)
+
+
+def search_local_sessions(query, *, include_deleted=True):
+    """Search descriptions and item contents in the local SQLite mirror."""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        return []
+    with _open_session_store() as store:
+        return store.search_sessions(str(query or ""), include_deleted=include_deleted)
+
+
+def query_local_sessions(*, query=None, session_id=None, limit=20, include_deleted=True):
+    """Read-only search or message inspection against the local SQLite session mirror."""
+    db_path = _session_db_path()
+    if not db_path.is_file():
+        return {"sessions": [], "messages": []}
+    limit = max(1, min(int(limit or 20), 100))
+    with _open_session_store() as store:
+        if isinstance(session_id, str) and session_id.strip():
+            target_id = session_id.strip()
+            session = store.get_session(target_id)
+            if session is None:
+                all_sessions = store.list_sessions(include_deleted=include_deleted)
+                suffix_matches = [
+                    row for row in all_sessions
+                    if _short_id(row.get("session_id")) == target_id
+                ]
+                if len(suffix_matches) == 1:
+                    target_id = suffix_matches[0]["session_id"]
+                    session = suffix_matches[0]
+                elif len(suffix_matches) > 1:
+                    raise ValueError(f"Session ID suffix {target_id!r} is ambiguous; use the full ID.")
+                else:
+                    return {"session": None, "messages": []}
+            messages = store.get_session_messages(target_id, limit=limit)
+            if isinstance(query, str) and query.strip():
+                terms = [t.casefold() for t in query.split() if t.strip()]
+                messages = [
+                    msg for msg in messages
+                    if any(term in msg["text"].casefold() for term in terms)
+                ][:limit]
+            return {
+                "session": {
+                    "session_id": session["session_id"],
+                    "description": session.get("description") or "",
+                    "created_at": session.get("created_at"),
+                    "last_active_at": session.get("last_active_at"),
+                    "status": session.get("status"),
+                    "model": session.get("model"),
+                    "remote_deleted": session.get("remote_deleted"),
+                },
+                "messages": messages,
+            }
+        results = store.search_sessions(str(query or ""), include_deleted=include_deleted)
+        return {
+            "sessions": [
+                {
+                    "session_id": row["session_id"],
+                    "description": row.get("description") or "",
+                    "created_at": row.get("created_at"),
+                    "last_active_at": row.get("last_active_at"),
+                    "status": row.get("status"),
+                    "model": row.get("model"),
+                    "remote_deleted": row.get("remote_deleted"),
+                    "matches": row.get("matches") or [],
+                }
+                for row in results[:limit]
+            ],
+            "messages": [],
+        }
+
+
 SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside the peforth Forth environment.
 peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges Forth with Python: you can run native Forth, write Python host definitions, and execute Python code directly inside Forth!
 
@@ -914,10 +1243,11 @@ peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges
 - AVOID DUPLICATE OUTPUT: When you use peforth_run_forth to execute code that produces output in the terminal, DO NOT repeat or echo that entire stdout in your final assistant reply; just briefly explain the result if necessary.
 - DICTIONARY SEARCH: Use peforth_search_words when you need to look up available Forth words, syntax, or documentation before proposing code.
 
-You have access to two tools:
-1. peforth_search_words: search available Forth vocabulary, words, help strings, comments, and implementation source.
+You have access to tools:
+1. peforth_search_words: search available Forth vocabulary, words, help strings, comments, and implementation source. Pure read-only.
    *IMPORTANT*: peforth is a rich, evolving environment. When unsure whether a word exists or how it interacts with the VM, ALWAYS search the dictionary first to inspect its documentation and source!
-2. peforth_run_forth: propose and execute Forth source code in the user's local VM.
+2. peforth_search_sessions: Search or read past AI conversations from the local SQLite session mirror (sessions.sqlite3). Read-only; runs without user approval. Pass query to search across all sessions, or session_id to read messages from a specific session.
+3. peforth_run_forth: propose and execute Forth source code in the user's local VM.
 
 === Important Rules ===
 - When executing code, always explain your purpose and propose clean Forth source code.
@@ -1194,6 +1524,7 @@ def ai_turn(vm, prompt, stream_response):
                 runtime_id,
                 prompt_content_id=prompt_cid,
                 instructions_content_id=instr_cid,
+                remote_session_id=vm.host.get("ai_active_session_id"),
             )
             vm.host["ai_current_turn_id"] = turn_id
             logger.append_event(
@@ -1387,6 +1718,36 @@ def ai_turn(vm, prompt, stream_response):
                         "role": "tool",
                         "tool_call_id": call_id,
                         "content": json.dumps(result_data, ensure_ascii=False)
+                    })
+                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name)
+
+                elif fn_name == "peforth_search_sessions":
+                    allowed_arguments = {"query", "session_id", "limit"}
+                    if not set(args.keys()).issubset(allowed_arguments):
+                        exec_result = {"error": "peforth_search_sessions accepts only query, session_id, and limit."}
+                    else:
+                        session_query = args.get("query")
+                        target_session_id = args.get("session_id")
+                        result_limit = args.get("limit", 20)
+                        try:
+                            if session_query is not None and not isinstance(session_query, str):
+                                raise TypeError("query must be a string")
+                            if target_session_id is not None and not isinstance(target_session_id, str):
+                                raise TypeError("session_id must be a string")
+                            if isinstance(result_limit, bool) or not isinstance(result_limit, int) or result_limit < 1:
+                                raise ValueError("limit must be a positive integer")
+                            exec_result = query_local_sessions(
+                                query=session_query,
+                                session_id=target_session_id,
+                                limit=result_limit,
+                            )
+                        except Exception as e:
+                            exec_result = {"error": f"{type(e).__name__}: {e}"}
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": json.dumps(exec_result, ensure_ascii=False)
                     })
                     _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                call_id=call_id, operation=fn_name)

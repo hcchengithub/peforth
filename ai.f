@@ -410,3 +410,335 @@ code ai-screen-region
     // ( prompt-string x y width height [stream?] -- [response-string] ) Capture a live desktop region and inspect it with ai-image-file in one step.
     last :: safe=True
 
+\ --- 7. Session Store & Local SQLite Mirror Words ---
+
+code (ai-sessions)
+    import ai
+    ai.sync_sessions(vm)
+    end-code
+    // ( -- ) Incrementally synchronize remote sessions into the local SQLite mirror and update the VM snapshot.
+    /// Fetches remote session metadata, downloads items only for new or updated sessions, and stores session rows in vm.host.
+    /// Prints nothing and leaves the data stack unchanged.
+    last :: safe=True
+
+code (ai-sessions-list)
+    import ai
+    rows = vm.host.get("ai_session_rows")
+    if rows is None:
+        rows = ai.list_local_sessions(vm)
+    if not rows:
+        print("No remote sessions found.")
+    else:
+        active_id = ai._saved_session(vm)
+        print(f"Remote sessions: {len(rows)} (newest first)")
+        for index, row in enumerate(rows, 1):
+            session_id = row.get("id") or row.get("session_id") or ""
+            title = (
+                row.get("description")
+                or ai._session_title(session_id)
+                or "(untitled)"
+            )
+            marker = " *" if session_id == active_id else ""
+            model = row.get("model") or (row.get("agent") or {}).get("model") or "unknown"
+            print(f"{index:>3}. {title}{marker}")
+            print(f"     Started: {ai._format_time(row.get('created_at'))}  "
+                  f"Last active: {ai._format_time(row.get('last_active_at'))}")
+            print(f"     {row.get('status') or 'unknown'}  {model}\t{session_id}\n")
+    end-code
+    // ( -- ) Print the session snapshot prepared by (ai-sessions).
+    last :: safe=True
+
+: ai-sessions
+    (ai-sessions)
+    (ai-sessions-list)
+    ;
+    // ( -- ) Synchronize remote AI sessions into the local SQLite mirror and list them.
+    /// Fetches remote session index metadata, performs differential item synchronization, and prints the numbered session list.
+    last :: safe=True
+
+code ai-sync
+    import ai
+    stats = ai.sync_sessions(vm)
+    print(
+        f"Synced AI sessions: {stats['synced']} updated, "
+        f"{stats['skipped']} unchanged, "
+        f"{stats['deleted']} marked remote-deleted "
+        f"({stats['total']} remote)."
+    )
+    end-code
+    // ( -- ) Incrementally synchronize remote AI sessions into the local SQLite mirror.
+    /// Fetches remote session metadata, downloads items only for new or updated sessions, and prints a brief sync summary.
+    last :: safe=True
+
+code (ai-session-details)
+    import ai
+    import urllib.parse
+
+    session_id = vm.pop()
+    index = vm.pop()
+    detail = ai._api_get(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+    agent = detail.get("agent") or {}
+    usage = detail.get("usage") or {}
+    resolved_id = detail.get("id") or session_id
+    title = ai._session_title(resolved_id) or "(untitled)"
+    print(f"Session {index}: {title} [{resolved_id}]")
+    print(f"Created: {ai._format_time(detail.get('created_at'))}")
+    print(f"Last active: {ai._format_time(detail.get('last_active_at'))}")
+    print(f"Status: {detail.get('status', 'unknown')}")
+    print(f"Model: {agent.get('model', 'unknown')}")
+    print(f"Usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)} "
+          f"total={usage.get('total_tokens', 0)} tokens")
+    if detail.get("error"):
+        print(f"Error: {detail['error']}")
+    end-code
+    // ( index session_id -- ) Show complete details for the session selected by this Forth process.
+    last :: safe=True
+
+code ai-session
+    import ai
+
+    selector = vm.pop()
+    rows = vm.host.get("ai_session_rows")
+    if rows is None or (isinstance(selector, str) and
+                        not any((row.get("id") or row.get("session_id")) == selector for row in rows)):
+        rows = ai._list_remote_sessions()
+        vm.host["ai_session_rows"] = rows
+    index, row = ai._resolve_session_selector(rows, selector)
+    vm.push(index)
+    vm.push(row.get("id") or row.get("session_id"))
+    yield from vm.call(vm.tick("(ai-session-details)"))
+    end-code
+    // ( session-number | full-session-ID -- ) Show remote session details.
+    last :: safe=True
+
+code ai-use
+    import ai
+    import urllib.parse
+
+    choice = vm.pop()
+    if isinstance(choice, int) and not isinstance(choice, bool):
+        snapshot = vm.host.get("ai_session_rows") or []
+        if 1 <= choice <= len(snapshot):
+            row = snapshot[choice - 1]
+            label = str(choice)
+        else:
+            matches = [row for row in ai._list_remote_sessions()
+                       if ai._short_id(row.get("id")) == str(choice)]
+            if len(matches) != 1:
+                if not matches:
+                    raise RuntimeError(f"No session number or ID suffix matches {choice!r}.")
+                raise RuntimeError(f"Session ID suffix {choice!r} is ambiguous; use the full ID.")
+            row = matches[0]
+            label = str(choice)
+    elif isinstance(choice, str) and choice:
+        matches = [row for row in ai._list_remote_sessions()
+                   if row.get("id") == choice or ai._short_id(row.get("id")) == choice]
+        if len(matches) != 1:
+            if not matches:
+                raise RuntimeError(f"No remote session matches ID {choice!r}.")
+            raise RuntimeError(f"Session ID suffix {choice!r} is ambiguous; use the full ID.")
+        row = matches[0]
+        label = ai._short_id(row["id"])
+    else:
+        raise RuntimeError("ai-use expects a session number or session ID.")
+    ai._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
+    vm.host["ai_active_session_id"] = row["id"]
+    title = ai._session_title(row["id"]) or "(untitled)"
+    print(f"Using session {label}: {title} [{row['id']}]")
+    end-code
+    // ( session-number | session-ID -- ) Select a remote session for follow-up chat.
+    last :: safe=True
+
+code ai-new
+    vm.host.pop("ai_active_session_id", None)
+    vm.host.pop("ai_messages", None)
+    print("A fresh AI session will be created for this Forth process on its next request.")
+    end-code
+    // ( -- ) Clear this Forth process's selected AI session.
+    last :: safe=True
+
+code ai-status
+    import ai
+
+    active_id = vm.host.get("ai_active_session_id")
+    if not active_id:
+        print("Active AI session: none (next request creates a new session)")
+    else:
+        vm.push("current")
+        vm.push(active_id)
+        yield from vm.call(vm.tick("(ai-session-details)"))
+    end-code
+    // ( -- ) Show complete details for the session selected by this Forth process.
+    last :: safe=True
+
+code ai-cleanup
+    import ai
+    import urllib.parse
+    selector = vm.pop()
+    rows = vm.host.get("ai_session_rows")
+    if rows is None:
+        raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
+    index, row = ai._resolve_session_selector(rows, selector)
+    session_id = row.get("id") or row.get("session_id")
+    print(f"This permanently deletes session {index}: {session_id} and its conversation.")
+    result = ai._api_delete(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+    if result.get("deleted") is not True:
+        raise RuntimeError("Agents API did not confirm session deletion.")
+    db_path = ai._session_db_path()
+    if db_path.is_file():
+        with ai._open_session_store() as store:
+            store.mark_remote_deleted(session_id, True)
+    if vm.host.get("ai_active_session_id") == session_id:
+        vm.host.pop("ai_active_session_id", None)
+    vm.host.pop("ai_session_rows", None)
+
+    print("AI session deleted from the API.")
+    end-code
+    // ( session-number | session-ID -- ) Delete the selected remote session immediately.
+    /// Permanently deletes the selected session from the remote API without prompting, and marks it remote_deleted in the local SQLite mirror.
+    /// Run ai-sessions first to refresh the session list. Cached session rows are cleared after deletion.
+    last :: safe=False
+
+code ai-export-session
+    import ai
+
+    if not vm.dstack:
+        raise RuntimeError("ai-export-session expects a session number or session ID.")
+    top = vm.pop()
+    output_path = None
+    if (
+        isinstance(top, str)
+        and vm.dstack
+        and (top.endswith(".json") or "/" in top or "\\" in top)
+        and isinstance(vm.peek(), (int, str))
+        and not isinstance(vm.peek(), bool)
+    ):
+        output_path = top
+        selector = vm.pop()
+    else:
+        selector = top
+    exported = ai.export_session_json(selector, output_path, vm=vm)
+    print(f"Exported session to {exported}")
+    end-code
+    // ( session-number | session-ID [output-path] -- ) Export a session's items from the local SQLite mirror to a JSON file.
+    /// Reconstructs the full JSON array of session items in ascending sequence order (default: ai-session-full-YYYYMMDD-HHMMSS.json).
+    last :: safe=True
+
+code ai-search
+    import ai
+
+    if vm.dstack and isinstance(vm.peek(), str):
+        query = vm.pop().strip()
+    elif vm.input is not None and vm.input.remaining.strip():
+        query = (
+            vm.input.read(until=chr(10))
+            if chr(10) in vm.input.remaining
+            else vm.input.rest()
+        ).strip()
+    else:
+        raise RuntimeError("ai-search expects a search query string.")
+    if not query:
+        raise RuntimeError("ai-search expects a non-empty search query.")
+    results = ai.search_local_sessions(query)
+    if not results:
+        print(f"No local sessions matched {query!r}.")
+    else:
+        print(f"Matched {len(results)} local session(s) for {query!r}:")
+        for index, row in enumerate(results, 1):
+            session_id = row.get("id") or row.get("session_id") or ""
+            title = row.get("description") or "(untitled)"
+            deleted_tag = " [remote-deleted]" if row.get("remote_deleted") else ""
+            print(f"{index:>3}. {title} [{session_id}]{deleted_tag}")
+            for snippet in row.get("matches") or []:
+                print(f"     {snippet}")
+    end-code
+    // ( "query" | <query> -- ) Search session descriptions and item contents in the local SQLite mirror.
+    last :: safe=True
+
+code ai-cancel
+    # Cancel pending AI task if any
+    tasks = vm.host.get('paused_tasks', [])
+    task = vm.host.get('pending_ai_task') or (tasks.pop() if tasks else None)
+    if task:
+        if task in tasks:
+            tasks.remove(task)
+        vm.host['pending_ai_task'] = None
+        task.cancel()
+        print("Cancelled pending AI task.")
+    else:
+        print("No active AI task to cancel.")
+    end-code
+    // ( -- ) Cancel active AI task.
+    last :: safe=True
+
+code (ai-context)
+    import ai
+    import urllib.parse
+
+    mode = vm.pop()
+    if mode not in {None, "json", "chat"}:
+        raise RuntimeError("ai-context mode must be json, chat, or None.")
+    count = vm.pop()
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        raise RuntimeError("ai-context count must be a positive integer.")
+    index = vm.pop()
+    rows = vm.host.get("ai_session_rows")
+    if rows is None:
+        raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
+    if not isinstance(index, int) or isinstance(index, bool) or index < 1 or index > len(rows):
+        raise RuntimeError(f"No item {index}; the current list has {len(rows)} entries.")
+    session_id = rows[index - 1]["id"]
+    items = []
+    after = ""
+    limit = min(100, max(2, count * 2))
+    user_messages = 0
+    while True:
+        query = urllib.parse.urlencode({"limit": limit, "order": "desc",
+                                        **({"after": after} if after else {})})
+        page = ai._api_get(
+            f"/sessions/{urllib.parse.quote(session_id, safe='')}/items?{query}")
+        page_items = page.get("data") or []
+        items.extend(page_items)
+        user_messages += sum(1 for item in page_items
+                             if item.get("type") == "message" and item.get("role") == "user")
+        if user_messages >= count:
+            recent = []
+            found = 0
+            for item in items:
+                recent.append(item)
+                if item.get("type") == "message" and item.get("role") == "user":
+                    found += 1
+                    if found == count:
+                        break
+            items = list(reversed(recent))
+            break
+        if not page.get("has_more") or not page.get("last_id") or page["last_id"] == after:
+            items.reverse()
+            break
+        after = page["last_id"]
+
+    if mode == "json":
+        vm.push(items)
+    else:
+        messages = []
+        for item in items:
+            if item.get("type") != "message" or item.get("role") not in {"user", "assistant"}:
+                continue
+            parts = []
+            for part in item.get("content") or []:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+                elif isinstance(part, str):
+                    parts.append(part)
+            text = "".join(parts).strip()
+            if text:
+                messages.append({"role": item["role"], "text": text})
+        vm.push(messages)
+    end-code
+    // ( session-number count mode -- object ) Return recent API items or chat messages for a session.
+    last :: safe=True
+
+: ai-context BL word int BL word int BL word dup "" = if drop none then (ai-context) ; immediate
+    // ( <session-number> <count> [mode] -- object ) Fetch recent context for a listed session.
+    last :: safe=True
+
