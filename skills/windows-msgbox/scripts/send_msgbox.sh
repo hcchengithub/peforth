@@ -120,8 +120,9 @@ ps_escape = lambda s: s.replace("'", "''")
 
 ps_code = (
     "Add-Type -AssemblyName System.Windows.Forms; "
-    f"[void][System.Windows.Forms.MessageBox]::Show('{ps_escape(msg)}', '{ps_escape(title)}', "
-    f"'OK', '{ps_escape(icon)}', 'Button1', 'ServiceNotification')"
+    "$f = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true }; "
+    f"[void][System.Windows.Forms.MessageBox]::Show($f, '{ps_escape(msg)}', '{ps_escape(title)}', 'OK', '{ps_escape(icon)}'); "
+    "$f.Dispose()"
 )
 print(base64.b64encode(ps_code.encode("utf-16-le")).decode("ascii"))
 PY

@@ -14,13 +14,20 @@ param(
 $escapedMsg = $Message.Replace("'", "''")
 $escapedTitle = $Title.Replace("'", "''")
 
-$code = "Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.MessageBox]::Show('$escapedMsg', '$escapedTitle', 'OK', '$Icon', 'Button1', 'ServiceNotification')"
+$innerCode = @"
+Add-Type -AssemblyName System.Windows.Forms
+`$form = New-Object System.Windows.Forms.Form -Property @{ TopMost = `$true }
+[void][System.Windows.Forms.MessageBox]::Show(`$form, '$escapedMsg', '$escapedTitle', 'OK', '$Icon')
+`$form.Dispose()
+"@
 
 if ($Wait) {
     Add-Type -AssemblyName System.Windows.Forms
-    [void][System.Windows.Forms.MessageBox]::Show($Message, $Title, 'OK', $Icon, 'Button1', 'ServiceNotification')
+    $form = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true }
+    [void][System.Windows.Forms.MessageBox]::Show($form, $Message, $Title, 'OK', $Icon)
+    $form.Dispose()
 } else {
-    $bytes = [System.Text.Encoding]::Unicode.GetBytes($code)
+    $bytes = [System.Text.Encoding]::Unicode.GetBytes($innerCode)
     $encoded = [Convert]::ToBase64String($bytes)
     Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile", "-NonInteractive", "-EncodedCommand", $encoded
 }
