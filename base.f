@@ -614,6 +614,10 @@ code see
                 parts.append(repr(item))
         imm = " immediate" if word.immediate else ""
         print(f": {word.name} {' '.join(parts)} ;{imm}")
+    elif getattr(word, "category", "") == "string-quote":
+        print(f"char {word.body[0]!r} string-quote {word.name}")
+    elif getattr(word, "category", "") == "print-string-quote":
+        print(f"char {word.body[0]!r} print-string-quote {word.name}")
     elif getattr(word, "category", "") == "constant" or (hasattr(word, "body") and word.category == "constant"):
         val = word.body[0] if hasattr(word, "body") and word.body else getattr(word, "value", None)
         print(f"{val!r} constant {word.name}")
@@ -631,31 +635,6 @@ code see
         print(f"Host word {word.name}: {word.action!r}{imm}")
     end-code immediate
     // ( <name> -- ) Display a word's definition and source.
-    last :: safe=True
-
-code s"
-    text = vm.input.read(until='"')
-    if text.startswith(' '):
-        text = text[1:]
-    if vm.compiling:
-        vm.literal(text)
-    else:
-        vm.push(text)
-    end-code immediate
-    // ( <string"> -- text ) Parse string up to closing quote.
-    last :: safe=True
-
-code ."
-    text = vm.input.read(until='"')
-    if text.startswith(' '):
-        text = text[1:]
-    if vm.compiling:
-        vm.literal(text)
-        vm.comma('.')
-    else:
-        print(text, end="", flush=True)
-    end-code immediate
-    // ( <string"> -- ) Print string up to closing quote.
     last :: safe=True
 
 code char
@@ -945,6 +924,115 @@ code to
     end-code
     // ( val <name> -- ) Set value of a word created by value.
     last :: safe=True
+
+\ --- String Quote Delimiter Families ---
+
+code (s)
+    delim = vm.pop()
+    raw = vm.input.read(until=delim)
+    val = raw[1:] if raw.startswith(" ") else raw
+    if vm.compiling:
+        vm.literal(val)
+    else:
+        vm.push(val)
+    end-code
+    // ( delim -- string ) Internal engine for parsing string delimited by delim.
+    /// Read input stream until delimiter, handle leading space, and emit literal or push.
+last :: safe=True
+
+: string-quote ( delim <name> -- )
+    create , [compile] immediate
+    does> ( -- string )
+    @ (s) ;
+    // ( delim <name> -- ) Define an immediate string quote word for delim.
+    /// Defined via create ... does>. When executed, parses input until delim.
+last :: safe=True
+
+char " string-quote s"
+    // ( <string>" -- string ) Parse string delimited by double quote ".
+    /// Part of the s["'`|^/] string family. Delimiter is '"'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
+last :: safe=True
+
+char ' string-quote s'
+    // ( <string>' -- string ) Parse string delimited by single quote '.
+    /// Part of the s["'`|^/] string family. Delimiter is "'".
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
+last :: safe=True
+
+char ` string-quote s`
+    // ( <string>` -- string ) Parse string delimited by backtick `.
+    /// Part of the s["'`|^/] string family. Delimiter is '`'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
+last :: safe=True
+
+char | string-quote s|
+    // ( <string>| -- string ) Parse string delimited by pipe |.
+    /// Part of the s["'`|^/] string family. Delimiter is '|'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
+last :: safe=True
+
+char ^ string-quote s^
+    // ( <string>^ -- string ) Parse string delimited by caret ^.
+    /// Part of the s["'`|^/] string family. Delimiter is '^'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
+last :: safe=True
+
+char / string-quote s/
+    // ( <string>/ -- string ) Parse string delimited by slash /.
+    /// Part of the s["'`|^/] string family. Delimiter is '/'.
+    /// Friends: s" s' s` s| s^ s/
+    /// Use alternative delimiters to avoid escaping internal quotes.
+last :: safe=True
+
+code (print-string)
+    if vm.compiling:
+        vm.comma(vm.tick("."))
+    else:
+        yield from vm.call(vm.tick("."))
+    end-code
+    // ( string -- ) Print a string now or compile its output into the current definition.
+    /// While compiling, append the "." word after the parsed string literal.
+last :: safe=True
+
+: print-string-quote ( delim <name> -- )
+    create , [compile] immediate
+    does> @ (s) (print-string) ;
+    // ( delim <name> -- ) Define an immediate word that parses and prints a delimited string.
+    /// In interpretation mode, print immediately without a newline. In a colon definition, compile the string and print it when the definition runs.
+last :: safe=True
+
+char " print-string-quote ."
+    // ( <string>" -- ) Parse and print text up to the next double quote.
+    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+last :: safe=True
+
+char ' print-string-quote .'
+    // ( <string>' -- ) Parse and print text up to the next single quote.
+    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+last :: safe=True
+
+char ` print-string-quote .`
+    // ( <string>` -- ) Parse and print text up to the next backtick.
+    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
+last :: safe=True
+
+char | print-string-quote .|
+    // ( <string>| -- ) Parse and print text up to the next pipe |.
+last :: safe=True
+
+char ^ print-string-quote .^
+    // ( <string>^ -- ) Parse and print text up to the next caret ^.
+last :: safe=True
+
+char / print-string-quote ./
+    // ( <string>/ -- ) Parse and print text up to the next slash /.
+last :: safe=True
 
 \ =====================================================================
 \ 8. Compilation Control and Meta-Programming

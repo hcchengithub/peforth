@@ -151,7 +151,7 @@ class TestSafePropertyAudit(unittest.TestCase):
             "BL", "CR", "none", '""', "inf", "-inf", "nan",
             "int", "float", "bool", "str", "list", "dict", "set", "tuple", "type",
             "{}", "[]", "count", "trim",
-            ".", ".s", "cr", "space", "words", "see", 's"', '."', "char",
+            ".", ".s", "cr", "space", "words", "see", 's"', "s'", 's`', "s|", "s^", "s/", '."', ".'", '.`', ".|", ".^", "./", "char",
             "branch", "0branch", "doNext", "here", ",", "!", "@", "[']", "[compile]",
             "begin", "until", "again", "if", "ahead", "then", "else", "?dup",
             "while", "repeat", "aft", "for", "next",
@@ -332,6 +332,92 @@ class TestSafePropertyAudit(unittest.TestCase):
         output = buf.getvalue()
         self.assertIn("code (play-notes)", output)
         self.assertIn("end-code", output)
+
+        # 4. Test see on string-quote word (s") and print-string-quote word (.")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate('see s"')
+        self.assertIn("char '\"' string-quote s\"", buf.getvalue())
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate('see ."')
+        self.assertIn("char '\"' print-string-quote .\"", buf.getvalue())
+
+    def test_string_delimiters(self):
+        # 1. Double quote s"
+        self.vm.dictate('s" this is a book"')
+        self.assertEqual(self.vm.pop(), "this is a book")
+
+        # 2. Single quote s' (can embed double quotes)
+        self.vm.dictate('s\' he said "hello"\'')
+        self.assertEqual(self.vm.pop(), 'he said "hello"')
+
+        # 3. Backtick s`
+        self.vm.dictate('s` markdown code`')
+        self.assertEqual(self.vm.pop(), 'markdown code')
+
+        # 4. Pipe s|
+        self.vm.dictate('s| path/to/file|')
+        self.assertEqual(self.vm.pop(), 'path/to/file')
+
+        # 5. Caret s^
+        self.vm.dictate('s^ [0-9]+^')
+        self.assertEqual(self.vm.pop(), '[0-9]+')
+
+        # 6. Slash s/
+        self.vm.dictate('s/ hello world from slash/')
+        self.assertEqual(self.vm.pop(), 'hello world from slash')
+
+        # Leading whitespace preservation: only the first separator space is stripped
+        self.vm.dictate('s"   two leading spaces"')
+        self.assertEqual(self.vm.pop(), '  two leading spaces')
+
+        # Multi-line string
+        self.vm.dictate('s" line 1\nline 2"')
+        self.assertEqual(self.vm.pop(), 'line 1\nline 2')
+
+        # Compilation mode inside colon definition
+        self.vm.dictate(': greet-s s\' Welcome to "Project K"!\' ; greet-s')
+        self.assertEqual(self.vm.pop(), 'Welcome to "Project K"!')
+
+    def test_dot_string_delimiters(self):
+        import io
+        from contextlib import redirect_stdout
+
+        for source, expected in [
+            ('." double quote output"', "double quote output"),
+            (".' single quote output'", "single quote output"),
+            (".` backtick output`", "backtick output"),
+            (".| pipe output|", "pipe output"),
+            (".^ caret output^", "caret output"),
+            ("./ slash output/", "slash output"),
+        ]:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.vm.dictate(source)
+            self.assertEqual(output.getvalue(), expected)
+
+        # Compilation mode inside colon definitions
+        self.vm.dictate(': say-d ." compiled double" ;')
+        self.vm.dictate(": say-s .' compiled single' ;")
+        self.vm.dictate(': say-b .` compiled backtick` ;')
+        self.vm.dictate(': say-p .| compiled pipe| ;')
+        self.vm.dictate(': say-c .^ compiled caret^ ;')
+        self.vm.dictate(': say-sl ./ compiled slash/ ;')
+
+        for word_call, expected in [
+            ("say-d", "compiled double"),
+            ("say-s", "compiled single"),
+            ("say-b", "compiled backtick"),
+            ("say-p", "compiled pipe"),
+            ("say-c", "compiled caret"),
+            ("say-sl", "compiled slash"),
+        ]:
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.vm.dictate(word_call)
+            self.assertEqual(output.getvalue(), expected)
 
     def test_forth_word_completer_matches_dictionary_in_all_modes(self):
         try:
