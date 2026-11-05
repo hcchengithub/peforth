@@ -736,6 +736,18 @@ class TestSecurityTaskApproval(unittest.TestCase):
         # Explicitly unsafe words (safe=False) must NEVER inherit safety even if called from safe_parent
         self.assertEqual(task.status, "paused")
 
+    def test_does_words_like_s_quote_do_not_trigger_security_pause(self):
+        from projectk import Task
+        # s" is defined via create ... does> and executes an internal tuple of steps (@, (s))
+        # It must complete cleanly in an AI task without triggering a false security pause on the tuple
+        task = Task(self.vm, self.vm.evaluate('s" hello from test"'))
+        self.vm.host["in_ai_task"] = task
+        self.vm.host["ai_task_base_frame_depth"] = 0
+        task.resume()
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(self.vm.pop(), "hello from test")
+
 
 class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
     """Verifies SQLite diagnostic logging, monitoring renderer, and watchdog supervision."""

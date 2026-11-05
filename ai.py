@@ -734,6 +734,15 @@ def install_security_guard(vm):
                 yield from original_call(operation)
                 return
 
+            resolved = vm._resolve(operation)
+
+            # Containers (tuples of colon steps) and Literals are internal execution constructs;
+            # their contained steps or values are dispatched individually through vm.call.
+            import projectk
+            if isinstance(resolved, (tuple, list, projectk.Literal)):
+                yield from original_call(operation)
+                return
+
             # Inherited Frame Safety:
             # If the current execution is within a Frame whose word is marked safe=True,
             # internal helper operations (like unannotated python closures) within this
@@ -745,7 +754,6 @@ def install_security_guard(vm):
             relevant_frames = frames[base_depth:] if base_depth < len(frames) else []
             if any(getattr(getattr(f, "word", None), "properties", {}).get("safe")
                    for f in relevant_frames):
-                resolved = vm._resolve(operation)
                 # An explicitly unsafe word (safe=False) must NEVER inherit safety
                 if not (hasattr(resolved, "properties") and resolved.properties.get("safe") is False):
                     yield from original_call(operation)
@@ -753,7 +761,6 @@ def install_security_guard(vm):
 
             trusted_tasks = vm.host.setdefault("trusted_ai_tasks", set())
             if task not in trusted_tasks:
-                resolved = vm._resolve(operation)
                 is_safe = False
                 if hasattr(resolved, "properties") and resolved.properties.get("safe"):
                     is_safe = True
