@@ -18,7 +18,7 @@ code (setup-completer)
                         yield Completion(
                             name,
                             start_position=-len(prefix),
-                            display_meta="Space: select | Esc: cancel",
+                            display_meta="← ↑ ↓ → move | Space selects | Esc cancels",
                         )
         vm.host["ForthWordCompleter"] = ForthWordCompleter
     except ImportError:
@@ -50,11 +50,15 @@ code repl
             from prompt_toolkit.keys import Keys
             from prompt_toolkit.layout.menus import MultiColumnCompletionMenuControl
             from prompt_toolkit.shortcuts import CompleteStyle
+            from prompt_toolkit.styles import Style
 
             completer_cls = vm.host.get("ForthWordCompleter")
             completer = completer_cls(vm) if completer_cls else None
 
-
+            repl_style = Style.from_dict({
+                "completion-menu.completion.current": "bold fg:#006400 bg:#ffffff noreverse",
+                "completion-menu.multi-column-meta": "fg:default bg:default noreverse",
+            })
 
             bindings = KeyBindings()
 
@@ -134,14 +138,34 @@ code repl
                 buf.cancel_completion()
                 buf.delete_before_cursor()
 
+            @bindings.add(Keys.Delete, filter=has_completions, eager=True)
+            def _delete_without_completion(event):
+                buf = event.current_buffer
+                buf.cancel_completion()
+                buf.delete()
+
+            @bindings.add(Keys.Any, filter=has_completions)
+            def _type_without_completion(event):
+                if event.data == " ":
+                    _accept_completion_with_space(event)
+                    return
+                buf = event.current_buffer
+                buf.cancel_completion()
+                if event.data and event.data.isprintable():
+                    buf.insert_text(event.data)
+
             pt_session = PromptSession(
                 multiline=True,
                 key_bindings=bindings,
                 completer=completer,
                 complete_while_typing=False,
                 complete_style=CompleteStyle.MULTI_COLUMN,
-                prompt_continuation=lambda width, line_number, is_soft_wrap: "... ",
+                style=repl_style,
+                prompt_continuation=lambda width, line_number, is_soft_wrap: (
+                    "  " if vm.host.get("repl_mode", "forth") == "chat" else "... "
+                ),
             )
+
 
         except ImportError:
             pt_session = None
