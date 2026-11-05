@@ -245,6 +245,14 @@ class TestSafePropertyAudit(unittest.TestCase):
         # (setup-ai) must no longer exist
         self.assertNotIn("(setup-ai)", self.vm.words, "(setup-ai) should not exist in dictionary")
 
+    def test_system_prompt_includes_environment(self):
+        import ai
+        prompt = ai.get_system_prompt(self.vm)
+        self.assertIn("=== System Environment ===", prompt)
+        self.assertIn("- OS:", prompt)
+        self.assertIn("- Environment:", prompt)
+        self.assertIn("- Active Shell:", prompt)
+
     def test_words_and_help_pattern_filtering(self):
         import io
         from contextlib import redirect_stdout

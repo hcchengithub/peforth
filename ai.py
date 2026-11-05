@@ -681,7 +681,19 @@ def get_system_prompt(vm=None) -> str:
     reference_path = skills_root / "peforth-forth" / "references" / "forth-reference.md"
     reference_text = reference_path.read_text(encoding="utf-8") if reference_path.is_file() else ""
 
-    instructions = SYSTEM_PROMPT
+    sys_info = detect_system_info(vm)
+    shell_label = "pwsh (PowerShell 7)" if sys_info.get("active_shell") == "pwsh" else sys_info.get("active_shell", "unknown")
+    os_label = sys_info.get("os", "unknown").lower()
+    env_label = sys_info.get("environment", "unknown").lower()
+
+    env_section = (
+        f"\n\n=== System Environment ===\n"
+        f"- OS: {os_label}\n"
+        f"- Environment: {env_label}\n"
+        f"- Active Shell: {shell_label}\n"
+    )
+
+    instructions = SYSTEM_PROMPT + env_section
     if combined_skills:
         instructions += "\n\n=== Available Skills ===\n\n" + combined_skills
     if reference_text:

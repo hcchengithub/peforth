@@ -46,12 +46,8 @@ These words perform actions inside the terminal and will trigger the `ai-approve
 
 Herdr organizes terminals into workspaces, tabs, and panes, recognizes coding agents running inside panes, and exposes the current session through the `herdr` CLI.
 
-Before issuing any control command, verify that this agent is running inside a Herdr-managed pane:
-
-```bash
-test "${HERDR_ENV:-}" = 1
-```
-
+Before issuing any control command, verify that this agent is running inside a Herdr-managed pane (`HERDR_ENV=1`).
+In peforth, all Herdr read operations have corresponding safe Forth words (such as `herdr-current-pane`, `herdr-screen-tail`, `herdr-screen-read`). Under Windows, Herdr runs natively in PowerShell (pwsh). Do not invoke WSL, bash, or external bash test scripts for Herdr control.
 If the check fails, say that you are not running inside Herdr and stop. Do not inspect or control the focused Herdr session from outside Herdr.
 
 When the check passes, the `herdr` binary in `PATH` talks to the current session. Use it to inspect neighboring work, create terminal layout, start agents and commands, read output, and wait for state changes.
@@ -264,7 +260,7 @@ If a larger recent read still does not reveal the completed response, ask the ag
 
 ## PeForth-specific pane input
 
-Use the peforth Python bridge and local Forth execution route for Herdr CLI calls. Check `HERDR_ENV=1` before any control operation; do not call `run_bash` for pane control.
+Use the peforth Python bridge and local Forth execution route for Herdr CLI calls. Check `HERDR_ENV=1` before any control operation; under Windows, do not call `run_bash` or WSL for pane control.
 
 When the user asks to type literal text into a shell pane:
 
