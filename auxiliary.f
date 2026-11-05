@@ -4,9 +4,9 @@
 \ --- 1. Terminal Utilities ---
 
 code cls
-    print("\x1b[2J\x1b[H", end="", flush=True)
+    print('\033[2J\033[3J\033[H')
     end-code
-    // ( -- ) Clear visible terminal screen and move cursor to top-left.
+    // ( -- ) Clear terminal screen, scrollback buffer, and move cursor to top-left.
     last :: safe=True
 
 code stringify

@@ -198,6 +198,19 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.vm.dictate("forth")
         self.assertEqual(self.vm.host.get("repl_mode"), "forth")
 
+    def test_cls_clears_screen_and_scrollback(self):
+        import io
+        from contextlib import redirect_stdout
+
+        word = self.vm.tick("cls")
+        self.assertIsNotNone(word, "cls word must exist")
+        self.assertTrue(word.properties.get("safe"), "cls must have safe=True")
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("cls")
+        self.assertIn("\033[2J\033[3J\033[H", buf.getvalue())
+
     def test_nokia_chime_words_exist_and_are_safe(self):
         for name in ("nokia", "nokia2", "nokia-full"):
             word = self.vm.tick(name)
