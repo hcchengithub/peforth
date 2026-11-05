@@ -1522,6 +1522,65 @@ class TestSessionStoreAndSync(unittest.TestCase):
         self.assertEqual(len(res["sessions"]), 1)
         self.assertEqual(res["sessions"][0]["session_id"], "sess_direct_12345678")
 
+    def test_ai_status_and_ai_use_lifecycle(self):
+        """Test ai-status displays local in-memory session, remote session, and none correctly."""
+        import ai
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        # 1. Fresh state: no remote session, no local messages
+        out_fresh = io.StringIO()
+        with contextlib.redirect_stdout(out_fresh):
+            vm.dictate("ai-status")
+        self.assertIn("Active AI session: none", out_fresh.getvalue())
+        self.assertIn("fresh local conversation", out_fresh.getvalue())
+
+        # 2. Local in-memory session with turns
+        vm.host["ai_messages"] = [
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "測試對話主題。第一句在此。"},
+            {"role": "assistant", "content": "收到測試。"},
+            {"role": "user", "content": "第二輪對話"},
+        ]
+        out_local = io.StringIO()
+        with contextlib.redirect_stdout(out_local):
+            vm.dictate("ai-status")
+        val = out_local.getvalue()
+        self.assertIn("Active AI session: local (in-memory)", val)
+        self.assertIn("Topic: 測試對話主題", val)
+        self.assertIn("Turns: 2 user turn(s)", val)
+
+        # 3. Remote session active (via ai_active_session_id)
+        detail = {
+            "id": "sess_remote_9999",
+            "created_at": 1700000000,
+            "last_active_at": 1700000050,
+            "status": "idle",
+            "agent": {"model": "gpt-remote-model"},
+            "usage": {"input_tokens": 12, "output_tokens": 34, "total_tokens": 46},
+        }
+        with patch.object(ai, "_api_get", return_value=detail), \
+             patch.object(ai, "_session_title", return_value="Remote Session Title"):
+            vm.host["ai_active_session_id"] = "sess_remote_9999"
+            out_remote = io.StringIO()
+            with contextlib.redirect_stdout(out_remote):
+                vm.dictate("ai-status")
+            val_remote = out_remote.getvalue()
+            self.assertIn("Session current: Remote Session Title [sess_remote_9999]", val_remote)
+            self.assertIn("Model: gpt-remote-model", val_remote)
+            self.assertIn("Local turns: 2 user turn(s) active in memory", val_remote)
+
+        # 4. ai-new clears both remote session and local messages
+        with contextlib.redirect_stdout(io.StringIO()):
+            vm.dictate("ai-new")
+        self.assertNotIn("ai_active_session_id", vm.host)
+        self.assertNotIn("ai_messages", vm.host)
+        out_after_new = io.StringIO()
+        with contextlib.redirect_stdout(out_after_new):
+            vm.dictate("ai-status")
+        self.assertIn("Active AI session: none", out_after_new.getvalue())
+
+
 
 
 if __name__ == "__main__":

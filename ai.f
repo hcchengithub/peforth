@@ -545,6 +545,20 @@ code ai-use
     vm.host["ai_active_session_id"] = row["id"]
     title = ai._session_title(row["id"]) or "(untitled)"
     print(f"Using session {label}: {title} [{row['id']}]")
+    try:
+        with ai._open_session_store() as store:
+            history = store.get_session_messages(row["id"], limit=50)
+        if history:
+            sys_prompt = ai.get_system_prompt(vm)
+            loaded = [{"role": "system", "content": sys_prompt}]
+            for h in history:
+                loaded.append({"role": h["role"], "content": h["text"]})
+            vm.host["ai_messages"] = loaded
+            print(f"Loaded {len(history)} historical message(s) into conversation context.")
+        else:
+            vm.host.pop("ai_messages", None)
+    except Exception:
+        vm.host.pop("ai_messages", None)
     end-code
     // ( session-number | session-ID -- ) Select a remote session for follow-up chat.
     last :: safe=True
@@ -559,14 +573,42 @@ code ai-new
 
 code ai-status
     import ai
+    import os
 
     active_id = vm.host.get("ai_active_session_id")
-    if not active_id:
-        print("Active AI session: none (next request creates a new session)")
-    else:
+    if active_id:
         vm.push("current")
         vm.push(active_id)
         yield from vm.call(vm.tick("(ai-session-details)"))
+        messages = vm.host.get("ai_messages") or []
+        user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
+        if user_turns:
+            print(f"Local turns: {len(user_turns)} user turn(s) active in memory ({len(messages)} messages)")
+    else:
+        messages = vm.host.get("ai_messages") or []
+        user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
+        if user_turns:
+            first_content = user_turns[0].get("content")
+            first_text = ""
+            if isinstance(first_content, str):
+                first_text = first_content
+            elif isinstance(first_content, list):
+                for part in first_content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        first_text = part.get("text", "")
+                        break
+            first_sentence = ai.extract_first_sentence(first_text, max_chars=80)
+            model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+            runtime_id = vm.host.get("diagnostic_runtime_id")
+            print("Active AI session: local (in-memory)")
+            if first_sentence:
+                print(f"Topic: {first_sentence}")
+            print(f"Model: {model}")
+            print(f"Turns: {len(user_turns)} user turn(s) ({len(messages)} messages in context)")
+            if runtime_id:
+                print(f"Runtime: {runtime_id}")
+        else:
+            print("Active AI session: none (next request starts a fresh local conversation)")
     end-code
     // ( -- ) Show complete details for the session selected by this Forth process.
     last :: safe=True
