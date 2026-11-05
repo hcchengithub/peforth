@@ -1012,6 +1012,8 @@ def _api_request(method, path, payload=None, stream=False, timeout=30):
     if not key:
         raise RuntimeError("Set OPENAI_API_KEY in ~/.peforth/.env or the process environment to use AI.")
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+    if not base_url.endswith("/agents"):
+        base_url = f"{base_url}/agents"
     url = f"{base_url}{path}" if path.startswith("/") else f"{base_url}/{path}"
     request_text = None if payload is None else json.dumps(payload, ensure_ascii=False)
     body = request_text.encode("utf-8") if request_text is not None else None
