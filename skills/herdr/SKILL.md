@@ -12,19 +12,7 @@ In peforth, Herdr operations are integrated directly via the `herdr.f` vocabular
 Checking, inspecting, and reading panes are read-only operations marked `safe=True`. They execute immediately without triggering the security review:
 
 - `herdr-current-pane` `( -- pane-id )`
-  Resolves the current pane ID (e.g. `w5:pA`). Fails if not inside Herdr.
-- `herdr-right-pane` `( -- pane-id )`
-  Finds the neighbor pane to the right of the current pane (e.g. `w5:pE`).
-- `herdr-left-pane` `( -- pane-id )`
-  Finds the neighbor pane to the left of the current pane.
-- `herdr-up-pane` `( -- pane-id )`
-  Finds the neighbor pane above the current pane.
-- `herdr-down-pane` `( -- pane-id )`
-  Finds the neighbor pane below the current pane.
-- `herdr-neighbor-pane` `( direction -- pane-id )`
-  Finds neighbor in given direction string (`"right"`, `"left"`, `"up"`, `"down"`).
-- `herdr-panes` `( -- pane-ids )`
-  Returns a list of all pane IDs in the current workspace.
+  Resolves the current caller pane ID (e.g. `w5:pA`). Fails if not inside Herdr.
 - `herdr-screen-read` `( pane-id [lines] -- text )`
   Reads visible lines from specified pane. Default lines = 80.
 - `herdr-screen-tail` `( pane-id [lines] -- text )`
@@ -35,21 +23,13 @@ Checking, inspecting, and reading panes are read-only operations marked `safe=Tr
   Clears custom pane names in current workspace.
 
 ### Examples for AI:
-- To inspect/read the right pane:
+- To inspect/read a specific pane (e.g. `w5:pF` or `w5:pE`):
   ```forth
-  herdr-right-pane 40 herdr-screen-tail . cr
-  ```
-- To inspect a specific pane (e.g. `w5:pF`):
-  ```forth
-  " w5:pF" 30 herdr-screen-tail . cr
+  " w5:pE" 30 herdr-screen-tail . cr
   ```
 - To check current pane ID:
   ```forth
   herdr-current-pane . cr
-  ```
-- To check all panes in the current workspace:
-  ```forth
-  herdr-panes . cr
   ```
 
 **CRITICAL RULE: NEVER use `py>>` or Python `os.environ` or external bash scripts to inspect panes or check `HERDR_ENV`. All read-only Forth words above handle environment checks automatically and run without approval.**

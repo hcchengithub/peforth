@@ -204,6 +204,14 @@ def install_security_guard(vm):
                 yield from original_call(operation)
                 return
 
+            # Inherited Frame Safety:
+            # If the current execution is within a Frame whose word is marked safe=True,
+            # all operations within this parent frame inherit safety and execute freely.
+            if any(getattr(getattr(f, "word", None), "properties", {}).get("safe")
+                   for f in getattr(task, "frames", [])):
+                yield from original_call(operation)
+                return
+
             trusted_tasks = vm.host.setdefault("trusted_ai_tasks", set())
             if task not in trusted_tasks:
                 resolved = vm._resolve(operation)
@@ -214,7 +222,13 @@ def install_security_guard(vm):
                     is_safe = True
 
                 if not is_safe:
-                    name = getattr(resolved, "name", repr(resolved))
+                    source_text = getattr(resolved, "source", None)
+                    name = getattr(resolved, "name", None)
+                    if not name:
+                        name = source_text if source_text else repr(resolved)
+                    if not source_text:
+                        source_text = name
+
                     turn_id = vm.host.get("ai_current_turn_id")
 
                     # In interactive mode (not headless), use ai-approve UI
@@ -223,7 +237,7 @@ def install_security_guard(vm):
                         if approval_word:
                             proposal = {
                                 "purpose": f"Execution of unsafe word '{name}'",
-                                "source": name,
+                                "source": source_text,
                             }
                             stack_depth = len(vm.dstack)
                             vm.push(proposal)
@@ -437,7 +451,7 @@ When the user asks you to run Python, write Python, or perform operations best s
 === Important Rules ===
 - When executing code, always explain your purpose and propose clean Forth source code.
 - If your proposed code executes non-safe words (such as <py>, file operations, or system commands), the VM task-level security guard will pause and ask the user for approval. This is normal and expected.
-- For Herdr terminal operations: inspect or read panes using safe Forth words (`herdr-current-pane`, `herdr-right-pane`, `herdr-left-pane`, `herdr-panes`, `herdr-screen-tail`, `herdr-screen-read`). Reading panes is safe and requires NO user approval. Never use `py>>` or bash checks to inspect Herdr panes.
+- For Herdr terminal operations: inspect or read panes using safe Forth words (`herdr-current-pane`, `herdr-screen-tail`, `herdr-screen-read`). Reading panes is safe and requires NO user approval. Never use `py>>` or bash checks to inspect Herdr panes.
 - Be concise, accurate, and helpful.
 """
 

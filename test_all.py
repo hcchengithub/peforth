@@ -338,9 +338,7 @@ class TestSafePropertyAudit(unittest.TestCase):
     def test_herdr_words_and_security_annotations(self):
         safe_words = [
             "herdr-current-pane", "herdr-screen-read", "herdr-screen-tail",
-            "herdr-show-pane-id", "herdr-clear-pane-id", "stringify",
-            "herdr-panes", "herdr-neighbor-pane", "herdr-right-pane",
-            "herdr-left-pane", "herdr-up-pane", "herdr-down-pane"
+            "herdr-show-pane-id", "herdr-clear-pane-id", "stringify"
         ]
         unsafe_words = [
             "herdr-screen-send-text", "herdr-screen-send-keys", "herdr-screen-run"
@@ -445,6 +443,46 @@ class TestSecurityTaskApproval(unittest.TestCase):
         # Approval must be requested exactly ONCE for outer; inner must NOT trigger recursion
         self.assertEqual(len(approval_calls), 1)
         self.assertIn("risky_outer", approval_calls[0]["purpose"])
+
+    def test_parent_frame_safety_inheritance(self):
+        from projectk import Task
+        # When a parent word is safe, internal Python expressions (like py>)
+        # inherit safety within that frame and do not pause an untrusted AI task
+        self.vm.dictate(": safe_wrapper py> 21*2 ; ' safe_wrapper :: safe=True")
+        task = Task(self.vm, self.vm.evaluate("safe_wrapper"))
+        self.vm.host["in_ai_task"] = task
+        task.resume()
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(self.vm.pop(), 42)
+
+        # nokia is a safe colon word using py> internally; it must complete without pausing
+        task_nokia = Task(self.vm, self.vm.evaluate("nokia"))
+        self.vm.host["in_ai_task"] = task_nokia
+        task_nokia.resume()
+        self.assertEqual(task_nokia.status, "done")
+
+    def test_unsafe_compiled_closure_shows_source_code(self):
+        from projectk import Task
+        self.vm.host["headless"] = False
+        # When an unsafe compiled closure triggers approval, proposal['source'] must be the Python source
+        self.vm.dictate(": unsafe_wrapper py> 99*2 ;")
+        approval_calls = []
+        def mock_approve(v):
+            proposal = v.pop()
+            approval_calls.append(proposal)
+            v.push("allow_once")
+        self.vm.define("ai-approve", mock_approve, properties={"safe": True})
+
+        task = Task(self.vm, self.vm.evaluate("unsafe_wrapper"))
+        self.vm.host["in_ai_task"] = task
+        task.resume()
+
+        self.assertEqual(task.status, "done")
+        self.assertEqual(self.vm.pop(), 198)
+        self.assertEqual(len(approval_calls), 1)
+        # Verify it displays the actual source code rather than '<function ...>'
+        self.assertEqual(approval_calls[0]["source"], "unsafe_wrapper")
 
 
 class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):

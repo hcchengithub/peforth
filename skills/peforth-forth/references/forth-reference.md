@@ -22,13 +22,10 @@ peforth evaluates each input as a resumable `Task`. A host word can yield `vm.pa
 
 In peforth, Herdr words provide terminal multi-pane access:
 - `herdr-current-pane ( -- pane-id )`: Get current caller pane ID (safe, no approval).
-- `herdr-right-pane ( -- pane-id )`: Find neighbor pane to the right (safe, no approval).
-- `herdr-left-pane ( -- pane-id )`: Find neighbor pane to the left (safe, no approval).
-- `herdr-up-pane ( -- pane-id )` / `herdr-down-pane ( -- pane-id )`: Find vertical neighbor panes (safe, no approval).
-- `herdr-neighbor-pane ( direction -- pane-id )`: Direction can be `"right"`, `"left"`, `"up"`, `"down"` (safe, no approval).
-- `herdr-panes ( -- list-of-pane-ids )`: List all panes in current workspace (safe, no approval).
 - `herdr-screen-read ( pane-id [lines] -- text )`: Read visible screen text (safe, no approval).
 - `herdr-screen-tail ( pane-id [lines] -- text )`: Read recent screen text tail (safe, no approval).
+- `herdr-show-pane-id ( -- )`: Show pane IDs in border titles (safe, no approval).
+- `herdr-clear-pane-id ( -- )`: Clear custom border titles (safe, no approval).
 - `herdr-screen-send-text ( pane-id text -- result )`: Send text to pane (unsafe, triggers approval).
 - `herdr-screen-send-keys ( pane-id keys -- result )`: Send keys to pane (unsafe, triggers approval).
 - `herdr-screen-run ( pane-id command -- result )`: Run command in pane (unsafe, triggers approval).

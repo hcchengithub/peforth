@@ -1054,6 +1054,8 @@ code </py>
     if vm.compiling:
         def op(v):
             exec(source, {"vm": v, **v.host})
+        op.source = source
+        op.name = f"py: {source.strip()}"
         vm.comma(op)
     else:
         exec(source, {"vm": vm, **vm.host})
@@ -1066,6 +1068,8 @@ code </pyV>
     if vm.compiling:
         def op(v):
             exec(wrapped, {"vm": v, **v.host})
+        op.source = source
+        op.name = f"py> {source}"
         vm.comma(op)
     else:
         exec(wrapped, {"vm": vm, **vm.host})
