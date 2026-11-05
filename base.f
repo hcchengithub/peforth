@@ -565,11 +565,70 @@ code words
 
 code see
     name = vm.input.read()
+    if not name:
+        raise KernelError("see expects a word name")
     word = vm.tick(name)
     if word is None:
         raise KernelError(f"Unknown word: {name}")
+
+    has_doc = bool(getattr(word, "help", "") or getattr(word, "comment", ""))
+    if has_doc:
+        help_text = word.help.strip() if getattr(word, "help", "") else ""
+        if help_text:
+            print(f"{word.name} {help_text}")
+        else:
+            print(word.name)
+        if getattr(word, "comment", ""):
+            for line in word.comment.splitlines():
+                print(f"    {line}")
+        print()
+
     print(word)
-    print(word.source or word.action)
+
+    if getattr(word, "category", "") == "colon" or isinstance(getattr(word, "action", None), tuple):
+        parts = []
+        for item in word.action:
+            if hasattr(item, "name") and item.name:
+                parts.append("does>" if item.name == "(does>)" else str(item.name))
+            elif hasattr(item, "source") and item.source:
+                parts.append(str(item.source))
+            elif hasattr(item, "value"):
+                if hasattr(item.value, "name"):
+                    parts.append(f"['] {item.value.name}")
+                elif isinstance(item.value, str):
+                    parts.append(f's" {item.value}"')
+                else:
+                    parts.append(repr(item.value))
+            elif isinstance(item, int):
+                parts.append(str(item))
+            elif callable(item):
+                src = getattr(item, "name", None) or getattr(item, "source", None)
+                if not src:
+                    import inspect
+                    try:
+                        src = inspect.getsource(item).strip()
+                    except Exception:
+                        src = getattr(item, "__name__", repr(item))
+                parts.append(str(src))
+            else:
+                parts.append(repr(item))
+        imm = " immediate" if word.immediate else ""
+        print(f": {word.name} {' '.join(parts)} ;{imm}")
+    elif getattr(word, "category", "") == "constant" or (hasattr(word, "body") and word.category == "constant"):
+        val = word.body[0] if hasattr(word, "body") and word.body else getattr(word, "value", None)
+        print(f"{val!r} constant {word.name}")
+    elif getattr(word, "category", "") == "variable" or (hasattr(word, "body") and word.category == "variable"):
+        print(f"variable {word.name} (body: {word.body!r})")
+    elif getattr(word, "category", "") == "created" or (hasattr(word, "body") and word.body is not None):
+        print(f"created {word.name} (body: {word.body!r})")
+    elif getattr(word, "source", ""):
+        lines = [f"code {word.name}"]
+        lines.append(word.source.rstrip())
+        lines.append("end-code" + (" immediate" if word.immediate else ""))
+        print("\n".join(lines))
+    else:
+        imm = " (immediate)" if word.immediate else ""
+        print(f"Host word {word.name}: {word.action!r}{imm}")
     end-code immediate
     // ( <name> -- ) Display a word's definition and source.
     last :: safe=True
@@ -1127,6 +1186,8 @@ code (::)
             else:
                 code_str = f"obj{s}" if s.startswith("[") or s.startswith("(") else f"obj.{s}"
                 exec(code_str, {"vm": v, "obj": target, **v.host})
+        op.source = stmt
+        op.name = f":: {stmt}"
         vm.comma(op)
     else:
         target = vm.pop()
@@ -1159,6 +1220,8 @@ code (:>)
     if vm.compiling:
         def op(v):
             exec(code_str, {"vm": v, **v.host})
+        op.source = stmt
+        op.name = f":> {stmt}"
         vm.comma(op)
     else:
         exec(code_str, {"vm": vm, **vm.host})

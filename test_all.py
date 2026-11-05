@@ -279,6 +279,33 @@ class TestSafePropertyAudit(unittest.TestCase):
         output = buf.getvalue()
         self.assertIn("No word matching 'non_existent_word_xyz'.", output)
 
+    def test_see_decompiles_colon_words_and_source(self):
+        import io
+        from contextlib import redirect_stdout
+
+        # 1. Test see on colon word with python expression (nokia)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see nokia")
+        output = buf.getvalue()
+        self.assertIn(": nokia py> [[659,120],[587,120],[370,240],[415,240]] (play-notes) ;", output)
+        self.assertNotIn("<function", output, "see nokia should not show raw function object address")
+
+        # 2. Test see on immediate colon word (bye)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see bye")
+        output = buf.getvalue()
+        self.assertIn(": bye (bye) abort ; immediate", output)
+
+        # 3. Test see on code word (play-notes)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see (play-notes)")
+        output = buf.getvalue()
+        self.assertIn("code (play-notes)", output)
+        self.assertIn("end-code", output)
+
     def test_forth_word_completer_matches_dictionary_in_all_modes(self):
         try:
             from prompt_toolkit.document import Document

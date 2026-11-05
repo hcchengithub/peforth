@@ -384,6 +384,19 @@ def install_security_guard(vm):
                 if not is_safe:
                     source_text = getattr(resolved, "source", None)
                     name = getattr(resolved, "name", None)
+                    if not name and callable(resolved):
+                        import inspect
+                        try:
+                            fn_src = inspect.getsource(resolved).strip()
+                            if fn_src:
+                                source_text = source_text or fn_src
+                                name = fn_src.splitlines()[0]
+                        except Exception:
+                            pass
+                        if not name:
+                            fn_name = getattr(resolved, "__name__", "")
+                            if fn_name and fn_name != "<lambda>":
+                                name = fn_name
                     if not name:
                         name = source_text if source_text else repr(resolved)
                     if not source_text:
