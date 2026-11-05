@@ -252,6 +252,23 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("- OS:", prompt)
         self.assertIn("- Active Shell:", prompt)
 
+    def test_vision_words_exist_and_are_safe(self):
+        vision_words = [
+            "desktop-capture",
+            "desktop-capture-region",
+            "ai-image-url",
+            "ai-image-file",
+            "ai-screen",
+            "ai-screen-region",
+        ]
+        for name in vision_words:
+            word = self.vm.tick(name)
+            self.assertIsNotNone(word, f"Word '{name}' must exist in dictionary")
+            self.assertTrue(word.properties.get("safe", False), f"Word '{name}' must be safe=True")
+            help_text = getattr(word, "help", "") or ""
+            self.assertTrue(bool(help_text.strip()), f"Word '{name}' must have help documentation")
+
+
     def test_words_and_help_pattern_filtering(self):
         import io
         from contextlib import redirect_stdout
@@ -704,6 +721,105 @@ class TestForthSelfTestExecution(unittest.TestCase):
 
         task = vm.dictate("include selftest.f")
         self.assertEqual(task.status, "done", f"selftest.f failed with status {task.status}")
+
+
+class TestVisionAndDesktopCapture(unittest.TestCase):
+    """Verifies desktop screenshot capture, region cropping, image compression, and vision Forth words."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        cls.vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+    def test_capture_desktop_live(self):
+        import ai
+        try:
+            meta = ai.capture_desktop(vm=self.vm)
+        except RuntimeError as e:
+            if "display handle is invalid" in str(e) or "PowerShell is not available" in str(e):
+                self.skipTest(f"Desktop capture skipped: {e}")
+            raise
+        self.assertIsInstance(meta, dict)
+        for key in ("path", "width", "height", "orig_width", "orig_height", "size", "captured_at"):
+            self.assertIn(key, meta)
+        self.assertTrue(os.path.isfile(meta["path"]))
+        self.assertGreater(meta["size"], 0)
+        self.assertLessEqual(meta["size"], ai._SCREENSHOT_MAX_BYTES)
+        try:
+            os.remove(meta["path"])
+        except OSError:
+            pass
+
+    def test_capture_desktop_region_normalized(self):
+        import ai
+        try:
+            meta = ai.capture_desktop(region=(0.0, 0.0, 0.25, 0.25), vm=self.vm)
+        except RuntimeError as e:
+            if "display handle is invalid" in str(e) or "PowerShell is not available" in str(e):
+                self.skipTest(f"Desktop capture skipped: {e}")
+            raise
+        self.assertTrue(os.path.isfile(meta["path"]))
+        self.assertGreater(meta["width"], 0)
+        self.assertGreater(meta["height"], 0)
+        try:
+            os.remove(meta["path"])
+        except OSError:
+            pass
+
+    def test_capture_desktop_invalid_args(self):
+        import ai
+        with self.assertRaises(ValueError):
+            ai.capture_desktop(max_dimension=32)
+        with self.assertRaises(ValueError):
+            ai.capture_desktop(quality=5)
+        with self.assertRaises(ValueError):
+            ai.capture_desktop(region=[1, 2, 3])
+        with self.assertRaises(ValueError):
+            ai.capture_desktop(region=[0, 0, -10, 100])
+
+    def test_encode_image_file_data_uri(self):
+        import ai
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            f.write(
+                b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00"
+                b"\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f"
+                b"\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342\xff\xc0\x00\x0b"
+                b"\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01"
+                b"\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01"
+                b"\x01\x00\x00?\x00\xbf\x00\xff\xd9"
+            )
+            temp_path = f.name
+        try:
+            uri = ai.encode_image_file_data_uri(temp_path, vm=self.vm)
+            self.assertTrue(uri.startswith("data:image/jpeg;base64,"))
+            self.assertLessEqual(len(uri), ai._IMAGE_DATA_URI_MAX_LEN)
+        finally:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+    def test_desktop_capture_forth_execution(self):
+        output = io.StringIO()
+        old_stdout = sys.stdout
+        try:
+            sys.stdout = output
+            self.vm.dictate("desktop-capture")
+        except KernelError as e:
+            if "display handle is invalid" in str(e) or "PowerShell is not available" in str(e):
+                self.skipTest(f"Desktop capture skipped: {e}")
+            raise
+        finally:
+            sys.stdout = old_stdout
+
+        self.assertGreater(len(self.vm.dstack), 0)
+        path = self.vm.pop()
+        self.assertIsInstance(path, str)
+        self.assertTrue(os.path.isfile(path))
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 class TestCLISmoke(unittest.TestCase):

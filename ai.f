@@ -209,6 +209,7 @@ code (ai)
     // ( prompt stream? -- [response] ) Core AI turn generator.
     /// Send prompt to AI assistant. If stream? is True, stream reply to stdout.
     /// If stream? is False, push the full reply string onto the data stack.
+last :: safe=True
 
 : ai:
     rest
@@ -279,3 +280,133 @@ code (ai-approve-input)
     ;
     // ( proposal -- decision ) Interactive approval workflow for AI proposed code.
     last :: safe=True
+
+\ --- 6. Vision & Desktop Capture Words ---
+
+code desktop-capture
+    import ai
+    import json
+    meta = ai.capture_desktop(vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(meta["path"])
+    end-code
+    // ( -- path-string ) Capture a DPI-aware live Windows desktop screenshot sized for AI inspection.
+    /// Saves a unique JPEG in TEMP, prints capture metadata JSON, and pushes the file path.
+    last :: safe=True
+
+code desktop-capture-region
+    import ai
+    import json
+    height = vm.pop()
+    width = vm.pop()
+    y = vm.pop()
+    x = vm.pop()
+    meta = ai.capture_desktop(region=(x, y, width, height), vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(meta["path"])
+    end-code
+    // ( x y width height -- path-string ) Capture a pixel or normalized (0.0..1.0) region of the live Windows desktop.
+    /// Saves a unique JPEG in TEMP, prints capture metadata JSON, and pushes the file path.
+    last :: safe=True
+
+code ai-image-url
+    from urllib.parse import urlsplit
+    stream_response = vm.pop()
+    image_url = vm.pop()
+    prompt = vm.pop()
+    if not isinstance(prompt, str):
+        raise KernelError("ai-image-url expects prompt text.")
+    if not isinstance(image_url, str) or not image_url.strip():
+        raise KernelError("ai-image-url expects a non-empty HTTPS URL.")
+    image_url = image_url.strip()
+    parsed = urlsplit(image_url)
+    if parsed.scheme.casefold() != "https" or not parsed.netloc:
+        raise KernelError("ai-image-url only accepts absolute HTTPS URLs.")
+    if type(stream_response) is not bool:
+        raise KernelError("ai-image-url expects a Boolean output mode.")
+    vm.host["ai_image_url_once"] = image_url
+    vm.host["ai_isolated_session_once"] = True
+    vm.push(prompt)
+    vm.push(stream_response)
+    try:
+        yield from vm.call(vm.tick("(ai)"))
+    finally:
+        vm.host.pop("ai_image_url_once", None)
+        vm.host.pop("ai_isolated_session_once", None)
+    end-code
+    // ( prompt-string image-url-string stream? -- [response-string] ) Send a remote image URL to AI.
+    last :: safe=True
+
+code ai-image-file
+    import ai
+    stream_response = vm.pop()
+    file_path = vm.pop()
+    prompt = vm.pop()
+    if not isinstance(prompt, str):
+        raise KernelError("ai-image-file expects prompt text.")
+    if not isinstance(file_path, str) or not file_path.strip():
+        raise KernelError("ai-image-file expects a valid file path.")
+    if type(stream_response) is not bool:
+        raise KernelError("ai-image-file expects a Boolean output mode.")
+    data_uri = ai.encode_image_file_data_uri(file_path, vm=vm)
+    vm.host["ai_image_url_once"] = data_uri
+    vm.host["ai_isolated_session_once"] = True
+    vm.push(prompt)
+    vm.push(stream_response)
+    try:
+        yield from vm.call(vm.tick("(ai)"))
+    finally:
+        vm.host.pop("ai_image_url_once", None)
+        vm.host.pop("ai_isolated_session_once", None)
+    end-code
+    // ( prompt-string file-path-string stream? -- [response-string] ) Send a local image file as a Data URI to AI.
+    last :: safe=True
+
+code ai-screen
+    import ai
+    import json
+    top = vm.pop()
+    if type(top) is bool:
+        stream_response = top
+        prompt = vm.pop()
+    else:
+        prompt = top
+        stream_response = not bool(vm.host.get("in_ai_task"))
+    if not isinstance(prompt, str):
+        raise KernelError("ai-screen expects prompt text.")
+    meta = ai.capture_desktop(vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(prompt)
+    vm.push(meta["path"])
+    vm.push(stream_response)
+    yield from vm.call(vm.tick("ai-image-file"))
+    end-code
+    // ( prompt-string [stream?] -- [response-string] ) Capture the live Windows desktop and inspect it with ai-image-file in one step.
+    last :: safe=True
+
+code ai-screen-region
+    import ai
+    import json
+    top = vm.pop()
+    if type(top) is bool:
+        stream_response = top
+        height = vm.pop()
+    else:
+        height = top
+        stream_response = not bool(vm.host.get("in_ai_task"))
+    width = vm.pop()
+    y = vm.pop()
+    x = vm.pop()
+    prompt = vm.pop()
+    if not isinstance(prompt, str):
+        raise KernelError("ai-screen-region expects prompt text.")
+    meta = ai.capture_desktop(region=(x, y, width, height), vm=vm)
+    print(json.dumps(meta, ensure_ascii=False))
+    vm.push(prompt)
+    vm.push(meta["path"])
+    vm.push(stream_response)
+    yield from vm.call(vm.tick("ai-image-file"))
+    end-code
+    // ( prompt-string x y width height [stream?] -- [response-string] ) Capture a live desktop region and inspect it with ai-image-file in one step.
+    last :: safe=True
+
