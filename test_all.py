@@ -379,10 +379,15 @@ class TestSafePropertyAudit(unittest.TestCase):
         info = self.vm.pop()
         self.assertIsInstance(info, dict)
         self.assertIn("os", info)
+        self.assertIn("environment", info)
+        self.assertIn("active_shell", info)
+        self.assertIn("default_shell", info)
         self.assertIn("shells", info)
         self.assertIn("pwsh", info["shells"])
         self.assertIn("curl", info["shells"])
         self.assertIn("bash", info["shells"])
+        self.assertIn("wsl", info)
+        self.assertIn("active", info["wsl"])
 
 
 

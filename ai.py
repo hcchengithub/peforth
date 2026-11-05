@@ -115,8 +115,24 @@ def _http_request(url, method="GET", headers=None, body=None, timeout=30):
 
 def detect_system_info(vm=None) -> dict:
     is_windows = os.name == "nt"
-    is_wsl = bool(os.environ.get("WSL_DISTRO_NAME"))
+    is_wsl = bool(os.environ.get("WSL_DISTRO_NAME")) or "microsoft" in platform.release().casefold()
+    environment = "wsl" if is_wsl else ("windows" if is_windows else "linux")
     os_name = "Windows" if is_windows else ("WSL" if is_wsl else "Linux")
+
+    # Detect active shell
+    if is_wsl:
+        active_shell = "bash"
+    elif is_windows:
+        if "PSModulePath" in os.environ:
+            active_shell = "pwsh"
+        elif "PROMPT" in os.environ:
+            active_shell = "cmd"
+        else:
+            active_shell = "pwsh"
+    else:
+        active_shell = os.path.basename(os.environ.get("SHELL", "bash"))
+
+    default_shell = "pwsh" if is_windows else "bash"
 
     pwsh_candidates = ("pwsh", "powershell", "pwsh.exe", "powershell.exe") if is_windows else ("pwsh", "powershell")
     pwsh_path = None
@@ -128,7 +144,7 @@ def detect_system_info(vm=None) -> dict:
     curl_path = shutil.which("curl.exe" if is_windows else "curl")
     bash_path = shutil.which("bash.exe" if is_windows else "bash")
 
-    wsl_info = {"available": False, "path": None, "distro": None}
+    wsl_info = {"active": is_wsl, "available": False, "path": None, "distro": None}
     if is_windows:
         wsl_bin = shutil.which("wsl") or shutil.which("wsl.exe")
         if wsl_bin:
@@ -149,6 +165,9 @@ def detect_system_info(vm=None) -> dict:
 
     return {
         "os": os_name,
+        "environment": environment,
+        "active_shell": active_shell,
+        "default_shell": default_shell,
         "python": {
             "version": sys.version.split()[0],
             "executable": sys.executable,
