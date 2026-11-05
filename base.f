@@ -787,6 +787,29 @@ code [compile]
     // ( <name> -- ) Compile an immediate word into current definition.
     last :: safe=True
 
+code alias
+    target = vm.pop()
+    if not hasattr(target, "action") or not isinstance(getattr(target, "name", None), str):
+        raise KernelError("alias expects a word on the stack.")
+    alias_name = vm.input.read()
+    if alias_name is None:
+        raise KernelError("Expected a name after alias.")
+    new_word = vm.define(alias_name, (target,), immediate=target.immediate,
+                         source=f": {alias_name} {target.name} ;",
+                         help=target.help, comment=target.comment, category="alias",
+                         properties=dict(getattr(target, "properties", {})))
+    setattr(new_word, "type", "alias")
+    end-code immediate
+    // ( word <alias-name> -- ) Define an alias for an existing word.
+    /// Usage: ' true alias True. The alias executes the original word.
+last :: safe=True
+
+' true alias True
+' false alias False
+' none alias None
+' inf alias infinity
+' -inf alias -infinity
+
 : begin     here ; immediate
     // ( -- addr ) Mark the start of an indefinite loop.
     /// Push current compilation address (here) as backward branch destination.
@@ -1107,20 +1130,6 @@ code nop
     pass
     end-code
     // ( -- ) No operation.
-    last :: safe=True
-
-code alias
-    target_name = vm.input.read()
-    new_name = vm.input.read()
-    if not target_name or not new_name:
-        raise KernelError("alias expects <target> <new_name>")
-    word = vm.tick(target_name)
-    if word is None:
-        raise KernelError(f"alias: unknown word {target_name}")
-    vm.define(new_name, word.action, immediate=word.immediate, category="alias",
-              source=word.source, help=word.help, comment=word.comment, properties=word.properties)
-    end-code
-    // ( <target> <new_name> -- ) Create alias for an existing word.
     last :: safe=True
 
 code perform

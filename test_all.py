@@ -194,6 +194,29 @@ class TestSafePropertyAudit(unittest.TestCase):
             self.assertIn("source", item, "search results must include the word source")
 
 
+    def test_alias_and_standard_aliases(self):
+        # Verify 2.0.0 aliases True, False, None, infinity, -infinity exist and work
+        self.vm.dictate("none None")
+        self.assertIsNone(self.vm.pop())
+        self.assertIsNone(self.vm.pop())
+
+        self.vm.dictate("true True false False")
+        self.assertIs(self.vm.pop(), False)
+        self.assertIs(self.vm.pop(), False)
+        self.assertIs(self.vm.pop(), True)
+        self.assertIs(self.vm.pop(), True)
+
+        self.vm.dictate("infinity -infinity")
+        self.assertEqual(self.vm.pop(), float("-inf"))
+        self.assertEqual(self.vm.pop(), float("inf"))
+
+        # Verify alias signature ' word alias Name
+        self.vm.dictate(": original 17 ; ' original alias original-alias original-alias")
+        self.assertEqual(self.vm.pop(), 17)
+        alias_word = self.vm.tick("original-alias")
+        self.assertEqual(alias_word.category, "alias")
+        self.assertEqual(getattr(alias_word, "type", "alias"), "alias")
+
     def test_chat_and_forth_mode_switching(self):
         self.vm.dictate("chat")
         self.assertEqual(self.vm.host.get("repl_mode"), "chat")
