@@ -188,6 +188,9 @@ class TestSafePropertyAudit(unittest.TestCase):
         matched_names = [w["name"] for w in res["words"]]
         self.assertIn("execute", matched_names)
         self.assertTrue(any("py" in name for name in matched_names))
+        for item in res["words"]:
+            self.assertIn("source", item, "search results must include the word source")
+
 
     def test_chat_and_forth_mode_switching(self):
         self.vm.dictate("chat")

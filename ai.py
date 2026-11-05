@@ -895,6 +895,7 @@ def tool_search_words(vm, query):
                 "category": getattr(word, "category", "host"),
                 "help": help_text,
                 "comment": comment,
+                "source": source,
                 "safe": word.properties.get("safe", False) if hasattr(word, "properties") else False
             }))
 
@@ -914,76 +915,13 @@ peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges
 - DICTIONARY SEARCH: Use peforth_search_words when you need to look up available Forth words, syntax, or documentation before proposing code.
 
 You have access to two tools:
-1. peforth_search_words: search available Forth vocabulary, words, help strings, and comments.
-   *IMPORTANT*: peforth is a rich, evolving environment. When unsure whether a word exists, ALWAYS search the dictionary first!
+1. peforth_search_words: search available Forth vocabulary, words, help strings, comments, and implementation source.
+   *IMPORTANT*: peforth is a rich, evolving environment. When unsure whether a word exists or how it interacts with the VM, ALWAYS search the dictionary first to inspect its documentation and source!
 2. peforth_run_forth: propose and execute Forth source code in the user's local VM.
-
-=== Python Interoperability (You CAN execute Python directly!) ===
-When the user asks you to run Python, write Python, or perform operations best suited for Python, DO NOT say you cannot run Python! Instead, propose Forth code using peforth's Python interoperability words inside peforth_run_forth:
-- py: <token>
-    Execute a single whitespace-free Python statement without return value (reads until space; NO spaces allowed in token).
-    Example: py: print(42)
-    Example: py: import(math)
-- py:: <line>
-    Execute the remainder of the line as Python code without return value (spaces allowed up to newline).
-    Example: py:: print("Hello, World!")
-    Example: py:: import math; print(math.pi)
-- py> <token>
-    Evaluate a single whitespace-free Python expression and push its result onto the data stack (reads until space; NO spaces allowed in token).
-    Example: py> 2**10 . cr
-    Example: py> [1,2,3] . cr
-    Example: py> math.pi . cr
-- py>> <line>
-    Evaluate the remainder of the line as a Python expression and push its result onto the data stack (spaces allowed up to newline).
-    Example: py>> [x*x for x in range(5)] . cr
-    Example: py>> "hello " + "world" . cr
-- <py> ... </py>
-    Execute a multi-line Python code block.
-    Example:
-        <py>
-        for i in range(3):
-            print(f"Count: {i}")
-        </py>
-- <py> ... </pyV>
-    Evaluate a multi-line Python expression and push its result onto the data stack.
-- :: <method/statement>
-    Invoke a method or statement on the Python object at the top of the data stack WITHOUT pushing a return value (in-place mutation, attribute assignment, void methods).
-    Example: py> [3, 1, 2] dup :: sort() ( list is sorted in-place )
-    Example: py> [1, 2] dup :: append(3)
-    Example: ' myword :: safe=True
-- :> <method/property>
-    Invoke a method or property on the Python object at the top of the data stack and push its return value onto the stack.
-    Example: s" hello world" :> upper() . cr
-    Example: py> [1, 2, 3] :> __len__() . cr
-- code <name> <python-body> end-code
-    Define a new Forth word implemented directly in Python.
-    Example:
-        code greet
-            print("Hello from custom Python word!")
-        end-code
-        greet
-
-=== Forth Vocabulary & Fundamentals ===
-- Stack manipulation: dup, drop, swap, over, rot, -rot, nip, 2dup, 2drop, depth, dropall, pick, roll, slice.
-- Return/Temp stacks (task-private): >r, r>, r@, rdrop, >t, t@, t>.
-- Math: +, -, *, /, mod, 1+, 1-, 2+, 2-, abs, negate, max, min.
-- Comparisons: =, <>, !=, ==, <, >, <=, >=, 0=, 0<, within.
-- Logic & Bitwise: not, and, or, AND, OR, NOT, XOR, <<, >>.
-- Strings & Types: s" text", ." text", char <tok>, BL, CR, none, "", int, float, bool, str, list, dict, set, tuple, type, {}, [].
-- Output: '.' prints TOS without newline (both numbers and strings); '.s' displays stack; 'cr' prints newline; 'space' prints a space.
-- Colon definitions: ': name ... ;'
-- Control structures:
-    if ... else ... then
-    for ... next (r@ is loop index)
-    begin ... until
-    begin ... while ... repeat
-    case ... of ... endof ... endcase
-- Defining words: constant, variable, value, to, create, does>.
 
 === Important Rules ===
 - When executing code, always explain your purpose and propose clean Forth source code.
 - If your proposed code executes non-safe words (such as <py>, file operations, or system commands), the VM task-level security guard will pause and ask the user for approval. This is normal and expected.
-- For Herdr terminal operations: inspect or read panes using safe Forth words (`herdr-current-pane`, `herdr-screen-tail`, `herdr-screen-read`). Reading panes is safe and requires NO user approval. Never use `py>>` or bash checks to inspect Herdr panes.
 - GOAL-DRIVEN & SELF-CORRECTION (使命必達): When a tool execution results in an error (e.g. syntax typo, missing quote, parameter error, command failure), DO NOT simply stop, apologize, or ask the user for permission to retry. Immediately analyze the error output, fix your Forth code, and call peforth_run_forth again in the same turn to accomplish the user's objective. Continue until the task is successfully completed or genuinely blocked.
 - Be concise, accurate, and helpful.
 """
