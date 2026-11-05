@@ -44,20 +44,38 @@ code (play-notes)
     // ( notes-list -- ) Asynchronously play notes via PowerShell Console::Beep.
     last :: safe=True
 
+code (nokia-notes)
+    vm.push([[659,120],[587,120],[370,240],[415,240]])
+    end-code
+    // ( -- notes ) Gentle first Nokia Tune phrase (4 notes).
+    last :: safe=True
+
+code (nokia2-notes)
+    vm.push([[494,120],[440,120],[277,240],[330,240],[440,880]])
+    end-code
+    // ( -- notes ) Gentle final Nokia Tune phrase (5 notes).
+    last :: safe=True
+
+code (nokia-full-notes)
+    vm.push([[659,120],[587,120],[370,240],[415,240],[554,120],[494,120],[294,240],[330,240],[494,120],[440,120],[277,240],[330,240],[440,880]])
+    end-code
+    // ( -- notes ) Complete gentle Nokia Tune (13 notes).
+    last :: safe=True
+
 : nokia ( -- )
-    py> [[659,120],[587,120],[370,240],[415,240]] (play-notes)
+    (nokia-notes) (play-notes)
     ;
     // ( -- ) Play the gentle first Nokia Tune phrase (4 notes) asynchronously.
     last :: safe=True
 
 : nokia2 ( -- )
-    py> [[494,120],[440,120],[277,240],[330,240],[440,880]] (play-notes)
+    (nokia2-notes) (play-notes)
     ;
     // ( -- ) Play the gentle final Nokia Tune phrase (5 notes, long finish) asynchronously.
     last :: safe=True
 
 : nokia-full ( -- )
-    py> [[659,120],[587,120],[370,240],[415,240],[554,120],[494,120],[294,240],[330,240],[494,120],[440,120],[277,240],[330,240],[440,880]] (play-notes)
+    (nokia-full-notes) (play-notes)
     ;
     // ( -- ) Play the complete gentle Nokia Tune (13 notes) asynchronously.
     last :: safe=True

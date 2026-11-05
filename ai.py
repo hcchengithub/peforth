@@ -200,6 +200,10 @@ def install_security_guard(vm):
 
         # Security check applies only when running inside an AI Task context
         if in_ai_task is not None and task is in_ai_task:
+            if vm.host.get("in_approval"):
+                yield from original_call(operation)
+                return
+
             trusted_tasks = vm.host.setdefault("trusted_ai_tasks", set())
             if task not in trusted_tasks:
                 resolved = vm._resolve(operation)
@@ -225,7 +229,11 @@ def install_security_guard(vm):
                             vm.push(proposal)
                             _log_event(vm, "approval_requested", turn_id=turn_id,
                                        operation=name, payload=proposal)
-                            yield from vm.call(approval_word)
+                            vm.host["in_approval"] = True
+                            try:
+                                yield from vm.call(approval_word)
+                            finally:
+                                vm.host["in_approval"] = False
                             decision = vm.pop() if len(vm.dstack) > stack_depth else "deny"
                             _log_event(vm, "approval_received", turn_id=turn_id,
                                        operation=name, payload={"decision": decision})
@@ -238,7 +246,11 @@ def install_security_guard(vm):
                                 task.cancel()
                                 raise KernelError("Security: AI task was cancelled.")
                             # "allow_once": execute this call once without adding to trusted_tasks
-                            yield from original_call(operation)
+                            vm.host["in_approval"] = True
+                            try:
+                                yield from original_call(operation)
+                            finally:
+                                vm.host["in_approval"] = False
                             return
 
                     # Fallback for headless / non-interactive test mode: pause task
@@ -425,6 +437,7 @@ When the user asks you to run Python, write Python, or perform operations best s
 === Important Rules ===
 - When executing code, always explain your purpose and propose clean Forth source code.
 - If your proposed code executes non-safe words (such as <py>, file operations, or system commands), the VM task-level security guard will pause and ask the user for approval. This is normal and expected.
+- For Herdr terminal operations: inspect or read panes using safe Forth words (`herdr-current-pane`, `herdr-right-pane`, `herdr-left-pane`, `herdr-panes`, `herdr-screen-tail`, `herdr-screen-read`). Reading panes is safe and requires NO user approval. Never use `py>>` or bash checks to inspect Herdr panes.
 - Be concise, accurate, and helpful.
 """
 

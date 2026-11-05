@@ -338,7 +338,9 @@ class TestSafePropertyAudit(unittest.TestCase):
     def test_herdr_words_and_security_annotations(self):
         safe_words = [
             "herdr-current-pane", "herdr-screen-read", "herdr-screen-tail",
-            "herdr-show-pane-id", "herdr-clear-pane-id", "stringify"
+            "herdr-show-pane-id", "herdr-clear-pane-id", "stringify",
+            "herdr-panes", "herdr-neighbor-pane", "herdr-right-pane",
+            "herdr-left-pane", "herdr-up-pane", "herdr-down-pane"
         ]
         unsafe_words = [
             "herdr-screen-send-text", "herdr-screen-send-keys", "herdr-screen-run"
@@ -416,6 +418,33 @@ class TestSecurityTaskApproval(unittest.TestCase):
         task2.resume()
         self.assertEqual(task2.status, "done")
         self.assertEqual(len(approval_calls), 0)
+
+    def test_interactive_ai_approve_reentrancy_protection(self):
+        from projectk import Task
+        self.vm.host["headless"] = False
+        self.vm.define("risky_outer", lambda v: v.push("outer_done"), properties={"safe": False})
+        self.vm.define("risky_inner", lambda v: v.push("inner_done"), properties={"safe": False})
+
+        # ai-approve calls another unsafe word inside itself
+        approval_calls = []
+        def approve_with_side_effect(v):
+            proposal = v.pop()
+            approval_calls.append(proposal)
+            # Invoke risky_inner directly during approval
+            yield from v.call(v.tick("risky_inner"))
+            v.push("allow_once")
+
+        self.vm.define("ai-approve", approve_with_side_effect, properties={"safe": True})
+        task = Task(self.vm, self.vm.evaluate("risky_outer"))
+        self.vm.host["in_ai_task"] = task
+        task.resume()
+
+        self.assertEqual(task.status, "done")
+        self.assertIn("inner_done", self.vm.dstack)
+        self.assertIn("outer_done", self.vm.dstack)
+        # Approval must be requested exactly ONCE for outer; inner must NOT trigger recursion
+        self.assertEqual(len(approval_calls), 1)
+        self.assertIn("risky_outer", approval_calls[0]["purpose"])
 
 
 class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):

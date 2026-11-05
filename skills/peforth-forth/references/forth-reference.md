@@ -18,6 +18,23 @@ Curated from the peforth manuals, live `base.f` and `auxiliary.f` dictionaries, 
 
 peforth evaluates each input as a resumable `Task`. A host word can yield `vm.pause()` and later continue with `Task.resume()`. `Task.cancel()` closes a paused continuation, but it does not roll back work already performed. AI function calls therefore use the REPL's explicit approval boundary; cancellation is not an undo operation.
 
+## Herdr screen and pane words
+
+In peforth, Herdr words provide terminal multi-pane access:
+- `herdr-current-pane ( -- pane-id )`: Get current caller pane ID (safe, no approval).
+- `herdr-right-pane ( -- pane-id )`: Find neighbor pane to the right (safe, no approval).
+- `herdr-left-pane ( -- pane-id )`: Find neighbor pane to the left (safe, no approval).
+- `herdr-up-pane ( -- pane-id )` / `herdr-down-pane ( -- pane-id )`: Find vertical neighbor panes (safe, no approval).
+- `herdr-neighbor-pane ( direction -- pane-id )`: Direction can be `"right"`, `"left"`, `"up"`, `"down"` (safe, no approval).
+- `herdr-panes ( -- list-of-pane-ids )`: List all panes in current workspace (safe, no approval).
+- `herdr-screen-read ( pane-id [lines] -- text )`: Read visible screen text (safe, no approval).
+- `herdr-screen-tail ( pane-id [lines] -- text )`: Read recent screen text tail (safe, no approval).
+- `herdr-screen-send-text ( pane-id text -- result )`: Send text to pane (unsafe, triggers approval).
+- `herdr-screen-send-keys ( pane-id keys -- result )`: Send keys to pane (unsafe, triggers approval).
+- `herdr-screen-run ( pane-id command -- result )`: Run command in pane (unsafe, triggers approval).
+
+Rule: Always use the safe Forth words directly to read or inspect panes. Never use `py>>` or bash checks.
+
 ## Python bridge and side effects
 
 `py:` and `py>>` are powerful host bridges, not sandboxes. Depending on the expression, Forth can interact with Python modules, files, processes, and other local resources. The AI CLI runs approved Forth in the active local VM and reports the actual output and resulting data stack. Review the complete proposal before approving it.
