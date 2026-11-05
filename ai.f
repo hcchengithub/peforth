@@ -66,6 +66,126 @@ code list-skills
     last :: safe=True
 
 
+\ --- 3.5 System Info & Shell Execution Primitives ---
+
+code (ai-tool-error)
+    message = vm.pop()
+    vm.push({"exit_code": None, "stdout": "", "stderr": "", "timed_out": False,
+             "truncated": False, "error": str(message)})
+    end-code
+    // ( message -- result ) Build a normalized local tool error result.
+    last :: safe=True
+
+code system_info
+    import ai
+    info = vm.host.get("system_info")
+    if not info:
+        info = ai.detect_system_info(vm)
+        vm.host["system_info"] = info
+    vm.push(info)
+    end-code
+    // ( -- info ) Return host environment snapshot including OS, Python, and detected shells.
+    last :: safe=True
+
+code run_pwsh
+    import ai
+    script = vm.pop()
+    if not isinstance(script, str):
+        vm.push("run_pwsh expects a script string.")
+        yield from vm.call(vm.tick("(ai-tool-error)"))
+        return
+    yield from vm.call(vm.tick("system_info"))
+    pwsh = vm.pop()["shells"]["pwsh"]
+    if not pwsh.get("available") or not pwsh.get("path"):
+        vm.push("PowerShell (pwsh or powershell) is not available in this environment.")
+        yield from vm.call(vm.tick("(ai-tool-error)"))
+        return
+    vm.push(ai._run_process(
+        [pwsh["path"], "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
+        input_text=script))
+    end-code
+    // ( script-string -- result ) Run a PowerShell script without profiles.
+    last :: safe=False
+
+code run_bash
+    import ai
+    script = vm.pop()
+    if not isinstance(script, str):
+        vm.push("run_bash expects a script string.")
+        yield from vm.call(vm.tick("(ai-tool-error)"))
+        return
+    yield from vm.call(vm.tick("system_info"))
+    info = vm.pop()
+    if info.get("os") == "Windows":
+        wsl = info.get("wsl", {})
+        if not wsl.get("available") or not wsl.get("path"):
+            vm.push("WSL with an Ubuntu/Linux distribution is not available.")
+            yield from vm.call(vm.tick("(ai-tool-error)"))
+            return
+        distro_args = ["-d", wsl["distro"]] if wsl.get("distro") else []
+        argv = [wsl["path"], *distro_args, "--exec", "bash", "--noprofile", "--norc", "-s"]
+    else:
+        bash = info.get("shells", {}).get("bash", {})
+        if not bash.get("available") or not bash.get("path"):
+            vm.push("Bash is not available in this environment.")
+            yield from vm.call(vm.tick("(ai-tool-error)"))
+            return
+        argv = [bash["path"], "--noprofile", "--norc", "-s"]
+    vm.push(ai._run_process(argv, input_text=script))
+    end-code
+    // ( script-string -- result ) Run a Bash script.
+    last :: safe=False
+
+code run_curl
+    import ai
+    arguments = vm.pop()
+    if not isinstance(arguments, (list, tuple)) or not all(isinstance(item, str) for item in arguments):
+        vm.push("run_curl expects a list of curl argument strings, including the URL.")
+        yield from vm.call(vm.tick("(ai-tool-error)"))
+        return
+    yield from vm.call(vm.tick("system_info"))
+    curl = vm.pop()["shells"]["curl"]
+    if not curl.get("available") or not curl.get("path"):
+        vm.push("curl is not available in this environment.")
+        yield from vm.call(vm.tick("(ai-tool-error)"))
+        return
+    vm.push(ai._run_process([curl["path"], *arguments]))
+    end-code
+    // ( argument-list -- result ) Run curl with arguments passed directly.
+    last :: safe=False
+
+code run_http
+    import ai
+    import urllib.parse
+
+    request = vm.pop()
+    if not isinstance(request, dict):
+        vm.push({"error": "run_http expects a request mapping with a url field."})
+        return
+    url = request.get("url")
+    if not isinstance(url, str):
+        vm.push({"error": "run_http request url must be a string."})
+        return
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError as exc:
+        vm.push({"error": str(exc)})
+        return
+    if parsed.scheme.casefold() not in ("http", "https") or not parsed.netloc:
+        vm.push({"error": "run_http only supports absolute http:// or https:// URLs."})
+        return
+    method = request.get("method", "GET")
+    headers = request.get("headers", {})
+    body = request.get("body")
+    if not isinstance(method, str) or not method:
+        vm.push({"error": "run_http method must be a nonempty string."})
+        return
+    vm.push(ai._http_request(url, method=method, headers=headers, body=body))
+    end-code
+    // ( request-mapping -- response ) Send an HTTP/HTTPS request using urllib.
+    last :: safe=False
+
+
 \ --- 4. Core AI Words: (ai), ai:, AI: ---
 
 code (ai-monotonic-time)

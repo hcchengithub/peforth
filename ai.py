@@ -11,7 +11,10 @@ import io
 import json
 import os
 from pathlib import Path
+import platform
 import re
+import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -20,6 +23,144 @@ import uuid
 
 
 from projectk import KernelError
+
+
+_OUTPUT_LIMIT = 64 * 1024
+
+
+def _clip(value, limit=_OUTPUT_LIMIT):
+    value = value or ""
+    return value[:limit], len(value) > limit
+
+
+def _run_process(argv, input_text=None, timeout=60):
+    try:
+        completed = subprocess.run(
+            argv,
+            input=input_text,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout_raw = exc.stdout or ""
+        stderr_raw = exc.stderr or ""
+        stdout, out_trunc = _clip(stdout_raw)
+        stderr, err_trunc = _clip(stderr_raw)
+        return {
+            "exit_code": None,
+            "stdout": stdout,
+            "stderr": stderr,
+            "timed_out": True,
+            "truncated": out_trunc or err_trunc,
+            "error": f"Process exceeded the {timeout}-second time limit.",
+        }
+    except OSError as exc:
+        return {
+            "exit_code": None,
+            "stdout": "",
+            "stderr": "",
+            "timed_out": False,
+            "truncated": False,
+            "error": str(exc),
+        }
+
+    stdout, out_trunc = _clip(completed.stdout)
+    stderr, err_trunc = _clip(completed.stderr)
+    return {
+        "exit_code": completed.returncode,
+        "stdout": stdout,
+        "stderr": stderr,
+        "timed_out": False,
+        "truncated": out_trunc or err_trunc,
+    }
+
+
+def _http_result(status, headers, response_or_body):
+    if hasattr(response_or_body, "read"):
+        raw = response_or_body.read()
+    else:
+        raw = response_or_body or b""
+    if isinstance(raw, str):
+        body, truncated = _clip(raw)
+    else:
+        body, truncated = _clip(raw.decode("utf-8", errors="replace"))
+    header_dict = dict(headers.items()) if hasattr(headers, "items") else dict(headers or {})
+    return {
+        "status_code": status,
+        "headers": header_dict,
+        "body": body,
+        "truncated": truncated,
+    }
+
+
+def _http_request(url, method="GET", headers=None, body=None, timeout=30):
+    data = body.encode("utf-8") if isinstance(body, str) else body
+    req_headers = dict(headers or {})
+    req = urllib.request.Request(url, data=data, headers=req_headers, method=method.upper())
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _http_result(resp.status, resp.headers, resp)
+    except urllib.error.HTTPError as exc:
+        try:
+            return _http_result(exc.code, exc.headers, exc)
+        finally:
+            exc.close()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def detect_system_info(vm=None) -> dict:
+    is_windows = os.name == "nt"
+    is_wsl = bool(os.environ.get("WSL_DISTRO_NAME"))
+    os_name = "Windows" if is_windows else ("WSL" if is_wsl else "Linux")
+
+    pwsh_candidates = ("pwsh", "powershell", "pwsh.exe", "powershell.exe") if is_windows else ("pwsh", "powershell")
+    pwsh_path = None
+    for c in pwsh_candidates:
+        pwsh_path = shutil.which(c)
+        if pwsh_path:
+            break
+
+    curl_path = shutil.which("curl.exe" if is_windows else "curl")
+    bash_path = shutil.which("bash.exe" if is_windows else "bash")
+
+    wsl_info = {"available": False, "path": None, "distro": None}
+    if is_windows:
+        wsl_bin = shutil.which("wsl") or shutil.which("wsl.exe")
+        if wsl_bin:
+            wsl_info["available"] = True
+            wsl_info["path"] = wsl_bin
+            try:
+                proc = subprocess.run([wsl_bin, "-l", "-q"], capture_output=True, timeout=5)
+                raw = proc.stdout
+                text = raw.decode("utf-16-le", errors="ignore") if b"\x00" in raw else raw.decode("utf-8", errors="ignore")
+                distros = [line.strip() for line in text.splitlines() if line.strip()]
+                if distros:
+                    wsl_info["distro"] = distros[0]
+            except Exception:
+                wsl_info["distro"] = "Ubuntu"
+    elif is_wsl:
+        wsl_info["available"] = True
+        wsl_info["distro"] = os.environ.get("WSL_DISTRO_NAME")
+
+    return {
+        "os": os_name,
+        "python": {
+            "version": sys.version.split()[0],
+            "executable": sys.executable,
+        },
+        "shells": {
+            "pwsh": {"available": bool(pwsh_path), "path": pwsh_path},
+            "curl": {"available": bool(curl_path), "path": curl_path},
+            "bash": {"available": bool(bash_path), "path": bash_path},
+        },
+        "wsl": wsl_info,
+    }
+
 
 
 def load_dotenv(env_path=None):

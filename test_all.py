@@ -117,10 +117,16 @@ class TestArchitecturalContracts(unittest.TestCase):
         peforth_f = (HERE / "peforth.f").read_text(encoding="utf-8")
         self.assertIn("include base.f", peforth_f)
         self.assertIn("include auxiliary.f", peforth_f)
-        self.assertIn("include herdr.f", peforth_f)
         self.assertIn("include ai.f", peforth_f)
+        self.assertIn("include herdr.f", peforth_f)
         self.assertIn("include repl.f", peforth_f)
         self.assertIn("repl", peforth_f)
+        # ai.f must be included before herdr.f because herdr.f depends on ai.f
+        self.assertLess(
+            peforth_f.index("include ai.f"),
+            peforth_f.index("include herdr.f"),
+            "ai.f must be included before herdr.f in peforth.f"
+        )
 
 
 class TestSafePropertyAudit(unittest.TestCase):
@@ -353,6 +359,30 @@ class TestSafePropertyAudit(unittest.TestCase):
             w = self.vm.tick(name)
             self.assertIsNotNone(w, f"Word '{name}' must exist in dictionary")
             self.assertFalse(w.properties.get("safe", False), f"Word '{name}' must NOT have safe=True")
+
+    def test_shell_and_system_info_words_and_security_annotations(self):
+        # Read-only system reflection words are safe=True
+        for name in ("system_info", "(ai-tool-error)"):
+            w = self.vm.tick(name)
+            self.assertIsNotNone(w, f"Word '{name}' must exist in dictionary")
+            self.assertTrue(w.properties.get("safe"), f"Word '{name}' must have safe=True")
+
+        # System/network executing words are unsafe (safe=False)
+        for name in ("run_pwsh", "run_bash", "run_curl", "run_http"):
+            w = self.vm.tick(name)
+            self.assertIsNotNone(w, f"Word '{name}' must exist in dictionary")
+            self.assertFalse(w.properties.get("safe", False), f"Word '{name}' must NOT have safe=True")
+
+        # Test system_info execution and structure
+        task = self.vm.dictate("system_info")
+        self.assertEqual(task.status, "done")
+        info = self.vm.pop()
+        self.assertIsInstance(info, dict)
+        self.assertIn("os", info)
+        self.assertIn("shells", info)
+        self.assertIn("pwsh", info["shells"])
+        self.assertIn("curl", info["shells"])
+        self.assertIn("bash", info["shells"])
 
 
 

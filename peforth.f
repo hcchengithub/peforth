@@ -3,8 +3,8 @@
 
 include base.f
 include auxiliary.f
-include herdr.f
 include ai.f
+include herdr.f
 include repl.f
 
 \ --- Launch CLI or REPL if not headless ---
