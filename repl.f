@@ -12,12 +12,14 @@ code (setup-completer)
                 if not text or text[-1].isspace():
                     return
                 prefix = text.rsplit(None, 1)[-1]
-                folded = prefix.casefold()
+                has_slash = prefix.startswith("/") and len(prefix) > 1
+                search = prefix[1:] if has_slash else prefix
+                folded = search.casefold()
                 for name in self.vm.words:
                     if isinstance(name, str) and name.casefold().startswith(folded):
                         yield Completion(
                             name,
-                            start_position=-len(prefix),
+                            start_position=-len(search) if has_slash else -len(prefix),
                             display_meta="← ↑ ↓ → move | Space selects | Esc cancels",
                         )
         vm.host["ForthWordCompleter"] = ForthWordCompleter
@@ -167,7 +169,7 @@ code repl
             )
 
 
-        except ImportError:
+        except Exception:
             pt_session = None
 
 
@@ -216,8 +218,8 @@ code repl
 
             try:
                 if mode == "chat" and not is_continuing:
-                    if clean_text in ("forth", "bye") or clean_text.startswith("forth ") or clean_text.startswith("bye "):
-                        task = vm.dictate(clean_text)
+                    if clean_text.startswith("/"):
+                        task = vm.dictate(clean_text[1:])
                     else:
                         task = vm.dictate(f"ai: {clean_text}")
                 else:

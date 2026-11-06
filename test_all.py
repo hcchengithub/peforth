@@ -223,6 +223,57 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.vm.dictate("forth")
         self.assertEqual(self.vm.host.get("repl_mode"), "forth")
 
+    def test_chat_mode_slash_leading_forth_tib(self):
+        import projectk
+        import unittest.mock
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.dictate((HERE / "repl.f").read_text(encoding="utf-8"))
+
+        dispatched = []
+        orig_dictate = vm.dictate
+
+        def empty_gen():
+            if False:
+                yield
+
+        def spy_dictate(tib):
+            dispatched.append(tib)
+            if tib.startswith("ai:"):
+                # Avoid network requests in unit tests
+                return projectk.Task(vm, empty_gen()).resume()
+            return orig_dictate(tib)
+
+        vm.dictate = spy_dictate
+        try:
+            inputs = [
+                "chat",
+                "/10 20 +",
+                "hello world",
+                "forth is a language",
+                "bye everyone",
+                "/forth",
+                "bye",
+            ]
+            with unittest.mock.patch("sys.stdin.isatty", return_value=False), \
+                 unittest.mock.patch("builtins.input", side_effect=inputs):
+                orig_dictate("repl")
+
+            # Check that / leading inputs had slash stripped and ran as Forth statements
+            self.assertEqual(vm.pop(), 30)
+            self.assertIn("10 20 +", dispatched)
+            self.assertIn("forth", dispatched)
+
+            # Check that non-slash inputs were dispatched to chatting (ai:)
+            self.assertIn("ai: hello world", dispatched)
+            self.assertIn("ai: forth is a language", dispatched)
+            self.assertIn("ai: bye everyone", dispatched)
+            self.assertEqual(vm.host.get("repl_mode"), "forth")
+            self.assertTrue(vm.host.get("exit_requested"))
+        finally:
+            vm.dictate = orig_dictate
+
     def test_cls_clears_screen_and_scrollback(self):
         import io
         from contextlib import redirect_stdout
@@ -547,6 +598,15 @@ class TestSafePropertyAudit(unittest.TestCase):
         doc_space = Document("nokia ", 6)
         completions_space = list(completer.get_completions(doc_space, None))
         self.assertEqual(len(completions_space), 0)
+
+        # 5. Test completion with leading slash (e.g., in Chat mode /<word>)
+        doc_slash = Document("/ai-app", 7)
+        slash_completions = list(completer.get_completions(doc_slash, None))
+        slash_texts = [c.text for c in slash_completions]
+        self.assertIn("ai-approve", slash_texts)
+        for c in slash_completions:
+            if c.text == "ai-approve":
+                self.assertEqual(c.start_position, -6)
 
     def test_skills_loading_and_list_skills_word(self):
         import ai
@@ -1737,6 +1797,98 @@ class TestSessionStoreAndSync(unittest.TestCase):
             vm.dictate('s" sess_other_888" ai-use')
         self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
         self.assertNotIn("ai_messages", vm.host)
+
+    def test_ai_context_dual_mode(self):
+        import io
+        import contextlib
+        from unittest.mock import patch, MagicMock
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        # --- 1. Stateless mode ---
+        vm.host.pop("ai_active_session_id", None)
+        messages = [
+            {"role": "system", "content": "System prompt"},
+            {"role": "user", "content": "Hi there"},
+            {"role": "assistant", "content": "Hello!"},
+        ]
+        vm.host["ai_messages"] = list(messages)
+
+        # Call via Forth word ai-context
+        vm.dictate("ai-context")
+        self.assertEqual(len(vm.dstack), 1)
+        ctx = vm.pop()
+        self.assertIsInstance(ctx, dict)
+        self.assertEqual(ctx["mode"], "stateless")
+        self.assertTrue(ctx["session_id"].startswith("local_"))
+        self.assertEqual(len(ctx["items"]), 3)
+        self.assertEqual(ctx["items"][1]["content"], "Hi there")
+
+        # Mutating returned ctx does not alter vm.host["ai_messages"]
+        ctx["items"].append({"role": "user", "content": "Extra"})
+        self.assertEqual(len(vm.host["ai_messages"]), 3)
+
+        # Test ai-status in Stateless mode
+        out_stateless = io.StringIO()
+        with contextlib.redirect_stdout(out_stateless):
+            vm.dictate("ai-status")
+        status_val = out_stateless.getvalue()
+        self.assertIn("Mode: Stateless", status_val)
+        self.assertIn("Turns: 1 user turn(s) (3 messages in context)", status_val)
+
+        # --- 2. Stateful mode ---
+        vm.host["ai_active_session_id"] = "sess_stateful_test"
+        remote_metadata = {
+            "id": "sess_stateful_test",
+            "last_active_at": 1700000000,
+            "status": "completed",
+        }
+        raw_remote_items = [
+            {"id": "item_1", "type": "message", "role": "user", "content": [{"type": "text", "text": "Remote prompt"}]},
+            {"id": "item_2", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "Remote answer"}]},
+        ]
+
+        # Case A: needs_item_sync is True -> fetches remote items and syncs mirror
+        mock_store = MagicMock()
+        mock_store.needs_item_sync.return_value = True
+        mock_store.get_session_items.return_value = raw_remote_items
+
+        with patch.object(ai, "_open_session_store") as mock_open:
+            mock_open.return_value.__enter__.return_value = mock_store
+            with patch.object(ai, "_api_get", return_value=remote_metadata) as mock_get:
+                with patch.object(ai, "_fetch_session_items", return_value=raw_remote_items) as mock_fetch:
+                    vm.dictate("ai-context")
+                    self.assertEqual(len(vm.dstack), 1)
+                    st_ctx = vm.pop()
+                    self.assertEqual(st_ctx["mode"], "stateful")
+                    self.assertEqual(st_ctx["session_id"], "sess_stateful_test")
+                    self.assertEqual(st_ctx["items"], raw_remote_items)
+                    mock_fetch.assert_called_once_with("sess_stateful_test")
+                    mock_store.sync_session.assert_called_once_with(remote_metadata, raw_remote_items)
+
+        # Case B: needs_item_sync is False -> fast path: uses local mirror without fetching items
+        mock_store_fresh = MagicMock()
+        mock_store_fresh.needs_item_sync.return_value = False
+        mock_store_fresh.get_session_items.return_value = raw_remote_items
+
+        with patch.object(ai, "_open_session_store") as mock_open:
+            mock_open.return_value.__enter__.return_value = mock_store_fresh
+            with patch.object(ai, "_api_get", return_value=remote_metadata):
+                with patch.object(ai, "_fetch_session_items") as mock_fetch_never:
+                    st_ctx2 = ai.get_ai_context(vm)
+                    self.assertEqual(st_ctx2["mode"], "stateful")
+                    self.assertEqual(st_ctx2["items"], raw_remote_items)
+                    mock_fetch_never.assert_not_called()
+                    mock_store_fresh.update_session_metadata.assert_called_once_with(remote_metadata)
+
+        # Chat turn count can be derived directly from items
+        user_turns = [
+            it for it in st_ctx2["items"]
+            if (it.get("role") == "user" or (it.get("type") == "message" and it.get("role") == "user"))
+        ]
+        self.assertEqual(len(user_turns), 1)
 
 
 

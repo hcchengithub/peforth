@@ -1265,6 +1265,57 @@ def query_local_sessions(*, query=None, session_id=None, limit=20, include_delet
         }
 
 
+def get_ai_context(vm) -> dict:
+    """Return the context dictionary for the currently active AI session.
+
+    In Stateful mode (when vm.host['ai_active_session_id'] is set):
+      - Checks local session mirror freshness against remote metadata.
+      - If stale or missing, fetches remote items and updates the local mirror.
+      - Returns a dict with mode="stateful", session_id, and the ordered raw items.
+
+    In Stateless mode (default in-memory conversation):
+      - Dumps the active conversation from vm.host['ai_messages'].
+      - Returns a dict with mode="stateless", session_id (local session ID),
+        and the list of message dicts (user, assistant, tool calls, tool results).
+    """
+    import copy
+    import urllib.parse
+
+    active_id = vm.host.get("ai_active_session_id")
+    if active_id:
+        items = []
+        with _open_session_store() as store:
+            remote_session = None
+            try:
+                encoded_id = urllib.parse.quote(active_id, safe="")
+                remote_session = _api_get(f"/sessions/{encoded_id}")
+            except Exception:
+                remote_session = None
+
+            if remote_session and isinstance(remote_session, dict):
+                if store.needs_item_sync(remote_session):
+                    items = _fetch_session_items(active_id)
+                    store.sync_session(remote_session, items)
+                else:
+                    store.update_session_metadata(remote_session)
+
+            items = store.get_session_items(active_id)
+
+        return {
+            "mode": "stateful",
+            "session_id": active_id,
+            "items": items,
+        }
+    else:
+        local_id = vm.host.get("ai_local_session_id") or _ensure_local_session_id(vm)
+        raw_messages = vm.host.get("ai_messages") or []
+        return {
+            "mode": "stateless",
+            "session_id": local_id,
+            "items": copy.deepcopy(raw_messages),
+        }
+
+
 SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside the peforth Forth environment.
 peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges Forth with Python: you can run native Forth, write Python host definitions, and execute Python code directly inside Forth!
 

@@ -125,7 +125,7 @@ nokia-full
 \ Switch to conversational AI Chat mode
 chat
 chat> tell me a joke
-chat> forth
+chat> /forth
 ```
 
 Or ask the AI directly from Forth mode:

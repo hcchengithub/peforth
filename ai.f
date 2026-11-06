@@ -45,7 +45,7 @@ code cancel-task
 
 code chat
     vm.host["repl_mode"] = "chat"
-    print("Switched to chat mode (chat>). Type 'forth' to return to Forth mode.")
+    print("Switched to chat mode (chat>). Type '/forth' to return to Forth mode.")
     end-code
     // ( -- ) Switch REPL to chat mode (chat>).
     last :: safe=True
@@ -586,7 +586,8 @@ code ai-status
         if user_turns:
             print(f"Local turns: {len(user_turns)} user turn(s) active in memory ({len(messages)} messages)")
     else:
-        messages = vm.host.get("ai_messages") or []
+        ctx = ai.get_ai_context(vm)
+        messages = ctx.get("items") or []
         user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
         if user_turns:
             first_content = user_turns[0].get("content")
@@ -601,7 +602,7 @@ code ai-status
             first_sentence = ai.extract_first_sentence(first_text, max_chars=80)
             model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
             runtime_id = vm.host.get("diagnostic_runtime_id")
-            local_id = vm.host.get("ai_local_session_id") or ai._ensure_local_session_id(vm)
+            local_id = ctx.get("session_id") or vm.host.get("ai_local_session_id") or ai._ensure_local_session_id(vm)
             print(f"Active AI session: local (in-memory) [{local_id}]")
             print("Mode: Stateless (/chat/completions; use 'ai-promote' to promote to a remote session)")
             if first_sentence:
@@ -718,72 +719,18 @@ code ai-cancel
 
 code (ai-context)
     import ai
-    import urllib.parse
-
-    mode = vm.pop()
-    if mode not in {None, "json", "chat"}:
-        raise RuntimeError("ai-context mode must be json, chat, or None.")
-    count = vm.pop()
-    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
-        raise RuntimeError("ai-context count must be a positive integer.")
-    index = vm.pop()
-    rows = vm.host.get("ai_session_rows")
-    if rows is None:
-        raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
-    if not isinstance(index, int) or isinstance(index, bool) or index < 1 or index > len(rows):
-        raise RuntimeError(f"No item {index}; the current list has {len(rows)} entries.")
-    session_id = rows[index - 1]["id"]
-    items = []
-    after = ""
-    limit = min(100, max(2, count * 2))
-    user_messages = 0
-    while True:
-        query = urllib.parse.urlencode({"limit": limit, "order": "desc",
-                                        **({"after": after} if after else {})})
-        page = ai._api_get(
-            f"/sessions/{urllib.parse.quote(session_id, safe='')}/items?{query}")
-        page_items = page.get("data") or []
-        items.extend(page_items)
-        user_messages += sum(1 for item in page_items
-                             if item.get("type") == "message" and item.get("role") == "user")
-        if user_messages >= count:
-            recent = []
-            found = 0
-            for item in items:
-                recent.append(item)
-                if item.get("type") == "message" and item.get("role") == "user":
-                    found += 1
-                    if found == count:
-                        break
-            items = list(reversed(recent))
-            break
-        if not page.get("has_more") or not page.get("last_id") or page["last_id"] == after:
-            items.reverse()
-            break
-        after = page["last_id"]
-
-    if mode == "json":
-        vm.push(items)
-    else:
-        messages = []
-        for item in items:
-            if item.get("type") != "message" or item.get("role") not in {"user", "assistant"}:
-                continue
-            parts = []
-            for part in item.get("content") or []:
-                if isinstance(part, dict) and isinstance(part.get("text"), str):
-                    parts.append(part["text"])
-                elif isinstance(part, str):
-                    parts.append(part)
-            text = "".join(parts).strip()
-            if text:
-                messages.append({"role": item["role"], "text": text})
-        vm.push(messages)
+    vm.push(ai.get_ai_context(vm))
     end-code
-    // ( session-number count mode -- object ) Return recent API items or chat messages for a session.
+    // ( -- dict ) Push the current AI session context dict.
+    /// In Stateful mode, checks freshness, syncs with remote if needed, and returns ordered raw items from local mirror.
+    /// In Stateless mode, returns the active in-memory messages list.
     last :: safe=True
 
-: ai-context BL word int BL word int BL word dup "" = if drop none then (ai-context) ; immediate
-    // ( <session-number> <count> [mode] -- object ) Fetch recent context for a listed session.
+: ai-context
+    (ai-context)
+    ;
+    // ( -- dict ) Push the current AI session context dict.
+    /// In Stateful mode, checks freshness, syncs with remote if needed, and returns ordered raw items from local mirror.
+    /// In Stateless mode, returns the active in-memory messages list.
     last :: safe=True
 
