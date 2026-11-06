@@ -1506,8 +1506,585 @@ def _http_chat_stream(base_url, api_key, model, messages, tools):
         raise
 
 
+AGENTS_TOOLS_DEFINITION = [
+    {
+        "type": "function",
+        "name": tc["function"]["name"],
+        "description": tc["function"]["description"],
+        "parameters": tc["function"]["parameters"],
+    }
+    for tc in TOOLS_DEFINITION
+]
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_APPROVAL_MENU_RE = re.compile(
+    r"Purpose:\s*Execution of unsafe word[^\n]*\n+"
+    r"Forth action:\n.*?"
+    r"1\.\s*Allow Once\n2\.\s*Trust this AI task\n3\.\s*Deny this proposal\n4\.\s*Cancel this AI task\n+"
+    r"(?:Choose 1-4:\s*\d*\s*)?",
+    flags=re.S,
+)
+
+
+def _clean_tool_stdout(stdout_text: str) -> str:
+    """Strip ANSI escape codes and interactive security approval menu noise from tool stdout."""
+    if not isinstance(stdout_text, str) or not stdout_text:
+        return ""
+    cleaned = _ANSI_ESCAPE_RE.sub("", stdout_text)
+    cleaned = _APPROVAL_MENU_RE.sub("", cleaned)
+    return cleaned.strip()
+
+
+def distill_messages_for_promotion(messages: list) -> dict:
+    """Clean and distill local in-memory messages for promotion to a remote Agents API session.
+
+    Removes:
+    - system prompt (sent separately via agent.instructions)
+    - dictionary/session lookup dumps (peforth_search_words, peforth_search_sessions)
+    - failed peforth_run_forth attempts and approval menu ANSI noise
+    - base64 image data URIs
+    """
+    messages = messages or []
+    raw_chars = len(json.dumps(messages, ensure_ascii=False))
+
+    tool_results_by_id = {}
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "tool" and msg.get("tool_call_id"):
+            tool_results_by_id[msg["tool_call_id"]] = msg.get("content", "")
+
+    entries = []
+    user_turns = 0
+    assistant_replies = 0
+    kept_tool_calls = 0
+    removed_noise_items = 0
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = msg.get("role")
+        if role == "system":
+            removed_noise_items += 1
+            continue
+        if role == "tool":
+            # Handled alongside assistant tool_calls
+            continue
+        if role == "user":
+            content = msg.get("content")
+            if isinstance(content, str):
+                text = content.strip()
+            elif isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict):
+                        if part.get("type") == "text" and part.get("text"):
+                            parts.append(str(part["text"]).strip())
+                        elif part.get("type") == "image_url":
+                            parts.append("[Image attached]")
+                            removed_noise_items += 1
+                text = " ".join(p for p in parts if p)
+            else:
+                text = str(content or "").strip()
+            if text:
+                entries.append(f"User: {text}")
+                user_turns += 1
+        elif role == "assistant":
+            tool_calls = msg.get("tool_calls") or []
+            for tc in tool_calls:
+                if not isinstance(tc, dict):
+                    continue
+                call_id = tc.get("id", "")
+                fn = tc.get("function") or {}
+                fn_name = fn.get("name", "")
+                args_str = fn.get("arguments", "{}")
+                try:
+                    args = json.loads(args_str) if isinstance(args_str, str) else (args_str or {})
+                except Exception:
+                    args = {}
+
+                if fn_name in ("peforth_search_words", "peforth_search_sessions"):
+                    removed_noise_items += 1
+                    continue
+
+                if fn_name == "peforth_run_forth":
+                    raw_res = tool_results_by_id.get(call_id, "{}")
+                    try:
+                        res_obj = json.loads(raw_res) if isinstance(raw_res, str) else (raw_res or {})
+                    except Exception:
+                        res_obj = {}
+                    if not isinstance(res_obj, dict) or res_obj.get("error"):
+                        removed_noise_items += 1
+                        continue
+                    purpose = str(args.get("purpose") or "").strip()
+                    source = str(args.get("source") or "").strip()
+                    cleaned_out = _clean_tool_stdout(str(res_obj.get("stdout") or ""))
+                    action_line = f"[Executed Forth ({purpose})]:\n{source}" if purpose else f"[Executed Forth]:\n{source}"
+                    if cleaned_out:
+                        if len(cleaned_out) > 600:
+                            cleaned_out = cleaned_out[:600] + "... (truncated)"
+                        action_line += f"\nOutput: {cleaned_out}"
+                    entries.append(action_line)
+                    kept_tool_calls += 1
+                else:
+                    removed_noise_items += 1
+
+            content = msg.get("content")
+            if isinstance(content, str) and content.strip():
+                entries.append(f"Assistant: {content.strip()}")
+                assistant_replies += 1
+
+    preview_text = "\n\n".join(entries)
+    promoted_input = (
+        "Below is the distilled conversation context from our current local peforth session:\n\n"
+        f"{preview_text}\n\n"
+        "Please briefly acknowledge that you have received this prior context and are ready to continue."
+    ) if preview_text else ""
+
+    return {
+        "user_turns": user_turns,
+        "assistant_replies": assistant_replies,
+        "kept_tool_calls": kept_tool_calls,
+        "removed_noise_items": removed_noise_items,
+        "raw_chars": raw_chars,
+        "distilled_chars": len(preview_text),
+        "preview_text": preview_text,
+        "promoted_input": promoted_input,
+    }
+
+
+def _session_id_from_event(event: dict) -> str | None:
+    if not isinstance(event, dict):
+        return None
+    session = event.get("session") or event.get("data") or {}
+    if isinstance(session, dict):
+        sid = session.get("id") or session.get("session_id")
+        if sid:
+            return str(sid)
+    sid = event.get("session_id")
+    return str(sid) if sid else None
+
+
+def _agents_event_stream(response):
+    """Yield decoded JSON events from an OpenAI Agents API SSE response."""
+    data_lines = []
+    event_name = None
+    try:
+        for raw in response:
+            raw_bytes = raw if isinstance(raw, bytes) else str(raw).encode("utf-8")
+            line = raw_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line.startswith(":"):
+                continue
+            elif line.startswith("event:"):
+                event_name = line[6:].strip()
+            elif line.startswith("data:"):
+                data_lines.append(line[5:].lstrip())
+            elif not line:
+                if data_lines:
+                    joined = "\n".join(data_lines)
+                    data_lines.clear()
+                    if joined == "[DONE]":
+                        event_name = None
+                        break
+                    try:
+                        event = json.loads(joined)
+                        if isinstance(event, dict) and event_name and "type" not in event:
+                            event["type"] = event_name
+                        yield event
+                    except json.JSONDecodeError:
+                        pass
+                event_name = None
+        if data_lines:
+            joined = "\n".join(data_lines)
+            if joined != "[DONE]":
+                try:
+                    event = json.loads(joined)
+                    if isinstance(event, dict) and event_name and "type" not in event:
+                        event["type"] = event_name
+                    yield event
+                except json.JSONDecodeError:
+                    pass
+    finally:
+        try:
+            response.close()
+        except Exception:
+            pass
+
+
+def _wait_for_current_actions(session_id: str, attempts: int = 3):
+    """Fetch current session status and required_actions from Agents API."""
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    status, actions = None, []
+    for attempt in range(max(1, attempts)):
+        session = _api_get(f"/sessions/{encoded_id}")
+        status = session.get("status")
+        actions = session.get("required_actions") or []
+        if status == "requires_action" and actions:
+            return status, actions
+        if status not in {"in_progress", "requires_action"}:
+            return status, actions
+        if attempt + 1 < attempts:
+            time.sleep(0.5)
+    return status, actions
+
+
+def _submit_agents_tool_result(session_id: str, turn_id: str, call_id: str, success: bool, result_text: str):
+    """Submit a tool execution result back to an active Agents API session."""
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    event = {
+        "type": "agent.session.input.tool_result",
+        "turn_id": turn_id,
+        "call_id": call_id,
+        "success": bool(success),
+    }
+    event["output" if success else "error"] = result_text
+    with _api_request("POST", f"/sessions/{encoded_id}/events", payload={"events": [event]}, timeout=60) as resp:
+        resp.read()
+
+
+def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new=False, image_url=None, isolated_session=False):
+    """Cooperative generator for one Stateful AI turn via the OpenAI Agents API (/v1/agents/sessions)."""
+    init_diagnostics(vm)
+    load_dotenv()
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+
+    if not api_key:
+        msg = (
+            "\n[AI] OPENAI_API_KEY is not set.\n"
+            "Please configure OPENAI_API_KEY in your environment or in a .env file.\n"
+        )
+        if stream_response:
+            sys.stdout.write(msg)
+            sys.stdout.flush()
+        else:
+            vm.push(msg)
+        return
+
+    system_instructions = get_system_prompt(vm)
+    logger = vm.host.get("diagnostic_log")
+    runtime_id = vm.host.get("diagnostic_runtime_id")
+    turn_id = None
+    if logger is not None and runtime_id is not None:
+        try:
+            prompt_cid = logger.store_content("prompt", prompt)
+            instr_cid = logger.store_content("agent_instructions", system_instructions)
+            turn_id = logger.start_turn(
+                runtime_id,
+                prompt_content_id=prompt_cid,
+                instructions_content_id=instr_cid,
+                remote_session_id=session_id,
+            )
+            vm.host["ai_current_turn_id"] = turn_id
+            logger.append_event(
+                runtime_id, turn_id, "ai_turn_started",
+                session_id=session_id,
+                payload={"model": model, "stream_response": bool(stream_response), "mode": "stateful"},
+            )
+        except Exception:
+            turn_id = None
+
+    user_content = [{"type": "input_text", "text": prompt}]
+    if image_url is not None:
+        user_content.append({"type": "input_image", "image_url": image_url})
+
+    accumulated_full_text = []
+    remote_turn_id = None
+
+    try:
+        if create_new or not session_id:
+            payload = {
+                "agent": {
+                    "model": model,
+                    "tools": [] if isolated_session else AGENTS_TOOLS_DEFINITION,
+                    "instructions": system_instructions,
+                },
+                "environment": {"type": "none"},
+                "input": [{"role": "user", "content": user_content}] if image_url is not None else prompt,
+                "stream": True,
+            }
+            _log_event(vm, "http_request_started", turn_id=turn_id,
+                       http_method="POST", url="/agents/sessions", payload={"model": model})
+            response = _api_request("POST", "/sessions", payload=payload, stream=True, timeout=300)
+        else:
+            encoded_id = urllib.parse.quote(session_id, safe="")
+            message_event = {
+                "type": "agent.session.input.message",
+                "input": [{"role": "user", "content": user_content}],
+            }
+            _log_event(vm, "http_request_started", turn_id=turn_id,
+                       http_method="GET", url=f"/agents/sessions/{encoded_id}/events?stream=true",
+                       payload={"model": model, "session_id": session_id})
+            response = _api_request("GET", f"/sessions/{encoded_id}/events?stream=true", stream=True, timeout=300)
+            with _api_request("POST", f"/sessions/{encoded_id}/events", payload={"events": [message_event]}, timeout=60) as post_resp:
+                post_resp.read()
+
+        _log_event(vm, "sse_stream_opened", turn_id=turn_id)
+        for event in _agents_event_stream(response):
+            if not isinstance(event, dict):
+                continue
+            ev_turn_id = event.get("turn_id")
+            if not ev_turn_id and isinstance(event.get("turn"), dict):
+                ev_turn_id = event["turn"].get("id")
+            if isinstance(ev_turn_id, str) and ev_turn_id:
+                remote_turn_id = ev_turn_id
+
+            if not session_id:
+                discovered_id = _session_id_from_event(event)
+                if discovered_id:
+                    session_id = discovered_id
+                    if not isolated_session:
+                        vm.host["ai_active_session_id"] = session_id
+                    if logger is not None and turn_id is not None:
+                        try:
+                            logger.set_turn_session(turn_id, session_id)
+                        except Exception:
+                            pass
+
+            kind = event.get("type", "")
+            if kind == "agent.session.turn.output_text.delta":
+                delta_text = event.get("delta", "")
+                if delta_text:
+                    accumulated_full_text.append(delta_text)
+                    if stream_response:
+                        sys.stdout.write(delta_text)
+                        sys.stdout.flush()
+            elif kind == "agent.session.turn.output_text.done":
+                done_text = event.get("text", "")
+                if done_text and not accumulated_full_text:
+                    accumulated_full_text.append(done_text)
+                    if stream_response:
+                        sys.stdout.write(done_text)
+                        sys.stdout.flush()
+            elif kind == "agent.session.requires_action":
+                if not session_id:
+                    continue
+                status, actions = _wait_for_current_actions(session_id)
+                if status != "requires_action" or not actions:
+                    continue
+                for action in actions:
+                    if not isinstance(action, dict):
+                        continue
+                    act_turn_id = action.get("turn_id") or remote_turn_id or ""
+                    call_id = action.get("call_id") or ""
+                    fn_name = action.get("name") or ""
+                    raw_args = action.get("arguments", "{}")
+                    try:
+                        args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+                    except Exception:
+                        args = {}
+
+                    _log_event(vm, "tool_call_started", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name,
+                               payload={"arguments": raw_args})
+
+                    if fn_name == "peforth_search_words":
+                        query = args.get("query", "")
+                        if stream_response:
+                            sys.stdout.write(f"\n[AI Tool] Searching dictionary for: {query!r}...\n")
+                            sys.stdout.flush()
+                        result_data = tool_search_words(vm, query)
+                        _submit_agents_tool_result(
+                            session_id, act_turn_id, call_id, True,
+                            json.dumps(result_data, ensure_ascii=False),
+                        )
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+
+                    elif fn_name == "peforth_search_sessions":
+                        session_query = args.get("query")
+                        target_session_id = args.get("session_id")
+                        result_limit = args.get("limit", 20)
+                        try:
+                            exec_result = query_local_sessions(
+                                query=session_query,
+                                session_id=target_session_id,
+                                limit=result_limit,
+                            )
+                            _submit_agents_tool_result(
+                                session_id, act_turn_id, call_id, True,
+                                json.dumps(exec_result, ensure_ascii=False),
+                            )
+                        except Exception as e:
+                            _submit_agents_tool_result(
+                                session_id, act_turn_id, call_id, False,
+                                f"{type(e).__name__}: {e}",
+                            )
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+
+                    elif fn_name == "peforth_run_forth":
+                        source = args.get("source", "")
+                        purpose = args.get("purpose", "")
+                        if stream_response:
+                            sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
+                            sys.stdout.flush()
+
+                        prev_ai_task = vm.host.get("in_ai_task")
+                        prev_base_depth = vm.host.get("ai_task_base_frame_depth")
+                        vm.host["in_ai_task"] = vm.task
+                        vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
+
+                        tee = TeeOutput(sys.stdout)
+                        old_stdout = sys.stdout
+                        error_msg = None
+                        _log_event(vm, "forth_execution_started", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name,
+                                   payload={"purpose": purpose, "source": source})
+                        try:
+                            sys.stdout = tee
+                            yield from vm.evaluate(source)
+                        except Exception as e:
+                            error_msg = f"{type(e).__name__}: {e}"
+                            sys.__stdout__.write(f"\n[Execution Error] {error_msg}\n")
+                            sys.__stdout__.flush()
+                        finally:
+                            sys.stdout = old_stdout
+                            vm.host["in_ai_task"] = prev_ai_task
+                            if prev_base_depth is None:
+                                vm.host.pop("ai_task_base_frame_depth", None)
+                            else:
+                                vm.host["ai_task_base_frame_depth"] = prev_base_depth
+                            _log_event(vm, "forth_execution_finished", turn_id=turn_id,
+                                       call_id=call_id, operation=fn_name,
+                                       payload={"stdout": tee.getvalue(), "error": error_msg})
+
+                        exec_result = {
+                            "stdout": tee.getvalue(),
+                            "dstack": [repr(x) for x in vm.dstack],
+                            "error": error_msg,
+                        }
+                        _submit_agents_tool_result(
+                            session_id, act_turn_id, call_id, True,
+                            json.dumps(exec_result, ensure_ascii=False),
+                        )
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+                    else:
+                        _submit_agents_tool_result(
+                            session_id, act_turn_id, call_id, False,
+                            f"Unknown tool: {fn_name}",
+                        )
+            elif kind in ("error", "agent.session.failed", "agent.session.turn.failed", "agent.session.turn.cancelled"):
+                detail = event.get("error") or event.get("turn", {}).get("error") or event
+                raise RuntimeError(f"Agents API {kind}: {detail}")
+            elif kind == "agent.session.turn.completed":
+                break
+
+        _log_event(vm, "sse_stream_completed", turn_id=turn_id)
+    except Exception as e:
+        _log_event(vm, "sse_stream_failed", turn_id=turn_id, error=e)
+        _finish_turn(
+            vm, turn_id,
+            output_text="".join(accumulated_full_text) if accumulated_full_text else None,
+            output_status="partial" if accumulated_full_text else "failed_before_output",
+            status="failed", error=e,
+        )
+        vm.host["ai_current_turn_id"] = None
+        err_msg = f"\n[AI Error] Agents API request failed: {e}\n"
+        if stream_response:
+            sys.stdout.write(err_msg)
+            sys.stdout.flush()
+        else:
+            vm.push(err_msg)
+        return
+
+    trusted_tasks = vm.host.get("trusted_ai_tasks")
+    if trusted_tasks and vm.task in trusted_tasks:
+        trusted_tasks.remove(vm.task)
+    vm.host["pending_ai_task"] = None
+
+    full_output = "".join(accumulated_full_text)
+    _finish_turn(
+        vm, turn_id,
+        output_text=full_output if full_output else None,
+        output_status="complete" if full_output else "empty",
+        status="completed",
+    )
+    vm.host["ai_current_turn_id"] = None
+
+    if stream_response:
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+    else:
+        vm.push(full_output)
+
+
+def promote_local_session(vm):
+    """Distill current local in-memory messages, ask user for approval, and promote to a new remote Agents API session."""
+    active_id = vm.host.get("ai_active_session_id")
+    messages = vm.host.get("ai_messages") or []
+    user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
+
+    if active_id and not user_turns:
+        print(f"Already in Stateful mode with remote session: {active_id}")
+        return
+
+    if not user_turns:
+        print("No local conversation context to promote. Start chatting with ai: first.")
+        return
+
+    distilled = distill_messages_for_promotion(messages)
+    print("\n=== Distilled Context for Remote Promotion ===")
+    print(
+        f"Turns: {distilled['user_turns']} user turn(s), "
+        f"{distilled['assistant_replies']} assistant reply(ies), "
+        f"{distilled['kept_tool_calls']} executed Forth action(s)"
+    )
+    print(
+        f"Removed noise: {distilled['removed_noise_items']} item(s) "
+        f"({distilled['raw_chars']} raw chars -> {distilled['distilled_chars']} distilled chars)"
+    )
+    print("-" * 46)
+    print(distilled["preview_text"])
+    print("-" * 46)
+
+    choice = read_numbered_choice(
+        "Choose 1-2: ",
+        choices=("1", "2"),
+        default="1",
+        labels={
+            "1": "Promote to new remote Agents API session",
+            "2": "Cancel (keep local Stateless conversation)",
+        },
+    )
+    if choice != "1":
+        print("Promotion cancelled. Remaining in local Stateless mode.")
+        return
+
+    print("\nPromoting context to a new remote Agents API session...")
+    yield from ai_turn_stateful(
+        vm,
+        distilled["promoted_input"],
+        stream_response=True,
+        create_new=True,
+    )
+    new_session_id = vm.host.get("ai_active_session_id")
+    if new_session_id:
+        vm.host.pop("ai_messages", None)
+        print(f"Promoted local conversation to remote session: {new_session_id}")
+
+
+
 def ai_turn(vm, prompt, stream_response):
-    """Cooperative generator for one AI conversation turn."""
+    """Cooperative generator for one AI conversation turn.
+
+    Routes to Stateful OpenAI Agents API mode if vm.host['ai_active_session_id']
+    is set (unless ai_isolated_session_once is set), or defaults to Stateless
+    /chat/completions mode using vm.host['ai_messages'].
+    """
+    active_session_id = vm.host.get("ai_active_session_id")
+    if active_session_id and not vm.host.get("ai_isolated_session_once", False):
+        image_url = vm.host.pop("ai_image_url_once", None)
+        isolated_session = vm.host.pop("ai_isolated_session_once", False)
+        yield from ai_turn_stateful(
+            vm,
+            prompt,
+            stream_response,
+            session_id=active_session_id,
+            image_url=image_url,
+            isolated_session=isolated_session,
+        )
+        return
+
     init_diagnostics(vm)
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()

@@ -357,6 +357,11 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertFalse(cleanup_word.properties.get("safe", False), "Word 'ai-cleanup' must be safe=False")
         self.assertTrue(bool(getattr(cleanup_word, "help", "").strip()), "Word 'ai-cleanup' must have help documentation")
 
+        promote_word = self.vm.tick("ai-promote")
+        self.assertIsNotNone(promote_word, "Word 'ai-promote' must exist in dictionary")
+        self.assertFalse(promote_word.properties.get("safe", False), "Word 'ai-promote' must be safe=False")
+        self.assertTrue(bool(getattr(promote_word, "help", "").strip()), "Word 'ai-promote' must have help documentation")
+
 
     def test_words_and_help_pattern_filtering(self):
         import io
@@ -1579,6 +1584,150 @@ class TestSessionStoreAndSync(unittest.TestCase):
         with contextlib.redirect_stdout(out_after_new):
             vm.dictate("ai-status")
         self.assertIn("Active AI session: none", out_after_new.getvalue())
+
+    def test_distill_messages_for_promotion(self):
+        import json
+        import ai
+
+        messages = [
+            {"role": "system", "content": "Huge system prompt with skills"},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Define a word to triple a number and test it on 7."},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="}},
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_lookup_1",
+                        "type": "function",
+                        "function": {"name": "peforth_search_words", "arguments": json.dumps({"query": "triple"})},
+                    },
+                    {
+                        "id": "call_fail_1",
+                        "type": "function",
+                        "function": {"name": "peforth_run_forth", "arguments": json.dumps({"source": ": triple 3 * ;", "purpose": "define triple"})},
+                    },
+                    {
+                        "id": "call_ok_1",
+                        "type": "function",
+                        "function": {"name": "peforth_run_forth", "arguments": json.dumps({"source": ": triple 3 * ; 7 triple", "purpose": "define and test triple"})},
+                    },
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_lookup_1",
+                "content": json.dumps({"matches": [{"name": "*", "help": "multiply"}]}),
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_fail_1",
+                "content": json.dumps({"approved": False, "status": "denied", "error": "User denied execution"}),
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call_ok_1",
+                "content": json.dumps({
+                    "approved": True,
+                    "status": "completed",
+                    "error": None,
+                    "stdout": (
+                        "\x1b[33mPurpose: Execution of unsafe word 'triple'\x1b[0m\n"
+                        "Forth action:\n: triple 3 * ;\n"
+                        "1. Allow Once\n2. Trust this AI task\n3. Deny this proposal\n4. Cancel this AI task\n"
+                        "Choose 1-4: 1\nResult OK\n"
+                    ),
+                    "dstack": ["21"],
+                }),
+            },
+            {
+                "role": "assistant",
+                "content": "I have defined `triple` and verified `7 triple` leaves `21` on the stack.",
+            },
+        ]
+
+        distilled = ai.distill_messages_for_promotion(messages)
+        self.assertEqual(distilled["user_turns"], 1)
+        self.assertEqual(distilled["assistant_replies"], 1)
+        self.assertEqual(distilled["kept_tool_calls"], 1)
+        self.assertGreaterEqual(distilled["removed_noise_items"], 2)
+
+        promoted = distilled["promoted_input"]
+        self.assertNotIn("Huge system prompt", promoted)
+        self.assertNotIn("iVBORw0KGgo", promoted)
+        self.assertIn("[Image attached]", promoted)
+        self.assertIn("Define a word to triple a number", promoted)
+        self.assertIn(": triple 3 * ; 7 triple", promoted)
+        self.assertIn("Result OK", promoted)
+        self.assertNotIn("Choose 1-4:", promoted)
+        self.assertIn("I have defined `triple`", promoted)
+
+    def test_ai_promote_and_dual_mode_routing(self):
+        import io
+        import contextlib
+        from unittest.mock import patch
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.host["ai_messages"] = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "Hello local world."},
+            {"role": "assistant", "content": "Hi there!"},
+        ]
+
+        # 1. Cancel ai-promote (choice "2") -> stays in local Stateless mode
+        out_cancel = io.StringIO()
+        with patch.object(ai, "read_numbered_choice", return_value="2"), \
+             contextlib.redirect_stdout(out_cancel):
+            vm.dictate("ai-promote")
+        self.assertIn("Promotion cancelled", out_cancel.getvalue())
+        self.assertIsNone(vm.host.get("ai_active_session_id"))
+        self.assertEqual(len(vm.host.get("ai_messages", [])), 3)
+
+        # 2. Approve ai-promote (choice "1") -> creates remote session and clears ai_messages
+        def fake_stateful_promote(vm_arg, prompt, stream_response, session_id=None, create_new=False, **kwargs):
+            if False:
+                yield None
+            self.assertTrue(create_new)
+            self.assertIn("Hello local world.", prompt)
+            vm_arg.host["ai_active_session_id"] = "sess_promoted_777"
+
+        out_promote = io.StringIO()
+        with patch.object(ai, "read_numbered_choice", return_value="1"), \
+             patch.object(ai, "ai_turn_stateful", side_effect=fake_stateful_promote), \
+             contextlib.redirect_stdout(out_promote):
+            vm.dictate("ai-promote")
+        self.assertEqual(vm.host.get("ai_active_session_id"), "sess_promoted_777")
+        self.assertNotIn("ai_messages", vm.host)
+        self.assertIn("Promoted local conversation to remote session: sess_promoted_777", out_promote.getvalue())
+
+        # 3. When ai_active_session_id is set, ai_turn routes to ai_turn_stateful
+        routed_calls = []
+
+        def fake_stateful_turn(vm_arg, prompt, stream_response, session_id=None, **kwargs):
+            if False:
+                yield None
+            routed_calls.append((session_id, prompt, stream_response))
+
+        with patch.object(ai, "ai_turn_stateful", side_effect=fake_stateful_turn):
+            vm.dictate('s" Follow-up in remote session" false (ai)')
+        self.assertEqual(routed_calls, [("sess_promoted_777", "Follow-up in remote session", False)])
+
+        # 4. ai-use switches to remote session and clears ai_messages (no 50-message preload)
+        vm.host["ai_messages"] = [{"role": "user", "content": "leftover"}]
+        with patch.object(ai, "_list_remote_sessions", return_value=[{"id": "sess_other_888"}]), \
+             patch.object(ai, "_api_get", return_value={"id": "sess_other_888"}), \
+             patch.object(ai, "_session_title", return_value="Other Session"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            vm.dictate('s" sess_other_888" ai-use')
+        self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
+        self.assertNotIn("ai_messages", vm.host)
 
 
 
