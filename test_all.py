@@ -287,6 +287,69 @@ class TestSafePropertyAudit(unittest.TestCase):
             self.vm.dictate("cls")
         self.assertIn("\033[2J\033[3J\033[H", buf.getvalue())
 
+    def test_bracket_flow_control_conditionals_and_loops(self):
+        # 1. [if] [else] [then]
+        self.vm.dictate("1 [if] 11 [else] 22 [then]")
+        self.assertEqual(self.vm.pop(), 11)
+        self.vm.dictate("0 [if] 33 [else] 44 [then]")
+        self.assertEqual(self.vm.pop(), 44)
+        self.vm.dictate("0 [if] 1 [if] 55 [else] 66 [then] [else] 77 [then]")
+        self.assertEqual(self.vm.pop(), 77)
+
+        # 2. [begin] [until] and [again]
+        self.vm.dictate("dropall 0 [begin] 1+ dup 3 >= [until]")
+        self.assertEqual(self.vm.pop(), 3)
+
+        # 3. [for] [next]
+        self.vm.dictate("dropall 0 3 [for] 1+ [next]")
+        self.assertEqual(self.vm.pop(), 3)
+        self.vm.dictate("dropall 0 0 [for] 1+ [next]")
+        self.assertEqual(self.vm.pop(), 1)
+        self.vm.dictate("dropall 0 2 [for] 2 [for] 1+ [next] [next]")
+        self.assertEqual(self.vm.pop(), 4)
+
+    def test_inherited_200_auxiliary_words(self):
+        # 1. dir, keys, dict>keys
+        self.vm.dictate("<py> {'a': 1, 'b': 2} </pyV> dict>keys")
+        self.assertEqual(sorted(self.vm.pop()), ["a", "b"])
+
+        self.vm.dictate("<py> {'x': 10} </pyV> keys")
+        self.assertEqual(self.vm.pop(), ["x"])
+
+        # 2. <text> and </text>
+        self.vm.dictate("<text> hello from 2.0 </text>")
+        self.assertEqual(self.vm.pop(), "hello from 2.0 ")
+
+        # 3. <comment> and </comment>
+        self.vm.dictate("10 <comment> ignored text </comment> 20 +")
+        self.assertEqual(self.vm.pop(), 30)
+
+        # 4. (space) and (')
+        self.vm.dictate("(space)")
+        self.assertEqual(self.vm.pop(), " ")
+
+        self.vm.dictate("s' dup' (')")
+        word = self.vm.pop()
+        self.assertEqual(word.name, "dup")
+
+        # 5. sleep and greeting
+        self.vm.dictate("1 sleep")
+        self.vm.dictate("greeting")
+
+        # 6. aiModel and initial-ai-model
+        self.vm.dictate("aiModel")
+        val = self.vm.pop()
+        self.assertIsInstance(val, str)
+        self.vm.dictate('s" test-custom-model" to aiModel aiModel')
+        self.assertEqual(self.vm.pop(), "test-custom-model")
+
+    def test_inherited_shell_and_debug_words_are_unsafe(self):
+        unsafe_inherited = ["*debug*", "bash", "(bash)", "pwsh", "(pwsh)", "sudo", "(sudo)"]
+        for name in unsafe_inherited:
+            word = self.vm.tick(name)
+            self.assertIsNotNone(word, f"Word {name!r} must be defined in dictionary")
+            self.assertFalse(word.properties.get("safe", False), f"Word {name!r} must be marked safe=False")
+
     def test_nokia_chime_words_exist_and_are_safe(self):
         for name in ("nokia", "nokia2", "nokia-full"):
             word = self.vm.tick(name)

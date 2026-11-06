@@ -1328,3 +1328,12 @@ code (:>)
 : :> BL word (:>) ; immediate
     // ( <member> -- result ) Access member on TOS and push result onto data stack.
     /// Read next token as attribute or method call, evaluate on TOS, and push the result.
+
+\ --- 11. REPL Greeting Text ---
+: greeting ( -- )
+    cr
+    ." peforth 2.1.0 (with AI support)"
+    cr
+    ." Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode, 'bye' to exit."
+    cr ;
+last :: safe=True

@@ -68,6 +68,16 @@ code list-skills
 
 \ --- 3.5 System Info & Shell Execution Primitives ---
 
+code initial-ai-model
+    import os
+    vm.push(os.environ.get("OPENAI_MODEL") or os.environ.get("PEFORTH_AI_MODEL") or "gpt-4o-mini")
+    end-code
+last :: safe=True
+
+initial-ai-model value aiModel
+    // ( -- model-name ) Current AI model. Change with: s" model-name" to aiModel.
+last :: safe=True
+
 code (ai-tool-error)
     message = vm.pop()
     vm.push({"exit_code": None, "stdout": "", "stderr": "", "timed_out": False,

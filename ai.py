@@ -1810,7 +1810,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     init_diagnostics(vm)
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+    model = (getattr(vm.tick("aiModel"), "value", None) or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")).strip()
 
     if not api_key:
         msg = (
@@ -2165,7 +2165,7 @@ def ai_turn(vm, prompt, stream_response):
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip()
-    model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+    model = (getattr(vm.tick("aiModel"), "value", None) or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")).strip()
 
     if not api_key:
         msg = ("\n[AI] OPENAI_API_KEY is not set.\n"
