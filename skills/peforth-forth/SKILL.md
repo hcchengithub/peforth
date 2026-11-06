@@ -13,12 +13,11 @@ You are assisting with peforth v2, a small Forth VM hosted by Python. The user's
 - The Python VM has a return stack used by control flow and supports Python objects on the Forth data stack.
 - Definitions made with `: name ... ;` are compiled into the current dictionary. The CLI's current VM persists definitions for the life of that process.
 - peforth loads core words from `base.f`, auxiliary words from `auxiliary.f`, REPL words from `repl.f`, and AI-facing words from `ai.f` at startup. Word behavior and help text in the live dictionary are authoritative; query before assuming a word exists.
-- `code name ... end-code` defines host Python code. Inline Python bridges:
-  - `<py> ... </py>`: multi-line Python statements (no return value).
-  - `<py> ... </pyV>`: multi-line Python expression (pushes result onto data stack).
-  - `py:: <line>` and `py>> <expr>`: single-line Python statement / expression on the **same line** up to newline (never put code on the next line after `py::` or `py>>`).
-  - `py: <token>` and `py> <token>`: single whitespace-free token Python statement / expression.
-  - `:: <member>` and `:> <member>`: invoke attribute/method on TOS without or with pushing return value.
+- `code name ... end-code` defines host Python code. For inline Python execution (single-line or multi-line), use `<py> ... </py>`:
+  - `<py> print('hello world') </py>`
+  - `<py> x = 123 + 456; vm.push(x) </py>`
+  - `<py> vm.pop().foo(123) </py>`
+  - `<py> vm.latest.properties['safe'] = True </py>`
 - Keep the AI feature's user-facing words and application flow in `ai.f`. Prefer colon definitions for Forth composition; put Python integration in visible `code` words there, importing `ai.py` for transport, security guard, and host helpers.
 
 ## Capability awareness

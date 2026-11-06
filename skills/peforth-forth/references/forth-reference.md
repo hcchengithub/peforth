@@ -30,11 +30,16 @@ In peforth, Herdr words provide terminal multi-pane access:
 - `herdr-screen-send-keys ( pane-id keys -- result )`: Send keys to pane (unsafe, triggers approval).
 - `herdr-screen-run ( pane-id command -- result )`: Run command in pane (unsafe, triggers approval).
 
-Rule: Always use the safe Forth words directly to read or inspect panes. Never use `py>>` or bash checks.
+Rule: Always use the safe Forth words directly to read or inspect panes. Never use inline Python or bash checks.
 
 ## Python bridge and side effects
 
-`py:`, `py::`, `py>`, `py>>`, and `<py> ... </py>` / `</pyV>` are powerful host bridges, not sandboxes. Depending on the expression, Forth can interact with Python modules, files, processes, and other local resources. The AI CLI runs approved Forth in the active local VM and reports the actual output and resulting data stack. Review the complete proposal before approving it.
+`<py> ... </py>` is a powerful host bridge, not a sandbox:
+- `<py> print('hello world') </py>` executes Python statements directly.
+- `<py> x = 123 + 456; vm.push(x) </py>` computes in Python and pushes the result onto the Forth data stack.
+- `<py> vm.pop().foo(123) </py>` pops the top stack item and invokes a Python method on it.
+- `<py> vm.latest.properties['safe'] = True </py>` sets a property on the most recently defined word.
+Depending on the Python code, Forth can interact with Python modules, files, processes, and other local resources. The AI CLI runs approved Forth in the active local VM and reports the actual output and resulting data stack. Review the complete proposal before approving it.
 
 ## AI words
 
@@ -53,5 +58,5 @@ Rule: Always use the safe Forth words directly to read or inspect panes. Never u
 - `run_curl ( argument-list -- result )` passes a list of argument strings directly to curl; include the URL.
 - `run_http ( request-mapping -- response )` sends an HTTP/HTTPS request using Python urllib.request. Request fields: url (required), method (default GET), headers (optional string mapping), and body (optional string).
 - Shell and curl results include `exit_code`, `stdout`, `stderr`, `timed_out`, and `truncated`; process limits are 60 seconds and 64 KiB per output stream. HTTP results include `status_code`, `headers`, `body`, and `truncated`; the response limit is 64 KiB and timeout is 30 seconds.
-- Use `py>> <expr>` (on the same line up to newline) or `<py> ... </pyV>` (multi-line) to push Python list or mapping values for `run_curl` and `run_http`.
+- Use `<py> vm.push([...]) </py>` or `<py> vm.push({...}) </py>` to push Python list or mapping values onto the stack for `run_curl` and `run_http`.
 - At an execution approval prompt, choose `1` (Allow Once), `2` (Trust this AI task), `3` (Deny this proposal), or `4` (Cancel this AI task).
