@@ -3,51 +3,16 @@ name: herdr
 description: "Control Herdr panes, shells, workspaces, and agents from peforth. Use when the user explicitly asks to inspect a Herdr pane, type text or keys, run a command, inspect pane output or its Python VENV, or control an agent. Requires HERDR_ENV=1."
 ---
 
-# Herdr Integration in peforth
-
-In peforth, Herdr operations are integrated directly via the `herdr.f` vocabulary.
-**AI MUST USE FORTH WORDS INSTEAD OF PYTHON (`py>>`) OR BASH SCRIPTS.**
-
-## Read-Only Words (Safe — NO APPROVAL REQUIRED)
-Checking, inspecting, and reading panes are read-only operations marked `safe=True`. They execute immediately without triggering the security review:
-
-- `herdr-current-pane` `( -- pane-id )`
-  Resolves the current caller pane ID (e.g. `w5:pA`). Fails if not inside Herdr.
-- `herdr-screen-read` `( pane-id [lines] -- text )`
-  Reads visible lines from specified pane. Default lines = 80.
-- `herdr-screen-tail` `( pane-id [lines] -- text )`
-  Reads recent unwrapped lines from specified pane. Default lines = 80.
-- `herdr-show-pane-id` `( -- )`
-  Sets each pane name in current workspace to its pane ID.
-- `herdr-clear-pane-id` `( -- )`
-  Clears custom pane names in current workspace.
-
-### Examples for AI:
-- To inspect/read a specific pane (e.g. `w5:pF` or `w5:pE`):
-  ```forth
-  " w5:pE" 30 herdr-screen-tail . cr
-  ```
-- To check current pane ID:
-  ```forth
-  herdr-current-pane . cr
-  ```
-
-**CRITICAL RULE: NEVER use `py>>` or Python `os.environ` or external bash scripts to inspect panes or check `HERDR_ENV`. All read-only Forth words above handle environment checks automatically and run without approval.**
-
-## Mutating Operations (Unsafe — Requires User Approval)
-These words perform actions inside the terminal and will trigger the `ai-approve` review workflow:
-- `herdr-screen-send-text` `( pane-id text -- result )`: Sends text to the specified pane.
-- `herdr-screen-send-keys` `( pane-id keys -- result )`: Sends key names (or list of keys) to the specified pane.
-- `herdr-screen-run` `( pane-id command -- result )`: Executes a shell command in the specified pane.
-
----
-
-# Herdr CLI Reference
+# Herdr
 
 Herdr organizes terminals into workspaces, tabs, and panes, recognizes coding agents running inside panes, and exposes the current session through the `herdr` CLI.
 
-Before issuing any control command, verify that this agent is running inside a Herdr-managed pane (`HERDR_ENV=1`).
-In peforth, all Herdr read operations have corresponding safe Forth words (such as `herdr-current-pane`, `herdr-screen-tail`, `herdr-screen-read`). Under Windows, Herdr runs natively in PowerShell (pwsh). Do not invoke WSL, bash, or external bash test scripts for Herdr control.
+Before issuing any control command, verify that this agent is running inside a Herdr-managed pane:
+
+```bash
+test "${HERDR_ENV:-}" = 1
+```
+
 If the check fails, say that you are not running inside Herdr and stop. Do not inspect or control the focused Herdr session from outside Herdr.
 
 When the check passes, the `herdr` binary in `PATH` talks to the current session. Use it to inspect neighboring work, create terminal layout, start agents and commands, read output, and wait for state changes.
@@ -260,7 +225,7 @@ If a larger recent read still does not reveal the completed response, ask the ag
 
 ## PeForth-specific pane input
 
-Use the peforth Python bridge and local Forth execution route for Herdr CLI calls. Check `HERDR_ENV=1` before any control operation; under Windows, do not call `run_bash` or WSL for pane control.
+Use the peforth Python bridge and local Forth execution route for Herdr CLI calls. Check `HERDR_ENV=1` before any control operation; do not call `run_bash` for pane control.
 
 When the user asks to type literal text into a shell pane:
 
