@@ -76,7 +76,9 @@ flowchart TD
    - 在終端機印出整理統計與完整預覽內容，並透過 `read_numbered_choice` 詢問使用者：
      - `1. Promote to new remote session`
      - `2. Cancel`
-   - 若使用者選 `1`，呼叫 `yield from ai_turn_stateful(vm, promoted_prompt, stream_response=True, create_new=True)`，成功取得 `ai_active_session_id` 後清除 `vm.host["ai_messages"]`。
+   - 若使用者選 `1`，呼叫 `yield from ai_turn_stateful(vm, promoted_prompt, stream_response=True, create_new=True)`，成功取得 `ai_active_session_id` 後清除 `vm.host["ai_messages"]` 與 `vm.host["ai_local_session_id"]`，並於 `timeline` 記錄 `ai_session_promoted`（串聯 `from_local_session_id` 與 `to_remote_session_id`）。
+5. **新增 Stateless 本地對話 ID 追蹤（`_ensure_local_session_id` & `_current_diagnostic_session_id`）**：
+   - 為每一段本地 `ai_messages` 自動指派 `local_<16-hex>` ID（單次隔離呼叫則為 `isolated_<16-hex>`），寫入 `ai-diagnostics.sqlite3` 的 `turns.remote_session_id` 與 `timeline.session_id`，確保同一個 `runtime_id` 內多次 `ai-new` 的本地 Context 都能在資料庫中獨立識別。
 
 ---
 
@@ -95,10 +97,10 @@ flowchart TD
    ```
    （標記為 `safe=False`，確保只有使用者主動下達或經審核才能建立遠端 Session。）
 2. **修正 `code ai-use`**：
-   - 移除今天凌晨加入的「從本地 SQLite 撈 50 則訊息塞入 `ai_messages`」邏輯，改為設定 `vm.host["ai_active_session_id"] = row["id"]` 並清空 `vm.host.pop("ai_messages", None)`，因為後續對話將直接由遠端 Stateful Session 接管。
+   - 移除今天凌晨加入的「從本地 SQLite 撈 50 則訊息塞入 `ai_messages`」邏輯，改為設定 `vm.host["ai_active_session_id"] = row["id"]` 並清空 `ai_messages` 與 `ai_local_session_id`，因為後續對話將直接由遠端 Stateful Session 接管。
 3. **微調 `code ai-new` 與 `code ai-status`**：
-   - `ai-new`：清除 `ai_active_session_id` 與 `ai_messages`，印出明確提示已回到預設 Stateless（本地 `/chat/completions`）模式。
-   - `ai-status`：當有 `ai_active_session_id` 時明確標示為 `Stateful (remote Agents API session)`；當無 `ai_active_session_id` 但有 `ai_messages` 時標示為 `Stateless (local in-memory, use ai-promote to save remotely)`。
+   - `ai-new`：清除 `ai_active_session_id`、`ai_local_session_id` 與 `ai_messages`，寫入 `ai_session_reset` 診斷事件，並印出明確提示已回到預設 Stateless（本地 `/chat/completions`）模式。
+   - `ai-status`：當有 `ai_active_session_id` 時明確標示為 `Stateful (remote Agents API session)`；當無 `ai_active_session_id` 但有 `ai_messages` 時標示為 `Active AI session: local (in-memory) [local_<16-hex>]` 與 `Mode: Stateless (/chat/completions; use 'ai-promote' to promote to a remote session)`。
 
 ---
 

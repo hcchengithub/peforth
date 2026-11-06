@@ -143,5 +143,29 @@
 **A13：**
 這是教科書級別的「晉升模式（Promotion Pattern）」：
 1. **免除心理負擔**：一開始隨意聊（Stateless），不用事先開 Session 製造雲端垃圾。
-2. **打包前情提要（Promotion）**：聊到重要階段時，下達指令（如 `ai-new-remote` 或別名 `ai-promote`），自動將本地現有對話打包作為 Initial Payload 向遠端建立 Session。
+2. **打包前情提要（Promotion）**：聊到重要階段時，下達指令（我們正式定名為 `ai-promote`），自動將本地現有對話整理去雜質後預覽給使用者確認，同意後作為 Initial Payload 向遠端建立 Session。
 3. **無縫升級**：取得雲端 `session_id` 後自動切換為 Stateful 模式接續對話，達成無縫遷移。
+
+---
+
+### Q14：在 `ai-promote` 整理本地對話時，「移除 `system` 訊息」這點讓我覺得奇怪。我們的 System Prompt 是辛苦調出來的，遠端的 Agents API 不可能憑空知道我們的 System Prompt，那它怎麼合乎我們的要求？
+
+**A14：**
+這一點非常關鍵！我們辛苦調校的 `get_system_prompt(vm)`（包含核心規則與所有 Skills）**絕對有而且必須 100% 傳給遠端的 Agents API**。
+之所以從 `ai_messages` 的對話陣列中把 `role: "system"` 抽離，是因為 OpenAI Agents API 在建立 Session（`POST /v1/agents/sessions`）時，Payload 分成兩個獨立區塊：
+1. **`payload["agent"]["instructions"]`**：專門放置完整的 System Prompt（`get_system_prompt(vm)`）。
+2. **`payload["input"]`**：放置整理乾淨的使用者與 AI 對話前情提要（`User: ...` / `Assistant: ...`）。
+因此，把 `ai_messages[0]` 的 `system` 從 `input` 抽離，是為了避免同一個 20KB 的 System Prompt 在 `agent.instructions` 與 `input` 重複傳送兩次，同時讓 `ai-promote` 的螢幕預覽畫面保持乾淨，只顯示真正的人機對話紀錄。
+
+---
+
+### Q15：在 Stateless Mode 下，我們的 `ai_messages` 其實也是一個 Session。如果在同一個 `peforth` 視窗裡打了好幾次 `ai-new` 重來，在 `ai-diagnostics.sqlite3` 裡面保存了很多個 Contexts（Sessions），它們有 ID 可資分辨嗎？
+
+**A15：**
+這是一個極為關鍵的可觀測性設計！
+原本在 Stateless 模式下，`turns.remote_session_id` 與 `timeline.session_id` 都是 `NULL`，如果在同一個 `runtime_id` 內多次執行 `ai-new`，不同話題的本地對話在 `ai-diagnostics.sqlite3` 裡會全部混在一起無法區分。
+因此我們為 Stateless 模式的每一段 `ai_messages` 賦予專屬的本地身分證（`ai_local_session_id`）：
+1. **自動發號（`local_<16-hex>`）**：每當開始一段新的本地 Stateless 對話時，自動產生 `local_a1b2c3d4e5f60718` 格式的 ID，並寫入 `turns.remote_session_id` 與 `timeline.session_id`（單次隔離呼叫則標記為 `isolated_<16-hex>`）。
+2. **`ai-new` 切分界線**：執行 `ai-new` 時清除舊的 `ai_local_session_id`，並在 `timeline` 寫入 `ai_session_reset` 事件（記錄 `previous_session_id`）；下一輪對話會拿到全新的 `local_...` ID。
+3. **`ai-promote` 血緣追蹤**：執行 `ai-promote` 升級上雲時，在 `timeline` 寫入 `ai_session_promoted` 事件，將 `from_local_session_id`（`local_...`）與 `to_remote_session_id`（`sess_...`）永久串聯。
+4. **`ai-status` 即時顯示**：在本地模式下輸入 `ai-status`，會直接顯示 `Active AI session: local (in-memory) [local_...]`，方便隨時對照與從 SQLite 精準撈出整段對話。
