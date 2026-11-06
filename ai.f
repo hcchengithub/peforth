@@ -543,6 +543,7 @@ code ai-use
         raise RuntimeError("ai-use expects a session number or session ID.")
     ai._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
     vm.host["ai_active_session_id"] = row["id"]
+    vm.host.pop("ai_local_session_id", None)
     vm.host.pop("ai_messages", None)
     title = ai._session_title(row["id"]) or "(untitled)"
     print(f"Using session {label}: {title} [{row['id']}]")
@@ -551,8 +552,12 @@ code ai-use
     last :: safe=True
 
 code ai-new
-    vm.host.pop("ai_active_session_id", None)
+    import ai
+    prev_id = vm.host.pop("ai_active_session_id", None) or vm.host.pop("ai_local_session_id", None)
+    vm.host.pop("ai_local_session_id", None)
     vm.host.pop("ai_messages", None)
+    if prev_id:
+        ai._log_event(vm, "ai_session_reset", session_id=prev_id, payload={"previous_session_id": prev_id})
     print("A fresh AI session will be created for this Forth process on its next request.")
     end-code
     // ( -- ) Clear this Forth process's selected AI session and return to local Stateless mode.
@@ -596,7 +601,8 @@ code ai-status
             first_sentence = ai.extract_first_sentence(first_text, max_chars=80)
             model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
             runtime_id = vm.host.get("diagnostic_runtime_id")
-            print("Active AI session: local (in-memory)")
+            local_id = vm.host.get("ai_local_session_id") or ai._ensure_local_session_id(vm)
+            print(f"Active AI session: local (in-memory) [{local_id}]")
             print("Mode: Stateless (/chat/completions; use 'ai-promote' to promote to a remote session)")
             if first_sentence:
                 print(f"Topic: {first_sentence}")

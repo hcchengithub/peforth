@@ -644,9 +644,23 @@ def init_diagnostics(vm, *, database_path=None, force=False):
         return None
 
 
+def _ensure_local_session_id(vm) -> str:
+    """Return or generate the current local Stateless session ID (local_<16-hex>)."""
+    local_id = vm.host.get("ai_local_session_id")
+    if not local_id:
+        local_id = f"local_{uuid.uuid4().hex[:16]}"
+        vm.host["ai_local_session_id"] = local_id
+    return local_id
+
+
+def _current_diagnostic_session_id(vm) -> str | None:
+    """Return the active remote session ID (sess_...) or local Stateless session ID (local_...)."""
+    return vm.host.get("ai_active_session_id") or vm.host.get("ai_local_session_id")
+
+
 def _log_event(vm, event_type, turn_id=None, *, payload=None, call_id=None,
                operation=None, http_method=None, url=None, http_status=None,
-               elapsed_ms=None, error=None):
+               elapsed_ms=None, error=None, session_id=None):
     """Append a diagnostic event to the timeline table if logging is enabled."""
     logger = vm.host.get("diagnostic_log")
     runtime_id = vm.host.get("diagnostic_runtime_id")
@@ -655,7 +669,7 @@ def _log_event(vm, event_type, turn_id=None, *, payload=None, call_id=None,
     try:
         return logger.append_event(
             runtime_id, turn_id, event_type,
-            session_id=vm.host.get("ai_active_session_id"),
+            session_id=session_id if session_id is not None else _current_diagnostic_session_id(vm),
             call_id=call_id,
             operation=operation,
             http_method=http_method,
@@ -691,7 +705,7 @@ def _finish_turn(vm, turn_id, *, output_text=None, output_status="complete", sta
         }.get(status, "ai_turn_failed")
         logger.append_event(
             runtime_id, turn_id, event_type,
-            session_id=vm.host.get("ai_active_session_id"),
+            session_id=_current_diagnostic_session_id(vm),
             error_type=type(error).__name__ if error is not None else None,
             error_message=str(error) if error is not None else None,
         )
@@ -2050,6 +2064,7 @@ def promote_local_session(vm):
         print("Promotion cancelled. Remaining in local Stateless mode.")
         return
 
+    old_local_id = vm.host.get("ai_local_session_id") or _ensure_local_session_id(vm)
     print("\nPromoting context to a new remote Agents API session...")
     yield from ai_turn_stateful(
         vm,
@@ -2060,6 +2075,16 @@ def promote_local_session(vm):
     new_session_id = vm.host.get("ai_active_session_id")
     if new_session_id:
         vm.host.pop("ai_messages", None)
+        vm.host.pop("ai_local_session_id", None)
+        _log_event(
+            vm,
+            "ai_session_promoted",
+            session_id=new_session_id,
+            payload={
+                "from_local_session_id": old_local_id,
+                "to_remote_session_id": new_session_id,
+            },
+        )
         print(f"Promoted local conversation to remote session: {new_session_id}")
 
 
@@ -2102,6 +2127,14 @@ def ai_turn(vm, prompt, stream_response):
             vm.push(msg)
         return
 
+    image_url = vm.host.pop("ai_image_url_once", None)
+    isolated_session = vm.host.pop("ai_isolated_session_once", False)
+    diag_session_id = (
+        f"isolated_{uuid.uuid4().hex[:16]}"
+        if isolated_session
+        else _ensure_local_session_id(vm)
+    )
+
     # Start diagnostic turn tracking if enabled
     system_instructions = get_system_prompt(vm)
     logger = vm.host.get("diagnostic_log")
@@ -2115,18 +2148,16 @@ def ai_turn(vm, prompt, stream_response):
                 runtime_id,
                 prompt_content_id=prompt_cid,
                 instructions_content_id=instr_cid,
-                remote_session_id=vm.host.get("ai_active_session_id"),
+                remote_session_id=diag_session_id,
             )
             vm.host["ai_current_turn_id"] = turn_id
             logger.append_event(
                 runtime_id, turn_id, "ai_turn_started",
+                session_id=diag_session_id,
                 payload={"model": model, "stream_response": bool(stream_response)},
             )
         except Exception:
             turn_id = None
-
-    image_url = vm.host.pop("ai_image_url_once", None)
-    isolated_session = vm.host.pop("ai_isolated_session_once", False)
 
     if image_url is not None:
         user_content = [

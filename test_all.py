@@ -1552,6 +1552,9 @@ class TestSessionStoreAndSync(unittest.TestCase):
             vm.dictate("ai-status")
         val = out_local.getvalue()
         self.assertIn("Active AI session: local (in-memory)", val)
+        first_local_id = vm.host.get("ai_local_session_id")
+        self.assertTrue(first_local_id and first_local_id.startswith("local_"))
+        self.assertIn(f"[{first_local_id}]", val)
         self.assertIn("Topic: 測試對話主題", val)
         self.assertIn("Turns: 2 user turn(s)", val)
 
@@ -1575,15 +1578,21 @@ class TestSessionStoreAndSync(unittest.TestCase):
             self.assertIn("Model: gpt-remote-model", val_remote)
             self.assertIn("Local turns: 2 user turn(s) active in memory", val_remote)
 
-        # 4. ai-new clears both remote session and local messages
+        # 4. ai-new clears remote session, local session ID, and local messages
         with contextlib.redirect_stdout(io.StringIO()):
             vm.dictate("ai-new")
         self.assertNotIn("ai_active_session_id", vm.host)
+        self.assertNotIn("ai_local_session_id", vm.host)
         self.assertNotIn("ai_messages", vm.host)
         out_after_new = io.StringIO()
         with contextlib.redirect_stdout(out_after_new):
             vm.dictate("ai-status")
         self.assertIn("Active AI session: none", out_after_new.getvalue())
+
+        # 5. Starting a new local conversation after ai-new gets a distinct local_session_id
+        second_local_id = ai._ensure_local_session_id(vm)
+        self.assertTrue(second_local_id.startswith("local_"))
+        self.assertNotEqual(first_local_id, second_local_id)
 
     def test_distill_messages_for_promotion(self):
         import json
