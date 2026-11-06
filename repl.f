@@ -1,32 +1,31 @@
 \ repl.f - Interactive Multiline REPL for Project K (v2.1.0)
 
-code (setup-completer)
-    try:
-        from prompt_toolkit.completion import Completer, Completion
-        class ForthWordCompleter(Completer):
-            def __init__(self, vm_ref):
-                self.vm = vm_ref
+<py>
+try:
+    from prompt_toolkit.completion import Completer, Completion
+    class ForthWordCompleter(Completer):
+        def __init__(self, vm_ref):
+            self.vm = vm_ref
 
-            def get_completions(self, document, complete_event=None):
-                text = document.text_before_cursor
-                if not text or text[-1].isspace():
-                    return
-                prefix = text.rsplit(None, 1)[-1]
-                has_slash = prefix.startswith("/") and len(prefix) > 1
-                search = prefix[1:] if has_slash else prefix
-                folded = search.casefold()
-                for name in self.vm.words:
-                    if isinstance(name, str) and name.casefold().startswith(folded):
-                        yield Completion(
-                            name,
-                            start_position=-len(search) if has_slash else -len(prefix),
-                            display_meta="← ↑ ↓ → move | Space selects | Esc cancels",
-                        )
-        vm.host["ForthWordCompleter"] = ForthWordCompleter
-    except ImportError:
-        vm.host["ForthWordCompleter"] = None
-    end-code
-(setup-completer)
+        def get_completions(self, document, complete_event=None):
+            text = document.text_before_cursor
+            if not text or text[-1].isspace():
+                return
+            prefix = text.rsplit(None, 1)[-1]
+            has_slash = prefix.startswith("/") and len(prefix) > 1
+            search = prefix[1:] if has_slash else prefix
+            folded = search.casefold()
+            for name in self.vm.words:
+                if isinstance(name, str) and name.casefold().startswith(folded):
+                    yield Completion(
+                        name,
+                        start_position=-len(search) if has_slash else -len(prefix),
+                        display_meta="← ↑ ↓ → move | Space selects | Esc cancels",
+                    )
+    vm.host["ForthWordCompleter"] = ForthWordCompleter
+except ImportError:
+    vm.host["ForthWordCompleter"] = None
+</py>
 
 code repl
     import re
