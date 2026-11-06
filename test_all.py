@@ -553,11 +553,11 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("ai-diagnostics-log-inspector", names)
         self.assertIn("line-notify", names)
 
-        # Prompt includes skills and reference
+        # Prompt includes skills without duplicating references/forth-reference.md
         prompt = ai.get_system_prompt(self.vm)
         self.assertIn("## Skill: herdr", prompt)
         self.assertIn("## Skill: peforth-forth", prompt)
-        self.assertIn("Forth Reference", prompt)
+        self.assertNotIn("=== Forth Reference ===", prompt)
         self.assertLessEqual(len(prompt.encode("utf-8")), 100_000)
 
         # list-skills word in Forth

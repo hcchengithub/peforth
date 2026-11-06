@@ -1324,8 +1324,6 @@ def get_system_prompt(vm=None) -> str:
     """Build full agent system prompt dynamically composed with loaded skills."""
     skills_root = get_skills_dir(vm)
     skill_names, combined_skills = load_all_skills(skills_root)
-    reference_path = skills_root / "peforth-forth" / "references" / "forth-reference.md"
-    reference_text = reference_path.read_text(encoding="utf-8") if reference_path.is_file() else ""
 
     sys_info = detect_system_info(vm)
     shell_label = "pwsh (PowerShell 7)" if sys_info.get("active_shell") == "pwsh" else sys_info.get("active_shell", "unknown")
@@ -1340,8 +1338,6 @@ def get_system_prompt(vm=None) -> str:
     instructions = SYSTEM_PROMPT + env_section
     if combined_skills:
         instructions += "\n\n=== Available Skills ===\n\n" + combined_skills
-    if reference_text:
-        instructions += "\n\n=== Forth Reference ===\n\n" + reference_text
 
     if len(instructions.encode("utf-8")) > 100_000:
         raise RuntimeError("Combined skill texts are too large to include in agent instructions.")

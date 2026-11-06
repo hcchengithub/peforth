@@ -34,24 +34,24 @@ Rule: Always use the safe Forth words directly to read or inspect panes. Never u
 
 ## Python bridge and side effects
 
-`py:` and `py>>` are powerful host bridges, not sandboxes. Depending on the expression, Forth can interact with Python modules, files, processes, and other local resources. The AI CLI runs approved Forth in the active local VM and reports the actual output and resulting data stack. Review the complete proposal before approving it.
+`py:`, `py::`, `py>`, `py>>`, and `<py> ... </py>` / `</pyV>` are powerful host bridges, not sandboxes. Depending on the expression, Forth can interact with Python modules, files, processes, and other local resources. The AI CLI runs approved Forth in the active local VM and reports the actual output and resulting data stack. Review the complete proposal before approving it.
 
 ## AI words
 
 - `ai-context <n> <count> [json|chat]` reads its arguments from the TIB and returns an object on the data stack. `count` is the positive number of latest user-initiated turns; `chat` is the default and returns user/assistant text messages, while `json` returns all API items, including tool interactions, in those turns. The API is queried newest-first and paginated only until the requested turns are found. Use `stringify .` to display the result. Refresh sequence numbers with `ai-sessions` first.
-- `ai: <prompt>` sends the remaining submitted input, including multiple lines, to the current Agents API session.
+- `ai: <prompt>` sends the remaining submitted input, including multiple lines, to `(ai)` in streaming mode.
 - `word` reads the next token with a space delimiter; a falsy delimiter (`None`, `""`, `False`, or `0`) consumes the rest of the TIB. `ai:` uses an empty string delimiter with `word` to pass its complete prompt to `(ai)`.
 - `ai:` is a Forth colon word in `ai.f`. Use `help ai:` for its prompt and approval behavior, and `see ai:` for its source.
 - `(ai) ( prompt-string stream? -- [response-string] )` runs an AI turn. Use `false` to return the reply on the stack, or `true` to stream it. `ai:` uses the streaming mode. Its stack effect and behavior are available through `help (ai)`.
-- `ai-status`, `ai-new`, and `ai-confirm` are directly defined in `ai.f` and can be inspected with `see`. `ai-status` shows this process's active session; each new process starts without one, and `ai-use` selects one explicitly. `ai-new` clears only this process's selection; `ai-confirm` restores per-proposal approval.
-- AI application behavior and Forth word registration belong in `ai.f`: use colon definitions for Forth composition and `code` words for Python integration. `ai.f` imports `ai_tools.py` for Python-specific process and HTTP operations; runtime host detection is prepared by `repl.py` before the Forth AI dictionary loads. The Python modules do not register Forth words.
+- `ai-status`, `ai-new`, and `ai-confirm` are directly defined in `ai.f` and can be inspected with `see`. `ai-status` shows this process's active session (local in-memory or selected remote session); `ai-use` selects a remote session explicitly and loads its history. `ai-new` clears this process's session and local message history; `ai-confirm` restores per-proposal approval.
+- AI application behavior and Forth word registration belong in `ai.f`: use colon definitions for Forth composition and `code` words for Python integration. `ai.f` imports `ai.py` for transport, security guard, and host operations; the interactive REPL is implemented in `repl.f`. The Python modules do not register Forth words.
 - `sessions/sessions.sqlite3` under `PEFORTH_CONFIG_DIR` is a local SQLite mirror of remote sessions and their items. `ai-sessions` and `ai-sync` incrementally synchronize remote sessions into SQLite while preserving session descriptions. `ai-sessions`, `ai-status`, `ai-session`, `ai-use`, `ai-cleanup`, `ai-export-session`, and `ai-search` display full Session IDs. `ai-session`, `ai-cleanup`, and `ai-export-session` accept either a list number or full ID; `ai-use` also keeps unambiguous suffix matching for compatibility.
 - `stringify ( object -- pretty-string )` is defined directly as a `code` word in `auxiliary.f`; it converts Python values, including dicts, lists, tuples, and scalars, into indented JSON. String input is parsed as JSON or a Python literal when possible; unsupported nested values use repr.
-- `system_info ( -- info )` returns the host and configuration snapshot prepared by the Python runtime before the Forth AI dictionary is loaded. It includes Python/venv, WSL, pwsh, bash, curl, and non-secret configuration details; the Forth word returns the VM's bound snapshot.
+- `system_info ( -- info )` returns the host and configuration snapshot. It includes Python/venv, WSL, pwsh, bash, curl, and non-secret configuration details; the Forth word returns the VM's bound snapshot.
 - `run_pwsh ( script-string -- result )` runs a PowerShell 7 script without profiles.
 - `run_bash ( script-string -- result )` runs Bash natively on Linux/WSL or through the configured Ubuntu WSL distro on a Windows host.
 - `run_curl ( argument-list -- result )` passes a list of argument strings directly to curl; include the URL.
 - `run_http ( request-mapping -- response )` sends an HTTP/HTTPS request using Python urllib.request. Request fields: url (required), method (default GET), headers (optional string mapping), and body (optional string).
 - Shell and curl results include `exit_code`, `stdout`, `stderr`, `timed_out`, and `truncated`; process limits are 60 seconds and 64 KiB per output stream. HTTP results include `status_code`, `headers`, `body`, and `truncated`; the response limit is 64 KiB and timeout is 30 seconds.
-- Use `py>>` on its own line to push Python list or mapping values for `run_curl` and `run_http`.
-- At an execution approval prompt, enter `trust`, `yes`, `no`, or `cancel`. `trust` approves later AI programs for the lifetime of the current Forth process; `yes` approves only the current proposal.
+- Use `py>> <expr>` (on the same line up to newline) or `<py> ... </pyV>` (multi-line) to push Python list or mapping values for `run_curl` and `run_http`.
+- At an execution approval prompt, choose `1` (Allow Once), `2` (Trust this AI task), `3` (Deny this proposal), or `4` (Cancel this AI task).
