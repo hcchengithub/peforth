@@ -1989,6 +1989,90 @@ def _submit_agents_tool_result(session_id: str, turn_id: str, call_id: str, succ
         resp.read()
 
 
+def _chat_turn_width() -> int:
+    return max(24, min(shutil.get_terminal_size((80, 24)).columns, 100))
+
+
+def _chat_turn_header(role: str) -> str:
+    try:
+        from wcwidth import wcswidth
+    except ImportError:
+        def wcswidth(s):
+            return len(s)
+
+    if role == "user":
+        title = chr(0x1F44B) + " user"
+    elif role == "assistant":
+        title = chr(0x1FA84) + " peforth"
+    else:
+        raise ValueError("role must be user or assistant")
+    prefix = "╭─ " + title + " "
+    dashes = max(1, _chat_turn_width() - wcswidth(prefix) - 1)
+    return prefix + "─" * dashes + "╮"
+
+
+def _chat_turn_bottom() -> str:
+    return "╰" + "─" * (_chat_turn_width() - 2) + "╯"
+
+
+def _print_chat_turn(role: str, text: str) -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    sys.stdout.write(_chat_turn_header(role) + "\n")
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.split("\n"):
+        sys.stdout.write("  " + line + "\n")
+    sys.stdout.write(_chat_turn_bottom() + "\n")
+    sys.stdout.flush()
+
+
+class ChatBoxStreamer:
+    """Manages styled chat turn output frames for terminal interactions."""
+
+    def __init__(self, stream_response: bool = True):
+        self.stream_response = stream_response
+        self.box_open = False
+        self.line_start = True
+        if self.stream_response and hasattr(sys.stdout, "reconfigure"):
+            try:
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+    def print_user_turn(self, prompt: str) -> None:
+        if not self.stream_response or not prompt or not prompt.strip():
+            return
+        _print_chat_turn("user", prompt.strip())
+
+    def write_chunk(self, chunk: str) -> None:
+        if not self.stream_response or not chunk:
+            return
+        if not self.box_open:
+            sys.stdout.write("\n" + _chat_turn_header("assistant") + "\n")
+            self.box_open = True
+            self.line_start = True
+
+        for part in chunk.splitlines(keepends=True):
+            if self.line_start:
+                sys.stdout.write("  ")
+            sys.stdout.write(part)
+            self.line_start = part.endswith("\n") or part.endswith("\r")
+        sys.stdout.flush()
+
+    def close_box(self) -> None:
+        if not self.stream_response or not self.box_open:
+            return
+        if not self.line_start:
+            sys.stdout.write("\n")
+        sys.stdout.write(_chat_turn_bottom() + "\n")
+        sys.stdout.flush()
+        self.box_open = False
+        self.line_start = True
+
+
 def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new=False, image_url=None, isolated_session=False):
     """Cooperative generator for one Stateful AI turn via the OpenAI Agents API (/v1/agents/sessions)."""
     init_diagnostics(vm)
@@ -2037,6 +2121,8 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
 
     accumulated_full_text = []
     remote_turn_id = None
+    streamer = ChatBoxStreamer(stream_response)
+    streamer.print_user_turn(prompt)
 
     try:
         if create_new or not session_id:
@@ -2093,17 +2179,14 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                 delta_text = event.get("delta", "")
                 if delta_text:
                     accumulated_full_text.append(delta_text)
-                    if stream_response:
-                        sys.stdout.write(delta_text)
-                        sys.stdout.flush()
+                    streamer.write_chunk(delta_text)
             elif kind == "agent.session.turn.output_text.done":
                 done_text = event.get("text", "")
                 if done_text and not accumulated_full_text:
                     accumulated_full_text.append(done_text)
-                    if stream_response:
-                        sys.stdout.write(done_text)
-                        sys.stdout.flush()
+                    streamer.write_chunk(done_text)
             elif kind == "agent.session.requires_action":
+                streamer.close_box()
                 if not session_id:
                     continue
                 status, actions = _wait_for_current_actions(session_id)
@@ -2257,6 +2340,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     vm.host["pending_ai_task"] = None
 
     full_output = "".join(accumulated_full_text)
+    streamer.close_box()
     _finish_turn(
         vm, turn_id,
         output_text=full_output if full_output else None,
@@ -2265,10 +2349,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     )
     vm.host["ai_current_turn_id"] = None
 
-    if stream_response:
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-    else:
+    if not stream_response:
         vm.push(full_output)
 
 
@@ -2431,6 +2512,8 @@ def ai_turn(vm, prompt, stream_response):
         vm.host["ai_messages"] = messages
 
     accumulated_full_text = []
+    streamer = ChatBoxStreamer(stream_response)
+    streamer.print_user_turn(prompt)
 
     # Outer loop for handling multi-turn tool calling
     while True:
@@ -2510,9 +2593,7 @@ def ai_turn(vm, prompt, stream_response):
                     content_chunk = delta.get("content")
                     if content_chunk:
                         assistant_content += content_chunk
-                        if stream_response:
-                            sys.stdout.write(content_chunk)
-                            sys.stdout.flush()
+                        streamer.write_chunk(content_chunk)
 
                     # Tool calls streaming
                     if "tool_calls" in delta:
@@ -2552,6 +2633,7 @@ def ai_turn(vm, prompt, stream_response):
             assistant_msg["content"] = None
 
         if tool_calls_map:
+            streamer.close_box()
             formatted_tool_calls = []
             for idx in sorted(tool_calls_map.keys()):
                 entry = tool_calls_map[idx]
@@ -2712,14 +2794,12 @@ def ai_turn(vm, prompt, stream_response):
         trusted_tasks.remove(vm.task)
     vm.host["pending_ai_task"] = None
 
+    streamer.close_box()
     _finish_turn(vm, turn_id,
                  output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
                  output_status="complete" if accumulated_full_text else "empty",
                  status="completed")
     vm.host["ai_current_turn_id"] = None
 
-    if stream_response:
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-    else:
+    if not stream_response:
         vm.push("\n".join(accumulated_full_text))

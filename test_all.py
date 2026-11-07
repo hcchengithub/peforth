@@ -776,6 +776,57 @@ class TestSafePropertyAudit(unittest.TestCase):
             ": square dup * ; 7 square . cr"
         )
 
+    def test_chat_turn_ui_styling_and_streamer(self):
+        import io
+        import sys
+        import ai
+
+        # 1. Header & bottom formatting
+        user_header = ai._chat_turn_header("user")
+        self.assertIn("👋 user", user_header)
+        self.assertTrue(user_header.startswith("╭─"))
+        self.assertTrue(user_header.endswith("╮"))
+
+        asst_header = ai._chat_turn_header("assistant")
+        self.assertIn("🪄 peforth", asst_header)
+        self.assertTrue(asst_header.startswith("╭─"))
+        self.assertTrue(asst_header.endswith("╮"))
+
+        bottom = ai._chat_turn_bottom()
+        self.assertTrue(bottom.startswith("╰─"))
+        self.assertTrue(bottom.endswith("╯"))
+
+        # 2. Non-streaming streamer is completely quiet
+        trap = io.StringIO()
+        old_stdout = sys.stdout
+        try:
+            sys.stdout = trap
+            quiet = ai.ChatBoxStreamer(stream_response=False)
+            quiet.print_user_turn("hello")
+            quiet.write_chunk("reply")
+            quiet.close_box()
+            self.assertEqual(trap.getvalue(), "")
+        finally:
+            sys.stdout = old_stdout
+
+        # 3. Streaming streamer wraps user and assistant turns with indentation
+        trap = io.StringIO()
+        try:
+            sys.stdout = trap
+            streamer = ai.ChatBoxStreamer(stream_response=True)
+            streamer.print_user_turn("tell me a joke")
+            streamer.write_chunk("Why did the bicycle fall over?\n\nBecause it was two-tired!")
+            streamer.close_box()
+            output = trap.getvalue()
+            self.assertIn("╭─ 👋 user", output)
+            self.assertIn("tell me a joke", output)
+            self.assertIn("╭─ 🪄 peforth", output)
+            self.assertIn("  Why did the bicycle fall over?", output)
+            self.assertIn("  Because it was two-tired!", output)
+            self.assertIn("╰─", output)
+        finally:
+            sys.stdout = old_stdout
+
     def test_herdr_words_and_security_annotations(self):
         safe_words = [
             "herdr-current-pane", "herdr-screen-read", "herdr-screen-tail",
