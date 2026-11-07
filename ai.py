@@ -38,6 +38,12 @@ from session_store import (
 
 _OUTPUT_LIMIT = 64 * 1024
 
+_ANSI_RESET = "\x1b[0m"
+_ANSI_GREEN_BOLD = "\x1b[1;38;2;135;215;135m"
+_ANSI_GREEN = "\x1b[38;2;135;215;135m"
+_ANSI_DEEP_GREEN = "\x1b[38;2;0;100;0m"
+_ANSI_DIM = "\x1b[2;37m"
+
 
 def _clip(value, limit=_OUTPUT_LIMIT):
     value = value or ""
@@ -804,41 +810,60 @@ def install_security_guard(vm):
 
                     turn_id = vm.host.get("ai_current_turn_id")
 
-                    # In interactive mode (not headless), use ai-approve UI
+                    # In interactive mode (not headless), prompt for approval directly
                     if not vm.host.get("headless", False):
-                        approval_word = vm.tick("ai-approve")
-                        if approval_word:
-                            proposal = {
-                                "purpose": f"Execution of unsafe word '{name}'",
-                                "source": source_text,
-                            }
-                            stack_depth = len(vm.dstack)
-                            vm.push(proposal)
-                            _log_event(vm, "approval_requested", turn_id=turn_id,
-                                       operation=name, payload=proposal)
-                            vm.host["in_approval"] = True
-                            try:
-                                yield from vm.call(approval_word)
-                            finally:
-                                vm.host["in_approval"] = False
-                            decision = vm.pop() if len(vm.dstack) > stack_depth else "deny"
-                            _log_event(vm, "approval_received", turn_id=turn_id,
-                                       operation=name, payload={"decision": decision})
+                        proposal = {
+                            "word": name,
+                            "source": source_text,
+                        }
+                        _log_event(vm, "approval_requested", turn_id=turn_id,
+                                   operation=name, payload=proposal)
 
-                            if decision == "trust_task":
-                                trusted_tasks.add(task)
-                            elif decision == "deny":
-                                raise KernelError(f"Security: Execution of word '{name}' was denied.")
-                            elif decision == "cancel":
-                                task.cancel()
-                                raise KernelError("Security: AI task was cancelled.")
-                            # "allow_once": execute this call once without adding to trusted_tasks
-                            vm.host["in_approval"] = True
-                            try:
-                                yield from original_call(operation)
-                            finally:
-                                vm.host["in_approval"] = False
-                            return
+                        nokia_word = vm.tick("nokia")
+                        if nokia_word:
+                            yield from vm.call(nokia_word)
+
+                        vm.host["in_approval"] = True
+                        try:
+                            choice = read_numbered_choice(
+                                "Choose 1-4: ",
+                                default="1",
+                                labels={
+                                    "1": "Allow Once",
+                                    "2": "Trust this AI task",
+                                    "3": "Deny this proposal",
+                                    "4": "Cancel this AI task",
+                                },
+                                styles={"1": _ANSI_GREEN, "2": _ANSI_GREEN, "3": _ANSI_DIM, "4": _ANSI_DIM},
+                                proposal=proposal,
+                            )
+                        finally:
+                            vm.host["in_approval"] = False
+
+                        decision = {
+                            "1": "allow_once",
+                            "2": "trust_task",
+                            "3": "deny",
+                            "4": "cancel",
+                        }.get(choice, "allow_once")
+
+                        _log_event(vm, "approval_received", turn_id=turn_id,
+                                   operation=name, payload={"decision": decision})
+
+                        if decision == "trust_task":
+                            trusted_tasks.add(task)
+                        elif decision == "deny":
+                            raise KernelError(f"Security: Execution of word '{name}' was denied.")
+                        elif decision == "cancel":
+                            task.cancel()
+                            raise KernelError("Security: AI task was cancelled.")
+                        # "allow_once": execute this call once without adding to trusted_tasks
+                        vm.host["in_approval"] = True
+                        try:
+                            yield from original_call(operation)
+                        finally:
+                            vm.host["in_approval"] = False
+                        return
 
                     # Fallback for headless / non-interactive test mode: pause task
                     sys.__stdout__.write(f"\n[Security] Word '{name}' is not marked as safe.\n")
@@ -1630,6 +1655,7 @@ def read_numbered_choice(
     *,
     labels: dict = None,
     styles: dict = None,
+    proposal: dict = None,
 ) -> str:
     """Read a single-key or numbered choice with prompt_toolkit, falling back to input()."""
     labels = labels or {
@@ -1767,8 +1793,7 @@ AGENTS_TOOLS_DEFINITION = [
 
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _APPROVAL_MENU_RE = re.compile(
-    r"Purpose:\s*Execution of unsafe word[^\n]*\n+"
-    r"Forth action:\n.*?"
+    r"(?:Purpose:\s*Execution of unsafe word[^\n]*\n+Forth action:\n.*?)?"
     r"1\.\s*Allow Once\n2\.\s*Trust this AI task\n3\.\s*Deny this proposal\n4\.\s*Cancel this AI task\n+"
     r"(?:Choose 1-4:\s*\d*\s*)?",
     flags=re.S,
@@ -2262,7 +2287,12 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                         source = normalize_forth_source(args.get("source", ""))
                         purpose = args.get("purpose", "")
                         if stream_response:
-                            sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
+                            sys.stdout.write(
+                                f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
+                                f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
+                                f"Source:\n"
+                                f"{source.strip()}{_ANSI_RESET}\n\n"
+                            )
                             sys.stdout.flush()
 
                         prev_ai_task = vm.host.get("in_ai_task")
@@ -2727,7 +2757,12 @@ def ai_turn(vm, prompt, stream_response):
                     purpose = args.get("purpose", "")
 
                     if stream_response:
-                        sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
+                        sys.stdout.write(
+                            f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
+                            f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
+                            f"Source:\n"
+                            f"{source.strip()}{_ANSI_RESET}\n\n"
+                        )
                         sys.stdout.flush()
 
                     # Execute Forth code under AI task context.

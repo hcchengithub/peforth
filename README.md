@@ -8,7 +8,7 @@ In peforth 2.1.0, the environment shifts from a Python-centric monolithic superv
 - **Minimal Bootloader (`main.py`)**: A tiny 9-line bootstrap shim.
 - **Dependency-Free Micro-Kernel (`projectk.py`)**: Zero external dependencies, strictly 2 seed words (`code` and `end-code`), uniform `KernelError`, and generator coroutines.
 - **Forth-Level REPL (`repl.f`)**: Multiline interactive input accumulation and dual-mode switching (`chat>` and `>`).
-- **Word-Oriented Security (`ai.py`)**: Fine-grained task security where vocabulary words carry `safe=True` annotations. Pure Forth words run freely without friction; only unsafe words trigger the interactive `ai-approve` review workflow.
+- **Word-Oriented Security (`ai.py`)**: Fine-grained task security where vocabulary words carry `safe=True` annotations. Pure Forth words run freely without friction; only unsafe words trigger the interactive security approval review workflow.
 - **Integrated AI Assistant**: Conversational answers stream directly to the terminal; Forth code execution is delegated to `peforth_run_forth`.
 - **SQLite Diagnostics & Live Monitoring**: Comprehensive event tracking in `ai-diagnostics.sqlite3` with terminal emoji live streaming (`peforth-monitor` / `tools/peforth_logging_monitor.py`) and watchdog progress supervision (`tools/peforth_watchdog.py`).
 

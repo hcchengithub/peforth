@@ -356,12 +356,7 @@ class TestSafePropertyAudit(unittest.TestCase):
             self.assertIsNotNone(word, f"Word '{name}' should be in dictionary")
             self.assertTrue(word.properties.get("safe"), f"Word '{name}' should be safe")
 
-    def test_ai_approve_and_nokia2_property_types(self):
-        # Verify ai-approve is defined and marked safe
-        approve_word = self.vm.tick("ai-approve")
-        self.assertIsNotNone(approve_word, "ai-approve word must exist")
-        self.assertTrue(approve_word.properties.get("safe"), "ai-approve must be marked safe")
-
+    def test_nokia2_property_types(self):
         # Verify nokia2_after_seconds is parsed as an int (not str)
         ai_word = self.vm.tick("ai:")
         self.assertIsNotNone(ai_word)
@@ -647,9 +642,9 @@ class TestSafePropertyAudit(unittest.TestCase):
 
         # 2. Test in Chat mode (Unified completion applies to all modes)
         self.vm.host["repl_mode"] = "chat"
-        doc_chat = Document("ai-app", 6)
+        doc_chat = Document("ai-scr", 6)
         completions_chat = [c.text for c in completer.get_completions(doc_chat, None)]
-        self.assertIn("ai-approve", completions_chat)
+        self.assertIn("ai-screen", completions_chat)
 
 
         # 3. Test run-monitor completion
@@ -663,12 +658,12 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertEqual(len(completions_space), 0)
 
         # 5. Test completion with leading slash (e.g., in Chat mode /<word>)
-        doc_slash = Document("/ai-app", 7)
+        doc_slash = Document("/ai-scr", 7)
         slash_completions = list(completer.get_completions(doc_slash, None))
         slash_texts = [c.text for c in slash_completions]
-        self.assertIn("ai-approve", slash_texts)
+        self.assertIn("ai-screen", slash_texts)
         for c in slash_completions:
-            if c.text == "ai-approve":
+            if c.text == "ai-screen":
                 self.assertEqual(c.start_position, -6)
 
     def test_skills_loading_and_list_skills_word(self):
@@ -907,63 +902,67 @@ class TestSecurityTaskApproval(unittest.TestCase):
         self.assertEqual(task.status, "done")
         self.assertIn("dangerous_executed", self.vm.dstack)
 
-    def test_interactive_ai_approve_for_unsafe_words(self):
+    def test_interactive_approval_for_unsafe_words(self):
+        import ai
         from projectk import Task
-        # In non-headless mode, unsafe words trigger ai-approve
+        # In non-headless mode, unsafe words trigger direct interactive approval
         self.vm.host["headless"] = False
         self.vm.define("risky_cmd", lambda v: v.push("risky_done"), properties={"safe": False})
 
-        # Mock ai-approve returning 'allow_once'
         approval_calls = []
-        def mock_approve(v):
-            proposal = v.pop()
-            approval_calls.append(proposal)
-            v.push("allow_once")
-        self.vm.define("ai-approve", mock_approve, properties={"safe": True})
+        def mock_read_choice(*args, **kwargs):
+            if "proposal" in kwargs and kwargs["proposal"]:
+                approval_calls.append(kwargs["proposal"])
+            return "1"
 
-        task = Task(self.vm, self.vm.evaluate("risky_cmd"))
-        self.vm.host["in_ai_task"] = task
-        task.resume()
+        with patch.object(ai, "read_numbered_choice", side_effect=mock_read_choice):
+            task = Task(self.vm, self.vm.evaluate("risky_cmd"))
+            self.vm.host["in_ai_task"] = task
+            task.resume()
 
-        self.assertEqual(task.status, "done")
-        self.assertIn("risky_done", self.vm.dstack)
-        self.assertEqual(len(approval_calls), 1)
-        self.assertIn("risky_cmd", approval_calls[0]["purpose"])
+            self.assertEqual(task.status, "done")
+            self.assertIn("risky_done", self.vm.dstack)
+            self.assertEqual(len(approval_calls), 1)
+            self.assertEqual(approval_calls[0]["word"], "risky_cmd")
 
-        # Safe words must NEVER trigger ai-approve
+        # Safe words must NEVER trigger approval
         approval_calls.clear()
-        task2 = Task(self.vm, self.vm.evaluate("10 20 +"))
-        self.vm.host["in_ai_task"] = task2
-        task2.resume()
-        self.assertEqual(task2.status, "done")
-        self.assertEqual(len(approval_calls), 0)
+        with patch.object(ai, "read_numbered_choice", side_effect=mock_read_choice):
+            task2 = Task(self.vm, self.vm.evaluate("10 20 +"))
+            self.vm.host["in_ai_task"] = task2
+            task2.resume()
+            self.assertEqual(task2.status, "done")
+            self.assertEqual(len(approval_calls), 0)
 
-    def test_interactive_ai_approve_reentrancy_protection(self):
+    def test_interactive_approval_reentrancy_protection(self):
+        import ai
         from projectk import Task
         self.vm.host["headless"] = False
         self.vm.define("risky_outer", lambda v: v.push("outer_done"), properties={"safe": False})
         self.vm.define("risky_inner", lambda v: v.push("inner_done"), properties={"safe": False})
 
-        # ai-approve calls another unsafe word inside itself
         approval_calls = []
-        def approve_with_side_effect(v):
-            proposal = v.pop()
-            approval_calls.append(proposal)
+        def read_choice_with_side_effect(*args, **kwargs):
+            if "proposal" in kwargs and kwargs["proposal"]:
+                approval_calls.append(kwargs["proposal"])
             # Invoke risky_inner directly during approval
-            yield from v.call(v.tick("risky_inner"))
-            v.push("allow_once")
+            # Because vm.host["in_approval"] is True, it should execute without triggering recursive approval
+            task_inner = Task(self.vm, self.vm.evaluate("risky_inner"))
+            self.vm.host["in_ai_task"] = task_inner
+            task_inner.resume()
+            return "1"
 
-        self.vm.define("ai-approve", approve_with_side_effect, properties={"safe": True})
-        task = Task(self.vm, self.vm.evaluate("risky_outer"))
-        self.vm.host["in_ai_task"] = task
-        task.resume()
+        with patch.object(ai, "read_numbered_choice", side_effect=read_choice_with_side_effect):
+            task = Task(self.vm, self.vm.evaluate("risky_outer"))
+            self.vm.host["in_ai_task"] = task
+            task.resume()
 
-        self.assertEqual(task.status, "done")
-        self.assertIn("inner_done", self.vm.dstack)
-        self.assertIn("outer_done", self.vm.dstack)
-        # Approval must be requested exactly ONCE for outer; inner must NOT trigger recursion
-        self.assertEqual(len(approval_calls), 1)
-        self.assertIn("risky_outer", approval_calls[0]["purpose"])
+            self.assertEqual(task.status, "done")
+            self.assertIn("inner_done", self.vm.dstack)
+            self.assertIn("outer_done", self.vm.dstack)
+            # Approval must be requested exactly ONCE for outer; inner must NOT trigger recursion
+            self.assertEqual(len(approval_calls), 1)
+            self.assertEqual(approval_calls[0]["word"], "risky_outer")
 
     def test_parent_frame_safety_inheritance(self):
         from projectk import Task
@@ -984,26 +983,27 @@ class TestSecurityTaskApproval(unittest.TestCase):
         self.assertEqual(task_nokia.status, "done")
 
     def test_unsafe_compiled_closure_shows_source_code(self):
+        import ai
         from projectk import Task
         self.vm.host["headless"] = False
         # When an unsafe compiled closure triggers approval, proposal['source'] must be the Python source
         self.vm.dictate(": unsafe_wrapper py> 99*2 ;")
         approval_calls = []
-        def mock_approve(v):
-            proposal = v.pop()
-            approval_calls.append(proposal)
-            v.push("allow_once")
-        self.vm.define("ai-approve", mock_approve, properties={"safe": True})
+        def mock_read_choice(*args, **kwargs):
+            if "proposal" in kwargs and kwargs["proposal"]:
+                approval_calls.append(kwargs["proposal"])
+            return "1"
 
-        task = Task(self.vm, self.vm.evaluate("unsafe_wrapper"))
-        self.vm.host["in_ai_task"] = task
-        task.resume()
+        with patch.object(ai, "read_numbered_choice", side_effect=mock_read_choice):
+            task = Task(self.vm, self.vm.evaluate("unsafe_wrapper"))
+            self.vm.host["in_ai_task"] = task
+            task.resume()
 
-        self.assertEqual(task.status, "done")
-        self.assertEqual(self.vm.pop(), 198)
-        self.assertEqual(len(approval_calls), 1)
-        # Verify it displays the actual source code rather than '<function ...>'
-        self.assertEqual(approval_calls[0]["source"], "unsafe_wrapper")
+            self.assertEqual(task.status, "done")
+            self.assertEqual(self.vm.pop(), 198)
+            self.assertEqual(len(approval_calls), 1)
+            # Verify it displays the actual source code rather than '<function ...>'
+            self.assertEqual(approval_calls[0]["source"], "unsafe_wrapper")
 
     def test_ai_task_base_frame_depth_prevents_outer_frame_leak(self):
         from projectk import Task, Frame

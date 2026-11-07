@@ -148,7 +148,7 @@ code herdr-screen-tail
     // ( pane-id [line-count] -- snapshot ) Read recent unwrapped output; line-count defaults to 80.
     last :: safe=True
 
-\ --- 3. Mutating Screen Operations (Unsafe: triggers ai-approve under untrusted AI task) ---
+\ --- 3. Mutating Screen Operations (Unsafe: triggers security approval under untrusted AI task) ---
 
 code herdr-screen-send-text
     import json
