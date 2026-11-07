@@ -2104,6 +2104,135 @@ class TestSessionStoreAndSync(unittest.TestCase):
         ]
         self.assertEqual(len(user_turns), 1)
 
+    def test_task_interrupt_monitor_esc_and_key_sequences(self):
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        interrupted = []
+        monitor = ai.TaskInterruptMonitor(vm, interrupt_callback=lambda: interrupted.append(True))
+
+        # 1. Standalone Esc ('\x1b' with no trailing bytes) triggers interrupt
+        buffer = ["\x1b"]
+        res = monitor.process_key_stream(
+            lambda: bool(buffer),
+            lambda: buffer.pop(0),
+            wait_fn=lambda _t: None,
+        )
+        self.assertTrue(res)
+        self.assertEqual(len(interrupted), 1)
+        self.assertTrue(vm.host.get("esc_interrupted"))
+
+        # 2. VT escape sequence (e.g. Up Arrow '\x1b[A') drains and does NOT interrupt
+        interrupted.clear()
+        vm.host.pop("esc_interrupted", None)
+        buffer = ["\x1b", "[", "A"]
+        res_vt = monitor.process_key_stream(
+            lambda: bool(buffer),
+            lambda: buffer.pop(0),
+            wait_fn=lambda _t: None,
+        )
+        self.assertFalse(res_vt)
+        self.assertEqual(len(interrupted), 0)
+        self.assertEqual(buffer, [])
+        self.assertFalse(vm.host.get("esc_interrupted"))
+
+        # 3. Windows scan-code prefix ('\xe0', 'H') consumes both and does NOT interrupt
+        buffer = ["\xe0", "H"]
+        res_win = monitor.process_key_stream(
+            lambda: bool(buffer),
+            lambda: buffer.pop(0),
+            wait_fn=lambda _t: None,
+        )
+        self.assertFalse(res_win)
+        self.assertEqual(len(interrupted), 0)
+        self.assertEqual(buffer, [])
+
+        # 4. In approval mode, monitor pauses polling
+        vm.host["in_approval"] = True
+        self.assertTrue(monitor._in_interactive_prompt())
+        vm.host["in_approval"] = False
+        self.assertFalse(monitor._in_interactive_prompt())
+
+    def test_ai_turn_keyboard_interrupt_closes_box_and_marks_turn_cancelled(self):
+        import ai
+        import contextlib
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "diag_interrupt.sqlite3"
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "PEFORTH_AI_LOG_MODE": "normal"}):
+                logger = ai.init_diagnostics(vm, database_path=db_path, force=True)
+                self.assertIsNotNone(logger)
+
+                class InterruptedStream:
+                    status = 200
+                    def __enter__(self):
+                        return self
+                    def __exit__(self, *args):
+                        pass
+                    def __iter__(self):
+                        yield b'data: {"choices": [{"delta": {"content": "Partial reply before Esc"}}]}\n\n'
+                        raise KeyboardInterrupt("Esc pressed")
+                    def close(self):
+                        pass
+
+                out = io.StringIO()
+                try:
+                    with patch.object(ai, "_http_chat_stream", return_value=InterruptedStream()):
+                        with contextlib.redirect_stdout(out):
+                            with self.assertRaises(KeyboardInterrupt):
+                                list(ai.ai_turn(vm, "Test interrupt", True))
+
+                    rendered = out.getvalue()
+                    # Partial assistant box must be opened and cleanly closed with bottom border
+                    self.assertIn("Partial reply before Esc", rendered)
+                    self.assertEqual(rendered.count("╭─"), 2)  # user box + assistant box
+                    self.assertEqual(rendered.count("╰─"), 2)  # both boxes closed
+                    self.assertIsNone(vm.host.get("ai_current_turn_id"))
+
+                    # Verify diagnostic database marked turn as 'cancelled' with non-null ended_at
+                    conn = sqlite3.connect(str(db_path))
+                    try:
+                        conn.row_factory = sqlite3.Row
+                        turn_row = conn.execute("SELECT * FROM turns").fetchone()
+                        self.assertIsNotNone(turn_row)
+                        self.assertEqual(turn_row["status"], "cancelled")
+                        self.assertEqual(turn_row["output_status"], "partial")
+                        self.assertIsNotNone(turn_row["ended_at"])
+                        self.assertEqual(turn_row["error_type"], "KeyboardInterrupt")
+
+                        events = [
+                            r["event_type"]
+                            for r in conn.execute("SELECT event_type FROM timeline ORDER BY event_id").fetchall()
+                        ]
+                        self.assertIn("ai_turn_cancel_requested", events)
+                    finally:
+                        conn.close()
+                finally:
+                    logger.close()
+
+    def test_repl_survives_keyboard_interrupt_during_task_execution(self):
+        import contextlib
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.define("interrupt-me", lambda _v: (_ for _ in ()).throw(KeyboardInterrupt()), properties={"safe": True})
+
+        inputs = iter(["interrupt-me", "21 2 *", "bye"])
+        out = io.StringIO()
+        with patch("builtins.input", side_effect=lambda *_a: next(inputs)):
+            with patch("sys.stdin.isatty", return_value=False):
+                with contextlib.redirect_stdout(out):
+                    vm.dictate("repl")
+
+        # REPL did not exit on 'interrupt-me'; it printed <interrupted> and executed '21 2 *' then 'bye'
+        self.assertIn("<interrupted>", out.getvalue())
+        self.assertEqual(vm.pop(), 42)
+
 
 
 

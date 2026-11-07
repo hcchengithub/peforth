@@ -6,6 +6,7 @@ Implements:
 - (ai) cooperative turn generator with OpenAI-compatible SSE streaming
 """
 
+import _thread
 import atexit
 from datetime import datetime, timezone
 import io
@@ -13,10 +14,12 @@ import json
 import os
 from pathlib import Path
 import platform
+import queue
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -45,6 +48,205 @@ _ANSI_DEEP_GREEN = "\x1b[38;2;0;100;0m"
 _ANSI_DIM = "\x1b[2;37m"
 
 
+class TaskInterruptMonitor:
+    """Monitor keyboard input during task execution so pressing standalone Esc interrupts the task."""
+
+    def __init__(self, vm=None, *, interrupt_callback=None):
+        self.vm = vm
+        self._interrupt_callback = interrupt_callback or _thread.interrupt_main
+        self._stop_event = threading.Event()
+        self._thread = None
+
+    def _trigger_interrupt(self):
+        if self.vm is not None and hasattr(self.vm, "host"):
+            self.vm.host["esc_interrupted"] = True
+        self._interrupt_callback()
+
+    def _in_interactive_prompt(self) -> bool:
+        if self.vm is not None and hasattr(self.vm, "host"):
+            return bool(self.vm.host.get("in_approval"))
+        return False
+
+    def process_key_stream(self, kbhit_fn, getch_fn, wait_fn=None) -> bool:
+        """Inspect buffered console keys; return True and trigger interrupt if standalone Esc is pressed."""
+        wait = wait_fn or self._stop_event.wait
+        if not kbhit_fn():
+            return False
+        ch = getch_fn()
+        if ch in ("\x00", "\xe0", b"\x00", b"\xe0"):
+            if kbhit_fn():
+                getch_fn()
+            return False
+        if ch in ("\x1b", b"\x1b"):
+            wait(0.02)
+            if kbhit_fn():
+                while kbhit_fn():
+                    getch_fn()
+                return False
+            self._trigger_interrupt()
+            return True
+        if ch in ("\x03", b"\x03"):
+            self._trigger_interrupt()
+            return True
+        return False
+
+    def _watch_windows(self):
+        try:
+            import msvcrt
+        except ImportError:
+            return
+        while not self._stop_event.is_set():
+            if self._in_interactive_prompt():
+                self._stop_event.wait(0.025)
+                continue
+            try:
+                if self.process_key_stream(msvcrt.kbhit, msvcrt.getwch):
+                    break
+            except Exception:
+                break
+            self._stop_event.wait(0.025)
+
+    def _watch_posix(self):
+        try:
+            import select
+            import termios
+            import tty
+            fd = sys.stdin.fileno()
+            orig_attrs = termios.tcgetattr(fd)
+        except Exception:
+            return
+
+        cbreak_active = False
+
+        def _enable_cbreak():
+            nonlocal cbreak_active
+            if not cbreak_active:
+                try:
+                    tty.setcbreak(fd, termios.TCSANOW)
+                    cbreak_active = True
+                except Exception:
+                    pass
+
+        def _restore_attrs():
+            nonlocal cbreak_active
+            if cbreak_active:
+                try:
+                    termios.tcsetattr(fd, termios.TCSANOW, orig_attrs)
+                except Exception:
+                    pass
+                cbreak_active = False
+
+        def _kbhit():
+            r, _, _ = select.select([fd], [], [], 0)
+            return bool(r)
+
+        def _getch():
+            return os.read(fd, 1)
+
+        try:
+            _enable_cbreak()
+            while not self._stop_event.is_set():
+                if self._in_interactive_prompt():
+                    _restore_attrs()
+                    self._stop_event.wait(0.025)
+                    continue
+                _enable_cbreak()
+                try:
+                    if self.process_key_stream(_kbhit, _getch):
+                        break
+                except Exception:
+                    break
+                self._stop_event.wait(0.025)
+        finally:
+            _restore_attrs()
+
+    def __enter__(self):
+        if self.vm is not None and hasattr(self.vm, "host"):
+            self.vm.host.pop("esc_interrupted", None)
+        if sys.stdin is not None and hasattr(sys.stdin, "isatty") and sys.stdin.isatty():
+            target = self._watch_windows if os.name == "nt" else self._watch_posix
+            self._thread = threading.Thread(target=target, name="peforth-esc-monitor", daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._stop_event.set()
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=0.1)
+        return False
+
+
+def _urlopen_interruptible(req, timeout=60):
+    """Open URL with 50ms main-thread signal checks on interactive TTY so Esc / Ctrl+C wake immediately."""
+    if not (sys.stdin is not None and hasattr(sys.stdin, "isatty") and sys.stdin.isatty()):
+        return urllib.request.urlopen(req, timeout=timeout)
+    result = []
+    error = []
+    done = threading.Event()
+
+    def _worker():
+        try:
+            result.append(urllib.request.urlopen(req, timeout=timeout))
+        except BaseException as exc:
+            error.append(exc)
+        finally:
+            done.set()
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    try:
+        while not done.wait(timeout=0.05):
+            pass
+    except BaseException:
+        if result:
+            try:
+                result[0].close()
+            except Exception:
+                pass
+        raise
+    if error:
+        raise error[0]
+    return result[0]
+
+
+def _iter_response_lines(response):
+    """Iterate over response lines while allowing KeyboardInterrupt / Esc to wake within 50ms on Windows."""
+    if not (sys.stdin is not None and hasattr(sys.stdin, "isatty") and sys.stdin.isatty()) or isinstance(response, (list, tuple)):
+        for line in response:
+            yield line
+        return
+    q = queue.Queue()
+    _EOF = object()
+
+    def _reader():
+        try:
+            for line in response:
+                q.put((True, line))
+        except BaseException as exc:
+            q.put((False, exc))
+        finally:
+            q.put((True, _EOF))
+
+    t = threading.Thread(target=_reader, daemon=True)
+    t.start()
+    try:
+        while True:
+            try:
+                ok, item = q.get(timeout=0.05)
+            except queue.Empty:
+                continue
+            if not ok:
+                raise item
+            if item is _EOF:
+                break
+            yield item
+    finally:
+        try:
+            response.close()
+        except Exception:
+            pass
+
+
 def _clip(value, limit=_OUTPUT_LIMIT):
     value = value or ""
     return value[:limit], len(value) > limit
@@ -52,16 +254,60 @@ def _clip(value, limit=_OUTPUT_LIMIT):
 
 def _run_process(argv, input_text=None, timeout=60):
     try:
-        completed = subprocess.run(
-            argv,
-            input=input_text,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            check=False,
-        )
+        if not (sys.stdin is not None and hasattr(sys.stdin, "isatty") and sys.stdin.isatty()):
+            completed = subprocess.run(
+                argv,
+                input=input_text,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+            )
+        else:
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            out_box = []
+            err_box = []
+            done = threading.Event()
+
+            def _comm():
+                try:
+                    out_box.append(proc.communicate(input=input_text))
+                except BaseException as e:
+                    err_box.append(e)
+                finally:
+                    done.set()
+
+            t = threading.Thread(target=_comm, daemon=True)
+            t.start()
+            deadline = time.monotonic() + timeout if timeout else None
+            try:
+                while not done.wait(timeout=0.05):
+                    if deadline is not None and time.monotonic() >= deadline:
+                        proc.kill()
+                        done.wait(timeout=1.0)
+                        stdout_raw, stderr_raw = out_box[0] if out_box else ("", "")
+                        raise subprocess.TimeoutExpired(argv, timeout, output=stdout_raw, stderr=stderr_raw)
+            except BaseException:
+                try:
+                    if proc.poll() is None:
+                        proc.kill()
+                except Exception:
+                    pass
+                raise
+            if err_box:
+                raise err_box[0]
+            stdout_str, stderr_str = out_box[0]
+            completed = subprocess.CompletedProcess(argv, proc.returncode, stdout_str, stderr_str)
     except subprocess.TimeoutExpired as exc:
         stdout_raw = exc.stdout or ""
         stderr_raw = exc.stderr or ""
@@ -119,7 +365,7 @@ def _http_request(url, method="GET", headers=None, body=None, timeout=30):
     req_headers = dict(headers or {})
     req = urllib.request.Request(url, data=data, headers=req_headers, method=method.upper())
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen_interruptible(req, timeout=timeout) as resp:
             return _http_result(resp.status, resp.headers, resp)
     except urllib.error.HTTPError as exc:
         try:
@@ -1105,7 +1351,7 @@ def _api_request(method, path, payload=None, stream=False, timeout=30):
         "Accept": "text/event-stream" if stream else "application/json",
     }
     req = urllib.request.Request(url, data=body, method=method.upper(), headers=headers)
-    return urllib.request.urlopen(req, timeout=timeout)
+    return _urlopen_interruptible(req, timeout=timeout)
 
 
 def _api_get(path, timeout=30):
@@ -1709,6 +1955,14 @@ def read_numbered_choice(
         def _next(event):
             _move_selection(event, 1)
 
+        @bindings.add("escape")
+        def _escape_cancel(event):
+            cancel_choice = "4" if "4" in choices else ("2" if "2" in choices else choices[-1])
+            selected_index[0] = choices.index(cancel_choice)
+            event.current_buffer.text = cancel_choice
+            event.app.invalidate()
+            event.current_buffer.validate_and_handle()
+
         def _confirm_selected_choice(app, buffer):
             async def confirm_after_render():
                 await asyncio.sleep(0.05)
@@ -1738,12 +1992,16 @@ def read_numbered_choice(
         session = PromptSession(multiline=False, key_bindings=bindings)
         result = session.prompt(choice_prompt)
         return result.strip() if result and result.strip() in choices else default
+    except KeyboardInterrupt:
+        raise
     except Exception:
         for choice in choices:
             print(f"{choice}. {labels.get(choice, choice)}")
         try:
             val = input(prompt).strip()
             return val if val in choices else default
+        except KeyboardInterrupt:
+            raise
         except Exception:
             return default
 
@@ -1773,7 +2031,7 @@ def _http_chat_stream(base_url, api_key, model, messages, tools):
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        return urllib.request.urlopen(req, timeout=60)
+        return _urlopen_interruptible(req, timeout=60)
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         if "reasoning_effort" in err_body:
@@ -1783,7 +2041,7 @@ def _http_chat_stream(base_url, api_key, model, messages, tools):
                 payload["reasoning_effort"] = "none"
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            return urllib.request.urlopen(req, timeout=60)
+            return _urlopen_interruptible(req, timeout=60)
         raise
 
 
@@ -1948,7 +2206,7 @@ def _agents_event_stream(response):
     data_lines = []
     event_name = None
     try:
-        for raw in response:
+        for raw in _iter_response_lines(response):
             raw_bytes = raw if isinstance(raw, bytes) else str(raw).encode("utf-8")
             line = raw_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
             if line.startswith(":"):
@@ -2353,6 +2611,20 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                 break
 
         _log_event(vm, "sse_stream_completed", turn_id=turn_id)
+    except KeyboardInterrupt as e:
+        streamer.close_box()
+        trusted_tasks = vm.host.get("trusted_ai_tasks")
+        if trusted_tasks and vm.task in trusted_tasks:
+            trusted_tasks.remove(vm.task)
+        vm.host["pending_ai_task"] = None
+        _finish_turn(
+            vm, turn_id,
+            output_text="".join(accumulated_full_text) if accumulated_full_text else None,
+            output_status="partial" if accumulated_full_text else "empty",
+            status="cancelled", error=e,
+        )
+        vm.host["ai_current_turn_id"] = None
+        raise
     except Exception as e:
         _log_event(vm, "sse_stream_failed", turn_id=turn_id, error=e)
         _finish_turn(
@@ -2552,282 +2824,301 @@ def ai_turn(vm, prompt, stream_response):
     streamer.print_user_turn(prompt)
 
     # Outer loop for handling multi-turn tool calling
-    while True:
-        t0 = time.monotonic()
-        req_url = f"{base_url.rstrip('/')}/chat/completions"
-        _log_event(vm, "http_request_started", turn_id=turn_id,
-                   http_method="POST", url=req_url, payload={"model": model})
-        try:
-            response = _http_chat_stream(base_url, api_key, model, messages, TOOLS_DEFINITION)
-            elapsed_ms = (time.monotonic() - t0) * 1000.0
-            http_status = getattr(response, "status", 200)
-            _log_event(vm, "http_response_received", turn_id=turn_id,
-                       http_status=http_status, elapsed_ms=elapsed_ms)
-        except urllib.error.HTTPError as e:
-            elapsed_ms = (time.monotonic() - t0) * 1000.0
-            _log_event(vm, "http_request_failed", turn_id=turn_id,
-                       http_status=e.code, elapsed_ms=elapsed_ms, error=e)
-            _finish_turn(vm, turn_id,
-                         output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
-                         output_status="partial" if accumulated_full_text else "failed_before_output",
-                         status="failed", error=e)
-            vm.host["ai_current_turn_id"] = None
-            err_body = e.read().decode("utf-8", errors="replace")
-            err_msg = f"\n[AI Error] HTTP {e.code}: {err_body}\n"
-            if stream_response:
-                sys.stdout.write(err_msg)
-                sys.stdout.flush()
-            else:
-                vm.push(err_msg)
-            return
-        except Exception as e:
-            elapsed_ms = (time.monotonic() - t0) * 1000.0
-            _log_event(vm, "http_request_failed", turn_id=turn_id,
-                       elapsed_ms=elapsed_ms, error=e)
-            _finish_turn(vm, turn_id,
-                         output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
-                         output_status="partial" if accumulated_full_text else "failed_before_output",
-                         status="failed", error=e)
-            vm.host["ai_current_turn_id"] = None
-            err_msg = f"\n[AI Error] Network request failed: {e}\n"
-            if stream_response:
-                sys.stdout.write(err_msg)
-                sys.stdout.flush()
-            else:
-                vm.push(err_msg)
-            return
+    assistant_content = ""
+    try:
+        while True:
+            t0 = time.monotonic()
+            req_url = f"{base_url.rstrip('/')}/chat/completions"
+            _log_event(vm, "http_request_started", turn_id=turn_id,
+                       http_method="POST", url=req_url, payload={"model": model})
+            try:
+                response = _http_chat_stream(base_url, api_key, model, messages, TOOLS_DEFINITION)
+                elapsed_ms = (time.monotonic() - t0) * 1000.0
+                http_status = getattr(response, "status", 200)
+                _log_event(vm, "http_response_received", turn_id=turn_id,
+                           http_status=http_status, elapsed_ms=elapsed_ms)
+            except urllib.error.HTTPError as e:
+                elapsed_ms = (time.monotonic() - t0) * 1000.0
+                _log_event(vm, "http_request_failed", turn_id=turn_id,
+                           http_status=e.code, elapsed_ms=elapsed_ms, error=e)
+                _finish_turn(vm, turn_id,
+                             output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                             output_status="partial" if accumulated_full_text else "failed_before_output",
+                             status="failed", error=e)
+                vm.host["ai_current_turn_id"] = None
+                err_body = e.read().decode("utf-8", errors="replace")
+                err_msg = f"\n[AI Error] HTTP {e.code}: {err_body}\n"
+                if stream_response:
+                    sys.stdout.write(err_msg)
+                    sys.stdout.flush()
+                else:
+                    vm.push(err_msg)
+                return
+            except Exception as e:
+                elapsed_ms = (time.monotonic() - t0) * 1000.0
+                _log_event(vm, "http_request_failed", turn_id=turn_id,
+                           elapsed_ms=elapsed_ms, error=e)
+                _finish_turn(vm, turn_id,
+                             output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                             output_status="partial" if accumulated_full_text else "failed_before_output",
+                             status="failed", error=e)
+                vm.host["ai_current_turn_id"] = None
+                err_msg = f"\n[AI Error] Network request failed: {e}\n"
+                if stream_response:
+                    sys.stdout.write(err_msg)
+                    sys.stdout.flush()
+                else:
+                    vm.push(err_msg)
+                return
 
-        assistant_content = ""
-        tool_calls_map = {}  # index -> {id, name, arguments}
+            assistant_content = ""
+            tool_calls_map = {}  # index -> {id, name, arguments}
 
-        _log_event(vm, "sse_stream_opened", turn_id=turn_id)
-        first_chunk_logged = False
-        try:
-            with response:
-                for raw_line in response:
-                    line = raw_line.decode("utf-8").strip()
-                    if not line or not line.startswith("data:"):
-                        continue
-                    data_str = line[5:].strip()
-                    if data_str == "[DONE]":
-                        break
+            _log_event(vm, "sse_stream_opened", turn_id=turn_id)
+            first_chunk_logged = False
+            try:
+                with response:
+                    for raw_line in _iter_response_lines(response):
+                        line = raw_line.decode("utf-8").strip()
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data_str = line[5:].strip()
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data_str)
+                        except json.JSONDecodeError:
+                            continue
+
+                        if not first_chunk_logged:
+                            _log_event(vm, "sse_event_received", turn_id=turn_id)
+                            first_chunk_logged = True
+
+                        choices = chunk.get("choices", [])
+                        if not choices:
+                            continue
+                        delta = choices[0].get("delta", {})
+
+                        # Text streaming
+                        content_chunk = delta.get("content")
+                        if content_chunk:
+                            assistant_content += content_chunk
+                            streamer.write_chunk(content_chunk)
+
+                        # Tool calls streaming
+                        if "tool_calls" in delta:
+                            for tc in delta["tool_calls"]:
+                                idx = tc.get("index", 0)
+                                if idx not in tool_calls_map:
+                                    tool_calls_map[idx] = {
+                                        "id": "",
+                                        "name": "",
+                                        "arguments": ""
+                                    }
+                                if tc.get("id"):
+                                    tool_calls_map[idx]["id"] += tc["id"]
+                                fn = tc.get("function", {})
+                                if fn.get("name"):
+                                    tool_calls_map[idx]["name"] += fn["name"]
+                                if fn.get("arguments"):
+                                    tool_calls_map[idx]["arguments"] += fn["arguments"]
+                _log_event(vm, "sse_stream_completed", turn_id=turn_id)
+            except Exception as e:
+                _log_event(vm, "sse_stream_failed", turn_id=turn_id, error=e)
+                _finish_turn(vm, turn_id,
+                             output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+                             output_status="partial" if accumulated_full_text else "failed_before_output",
+                             status="failed", error=e)
+                vm.host["ai_current_turn_id"] = None
+                raise
+
+            if assistant_content:
+                accumulated_full_text.append(assistant_content)
+
+            # Build assistant message object
+            assistant_msg = {"role": "assistant"}
+            if assistant_content:
+                assistant_msg["content"] = assistant_content
+            else:
+                assistant_msg["content"] = None
+            assistant_content = ""
+
+            if tool_calls_map:
+                streamer.close_box()
+                formatted_tool_calls = []
+                for idx in sorted(tool_calls_map.keys()):
+                    entry = tool_calls_map[idx]
+                    formatted_tool_calls.append({
+                        "id": entry["id"] or f"call_{idx}",
+                        "type": "function",
+                        "function": {
+                            "name": entry["name"],
+                            "arguments": entry["arguments"],
+                        }
+                    })
+                assistant_msg["tool_calls"] = formatted_tool_calls
+                messages.append(assistant_msg)
+
+                # Execute each tool call
+                for tc in formatted_tool_calls:
+                    call_id = tc["id"]
+                    fn_name = tc["function"]["name"]
+                    args_str = tc["function"]["arguments"]
                     try:
-                        chunk = json.loads(data_str)
+                        args = json.loads(args_str) if args_str else {}
                     except json.JSONDecodeError:
-                        continue
+                        args = {}
 
-                    if not first_chunk_logged:
-                        _log_event(vm, "sse_event_received", turn_id=turn_id)
-                        first_chunk_logged = True
+                    _log_event(vm, "tool_call_started", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name,
+                               payload={"arguments": args_str})
 
-                    choices = chunk.get("choices", [])
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta", {})
+                    if fn_name == "peforth_search_words":
+                        query = args.get("query", "")
+                        if stream_response:
+                            sys.stdout.write(f"\n[AI Tool] Searching dictionary for: {query!r}...\n")
+                            sys.stdout.flush()
+                        result_data = tool_search_words(vm, query)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps(result_data, ensure_ascii=False)
+                        })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
 
-                    # Text streaming
-                    content_chunk = delta.get("content")
-                    if content_chunk:
-                        assistant_content += content_chunk
-                        streamer.write_chunk(content_chunk)
+                    elif fn_name == "peforth_search_sessions":
+                        allowed_arguments = {"query", "session_id", "limit"}
+                        if not set(args.keys()).issubset(allowed_arguments):
+                            exec_result = {"error": "peforth_search_sessions accepts only query, session_id, and limit."}
+                        else:
+                            session_query = args.get("query")
+                            target_session_id = args.get("session_id")
+                            result_limit = args.get("limit", 20)
+                            try:
+                                if session_query is not None and not isinstance(session_query, str):
+                                    raise TypeError("query must be a string")
+                                if target_session_id is not None and not isinstance(target_session_id, str):
+                                    raise TypeError("session_id must be a string")
+                                if isinstance(result_limit, bool) or not isinstance(result_limit, int) or result_limit < 1:
+                                    raise ValueError("limit must be a positive integer")
+                                exec_result = query_local_sessions(
+                                    query=session_query,
+                                    session_id=target_session_id,
+                                    limit=result_limit,
+                                )
+                            except Exception as e:
+                                exec_result = {"error": f"{type(e).__name__}: {e}"}
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps(exec_result, ensure_ascii=False)
+                        })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
 
-                    # Tool calls streaming
-                    if "tool_calls" in delta:
-                        for tc in delta["tool_calls"]:
-                            idx = tc.get("index", 0)
-                            if idx not in tool_calls_map:
-                                tool_calls_map[idx] = {
-                                    "id": "",
-                                    "name": "",
-                                    "arguments": ""
-                                }
-                            if tc.get("id"):
-                                tool_calls_map[idx]["id"] += tc["id"]
-                            fn = tc.get("function", {})
-                            if fn.get("name"):
-                                tool_calls_map[idx]["name"] += fn["name"]
-                            if fn.get("arguments"):
-                                tool_calls_map[idx]["arguments"] += fn["arguments"]
-            _log_event(vm, "sse_stream_completed", turn_id=turn_id)
-        except Exception as e:
-            _log_event(vm, "sse_stream_failed", turn_id=turn_id, error=e)
-            _finish_turn(vm, turn_id,
-                         output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
-                         output_status="partial" if accumulated_full_text else "failed_before_output",
-                         status="failed", error=e)
-            vm.host["ai_current_turn_id"] = None
-            raise
+                    elif fn_name == "peforth_read_skill":
+                        skill_name = args.get("skill_name", "")
+                        file_path = args.get("file_path")
+                        if stream_response:
+                            target_disp = f"{skill_name}/{file_path}" if file_path else skill_name
+                            sys.stdout.write(f"\n[AI Tool] Reading skill: {target_disp}...\n")
+                            sys.stdout.flush()
+                        result_data = tool_read_skill(vm, skill_name, file_path)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps(result_data, ensure_ascii=False)
+                        })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
 
+                    elif fn_name == "peforth_run_forth":
+                        source = normalize_forth_source(args.get("source", ""))
+                        purpose = args.get("purpose", "")
+
+                        if stream_response:
+                            sys.stdout.write(
+                                f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
+                                f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
+                                f"Source:\n"
+                                f"{source.strip()}{_ANSI_RESET}\n\n"
+                            )
+                            sys.stdout.flush()
+
+                        # Execute Forth code under AI task context.
+                        # Individual words are verified against safe=True in security_aware_call.
+                        prev_ai_task = vm.host.get("in_ai_task")
+                        prev_base_depth = vm.host.get("ai_task_base_frame_depth")
+                        vm.host["in_ai_task"] = vm.task
+                        vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
+
+                        tee = TeeOutput(sys.stdout)
+                        old_stdout = sys.stdout
+                        error_msg = None
+                        _log_event(vm, "forth_execution_started", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name,
+                                   payload={"purpose": purpose, "source": source})
+                        try:
+                            sys.stdout = tee
+                            yield from vm.evaluate(source)
+                        except Exception as e:
+                            error_msg = f"{type(e).__name__}: {e}"
+                            sys.__stdout__.write(f"\n[Execution Error] {error_msg}\n")
+                            sys.__stdout__.flush()
+                        finally:
+                            sys.stdout = old_stdout
+                            vm.host["in_ai_task"] = prev_ai_task
+                            if prev_base_depth is None:
+                                vm.host.pop("ai_task_base_frame_depth", None)
+                            else:
+                                vm.host["ai_task_base_frame_depth"] = prev_base_depth
+                            _log_event(vm, "forth_execution_finished", turn_id=turn_id,
+                                       call_id=call_id, operation=fn_name,
+                                       payload={"stdout": tee.getvalue(), "error": error_msg})
+
+                        exec_result = {
+                            "stdout": tee.getvalue(),
+                            "dstack": [repr(x) for x in vm.dstack],
+                            "error": error_msg
+                        }
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps(exec_result, ensure_ascii=False)
+                        })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+                    else:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps({"error": f"Unknown tool: {fn_name}"})
+                        })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+                # Continue loop to stream the assistant's follow-up
+                continue
+            else:
+                # No tool calls; turn is complete
+                messages.append(assistant_msg)
+                break
+    except KeyboardInterrupt as e:
         if assistant_content:
             accumulated_full_text.append(assistant_content)
-
-        # Build assistant message object
-        assistant_msg = {"role": "assistant"}
-        if assistant_content:
-            assistant_msg["content"] = assistant_content
-        else:
-            assistant_msg["content"] = None
-
-        if tool_calls_map:
-            streamer.close_box()
-            formatted_tool_calls = []
-            for idx in sorted(tool_calls_map.keys()):
-                entry = tool_calls_map[idx]
-                formatted_tool_calls.append({
-                    "id": entry["id"] or f"call_{idx}",
-                    "type": "function",
-                    "function": {
-                        "name": entry["name"],
-                        "arguments": entry["arguments"],
-                    }
-                })
-            assistant_msg["tool_calls"] = formatted_tool_calls
-            messages.append(assistant_msg)
-
-            # Execute each tool call
-            for tc in formatted_tool_calls:
-                call_id = tc["id"]
-                fn_name = tc["function"]["name"]
-                args_str = tc["function"]["arguments"]
-                try:
-                    args = json.loads(args_str) if args_str else {}
-                except json.JSONDecodeError:
-                    args = {}
-
-                _log_event(vm, "tool_call_started", turn_id=turn_id,
-                           call_id=call_id, operation=fn_name,
-                           payload={"arguments": args_str})
-
-                if fn_name == "peforth_search_words":
-                    query = args.get("query", "")
-                    if stream_response:
-                        sys.stdout.write(f"\n[AI Tool] Searching dictionary for: {query!r}...\n")
-                        sys.stdout.flush()
-                    result_data = tool_search_words(vm, query)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": json.dumps(result_data, ensure_ascii=False)
-                    })
-                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
-                               call_id=call_id, operation=fn_name)
-
-                elif fn_name == "peforth_search_sessions":
-                    allowed_arguments = {"query", "session_id", "limit"}
-                    if not set(args.keys()).issubset(allowed_arguments):
-                        exec_result = {"error": "peforth_search_sessions accepts only query, session_id, and limit."}
-                    else:
-                        session_query = args.get("query")
-                        target_session_id = args.get("session_id")
-                        result_limit = args.get("limit", 20)
-                        try:
-                            if session_query is not None and not isinstance(session_query, str):
-                                raise TypeError("query must be a string")
-                            if target_session_id is not None and not isinstance(target_session_id, str):
-                                raise TypeError("session_id must be a string")
-                            if isinstance(result_limit, bool) or not isinstance(result_limit, int) or result_limit < 1:
-                                raise ValueError("limit must be a positive integer")
-                            exec_result = query_local_sessions(
-                                query=session_query,
-                                session_id=target_session_id,
-                                limit=result_limit,
-                            )
-                        except Exception as e:
-                            exec_result = {"error": f"{type(e).__name__}: {e}"}
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": json.dumps(exec_result, ensure_ascii=False)
-                    })
-                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
-                               call_id=call_id, operation=fn_name)
-
-                elif fn_name == "peforth_read_skill":
-                    skill_name = args.get("skill_name", "")
-                    file_path = args.get("file_path")
-                    if stream_response:
-                        target_disp = f"{skill_name}/{file_path}" if file_path else skill_name
-                        sys.stdout.write(f"\n[AI Tool] Reading skill: {target_disp}...\n")
-                        sys.stdout.flush()
-                    result_data = tool_read_skill(vm, skill_name, file_path)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": json.dumps(result_data, ensure_ascii=False)
-                    })
-                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
-                               call_id=call_id, operation=fn_name)
-
-                elif fn_name == "peforth_run_forth":
-                    source = normalize_forth_source(args.get("source", ""))
-                    purpose = args.get("purpose", "")
-
-                    if stream_response:
-                        sys.stdout.write(
-                            f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
-                            f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
-                            f"Source:\n"
-                            f"{source.strip()}{_ANSI_RESET}\n\n"
-                        )
-                        sys.stdout.flush()
-
-                    # Execute Forth code under AI task context.
-                    # Individual words are verified against safe=True in security_aware_call.
-                    prev_ai_task = vm.host.get("in_ai_task")
-                    prev_base_depth = vm.host.get("ai_task_base_frame_depth")
-                    vm.host["in_ai_task"] = vm.task
-                    vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
-
-                    tee = TeeOutput(sys.stdout)
-                    old_stdout = sys.stdout
-                    error_msg = None
-                    _log_event(vm, "forth_execution_started", turn_id=turn_id,
-                               call_id=call_id, operation=fn_name,
-                               payload={"purpose": purpose, "source": source})
-                    try:
-                        sys.stdout = tee
-                        yield from vm.evaluate(source)
-                    except Exception as e:
-                        error_msg = f"{type(e).__name__}: {e}"
-                        sys.__stdout__.write(f"\n[Execution Error] {error_msg}\n")
-                        sys.__stdout__.flush()
-                    finally:
-                        sys.stdout = old_stdout
-                        vm.host["in_ai_task"] = prev_ai_task
-                        if prev_base_depth is None:
-                            vm.host.pop("ai_task_base_frame_depth", None)
-                        else:
-                            vm.host["ai_task_base_frame_depth"] = prev_base_depth
-                        _log_event(vm, "forth_execution_finished", turn_id=turn_id,
-                                   call_id=call_id, operation=fn_name,
-                                   payload={"stdout": tee.getvalue(), "error": error_msg})
-
-                    exec_result = {
-                        "stdout": tee.getvalue(),
-                        "dstack": [repr(x) for x in vm.dstack],
-                        "error": error_msg
-                    }
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": json.dumps(exec_result, ensure_ascii=False)
-                    })
-                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
-                               call_id=call_id, operation=fn_name)
-                else:
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": json.dumps({"error": f"Unknown tool: {fn_name}"})
-                    })
-                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
-                               call_id=call_id, operation=fn_name)
-            # Continue loop to stream the assistant's follow-up
-            continue
-        else:
-            # No tool calls; turn is complete
-            messages.append(assistant_msg)
-            break
+        streamer.close_box()
+        trusted_tasks = vm.host.get("trusted_ai_tasks")
+        if trusted_tasks and vm.task in trusted_tasks:
+            trusted_tasks.remove(vm.task)
+        vm.host["pending_ai_task"] = None
+        _finish_turn(
+            vm, turn_id,
+            output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
+            output_status="partial" if accumulated_full_text else "empty",
+            status="cancelled", error=e,
+        )
+        vm.host["ai_current_turn_id"] = None
+        raise
 
     # Clean up trusted task status once turn is done
     trusted_tasks = vm.host.get("trusted_ai_tasks")

@@ -38,7 +38,7 @@ code repl
     print("peforth 2.1.0 (with AI support)")
     print("Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode, 'bye' to exit.")
     if sys.stdin.isatty():
-        print("Keys: [Enter] submit, [Ctrl+J] or [Shift+Enter] multiline newline.")
+        print("Keys: [Enter] submit, [Ctrl+J] or [Shift+Enter] multiline newline, [Esc] interrupt.")
 
     # Try prompt_toolkit for modern CLI multiline & tab completion support if connected to an interactive TTY
     pt_session = None
@@ -133,6 +133,12 @@ code repl
             def _cancel_completion_esc(event):
                 event.current_buffer.cancel_completion()
 
+            @bindings.add("escape", filter=~has_completions)
+            def _cancel_input_esc(event):
+                buf = event.current_buffer
+                if buf.text or code_buffer or vm.compiling:
+                    event.app.exit(exception=KeyboardInterrupt)
+
             @bindings.add("backspace", filter=has_completions, eager=True)
             def _backspace_completion(event):
                 buf = event.current_buffer
@@ -216,13 +222,21 @@ code repl
                     continue
 
             try:
-                if mode == "chat" and not is_continuing:
-                    if clean_text.startswith("/"):
-                        task = vm.dictate(clean_text[1:])
+                import ai
+                monitor_ctx = ai.TaskInterruptMonitor(vm)
+            except Exception:
+                import contextlib
+                monitor_ctx = contextlib.nullcontext()
+
+            try:
+                with monitor_ctx:
+                    if mode == "chat" and not is_continuing:
+                        if clean_text.startswith("/"):
+                            task = vm.dictate(clean_text[1:])
+                        else:
+                            task = vm.dictate(f"ai: {clean_text}")
                     else:
-                        task = vm.dictate(f"ai: {clean_text}")
-                else:
-                    task = vm.dictate(clean_text)
+                        task = vm.dictate(clean_text)
                 if vm.host.get("exit_requested"):
                     break
                 if task.status == "paused":
@@ -230,6 +244,12 @@ code repl
                         paused_tasks.append(task)
                     if not vm.host.get("pending_ai_task"):
                         print("Task paused. Type 'resume' to continue.")
+            except KeyboardInterrupt:
+                print("\n<interrupted>")
+                code_buffer.clear()
+                if vm.compiling:
+                    vm._discard()
+                continue
             except Exception as error:
                 print(f"{type(error).__name__}: {error}")
                 code_buffer.clear()
