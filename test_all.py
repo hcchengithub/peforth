@@ -673,6 +673,7 @@ class TestSafePropertyAudit(unittest.TestCase):
 
     def test_skills_loading_and_list_skills_word(self):
         import ai
+        # 1. Backward-compatible load_all_skills
         names, text = ai.load_all_skills(HERE / "skills")
         self.assertIn("herdr", names)
         self.assertIn("peforth-forth", names)
@@ -681,19 +682,63 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("ai-diagnostics-log-inspector", names)
         self.assertIn("line-notify", names)
 
-        # Prompt includes skills without duplicating references/forth-reference.md
-        prompt = ai.get_system_prompt(self.vm)
-        self.assertIn("## Skill: herdr", prompt)
-        self.assertIn("## Skill: peforth-forth", prompt)
-        self.assertNotIn("=== Forth Reference ===", prompt)
-        self.assertLessEqual(len(prompt.encode("utf-8")), 100_000)
+        # 2. Lightweight manifest without absolute paths
+        m_names, manifest = ai.load_skills_manifest(HERE / "skills")
+        self.assertEqual(names, m_names)
+        self.assertIn("- herdr:", manifest)
+        self.assertIn("- peforth-forth:", manifest)
+        self.assertIn("[companion: references/forth-reference.md]", manifest)
+        self.assertNotIn(":\\", manifest, "Manifest must not contain Windows drive letters or absolute paths")
+        self.assertNotIn("Users", manifest, "Manifest must not leak local username or absolute paths")
 
-        # list-skills word in Forth
+        # 3. System prompt includes manifest and tool definition, not full markdown dumps
+        prompt = ai.get_system_prompt(self.vm)
+        self.assertIn("=== Available Skills ===", prompt)
+        self.assertIn("- herdr:", prompt)
+        self.assertIn("- peforth-forth:", prompt)
+        self.assertNotIn("## Skill: herdr", prompt)
+        self.assertNotIn("=== Forth Reference ===", prompt)
+        self.assertLessEqual(len(prompt.encode("utf-8")), 5_000, "System prompt should be compact (< 5KB)")
+
+        # 4. list-skills word in Forth
         task = self.vm.dictate("list-skills")
         self.assertEqual(task.status, "done")
         skills_str = self.vm.pop()
         self.assertIn("herdr", skills_str)
         self.assertIn("peforth-forth", skills_str)
+
+    def test_tool_read_skill_and_security_traversal(self):
+        import ai
+        # 1. Read default SKILL.md and discover companion files
+        res_main = ai.tool_read_skill(self.vm, "peforth-forth")
+        self.assertEqual(res_main.get("skill"), "peforth-forth")
+        self.assertEqual(res_main.get("file"), "SKILL.md")
+        self.assertIn("You are assisting with peforth v2", res_main.get("content", ""))
+        self.assertIn("references/forth-reference.md", res_main.get("companion_files", []))
+
+        # 2. Read specific companion reference file
+        res_ref = ai.tool_read_skill(self.vm, "peforth-forth", "references/forth-reference.md")
+        self.assertEqual(res_ref.get("file"), "references/forth-reference.md")
+        self.assertIn("# peforth v2 Python Forth quick reference", res_ref.get("content", ""))
+
+        # 3. Read specific companion script file
+        res_script = ai.tool_read_skill(self.vm, "windows-msgbox", "scripts/send_msgbox.ps1")
+        self.assertEqual(res_script.get("file"), "scripts/send_msgbox.ps1")
+        self.assertIn("MessageBox", res_script.get("content", ""))
+
+        # 4. Error handling for non-existent file
+        res_missing = ai.tool_read_skill(self.vm, "windows-msgbox", "not_there.txt")
+        self.assertIn("error", res_missing)
+        self.assertIn("available_companion_files", res_missing)
+
+        # 5. Security: Path traversal attempt is blocked
+        res_traversal = ai.tool_read_skill(self.vm, "windows-msgbox", "../../ai.py")
+        self.assertIn("error", res_traversal)
+        self.assertIn("escapes skill directory", res_traversal["error"])
+
+        # 6. Security: Invalid skill name
+        res_bad_skill = ai.tool_read_skill(self.vm, "../skills")
+        self.assertIn("error", res_bad_skill)
 
     def test_herdr_words_and_security_annotations(self):
         safe_words = [

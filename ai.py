@@ -902,6 +902,32 @@ TOOLS_DEFINITION = [
     {
         "type": "function",
         "function": {
+            "name": "peforth_read_skill",
+            "description": (
+                "Read full documentation or companion files for an available skill. "
+                "Call without file_path to read the main SKILL.md and discover companion files (references, scripts). "
+                "Call with file_path (relative to the skill directory) to read a specific reference or script."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {
+                        "type": "string",
+                        "description": "The logical name of the skill (e.g. 'peforth-forth', 'windows-msgbox').",
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "Optional relative path inside the skill directory (e.g. 'references/forth-reference.md', 'scripts/send_msgbox.ps1'). Defaults to 'SKILL.md'.",
+                    },
+                },
+                "required": ["skill_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "peforth_run_forth",
             "description": (
                 "Execute Forth source code in the user's local VM. "
@@ -1330,7 +1356,8 @@ You have access to tools:
 1. peforth_search_words: search available Forth vocabulary, words, help strings, comments, and implementation source. Pure read-only.
    *IMPORTANT*: peforth is a rich, evolving environment. When unsure whether a word exists or how it interacts with the VM, ALWAYS search the dictionary first to inspect its documentation and source!
 2. peforth_search_sessions: Search or read past AI conversations from the local SQLite session mirror (sessions.sqlite3). Read-only; runs without user approval. Pass query to search across all sessions, or session_id to read messages from a specific session.
-3. peforth_run_forth: propose and execute Forth source code in the user's local VM.
+3. peforth_read_skill: Read the full instructions, workflow, or companion reference/script files of an available skill from === Available Skills ===. Read-only; runs without user approval.
+4. peforth_run_forth: propose and execute Forth source code in the user's local VM.
 
 === Important Rules ===
 - When executing code, always explain your purpose and propose clean Forth source code.
@@ -1360,6 +1387,83 @@ def get_skills_dir(vm=None) -> Path:
     return candidate
 
 
+def parse_skill_frontmatter(text: str) -> dict:
+    """Extract YAML frontmatter key-value pairs (e.g. name, description) from SKILL.md."""
+    meta = {}
+    stripped_text = text.lstrip()
+    if not stripped_text.startswith("---"):
+        return meta
+    parts = stripped_text.split("---", 2)
+    if len(parts) < 3:
+        return meta
+    current_key = None
+    multiline_buf = []
+
+    def flush():
+        nonlocal current_key, multiline_buf
+        if current_key:
+            val = " ".join(multiline_buf).strip()
+            if len(val) >= 2 and ((val[0] == '"' and val[-1] == '"') or (val[0] == "'" and val[-1] == "'")):
+                val = val[1:-1].strip()
+            meta[current_key] = val
+            multiline_buf = []
+            current_key = None
+
+    for line in parts[1].strip().splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if ":" in line and not line.startswith(" ") and not line.startswith("\t"):
+            flush()
+            key, sep, rest = line.partition(":")
+            current_key = key.strip()
+            rest = rest.strip()
+            if rest in (">-", ">", "|", "|-"):
+                multiline_buf = []
+            elif rest:
+                multiline_buf.append(rest)
+        elif current_key:
+            multiline_buf.append(s)
+    flush()
+    return meta
+
+
+def load_skills_manifest(skills_root=None) -> tuple[list[str], str]:
+    """Build a lightweight manifest of available skills without exposing local absolute paths."""
+    if skills_root is None:
+        skills_root = get_skills_dir()
+    if not isinstance(skills_root, Path):
+        skills_root = Path(skills_root)
+    if not skills_root.is_dir():
+        return [], ""
+
+    skill_names = []
+    lines = []
+    for entry in sorted(skills_root.iterdir()):
+        if not entry.is_dir():
+            continue
+        skill_file = entry / "SKILL.md"
+        if not skill_file.is_file():
+            continue
+        skill_names.append(entry.name)
+        meta = parse_skill_frontmatter(skill_file.read_text(encoding="utf-8"))
+        desc = meta.get("description", "").strip()
+        if not desc:
+            desc = f"Skill {entry.name}"
+
+        # Find companion files (excluding SKILL.md)
+        companion_files = []
+        for f in sorted(entry.rglob("*")):
+            if f.is_file() and f.name != "SKILL.md":
+                rel = str(f.relative_to(entry)).replace("\\", "/")
+                companion_files.append(rel)
+
+        companion_str = f" [companion: {', '.join(companion_files)}]" if companion_files else ""
+        lines.append(f"- {entry.name}: {desc}{companion_str}")
+
+    return skill_names, "\n".join(lines)
+
+
 def load_all_skills(skills_root=None) -> tuple[list[str], str]:
     """Collect the markdown text of every skill bundle under skills_root."""
     if skills_root is None:
@@ -1385,10 +1489,65 @@ def load_all_skills(skills_root=None) -> tuple[list[str], str]:
     return skill_names, "\n".join(parts)
 
 
+def tool_read_skill(vm, skill_name: str, file_path: str = None) -> dict:
+    """Read a skill's SKILL.md or companion reference/script file safely."""
+    if not isinstance(skill_name, str) or not skill_name.strip():
+        return {"error": "skill_name must be a non-empty string."}
+    skill_name = skill_name.strip()
+    if "/" in skill_name or "\\" in skill_name or Path(skill_name).name != skill_name:
+        return {"error": f"Invalid skill name '{skill_name}'."}
+
+    skills_root = get_skills_dir(vm).resolve()
+    target_skill_dir = (skills_root / skill_name).resolve()
+
+    try:
+        target_skill_dir.relative_to(skills_root)
+    except ValueError:
+        return {"error": "Access denied: skill directory escapes skills root."}
+
+    if not target_skill_dir.is_dir():
+        return {"error": f"Skill '{skill_name}' not found."}
+
+    companion_files = []
+    for f in sorted(target_skill_dir.rglob("*")):
+        if f.is_file() and f.name != "SKILL.md":
+            rel = str(f.relative_to(target_skill_dir)).replace("\\", "/")
+            companion_files.append(rel)
+
+    subpath = (file_path or "SKILL.md").strip()
+    target_file = (target_skill_dir / subpath).resolve()
+
+    try:
+        target_file.relative_to(target_skill_dir)
+    except ValueError:
+        return {"error": "Access denied: file_path escapes skill directory."}
+
+    if not target_file.is_file():
+        return {
+            "error": f"File '{subpath}' not found in skill '{skill_name}'.",
+            "available_companion_files": companion_files,
+        }
+
+    try:
+        content = target_file.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return {"error": f"Failed to read file: {e}"}
+
+    res_file = str(target_file.relative_to(target_skill_dir)).replace("\\", "/")
+    res = {
+        "skill": skill_name,
+        "file": res_file,
+        "content": content,
+    }
+    if res_file == "SKILL.md":
+        res["companion_files"] = companion_files
+    return res
+
+
 def get_system_prompt(vm=None) -> str:
-    """Build full agent system prompt dynamically composed with loaded skills."""
+    """Build full agent system prompt dynamically composed with loaded skills manifest."""
     skills_root = get_skills_dir(vm)
-    skill_names, combined_skills = load_all_skills(skills_root)
+    skill_names, manifest_text = load_skills_manifest(skills_root)
 
     sys_info = detect_system_info(vm)
     shell_label = "pwsh (PowerShell 7)" if sys_info.get("active_shell") == "pwsh" else sys_info.get("active_shell", "unknown")
@@ -1401,11 +1560,11 @@ def get_system_prompt(vm=None) -> str:
     )
 
     instructions = SYSTEM_PROMPT + env_section
-    if combined_skills:
-        instructions += "\n\n=== Available Skills ===\n\n" + combined_skills
+    if manifest_text:
+        instructions += "\n\n=== Available Skills ===\n" + manifest_text
 
-    if len(instructions.encode("utf-8")) > 100_000:
-        raise RuntimeError("Combined skill texts are too large to include in agent instructions.")
+    if len(instructions.encode("utf-8")) > 50_000:
+        raise RuntimeError("Agent instructions unexpectedly exceed maximum allowed size.")
     return instructions
 
 
@@ -1666,7 +1825,7 @@ def distill_messages_for_promotion(messages: list) -> dict:
                 except Exception:
                     args = {}
 
-                if fn_name in ("peforth_search_words", "peforth_search_sessions"):
+                if fn_name in ("peforth_search_words", "peforth_search_sessions", "peforth_read_skill"):
                     removed_noise_items += 1
                     continue
 
@@ -1973,6 +2132,21 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                                 session_id, act_turn_id, call_id, False,
                                 f"{type(e).__name__}: {e}",
                             )
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+
+                    elif fn_name == "peforth_read_skill":
+                        skill_name = args.get("skill_name", "")
+                        file_path = args.get("file_path")
+                        if stream_response:
+                            target_disp = f"{skill_name}/{file_path}" if file_path else skill_name
+                            sys.stdout.write(f"\n[AI Tool] Reading skill: {target_disp}...\n")
+                            sys.stdout.flush()
+                        result_data = tool_read_skill(vm, skill_name, file_path)
+                        _submit_agents_tool_result(
+                            session_id, act_turn_id, call_id, True,
+                            json.dumps(result_data, ensure_ascii=False),
+                        )
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
 
@@ -2421,6 +2595,22 @@ def ai_turn(vm, prompt, stream_response):
                         "role": "tool",
                         "tool_call_id": call_id,
                         "content": json.dumps(exec_result, ensure_ascii=False)
+                    })
+                    _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                               call_id=call_id, operation=fn_name)
+
+                elif fn_name == "peforth_read_skill":
+                    skill_name = args.get("skill_name", "")
+                    file_path = args.get("file_path")
+                    if stream_response:
+                        target_disp = f"{skill_name}/{file_path}" if file_path else skill_name
+                        sys.stdout.write(f"\n[AI Tool] Reading skill: {target_disp}...\n")
+                        sys.stdout.flush()
+                    result_data = tool_read_skill(vm, skill_name, file_path)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": json.dumps(result_data, ensure_ascii=False)
                     })
                     _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                call_id=call_id, operation=fn_name)
