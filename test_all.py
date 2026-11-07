@@ -534,10 +534,22 @@ class TestSafePropertyAudit(unittest.TestCase):
         with redirect_stdout(buf):
             self.vm.dictate("see nokia")
         output = buf.getvalue()
+        self.assertIn("'name': 'nokia'", output)
+        self.assertIn("'category': 'colon'", output)
+        self.assertIn("'properties': {'safe': True}", output)
         self.assertIn(": nokia py> [[659,120],[587,120],[370,240],[415,240]] (play-notes) ;", output)
         self.assertNotIn("<function", output, "see nokia should not show raw function object address")
 
-        # 2. Test see on immediate colon word (bye)
+        # 2. Test see on immediate colon word (ai:) with custom properties
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see ai:")
+        output_ai = buf.getvalue()
+        self.assertIn("'name': 'ai:'", output_ai)
+        self.assertIn("'nokia2_after_seconds': 30", output_ai)
+        self.assertIn("'safe': True", output_ai)
+
+        # 2b. Test see on immediate colon word (bye)
         buf = io.StringIO()
         with redirect_stdout(buf):
             self.vm.dictate("see bye")
@@ -549,8 +561,18 @@ class TestSafePropertyAudit(unittest.TestCase):
         with redirect_stdout(buf):
             self.vm.dictate("see (play-notes)")
         output = buf.getvalue()
+        self.assertIn("'category': 'code'", output)
+        self.assertIn("'properties': {'safe': True}", output)
         self.assertIn("code (play-notes)", output)
         self.assertIn("end-code", output)
+
+        # 4. Test see on value word (aiModel)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see aiModel")
+        output_val = buf.getvalue()
+        self.assertIn("'category': 'value'", output_val)
+        self.assertIn("value aiModel", output_val)
 
         # 4. Test see on string-quote word (s") and print-string-quote word (.")
         buf = io.StringIO()

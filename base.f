@@ -571,6 +571,7 @@ code see
     if word is None:
         raise KernelError(f"Unknown word: {name}")
 
+    # Stage 1: Documentation (if help or comment exists)
     has_doc = bool(getattr(word, "help", "") or getattr(word, "comment", ""))
     if has_doc:
         help_text = word.help.strip() if getattr(word, "help", "") else ""
@@ -583,9 +584,73 @@ code see
                 print(f"    {line}")
         print()
 
-    print(word)
+    # Stage 2: Word Object Metadata Dict (including properties)
+    cat = getattr(word, "category", "") or getattr(word, "type", "")
+    if not cat or (cat == "host" and getattr(word, "source", "")):
+        if isinstance(getattr(word, "action", None), tuple):
+            cat = "colon"
+        elif getattr(word, "source", ""):
+            cat = "code"
+        else:
+            cat = cat or "host"
 
-    if getattr(word, "category", "") == "colon" or isinstance(getattr(word, "action", None), tuple):
+    meta = {
+        "name": word.name,
+        "category": cat,
+        "immediate": bool(getattr(word, "immediate", False)),
+        "action": getattr(word, "action", None),
+        "body": getattr(word, "body", None),
+        "help": "..." if getattr(word, "help", "") else "",
+        "comment": "..." if getattr(word, "comment", "") else "",
+        "source": "..." if getattr(word, "source", "") else "",
+        "properties": dict(getattr(word, "properties", {}) or {}),
+    }
+    for k, v in getattr(word, "__dict__", {}).items():
+        if k not in meta and k not in meta["properties"] and k != "type" and not k.startswith("_"):
+            meta[k] = v
+
+    def _fmt_action_item(it):
+        if isinstance(it, type(word)):
+            return repr(it)
+        if callable(it):
+            label = getattr(it, "name", None) or getattr(it, "source", None)
+            if label:
+                return f"<callable {label!r}>"
+            return f"<callable {getattr(it, '__name__', 'op')!r}>"
+        return repr(it)
+
+    meta_lines = ["{"]
+    for k, v in meta.items():
+        if k == "action" and isinstance(v, tuple):
+            items = [_fmt_action_item(item) for item in v]
+            val_repr = f"({', '.join(items)})" if len(items) != 1 else f"({items[0]},)"
+        elif k == "action" and callable(v):
+            val_repr = f"<callable {word.name!r}>"
+        else:
+            val_repr = repr(v)
+        meta_lines.append(f"    {k!r}: {val_repr},")
+    if meta_lines[-1].endswith(","):
+        meta_lines[-1] = meta_lines[-1][:-1]
+    meta_lines.append("}")
+    print("\n".join(meta_lines))
+    print()
+
+    # Stage 3: Definition / Source Code
+    if getattr(word, "category", "") == "value":
+        val = word.body[0] if hasattr(word, "body") and word.body else getattr(word, "value", None)
+        print(f"{val!r} value {word.name}")
+    elif getattr(word, "category", "") == "constant" or (hasattr(word, "body") and word.category == "constant"):
+        val = word.body[0] if hasattr(word, "body") and word.body else getattr(word, "value", None)
+        print(f"{val!r} constant {word.name}")
+    elif getattr(word, "category", "") == "variable" or (hasattr(word, "body") and word.category == "variable"):
+        print(f"variable {word.name} (body: {word.body!r})")
+    elif getattr(word, "category", "") == "string-quote":
+        print(f"char {word.body[0]!r} string-quote {word.name}")
+    elif getattr(word, "category", "") == "print-string-quote":
+        print(f"char {word.body[0]!r} print-string-quote {word.name}")
+    elif getattr(word, "category", "") == "created" or (hasattr(word, "body") and word.body is not None and not isinstance(getattr(word, "action", None), tuple)):
+        print(f"created {word.name} (body: {word.body!r})")
+    elif getattr(word, "category", "") == "colon" or isinstance(getattr(word, "action", None), tuple):
         parts = []
         for item in word.action:
             if hasattr(item, "name") and item.name:
@@ -614,17 +679,6 @@ code see
                 parts.append(repr(item))
         imm = " immediate" if word.immediate else ""
         print(f": {word.name} {' '.join(parts)} ;{imm}")
-    elif getattr(word, "category", "") == "string-quote":
-        print(f"char {word.body[0]!r} string-quote {word.name}")
-    elif getattr(word, "category", "") == "print-string-quote":
-        print(f"char {word.body[0]!r} print-string-quote {word.name}")
-    elif getattr(word, "category", "") == "constant" or (hasattr(word, "body") and word.category == "constant"):
-        val = word.body[0] if hasattr(word, "body") and word.body else getattr(word, "value", None)
-        print(f"{val!r} constant {word.name}")
-    elif getattr(word, "category", "") == "variable" or (hasattr(word, "body") and word.category == "variable"):
-        print(f"variable {word.name} (body: {word.body!r})")
-    elif getattr(word, "category", "") == "created" or (hasattr(word, "body") and word.body is not None):
-        print(f"created {word.name} (body: {word.body!r})")
     elif getattr(word, "source", ""):
         lines = [f"code {word.name}"]
         lines.append(word.source.rstrip())
@@ -634,7 +688,8 @@ code see
         imm = " (immediate)" if word.immediate else ""
         print(f"Host word {word.name}: {word.action!r}{imm}")
     end-code immediate
-    // ( <name> -- ) Display a word's definition and source.
+    // ( <name> -- ) Decompile and display the documentation, object metadata, and definition of word.
+    /// Print the documentation header, word object metadata dictionary (including properties), and definition source.
     last :: safe=True
 
 code char
@@ -888,6 +943,17 @@ code create
         v.push(b)
     word = vm.define(name, default_action, category="created")
     word.body = body
+    word_cls = type(word)
+    if not isinstance(getattr(word_cls, "value", None), property):
+        def _get_val(w):
+            if hasattr(w, "body") and isinstance(w.body, list) and len(w.body) > 0:
+                return w.body[0]
+            return getattr(w, "_value", None)
+        def _set_val(w, val):
+            w._value = val
+            if hasattr(w, "body") and isinstance(w.body, list) and len(w.body) > 0:
+                w.body[0] = val
+        word_cls.value = property(_get_val, _set_val)
     end-code
     // ( <name> -- ) Create a new word with an initialized data body.
     last :: safe=True
@@ -940,12 +1006,19 @@ code to
     if tok is None:
         raise KernelError("to expects a value word name")
     word = vm.tick(tok)
-    if word is None or not hasattr(word, "body") or not word.body:
+    if word is None or getattr(word, "category", "") != "value" or not hasattr(word, "body") or not word.body:
         raise KernelError(f"to expects a value word, got {tok}")
-    val = vm.pop()
-    word.body[0] = val
-    end-code
+    if vm.compiling:
+        def op(v, target=word):
+            target.body[0] = v.pop()
+        op.name = f"to {word.name}"
+        op._safe = True
+        vm.comma(op)
+    else:
+        word.body[0] = vm.pop()
+    end-code immediate
     // ( val <name> -- ) Set value of a word created by value.
+    /// If interpreting, update value immediately. If compiling, compile runtime assignment.
     last :: safe=True
 
 \ --- String Quote Delimiter Families ---
