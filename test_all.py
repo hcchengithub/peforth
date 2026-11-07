@@ -585,6 +585,28 @@ class TestSafePropertyAudit(unittest.TestCase):
             self.vm.dictate('see ."')
         self.assertIn("char '\"' print-string-quote .\"", buf.getvalue())
 
+        # 5. Test see 1K truncation on long source (code word) and long actions (colon word)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see see")
+        output_see = buf.getvalue()
+        self.assertIn("code see", output_see)
+        self.assertIn("... (truncated)", output_see)
+        self.assertIn("end-code immediate", output_see)
+        stage3_see = output_see.split("\n\n")[-1].strip()
+        self.assertLessEqual(len(stage3_see), 1024)
+
+        self.vm.dictate(": _long_colon_test " + ("dup drop " * 150) + ";")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("see _long_colon_test")
+        output_long = buf.getvalue()
+        self.assertIn("... (truncated)", output_long)
+        stage3_long = output_long.split("\n\n")[-1].strip()
+        self.assertLessEqual(len(stage3_long), 1024)
+        self.assertTrue(stage3_long.startswith(": _long_colon_test "))
+        self.assertTrue(stage3_long.endswith(" ;"))
+
     def test_string_delimiters(self):
         # 1. Double quote s"
         self.vm.dictate('s" this is a book"')

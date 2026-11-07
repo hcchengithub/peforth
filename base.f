@@ -609,6 +609,14 @@ code see
         if k not in meta and k not in meta["properties"] and k != "type" and not k.startswith("_"):
             meta[k] = v
 
+    MAX_DISPLAY_LEN = 1024
+
+    def _trunc_inline(text, limit=MAX_DISPLAY_LEN, closing=""):
+        if len(text) <= limit:
+            return text
+        suffix = f" ... (truncated){closing}"
+        return text[:max(0, limit - len(suffix))] + suffix
+
     def _fmt_action_item(it):
         if isinstance(it, type(word)):
             return repr(it)
@@ -624,8 +632,9 @@ code see
         if k == "action" and isinstance(v, tuple):
             items = [_fmt_action_item(item) for item in v]
             val_repr = f"({', '.join(items)})" if len(items) != 1 else f"({items[0]},)"
+            val_repr = _trunc_inline(val_repr, MAX_DISPLAY_LEN, closing=")")
         elif k == "action" and callable(v):
-            val_repr = f"<callable {word.name!r}>"
+            val_repr = _trunc_inline(f"<callable {word.name!r}>", MAX_DISPLAY_LEN)
         else:
             val_repr = repr(v)
         meta_lines.append(f"    {k!r}: {val_repr},")
@@ -678,15 +687,24 @@ code see
             else:
                 parts.append(repr(item))
         imm = " immediate" if word.immediate else ""
-        print(f": {word.name} {' '.join(parts)} ;{imm}")
+        prefix = f": {word.name} "
+        ending = f" ;{imm}"
+        body_limit = max(64, MAX_DISPLAY_LEN - len(prefix) - len(ending))
+        body_str = _trunc_inline(" ".join(parts), body_limit)
+        print(f"{prefix}{body_str}{ending}")
     elif getattr(word, "source", ""):
-        lines = [f"code {word.name}"]
-        lines.append(word.source.rstrip())
-        lines.append("end-code" + (" immediate" if word.immediate else ""))
-        print("\n".join(lines))
+        header = f"code {word.name}"
+        footer = "end-code" + (" immediate" if word.immediate else "")
+        src = word.source.rstrip()
+        src_limit = max(64, MAX_DISPLAY_LEN - len(header) - len(footer) - 2)
+        if len(src) > src_limit:
+            trunc_marker = "\n    ... (truncated)"
+            src = src[:max(0, src_limit - len(trunc_marker))].rstrip() + trunc_marker
+        print(f"{header}\n{src}\n{footer}")
     else:
         imm = " (immediate)" if word.immediate else ""
-        print(f"Host word {word.name}: {word.action!r}{imm}")
+        act_repr = _trunc_inline(repr(word.action), MAX_DISPLAY_LEN)
+        print(f"Host word {word.name}: {act_repr}{imm}")
     end-code immediate
     // ( <name> -- ) Decompile and display the documentation, object metadata, and definition of word.
     /// Print the documentation header, word object metadata dictionary (including properties), and definition source.
