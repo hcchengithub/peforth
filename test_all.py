@@ -644,6 +644,15 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.vm.dictate(': greet-s s\' Welcome to "Project K"!\' ; greet-s')
         self.assertEqual(self.vm.pop(), 'Welcome to "Project K"!')
 
+        # Factor-generated help, comment, and safe=True for all string-quote words
+        for wname in ('s"', "s'", "s`", "s|", "s^", "s/"):
+            w = self.vm.tick(wname)
+            self.assertIsNotNone(w)
+            self.assertTrue(w.properties.get("safe"))
+            self.assertIn("no backslash escaping", w.help)
+            self.assertIn("Backslash escaping", w.comment)
+            self.assertIn("Friends: s\"", w.comment)
+
     def test_dot_string_delimiters(self):
         import io
         from contextlib import redirect_stdout
@@ -660,6 +669,14 @@ class TestSafePropertyAudit(unittest.TestCase):
             with redirect_stdout(output):
                 self.vm.dictate(source)
             self.assertEqual(output.getvalue(), expected)
+
+        for wname in ('."', ".'", ".`", ".|", ".^", "./"):
+            w = self.vm.tick(wname)
+            self.assertIsNotNone(w)
+            self.assertTrue(w.properties.get("safe"))
+            self.assertIn("no backslash escaping", w.help)
+            self.assertIn("Backslash escaping", w.comment)
+            self.assertIn("Friends: .\"", w.comment)
 
         # Compilation mode inside colon definitions
         self.vm.dictate(': say-d ." compiled double" ;')
@@ -681,6 +698,34 @@ class TestSafePropertyAudit(unittest.TestCase):
             with redirect_stdout(output):
                 self.vm.dictate(word_call)
             self.assertEqual(output.getvalue(), expected)
+
+    def test_system_info_and_windows_message_box(self):
+        self.vm.host.pop("system_info", None)
+        self.vm.dictate("system_info")
+        info = self.vm.pop()
+        self.assertIsInstance(info, dict)
+        self.assertIn("cwd", info)
+        self.assertIn("source_path", info)
+        self.assertIn("runtime_path", info)
+        self.assertIn("venv", info)
+        self.assertIn("config", info)
+        cfg = info["config"]
+        for key in (
+            "PEFORTH_SOURCE_PATH",
+            "PEFORTH_CONFIG_DIR",
+            "PEFORTH_SKILLS_DIR",
+            "PEFORTH_AI_MODEL",
+            "PEFORTH_AI_LOG_MODE",
+            "OPENAI_BASE_URL",
+            "OPENAI_MODEL",
+            "HERDR_ENV",
+        ):
+            self.assertIn(key, cfg)
+
+        w_msgbox = self.vm.tick("Windows-Message-Box")
+        self.assertIsNotNone(w_msgbox, "Windows-Message-Box should be defined in auxiliary.f")
+        self.assertFalse(w_msgbox.properties.get("safe", True))
+        self.assertIn("YesNoCancel", w_msgbox.comment)
 
     def test_forth_word_completer_matches_dictionary_in_all_modes(self):
         try:

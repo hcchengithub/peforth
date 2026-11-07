@@ -94,7 +94,8 @@ code system_info
         vm.host["system_info"] = info
     vm.push(info)
     end-code
-    // ( -- info ) Return host environment snapshot including OS, Python, and detected shells.
+    // ( -- info ) Return host environment snapshot including OS, paths, Python/venv, shells, and peforth config env vars.
+    /// Includes cwd, source_path (PEFORTH_SOURCE_PATH repo checkout), runtime_path, runtime_latest, python, venv, shells, wsl, and config (PEFORTH_*, OPENAI_*, HERDR_*).
     last :: safe=True
 
 code run_pwsh

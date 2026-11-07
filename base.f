@@ -1050,59 +1050,44 @@ code (s)
     else:
         vm.push(val)
     end-code
-    // ( delim -- string ) Internal engine for parsing string delimited by delim.
-    /// Read input stream until delimiter, handle leading space, and emit literal or push.
+    // ( delim -- string ) Internal engine for parsing raw string delimited by delim.
+    /// Reads input stream verbatim until the very next delim character, strips one leading space, and pushes or compiles the literal.
+    /// Backslash escaping (e.g. \" or \n) is NOT supported; the first occurrence of delim terminates the string immediately.
+last :: safe=True
+
+code (string-quote-doc)
+    w = vm.latest
+    d = w.body[0] if getattr(w, "body", None) else '"'
+    w.help = f"( <string>{d} -- string ) Parse raw string delimited by {d} (no backslash escaping)."
+    w.comment = (
+        f"Part of the s[\"'`|^/] raw string family. Delimiter is {d!r}.\n"
+        f"Reads verbatim until the very next {d!r} character (strips one leading space).\n"
+        f"IMPORTANT: Backslash escaping (such as \\{d} or \\n) is NOT supported; the first {d!r} immediately terminates the string.\n"
+        f"Friends: s\" s' s` s| s^ s/ and <text> ... </text>.\n"
+        f"If your text contains {d!r}, use an alternative delimiter from Friends or <text> ... </text>."
+    )
+    w.properties["safe"] = True
+    w.safe = True
+    end-code
+    // ( -- ) Populate help, comment, and safe=True on the latest string-quote word.
 last :: safe=True
 
 : string-quote ( delim <name> -- )
-    create , [compile] immediate
+    create , [compile] immediate (string-quote-doc)
     does> ( -- string )
     @ (s) ;
-    // ( delim <name> -- ) Define an immediate string quote word for delim.
-    /// Defined via create ... does>. When executed, parses input until delim.
+    // ( delim <name> -- ) Define an immediate raw string quote word for delim.
+    /// Factor for the s["'`|^/] family via create ... does>.
+    /// Automatically populates the child word's help, comment, and safe=True property.
+    /// Child words read raw text up to delim without backslash escaping.
 last :: safe=True
 
 char " string-quote s"
-    // ( <string>" -- string ) Parse string delimited by double quote ".
-    /// Part of the s["'`|^/] string family. Delimiter is '"'.
-    /// Friends: s" s' s` s| s^ s/
-    /// Use alternative delimiters to avoid escaping internal quotes.
-last :: safe=True
-
 char ' string-quote s'
-    // ( <string>' -- string ) Parse string delimited by single quote '.
-    /// Part of the s["'`|^/] string family. Delimiter is "'".
-    /// Friends: s" s' s` s| s^ s/
-    /// Use alternative delimiters to avoid escaping internal quotes.
-last :: safe=True
-
 char ` string-quote s`
-    // ( <string>` -- string ) Parse string delimited by backtick `.
-    /// Part of the s["'`|^/] string family. Delimiter is '`'.
-    /// Friends: s" s' s` s| s^ s/
-    /// Use alternative delimiters to avoid escaping internal quotes.
-last :: safe=True
-
 char | string-quote s|
-    // ( <string>| -- string ) Parse string delimited by pipe |.
-    /// Part of the s["'`|^/] string family. Delimiter is '|'.
-    /// Friends: s" s' s` s| s^ s/
-    /// Use alternative delimiters to avoid escaping internal quotes.
-last :: safe=True
-
 char ^ string-quote s^
-    // ( <string>^ -- string ) Parse string delimited by caret ^.
-    /// Part of the s["'`|^/] string family. Delimiter is '^'.
-    /// Friends: s" s' s` s| s^ s/
-    /// Use alternative delimiters to avoid escaping internal quotes.
-last :: safe=True
-
 char / string-quote s/
-    // ( <string>/ -- string ) Parse string delimited by slash /.
-    /// Part of the s["'`|^/] string family. Delimiter is '/'.
-    /// Friends: s" s' s` s| s^ s/
-    /// Use alternative delimiters to avoid escaping internal quotes.
-last :: safe=True
 
 code (print-string)
     if vm.compiling:
@@ -1114,39 +1099,38 @@ code (print-string)
     /// While compiling, append the "." word after the parsed string literal.
 last :: safe=True
 
+code (print-string-quote-doc)
+    w = vm.latest
+    d = w.body[0] if getattr(w, "body", None) else '"'
+    w.help = f"( <string>{d} -- ) Parse and print raw text up to the next {d} (no backslash escaping)."
+    w.comment = (
+        f"Part of the .[\"'`|^/] print-string family. Delimiter is {d!r}.\n"
+        f"Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.\n"
+        f"IMPORTANT: Backslash escaping (such as \\{d} or \\n) is NOT supported; the first {d!r} immediately terminates the string.\n"
+        f"Friends: .\" .' .` .| .^ ./\n"
+        f"If your text contains {d!r}, use an alternative delimiter from Friends."
+    )
+    w.properties["safe"] = True
+    w.safe = True
+    end-code
+    // ( -- ) Populate help, comment, and safe=True on the latest print-string-quote word.
+last :: safe=True
+
 : print-string-quote ( delim <name> -- )
-    create , [compile] immediate
+    create , [compile] immediate (print-string-quote-doc)
     does> @ (s) (print-string) ;
-    // ( delim <name> -- ) Define an immediate word that parses and prints a delimited string.
-    /// In interpretation mode, print immediately without a newline. In a colon definition, compile the string and print it when the definition runs.
+    // ( delim <name> -- ) Define an immediate word that parses and prints a raw delimited string.
+    /// Factor for the .["'`|^/] family via create ... does>.
+    /// Automatically populates the child word's help, comment, and safe=True property.
+    /// In interpretation mode, prints immediately without a newline; while compiling, compiles the literal and "." call.
 last :: safe=True
 
 char " print-string-quote ."
-    // ( <string>" -- ) Parse and print text up to the next double quote.
-    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
-last :: safe=True
-
 char ' print-string-quote .'
-    // ( <string>' -- ) Parse and print text up to the next single quote.
-    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
-last :: safe=True
-
 char ` print-string-quote .`
-    // ( <string>` -- ) Parse and print text up to the next backtick.
-    /// Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.
-last :: safe=True
-
 char | print-string-quote .|
-    // ( <string>| -- ) Parse and print text up to the next pipe |.
-last :: safe=True
-
 char ^ print-string-quote .^
-    // ( <string>^ -- ) Parse and print text up to the next caret ^.
-last :: safe=True
-
 char / print-string-quote ./
-    // ( <string>/ -- ) Parse and print text up to the next slash /.
-last :: safe=True
 
 \ =====================================================================
 \ 8. Compilation Control and Meta-Programming

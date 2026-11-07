@@ -735,7 +735,63 @@ def encode_image_file_data_uri(file_path, max_data_uri_len=_IMAGE_DATA_URI_MAX_L
     return f"data:{mime_type};base64,{b64_str}"
 
 
+def _expand_env_vars(value: str) -> str:
+    """Expand ~, $VAR, and %VAR% placeholders in path configuration strings."""
+    if not value:
+        return ""
+    expanded = os.path.expanduser(os.path.expandvars(value.strip()))
+    return re.sub(
+        r"%([^%]+)%",
+        lambda match: os.environ.get(match.group(1), match.group(0)),
+        expanded,
+    )
+
+
+def _reported_source_path(runtime_path: Path) -> str:
+    """Return the source checkout path separately from the active runtime path."""
+    configured = os.environ.get("PEFORTH_SOURCE_PATH", "").strip()
+    if configured:
+        return _expand_env_vars(configured)
+    return str(runtime_path)
+
+
+def _latest_runtime_file_info(runtime_path: Path) -> dict | None:
+    """Return the newest .f/.py file under the runtime directory."""
+    try:
+        root = Path(runtime_path).resolve()
+    except OSError:
+        return None
+    newest = None
+    try:
+        for candidate in root.rglob("*"):
+            if candidate.suffix.casefold() not in {".f", ".py"}:
+                continue
+            parts = {p.casefold() for p in candidate.parts}
+            if ".venv" in parts or "venvs" in parts or "__pycache__" in parts or ".git" in parts:
+                continue
+            try:
+                if not candidate.is_file():
+                    continue
+                modified = candidate.stat().st_mtime
+            except OSError:
+                continue
+            relative = candidate.relative_to(root).as_posix()
+            if (newest is None or modified > newest[0]
+                    or (modified == newest[0] and relative < newest[1])):
+                newest = (modified, relative)
+    except OSError:
+        return None
+    if newest is None:
+        return None
+    modified, relative = newest
+    return {
+        "file": relative,
+        "modified": datetime.fromtimestamp(modified).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
 def detect_system_info(vm=None) -> dict:
+    load_dotenv()
     is_windows = os.name == "nt"
     is_wsl = bool(os.environ.get("WSL_DISTRO_NAME")) or "microsoft" in platform.release().casefold()
     environment = "wsl" if is_wsl else ("windows" if is_windows else "linux")
@@ -757,11 +813,16 @@ def detect_system_info(vm=None) -> dict:
     default_shell = "pwsh" if is_windows else "bash"
 
     pwsh_candidates = ("pwsh", "powershell", "pwsh.exe", "powershell.exe") if is_windows else ("pwsh", "powershell")
-    pwsh_path = None
-    for c in pwsh_candidates:
-        pwsh_path = shutil.which(c)
-        if pwsh_path:
-            break
+    pwsh_path = os.environ.get("PEFORTH_PWSH_PATH", "").strip()
+    if pwsh_path:
+        pwsh_path = _expand_env_vars(pwsh_path)
+        if not os.path.isfile(pwsh_path):
+            pwsh_path = shutil.which(pwsh_path)
+    if not pwsh_path:
+        for c in pwsh_candidates:
+            pwsh_path = shutil.which(c)
+            if pwsh_path:
+                break
 
     curl_path = shutil.which("curl.exe" if is_windows else "curl")
     bash_path = shutil.which("bash.exe" if is_windows else "bash")
@@ -772,27 +833,74 @@ def detect_system_info(vm=None) -> dict:
         if wsl_bin:
             wsl_info["available"] = True
             wsl_info["path"] = wsl_bin
+            configured_distro = os.environ.get("PEFORTH_WSL_DISTRO", "").strip()
             try:
                 proc = subprocess.run([wsl_bin, "-l", "-q"], capture_output=True, timeout=5)
                 raw = proc.stdout
                 text = raw.decode("utf-16-le", errors="ignore") if b"\x00" in raw else raw.decode("utf-8", errors="ignore")
                 distros = [line.strip() for line in text.splitlines() if line.strip()]
-                if distros:
+                wsl_info["distros"] = distros
+                if configured_distro:
+                    wsl_info["distro"] = configured_distro
+                elif distros:
                     wsl_info["distro"] = distros[0]
             except Exception:
-                wsl_info["distro"] = "Ubuntu"
+                wsl_info["distro"] = configured_distro or "Ubuntu"
     elif is_wsl:
         wsl_info["available"] = True
-        wsl_info["distro"] = os.environ.get("WSL_DISTRO_NAME")
+        wsl_info["distro"] = os.environ.get("WSL_DISTRO_NAME") or os.environ.get("PEFORTH_WSL_DISTRO")
+
+    file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
+    runtime_dir = Path(file_dir).resolve() if file_dir else Path(__file__).resolve().parent
+    runtime_path = str(runtime_dir)
+    source_path = _reported_source_path(runtime_dir)
+
+    prefix = os.path.normcase(os.path.abspath(sys.prefix))
+    base_prefix = os.path.normcase(os.path.abspath(sys.base_prefix))
+    venv_active = prefix != base_prefix
+
+    config_dir_raw = os.environ.get("PEFORTH_CONFIG_DIR", "").strip()
+    resolved_config_dir = str(Path(_expand_env_vars(config_dir_raw)).resolve()) if config_dir_raw else str((Path.home() / ".peforth").resolve())
+    skills_dir_raw = (os.environ.get("PEFORTH_SKILLS_DIR", "") or os.environ.get("PEFORTH_AI_SKILLS_DIR", "")).strip()
+
+    config_snapshot = {
+        "PEFORTH_SOURCE_PATH": os.environ.get("PEFORTH_SOURCE_PATH", ""),
+        "PEFORTH_CONFIG_DIR": config_dir_raw or resolved_config_dir,
+        "PEFORTH_SKILLS_DIR": skills_dir_raw or str(get_skills_dir(vm)),
+        "PEFORTH_AI_MODEL": os.environ.get("PEFORTH_AI_MODEL", ""),
+        "PEFORTH_AI_LOG_MODE": os.environ.get("PEFORTH_AI_LOG_MODE", "normal"),
+        "PEFORTH_PWSH_PATH": os.environ.get("PEFORTH_PWSH_PATH", ""),
+        "PEFORTH_WSL_DISTRO": os.environ.get("PEFORTH_WSL_DISTRO", ""),
+        "PEFORTH_CACHE_TTL": os.environ.get("PEFORTH_CACHE_TTL", ""),
+        "OPENAI_BASE_URL": os.environ.get("OPENAI_BASE_URL", ""),
+        "OPENAI_MODEL": os.environ.get("OPENAI_MODEL", ""),
+        "OPENAI_REASONING_EFFORT": os.environ.get("OPENAI_REASONING_EFFORT", ""),
+        "OPENAI_API_KEY_SET": bool(os.environ.get("OPENAI_API_KEY", "").strip()),
+        "HERDR_ENV": os.environ.get("HERDR_ENV", ""),
+        "HERDR_WORKSPACE_ID": os.environ.get("HERDR_WORKSPACE_ID", ""),
+        "HERDR_TAB_ID": os.environ.get("HERDR_TAB_ID", ""),
+        "HERDR_PANE_ID": os.environ.get("HERDR_PANE_ID", ""),
+        "LINE_USER_ID_SET": bool(os.environ.get("LINE_USER_ID", "").strip()),
+        "LINE_CHANNEL_ACCESS_TOKEN_SET": bool(os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()),
+    }
 
     return {
         "os": os_name,
+        "platform": sys.platform,
         "environment": environment,
         "active_shell": active_shell,
         "default_shell": default_shell,
+        "cwd": os.getcwd(),
+        "source_path": source_path,
+        "runtime_path": runtime_path,
+        "runtime_latest": _latest_runtime_file_info(runtime_dir),
         "python": {
             "version": sys.version.split()[0],
             "executable": sys.executable,
+        },
+        "venv": {
+            "active": venv_active,
+            "path": sys.prefix if venv_active else None,
         },
         "shells": {
             "pwsh": {"available": bool(pwsh_path), "path": pwsh_path},
@@ -800,8 +908,8 @@ def detect_system_info(vm=None) -> dict:
             "bash": {"available": bool(bash_path), "path": bash_path},
         },
         "wsl": wsl_info,
+        "config": config_snapshot,
     }
-
 
 
 def load_dotenv(env_path=None):
@@ -811,6 +919,7 @@ def load_dotenv(env_path=None):
             Path.cwd() / ".env",
             Path(__file__).resolve().parent / ".env",
             Path(__file__).resolve().parent.parent / ".env",
+            Path.home() / ".peforth" / ".env",
         ]
         for c in candidates:
             if c.exists():
@@ -870,11 +979,15 @@ def init_diagnostics(vm, *, database_path=None, force=False):
             database_path = db_dir / "ai-diagnostics.sqlite3"
 
         logger = DiagnosticLog(database_path, environment=env)
+        file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
+        runtime_dir = Path(file_dir).resolve() if file_dir else Path(__file__).resolve().parent
         metadata = {
             "argv": sys.argv,
             "version": "2.1.0",
         }
         runtime_id = logger.start_runtime(
+            source_path=_reported_source_path(runtime_dir),
+            runtime_path=str(runtime_dir),
             runtime_version=sys.version.split()[0],
             metadata=metadata,
         )

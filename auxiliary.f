@@ -643,3 +643,50 @@ last :: safe=False
 : sudo "" word (sudo) ;
     // ( <command> -- result-dict ) Run remaining TIB text with sudo.
 last :: safe=False
+
+
+\ --- 9. Windows Dialogs ---
+
+code Windows-Message-Box
+    import subprocess
+    import json
+    import shutil
+    import os
+
+    buttons = vm.pop()
+    title = vm.pop()
+    msg = vm.pop()
+    if not all(isinstance(x, str) for x in (msg, title, buttons)):
+        raise TypeError("Windows-Message-Box expects message, title, and buttons strings")
+    allowed = {"OK", "OKCancel", "YesNo", "YesNoCancel", "RetryCancel", "AbortRetryIgnore"}
+    if buttons not in allowed:
+        raise ValueError(f"buttons must be one of: {', '.join(sorted(allowed))}")
+
+    ps = (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        "$f = New-Object System.Windows.Forms.Form -Property @{ TopMost = $true }; "
+        f"$r = [System.Windows.Forms.MessageBox]::Show($f, {json.dumps(msg, ensure_ascii=False)}, "
+        f"{json.dumps(title, ensure_ascii=False)}, "
+        f"[System.Windows.Forms.MessageBoxButtons]::{buttons}, "
+        "[System.Windows.Forms.MessageBoxIcon]::Question); "
+        "$f.Dispose(); "
+        "[Console]::Out.Write($r.ToString())"
+    )
+    ps_path = (
+        shutil.which("pwsh.exe")
+        or shutil.which("pwsh")
+        or shutil.which("powershell.exe")
+        or shutil.which("powershell")
+    )
+    if not ps_path:
+        raise RuntimeError("PowerShell was not found")
+    kwargs = {"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"}
+    if os.name == "nt":
+        kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    r = subprocess.run([ps_path, "-NoProfile", "-NonInteractive", "-Command", ps], **kwargs)
+    vm.push({"exit_code": r.returncode, "stdout": r.stdout.strip(), "stderr": r.stderr.strip()})
+    end-code
+    // ( message-string title-string buttons-string -- result-dict ) Display a top-most Windows dialog with a selectable button set; stdout is the clicked button name.
+    /// Buttons string options: "OK", "OKCancel", "YesNo", "YesNoCancel", "RetryCancel", "AbortRetryIgnore" (case-sensitive).
+    /// Example: s" Continue?" s" Confirm" s" YesNo" Windows-Message-Box .  ( result dict; stdout is "Yes" or "No" )
+last :: safe=False
