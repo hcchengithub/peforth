@@ -6,7 +6,7 @@ Curated from the peforth manuals, live `base.f` and `auxiliary.f` dictionaries, 
 
 - Enter a word or number at the REPL prompt; values are pushed onto the data stack.
 - `: square dup * ;` defines a colon word. `12 square` leaves 144 on the stack.
-- `words` lists available names; `words <terms>` filters names. `help <terms>` searches word help and comments. `see <name>` displays documentation and a word definition.
+- `words` lists available names; `words <terms>` filters names. `help` displays the user tutorial; `help *` lists all words' help and comments; `help <terms>` searches word help and comments. `see <name>` displays documentation and a word definition.
 - `code <name> ... end-code` defines a Python-host word. Python names used in that code come from the VM host environment.
 - `s" text"` pushes a string. `(ai)` takes a prompt and a stream flag; use `false` to push the AI response or `true` to stream it to the terminal.
 - Python value words: `true`/`True`, `false`/`False`, `none`/`None`, and `""` push `True`, `False`, `None`, and an empty string. `inf`/`infinity`, `-inf`/`-infinity`, and `nan` push Python floating-point special values.

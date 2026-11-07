@@ -113,9 +113,11 @@ Launch `f` to enter the interactive Forth REPL:
 : square dup * ;
 5 square . cr
 
-\ Dictionary inspection
-words py >>
-help nokia
+\ Documentation & dictionary inspection
+help          \ Interactive user guide & tutorial
+help *        \ List help and comments for all words
+help nokia    \ Look up specific word documentation
+words py >>   \ Filter word names
 
 \ Audio chime notification (Windows & WSL)
 nokia

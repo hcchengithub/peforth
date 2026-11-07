@@ -239,44 +239,81 @@ code help
     pattern = line.strip()
 
     if not pattern:
-        matched_words = list(vm.words.values())
-    else:
-        target = pattern.casefold()
-        exact = [w for name, w in vm.words.items() if name.casefold() == target]
-        if exact:
-            matched_words = exact
-        else:
-            patterns = [p.casefold() for p in pattern.split() if p.strip()]
-            matched_words = [
-                w for name, w in vm.words.items()
-                if all(
-                    p in name.casefold()
-                    or p in (getattr(w, "help", "") or "").casefold()
-                    or p in (getattr(w, "comment", "") or "").casefold()
-                    for p in patterns
-                )
-            ]
+        print("""=== Welcome to peforth ===
+peforth is an AI-first Forth environment hosted by Python.
 
-    if pattern and not matched_words:
-        print(f"No word matching {pattern!r}.")
+1. Basic Usage:
+   - Forth mode (prompt '>'):
+     Enter Forth expressions and stack words directly.
+     Examples:
+       10 20 + .              ( Calculate and print: 30 )
+       words                  ( List available Forth words )
+       see <word>             ( Decompile and view source of a word )
+
+   - Chat mode (prompt 'chat>'):
+     Switch to conversational AI mode by typing 'chat'.
+     Chat directly with peforth. Type '/forth' to return to Forth mode.
+
+   - Ask AI anytime:
+     From Forth mode, use 'ai: <question>' or 'AI: <question>' (with chime).
+     Examples:
+       ai: How do I define a new word with a loop?
+       ai: What does the word 'over' do?
+
+2. Python Interoperability:
+   - Execute inline Python code inside Forth with <py> ... </py>:
+       <py> import math; vm.push(math.sqrt(144)) </py> . cr
+
+3. Help & Exploration:
+   - help             Display this user guide.
+   - help *           List help and comments for all words in the dictionary.
+   - help <pattern>   Look up documentation for specific word(s) (e.g. 'help dup').
+   - words <pattern>  Filter dictionary words by name.
+
+💡 Have a question? Just ask peforth!
+   peforth has full access to its own source code, live dictionary, and system
+   architecture. It can explain any word, diagnose code, or guide your workflow.
+   Try: ai: <your question>""")
     else:
-        entries = []
-        for word in matched_words:
-            w_help = getattr(word, "help", "")
-            header = f"{word.name} {w_help}" if w_help else word.name
-            comment = getattr(word, "comment", "") or ""
-            if comment:
-                indented = "\n".join("    " + c_line for c_line in comment.splitlines())
-                entries.append(header + "\n" + indented)
+        if pattern == "*":
+            matched_words = list(vm.words.values())
+        else:
+            target = pattern.casefold()
+            exact = [w for name, w in vm.words.items() if name.casefold() == target]
+            if exact:
+                matched_words = exact
             else:
-                entries.append(header)
-        if entries:
-            print("\n\n".join(entries))
+                patterns = [p.casefold() for p in pattern.split() if p.strip()]
+                matched_words = [
+                    w for name, w in vm.words.items()
+                    if all(
+                        p in name.casefold()
+                        or p in (getattr(w, "help", "") or "").casefold()
+                        or p in (getattr(w, "comment", "") or "").casefold()
+                        for p in patterns
+                    )
+                ]
+
+        if not matched_words:
+            print(f"No word matching {pattern!r}.")
+        else:
+            entries = []
+            for word in matched_words:
+                w_help = getattr(word, "help", "")
+                header = f"{word.name} {w_help}" if w_help else word.name
+                comment = getattr(word, "comment", "") or ""
+                if comment:
+                    indented = "\n".join("    " + c_line for c_line in comment.splitlines())
+                    entries.append(header + "\n" + indented)
+                else:
+                    entries.append(header)
+            if entries:
+                print("\n\n".join(entries))
     end-code immediate
-    // ( [<pattern>] -- ) Display help for an exact word, matching words, or all words.
-    /// Exact match prints full documentation.
-    /// Substring match filters words whose name, help, or comments contain the pattern.
-    /// With no arguments, lists help for all words in dictionary.
+    // ( [<pattern>] -- ) Display tutorial guide, all words ('*'), or matching word help.
+    /// With no arguments, displays a comprehensive introduction to peforth.
+    /// 'help *' lists help and comments for all words in the dictionary.
+    /// 'help <pattern>' searches word names, help, and comments.
     last :: safe=True
 
 \ --- 8. Load Master peforth ---

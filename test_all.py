@@ -420,6 +420,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("=== System Environment ===", prompt)
         self.assertIn("- OS:", prompt)
         self.assertIn("- Active Shell:", prompt)
+        self.assertIn("=== Full Source Code Access & Self-Understanding ===", prompt)
 
     def test_vision_words_exist_and_are_safe(self):
         vision_words = [
@@ -484,6 +485,24 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("py>>", output)
         self.assertNotIn("dup", output)
         self.assertNotIn("swap", output)
+
+        # Test bare help (tutorial guide for humans, encouraging asking peforth)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("help")
+        output = buf.getvalue()
+        self.assertIn("=== Welcome to peforth ===", output)
+        self.assertIn("Basic Usage:", output)
+        self.assertIn("Ask AI anytime:", output)
+        self.assertIn("Have a question? Just ask peforth!", output)
+
+        # Test help * (lists all words' help + comments)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.vm.dictate("help *")
+        output = buf.getvalue()
+        self.assertIn("dup ( x -- x x )", output)
+        self.assertIn("swap ( x1 x2 -- x2 x1 )", output)
 
         # Test help exact match
         buf = io.StringIO()

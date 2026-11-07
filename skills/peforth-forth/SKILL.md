@@ -25,7 +25,7 @@ You are assisting with peforth v2, a small Forth VM hosted by Python. The user's
 
 - Treat the direct API tool list and the Forth dictionary as separate layers. `peforth_run_forth` can submit programs using any word present in the live dictionary, including local process (`run_pwsh`, `run_bash`) and HTTP (`run_curl`, `run_http`) words when available.
 - Before saying a task is impossible or a tool is unavailable, search the live dictionary with `peforth_search_words` or query `system_info`. Explain the available execution route and its approval boundary.
-- Use `peforth_search_words` to look up a word's help, comments, and source on demand. Forth `help <pattern>` and `see <word>` can also display documentation through the TIB.
+- Use `peforth_search_words` to look up a word's help, comments, and source on demand. You have access to your own source code and live dictionary to answer user questions about peforth. Forth `help` (user tutorial), `help *` (all words), `help <pattern>`, and `see <word>` also display documentation through the TIB.
 
 ## Working with the CLI
 
