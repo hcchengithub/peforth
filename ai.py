@@ -1342,6 +1342,23 @@ def get_ai_context(vm) -> dict:
         }
 
 
+def normalize_forth_source(source: str) -> str:
+    """Normalize Forth source code submitted by AI:
+    1. Replaces invalid opening tag <pyV> with <py>.
+    2. Ensures opening tag <py> is separated from surrounding code by whitespace.
+    """
+    if not source:
+        return ""
+    text = source
+    # 1. Opening <pyV> is invalid -> convert to <py>
+    text = re.sub(r"<pyV>", "<py>", text)
+    # 2. Ensure whitespace after opening <py>: <py>import -> <py> import
+    text = re.sub(r"<py>(?!\s|$)", "<py> ", text)
+    # 3. Ensure whitespace before opening <py>: foo<py> -> foo <py>
+    text = re.sub(r"(\S)<py>", r"\1 <py>", text)
+    return text
+
+
 SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside the peforth Forth environment.
 peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges Forth with Python: you can run native Forth, write Python host definitions, and execute Python code directly inside Forth!
 
@@ -1358,6 +1375,14 @@ You have access to tools:
 2. peforth_search_sessions: Search or read past AI conversations from the local SQLite session mirror (sessions.sqlite3). Read-only; runs without user approval. Pass query to search across all sessions, or session_id to read messages from a specific session.
 3. peforth_read_skill: Read the full instructions, workflow, or companion reference/script files of an available skill from === Available Skills ===. Read-only; runs without user approval.
 4. peforth_run_forth: propose and execute Forth source code in the user's local VM.
+
+=== Forth & Python Bridge Syntax Guide ===
+- WHITESPACE DELIMITATION: In Forth, all words and tokens MUST be separated by whitespace (spaces or newlines).
+- PYTHON BLOCKS: Use `<py> ... </py>` for inline Python execution. To return values to the Forth data stack, call `vm.push(...)` inside Python.
+  *IMPORTANT*: The opening `<py>` tag MUST be followed by whitespace before Python code!
+  - Example: `<py> import os; print('hello') </py>`
+  - Example: `<py> x = 123 + 456; vm.push(x) </py>`
+  - WRONG: `<py>import os...</py>` (Fails as unknown word `<py>import`)
 
 === Important Rules ===
 - When executing code, always explain your purpose and propose clean Forth source code.
@@ -2151,7 +2176,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                                    call_id=call_id, operation=fn_name)
 
                     elif fn_name == "peforth_run_forth":
-                        source = args.get("source", "")
+                        source = normalize_forth_source(args.get("source", ""))
                         purpose = args.get("purpose", "")
                         if stream_response:
                             sys.stdout.write(f"\n[AI Proposes Forth Code]\nPurpose: {purpose}\nSource:\n{source.strip()}\n---\n")
@@ -2616,7 +2641,7 @@ def ai_turn(vm, prompt, stream_response):
                                call_id=call_id, operation=fn_name)
 
                 elif fn_name == "peforth_run_forth":
-                    source = args.get("source", "")
+                    source = normalize_forth_source(args.get("source", ""))
                     purpose = args.get("purpose", "")
 
                     if stream_response:

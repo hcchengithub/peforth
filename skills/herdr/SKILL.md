@@ -17,6 +17,21 @@ If the check fails, say that you are not running inside Herdr and stop. Do not i
 
 When the check passes, the `herdr` binary in `PATH` talks to the current session. Use it to inspect neighboring work, create terminal layout, start agents and commands, read output, and wait for state changes.
 
+## Native peforth words
+
+When assisting inside peforth, use the native built-in words from `herdr.f`. They automatically verify the Herdr environment:
+- `herdr-current-pane ( -- pane-id )`: Resolve and return current caller pane ID (safe, auto-approved).
+- `herdr-screen-tail ( pane-id [lines] -- text )`: Read recent unwrapped output from specified pane (safe, auto-approved).
+  Example: `s" w5:pJ" herdr-screen-tail . cr`
+- `herdr-screen-read ( pane-id [lines] -- text )`: Read visible screen text (safe, auto-approved).
+- `herdr-show-pane-id ( -- )`: Show pane IDs in border titles (safe, auto-approved).
+- `herdr-clear-pane-id ( -- )`: Clear custom border titles (safe, auto-approved).
+- `herdr-screen-send-text ( pane-id text -- result )`: Send text to pane (unsafe, requires approval).
+- `herdr-screen-send-keys ( pane-id keys -- result )`: Send keys to pane (unsafe, requires approval).
+- `herdr-screen-run ( pane-id command -- result )`: Run command in pane (unsafe, requires approval).
+
+In peforth, ALWAYS use these native words directly to inspect or control panes instead of writing inline bash or Python checks.
+
 ## Learn the current CLI
 
 The installed binary is the authority for command syntax. Start with:

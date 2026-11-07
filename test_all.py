@@ -698,7 +698,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("- peforth-forth:", prompt)
         self.assertNotIn("## Skill: herdr", prompt)
         self.assertNotIn("=== Forth Reference ===", prompt)
-        self.assertLessEqual(len(prompt.encode("utf-8")), 5_000, "System prompt should be compact (< 5KB)")
+        self.assertLessEqual(len(prompt.encode("utf-8")), 10_000, "System prompt should be compact (< 10KB)")
 
         # 4. list-skills word in Forth
         task = self.vm.dictate("list-skills")
@@ -739,6 +739,42 @@ class TestSafePropertyAudit(unittest.TestCase):
         # 6. Security: Invalid skill name
         res_bad_skill = ai.tool_read_skill(self.vm, "../skills")
         self.assertIn("error", res_bad_skill)
+
+    def test_normalize_forth_source_and_py_spacing(self):
+        import ai
+        # 1. Opening <py> without trailing space gets auto-spaced
+        self.assertEqual(
+            ai.normalize_forth_source("<py>import os; print('hi')</py>"),
+            "<py> import os; print('hi')</py>"
+        )
+
+        # 2. Opening <pyV> is invalid syntax -> auto-converted to <py>
+        self.assertEqual(
+            ai.normalize_forth_source("<pyV>import os; print('hi')</py>"),
+            "<py> import os; print('hi')</py>"
+        )
+        self.assertEqual(
+            ai.normalize_forth_source("<pyV> 1 + 2 </py>"),
+            "<py> 1 + 2 </py>"
+        )
+
+        # 3. Legal closing </pyV> is kept completely untouched
+        self.assertEqual(
+            ai.normalize_forth_source("<py> 1 + 2 </pyV>"),
+            "<py> 1 + 2 </pyV>"
+        )
+
+        # 4. Closing </py> without leading space is completely legal and untouched
+        self.assertEqual(
+            ai.normalize_forth_source("<py> print('ok')</py>"),
+            "<py> print('ok')</py>"
+        )
+
+        # 5. Normal Forth code is unchanged
+        self.assertEqual(
+            ai.normalize_forth_source(": square dup * ; 7 square . cr"),
+            ": square dup * ; 7 square . cr"
+        )
 
     def test_herdr_words_and_security_annotations(self):
         safe_words = [

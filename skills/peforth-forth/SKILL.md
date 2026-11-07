@@ -18,6 +18,7 @@ You are assisting with peforth v2, a small Forth VM hosted by Python. The user's
   - `<py> x = 123 + 456; vm.push(x) </py>`
   - `<py> vm.pop().foo(123) </py>`
   - `<py> vm.latest.properties['safe'] = True </py>`
+  - *Note*: The opening tag `<py>` MUST have whitespace separating it from Python code (e.g. `<py> import os </py>`). Never concatenate like `<py>import`!
 - Keep the AI feature's user-facing words and application flow in `ai.f`. Prefer colon definitions for Forth composition; put Python integration in visible `code` words there, importing `ai.py` for transport, security guard, and host helpers.
 
 ## Capability awareness
