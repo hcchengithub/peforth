@@ -938,6 +938,31 @@ class TestSafePropertyAudit(unittest.TestCase):
             ": square dup * ; 7 square . cr"
         )
 
+    def test_py_multiline_block_indentation(self):
+        # Test multiline Python starting on same line as <py> with space delimiter
+        code_input = """<py> a = 100
+b = 200
+def calc(x, y):
+    return x + y
+vm.push(calc(a, b))
+</py>"""
+        self.vm.dictate(code_input)
+        result = self.vm.pop()
+        self.assertEqual(result, 300)
+
+        # Test single-line Python
+        self.vm.dictate("<py> vm.push('single_line_ok') </py>")
+        self.assertEqual(self.vm.pop(), "single_line_ok")
+
+        # Test multiline starting with newline after <py>
+        code_input_newline = """<py>
+    val1 = 5
+    val2 = 7
+    vm.push(val1 * val2)
+</py>"""
+        self.vm.dictate(code_input_newline)
+        self.assertEqual(self.vm.pop(), 35)
+
     def test_chat_turn_ui_styling_and_streamer(self):
         import io
         import sys
@@ -992,7 +1017,9 @@ class TestSafePropertyAudit(unittest.TestCase):
     def test_herdr_words_and_security_annotations(self):
         safe_words = [
             "herdr-current-pane", "herdr-screen-read", "herdr-screen-tail",
-            "herdr-show-pane-id", "herdr-clear-pane-id", "stringify"
+            "herdr-show-pane-id", "herdr-clear-pane-id",
+            "herdr-set-tab-id", "herdr-show-tab-id", "herdr-clear-tab-id",
+            "stringify"
         ]
         unsafe_words = [
             "herdr-screen-send-text", "herdr-screen-send-keys", "herdr-screen-run"

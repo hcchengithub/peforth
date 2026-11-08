@@ -1278,7 +1278,7 @@ code <py>
     match = re.search(r"</py>|</pyV>", curr)
     if not match:
         raise KernelError("Expected </py> or </pyV>")
-    code_str = curr[:match.start()]
+    code_str = curr[1:match.start()]
     vm.input.consume(match.start())
     vm.push(code_str)
     end-code immediate

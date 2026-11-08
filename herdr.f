@@ -86,6 +86,68 @@ code herdr-set-pane-id
     // ( -- ) Clear custom names from all panes in current Herdr workspace.
     last :: safe=True
 
+code herdr-set-tab-id
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    mode = vm.pop()
+    if mode not in ("show", "clear"):
+        raise KernelError("herdr-set-tab-id expects 'show' or 'clear'")
+    if os.environ.get("HERDR_ENV") != "1":
+        raise KernelError("Not running inside Herdr (HERDR_ENV != 1)")
+    herdr = shutil.which("herdr") or shutil.which("herdr.exe")
+    if not herdr:
+        raise KernelError("Could not find the Herdr CLI on PATH")
+
+    def herdr_json(arguments):
+        completed = subprocess.run(
+            [herdr, *arguments],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+        if completed.returncode != 0:
+            raise KernelError(completed.stderr.strip() or completed.stdout.strip() or f"Herdr exited with status {completed.returncode}")
+        try:
+            return json.loads(completed.stdout)
+        except Exception as exc:
+            raise KernelError(f"Herdr returned invalid JSON: {completed.stdout!r}") from exc
+
+    current = herdr_json(["pane", "current", "--current"])
+    workspace_id = current["result"]["pane"]["workspace_id"]
+    tab_rows = herdr_json(["tab", "list", "--workspace", workspace_id])["result"]["tabs"]
+    if not tab_rows:
+        raise KernelError(f"No tabs found in workspace {workspace_id}")
+    tab_ids = []
+    for tab in tab_rows:
+        tid = tab["tab_id"]
+        tab_ids.append(tid)
+        if mode == "show":
+            herdr_json(["tab", "rename", tid, tid])
+        else:
+            default_label = str(tab.get("number", tid))
+            herdr_json(["tab", "rename", tid, default_label])
+    vm.push({"action": mode, "workspace_id": workspace_id, "tab_ids": tab_ids})
+    end-code
+    // ( mode -- result ) Set or clear tab names in current Herdr workspace.
+    last :: safe=True
+
+: herdr-show-tab-id ( -- )
+    s" show" herdr-set-tab-id stringify . cr
+    ;
+    // ( -- ) Set each tab name in current Herdr workspace to its tab ID.
+    last :: safe=True
+
+: herdr-clear-tab-id ( -- )
+    s" clear" herdr-set-tab-id stringify . cr
+    ;
+    // ( -- ) Clear custom names from all tabs in current Herdr workspace.
+    last :: safe=True
+
 \ --- 2. Read-Only Screen Inspection ---
 
 code herdr-screen-read
