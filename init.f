@@ -60,12 +60,15 @@ code ::
                 val = float(val_str)
             except ValueError:
                 val = val_str
-    if hasattr(target, "properties") and isinstance(target.properties, dict):
-        target.properties[key] = val
-    elif isinstance(target, dict):
+    if isinstance(target, dict):
         target[key] = val
     else:
-        setattr(target, key, val)
+        try:
+            setattr(target, key, val)
+        except Exception:
+            pass
+        if hasattr(target, "properties") and isinstance(target.properties, dict):
+            target.properties[key] = val
     end-code
 
 \ Retroactively document and configure early words

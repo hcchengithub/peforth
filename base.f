@@ -603,10 +603,13 @@ code see
         "help": "..." if getattr(word, "help", "") else "",
         "comment": "..." if getattr(word, "comment", "") else "",
         "source": "..." if getattr(word, "source", "") else "",
-        "properties": dict(getattr(word, "properties", {}) or {}),
     }
+    props = dict(getattr(word, "properties", {}) or {})
+    for k, v in props.items():
+        if k not in meta and not k.startswith("_"):
+            meta[k] = v
     for k, v in getattr(word, "__dict__", {}).items():
-        if k not in meta and k not in meta["properties"] and k != "type" and not k.startswith("_"):
+        if k not in meta and k != "properties" and k != "type" and not k.startswith("_"):
             meta[k] = v
 
     MAX_DISPLAY_LEN = 1024
@@ -872,6 +875,9 @@ code alias
                          help=target.help, comment=target.comment, category="alias",
                          properties=dict(getattr(target, "properties", {})))
     setattr(new_word, "type", "alias")
+    for k, v in getattr(target, "__dict__", {}).items():
+        if not k.startswith("_") and k not in ("name", "action", "immediate", "category", "source", "help", "comment"):
+            setattr(new_word, k, v)
     end-code immediate
     // ( word <alias-name> -- ) Define an alias for an existing word.
     /// Usage: ' true alias True. The alias executes the original word.
@@ -1346,15 +1352,16 @@ code (::)
     if vm.compiling:
         def op(v, s=stmt):
             target = v.pop()
-            if "=" in s and not s.startswith("(") and not s.startswith("[") and hasattr(target, "properties"):
+            if "=" in s and not s.startswith("(") and not s.startswith("["):
                 key, val_str = s.split("=", 1)
                 key = key.strip()
                 val = _parse_val(val_str)
-                target.properties[key] = val
                 try:
                     setattr(target, key, val)
                 except Exception:
                     pass
+                if hasattr(target, "properties") and isinstance(target.properties, dict):
+                    target.properties[key] = val
             else:
                 code_str = f"obj{s}" if s.startswith("[") or s.startswith("(") else f"obj.{s}"
                 exec(code_str, {"vm": v, "obj": target, **v.host})
@@ -1363,15 +1370,16 @@ code (::)
         vm.comma(op)
     else:
         target = vm.pop()
-        if "=" in stmt and not stmt.startswith("(") and not stmt.startswith("[") and hasattr(target, "properties"):
+        if "=" in stmt and not stmt.startswith("(") and not stmt.startswith("["):
             key, val_str = stmt.split("=", 1)
             key = key.strip()
             val = _parse_val(val_str)
-            target.properties[key] = val
             try:
                 setattr(target, key, val)
             except Exception:
                 pass
+            if hasattr(target, "properties") and isinstance(target.properties, dict):
+                target.properties[key] = val
         else:
             code_str = f"obj{stmt}" if stmt.startswith("[") or stmt.startswith("(") else f"obj.{stmt}"
             exec(code_str, {"vm": vm, "obj": target, **vm.host})

@@ -1131,22 +1131,32 @@ def install_security_guard(vm):
             base_depth = vm.host.get("ai_task_base_frame_depth", 0)
             frames = getattr(task, "frames", [])
             relevant_frames = frames[base_depth:] if base_depth < len(frames) else []
-            if any(getattr(getattr(f, "word", None), "properties", {}).get("safe")
-                   for f in relevant_frames):
+
+            def _is_safe_word(w):
+                if getattr(w, "safe", False) is True:
+                    return True
+                if hasattr(w, "properties") and isinstance(w.properties, dict) and w.properties.get("safe") is True:
+                    return True
+                if callable(w) and getattr(w, "_safe", False) is True:
+                    return True
+                return False
+
+            def _is_explicitly_unsafe_word(w):
+                if getattr(w, "safe", None) is False:
+                    return True
+                if hasattr(w, "properties") and isinstance(w.properties, dict) and w.properties.get("safe") is False:
+                    return True
+                return False
+
+            if any(_is_safe_word(getattr(f, "word", None)) for f in relevant_frames):
                 # An explicitly unsafe word (safe=False) must NEVER inherit safety
-                if not (hasattr(resolved, "properties") and resolved.properties.get("safe") is False):
+                if not _is_explicitly_unsafe_word(resolved):
                     yield from original_call(operation)
                     return
 
             trusted_tasks = vm.host.setdefault("trusted_ai_tasks", set())
             if task not in trusted_tasks:
-                is_safe = False
-                if hasattr(resolved, "properties") and resolved.properties.get("safe"):
-                    is_safe = True
-                elif callable(resolved) and getattr(resolved, "_safe", False):
-                    is_safe = True
-
-                if not is_safe:
+                if not _is_safe_word(resolved):
                     source_text = getattr(resolved, "source", None)
                     name = getattr(resolved, "name", None)
                     if not name and callable(resolved):

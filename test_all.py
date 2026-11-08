@@ -536,7 +536,8 @@ class TestSafePropertyAudit(unittest.TestCase):
         output = buf.getvalue()
         self.assertIn("'name': 'nokia'", output)
         self.assertIn("'category': 'colon'", output)
-        self.assertIn("'properties': {'safe': True}", output)
+        self.assertIn("'safe': True", output)
+        self.assertNotIn("'properties':", output)
         self.assertIn(": nokia py> [[659,120],[587,120],[370,240],[415,240]] (play-notes) ;", output)
         self.assertNotIn("<function", output, "see nokia should not show raw function object address")
 
@@ -548,6 +549,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("'name': 'ai:'", output_ai)
         self.assertIn("'nokia2_after_seconds': 30", output_ai)
         self.assertIn("'safe': True", output_ai)
+        self.assertNotIn("'properties':", output_ai)
 
         # 2b. Test see on immediate colon word (bye)
         buf = io.StringIO()
@@ -562,7 +564,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             self.vm.dictate("see (play-notes)")
         output = buf.getvalue()
         self.assertIn("'category': 'code'", output)
-        self.assertIn("'properties': {'safe': True}", output)
+        self.assertIn("'safe': True", output)
+        self.assertNotIn("'properties':", output)
         self.assertIn("code (play-notes)", output)
         self.assertIn("end-code", output)
 
