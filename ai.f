@@ -341,6 +341,7 @@ code ai-screen
     yield from vm.call(vm.tick("ai-image-file"))
     end-code
     // ( prompt-string [stream?] -- [response-string] ) Capture the live Windows desktop and inspect it with ai-image-file in one step.
+    /// Captures full DPI-aware virtual desktop as TEMP JPEG, prints metadata JSON, and passes to vision model.
     last :: safe=True
 
 code ai-screen-region
@@ -367,6 +368,8 @@ code ai-screen-region
     yield from vm.call(vm.tick("ai-image-file"))
     end-code
     // ( prompt-string x y width height [stream?] -- [response-string] ) Capture a live desktop region and inspect it with ai-image-file in one step.
+    /// Coordinates (x y width height) accept pixel integers or normalized floats (0.0..1.0).
+    /// Captures DPI-aware region as TEMP JPEG, prints metadata JSON, and passes to vision model.
     last :: safe=True
 
 \ --- 7. Session Store & Local SQLite Mirror Words ---

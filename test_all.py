@@ -783,8 +783,8 @@ class TestSafePropertyAudit(unittest.TestCase):
         names, text = ai.load_all_skills(HERE / "skills")
         self.assertIn("herdr", names)
         self.assertIn("peforth-forth", names)
-        self.assertIn("windows-screen-capture", names)
         self.assertIn("ai-diagnostics-log-inspector", names)
+        self.assertNotIn("windows-screen-capture", names)
         self.assertNotIn("line-notify", names)
         self.assertNotIn("windows-msgbox", names)
 
