@@ -1307,7 +1307,7 @@ TOOLS_DEFINITION = [
                 "properties": {
                     "skill_name": {
                         "type": "string",
-                        "description": "The logical name of the skill (e.g. 'peforth-forth', 'windows-msgbox').",
+                        "description": "The logical name of the skill (e.g. 'peforth-forth', 'line-notify').",
                     },
                     "file_path": {
                         "type": "string",

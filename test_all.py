@@ -784,9 +784,9 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("herdr", names)
         self.assertIn("peforth-forth", names)
         self.assertIn("windows-screen-capture", names)
-        self.assertIn("windows-msgbox", names)
         self.assertIn("ai-diagnostics-log-inspector", names)
         self.assertIn("line-notify", names)
+        self.assertNotIn("windows-msgbox", names)
 
         # 2. Lightweight manifest without absolute paths
         m_names, manifest = ai.load_skills_manifest(HERE / "skills")
@@ -828,17 +828,17 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("# peforth v2 Python Forth quick reference", res_ref.get("content", ""))
 
         # 3. Read specific companion script file
-        res_script = ai.tool_read_skill(self.vm, "windows-msgbox", "scripts/send_msgbox.ps1")
-        self.assertEqual(res_script.get("file"), "scripts/send_msgbox.ps1")
-        self.assertIn("MessageBox", res_script.get("content", ""))
+        res_script = ai.tool_read_skill(self.vm, "line-notify", "scripts/send_line_message.ps1")
+        self.assertEqual(res_script.get("file"), "scripts/send_line_message.ps1")
+        self.assertIn("LINE", res_script.get("content", ""))
 
         # 4. Error handling for non-existent file
-        res_missing = ai.tool_read_skill(self.vm, "windows-msgbox", "not_there.txt")
+        res_missing = ai.tool_read_skill(self.vm, "line-notify", "not_there.txt")
         self.assertIn("error", res_missing)
         self.assertIn("available_companion_files", res_missing)
 
         # 5. Security: Path traversal attempt is blocked
-        res_traversal = ai.tool_read_skill(self.vm, "windows-msgbox", "../../ai.py")
+        res_traversal = ai.tool_read_skill(self.vm, "line-notify", "../../ai.py")
         self.assertIn("error", res_traversal)
         self.assertIn("escapes skill directory", res_traversal["error"])
 
