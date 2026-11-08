@@ -690,3 +690,84 @@ code Windows-Message-Box
     /// Buttons string options: "OK", "OKCancel", "YesNo", "YesNoCancel", "RetryCancel", "AbortRetryIgnore" (case-sensitive).
     /// Example: s" Continue?" s" Confirm" s" YesNo" Windows-Message-Box .  ( result dict; stdout is "Yes" or "No" )
 last :: safe=False
+
+
+\ --- 10. External Notifications (LINE) ---
+
+code line-notify
+    import os
+    import json
+    import urllib.request
+    import urllib.error
+
+    msg = vm.pop()
+    if not isinstance(msg, str):
+        raise TypeError("line-notify expects a message string on TOS")
+
+    token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+    user_id = os.environ.get("LINE_USER_ID", "").strip()
+    endpoint = os.environ.get("LINE_API_ENDPOINT", "").strip() or "https://api.line.me/v2/bot/message/push"
+    disabled = os.environ.get("LINE_NOTIFY_DISABLED", "").strip() == "1"
+
+    if not token or not user_id:
+        try:
+            import ai
+            ai.load_dotenv()
+            token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+            user_id = os.environ.get("LINE_USER_ID", "").strip()
+        except Exception:
+            pass
+
+    if not token or not user_id:
+        vm.push({
+            "status_code": None,
+            "error": "LINE_CHANNEL_ACCESS_TOKEN and LINE_USER_ID must be set in environment or .env.",
+            "response": None,
+        })
+        return
+
+    payload = {
+        "to": user_id,
+        "messages": [{"type": "text", "text": msg}],
+    }
+    payload_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    if disabled:
+        vm.push({
+            "status_code": 200,
+            "disabled": True,
+            "payload": payload,
+            "error": None,
+            "response": "LINE_NOTIFY_DISABLED=1: message prepared but not sent.",
+        })
+        return
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    req = urllib.request.Request(endpoint, data=payload_bytes, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            status = resp.status
+            body_text = resp.read().decode("utf-8", errors="replace")
+            try:
+                resp_data = json.loads(body_text) if body_text.strip() else {}
+            except Exception:
+                resp_data = body_text
+            vm.push({"status_code": status, "error": None, "response": resp_data})
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        try:
+            err_json = json.loads(err_body)
+        except Exception:
+            err_json = err_body
+        vm.push({"status_code": e.code, "error": f"HTTPError {e.code}: {e.reason}", "response": err_json})
+    except Exception as e:
+        vm.push({"status_code": None, "error": f"{type(e).__name__}: {e}", "response": None})
+    end-code
+    // ( message-string -- result-dict ) Push a text message to user's LINE account via LINE Messaging API.
+    /// Reads LINE_CHANNEL_ACCESS_TOKEN and LINE_USER_ID from environment (.env).
+    /// If LINE_NOTIFY_DISABLED=1, prepares payload without sending (status_code=200, disabled=True).
+    /// Example: s" Build completed successfully!" line-notify .
+last :: safe=False

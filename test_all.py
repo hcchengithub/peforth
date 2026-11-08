@@ -785,7 +785,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("peforth-forth", names)
         self.assertIn("windows-screen-capture", names)
         self.assertIn("ai-diagnostics-log-inspector", names)
-        self.assertIn("line-notify", names)
+        self.assertNotIn("line-notify", names)
         self.assertNotIn("windows-msgbox", names)
 
         # 2. Lightweight manifest without absolute paths
@@ -827,24 +827,59 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertEqual(res_ref.get("file"), "references/forth-reference.md")
         self.assertIn("# peforth v2 Python Forth quick reference", res_ref.get("content", ""))
 
-        # 3. Read specific companion script file
-        res_script = ai.tool_read_skill(self.vm, "line-notify", "scripts/send_line_message.ps1")
-        self.assertEqual(res_script.get("file"), "scripts/send_line_message.ps1")
-        self.assertIn("LINE", res_script.get("content", ""))
-
-        # 4. Error handling for non-existent file
-        res_missing = ai.tool_read_skill(self.vm, "line-notify", "not_there.txt")
+        # 3. Error handling for non-existent companion file
+        res_missing = ai.tool_read_skill(self.vm, "peforth-forth", "not_there.txt")
         self.assertIn("error", res_missing)
         self.assertIn("available_companion_files", res_missing)
 
-        # 5. Security: Path traversal attempt is blocked
-        res_traversal = ai.tool_read_skill(self.vm, "line-notify", "../../ai.py")
+        # 4. Security: Path traversal attempt is blocked
+        res_traversal = ai.tool_read_skill(self.vm, "peforth-forth", "../../ai.py")
         self.assertIn("error", res_traversal)
         self.assertIn("escapes skill directory", res_traversal["error"])
 
-        # 6. Security: Invalid skill name
+        # 5. Security: Invalid skill name
         res_bad_skill = ai.tool_read_skill(self.vm, "../skills")
         self.assertIn("error", res_bad_skill)
+
+    def test_line_notify_forth_word(self):
+        from unittest.mock import patch
+        w = self.vm.tick("line-notify")
+        self.assertIsNotNone(w, "line-notify word must exist in dictionary")
+        self.assertFalse(getattr(w, "safe", True), "line-notify must be marked safe=False")
+
+        # 1. Test disabled mode (payload prepared without hitting external network)
+        with patch.dict(os.environ, {
+            "LINE_NOTIFY_DISABLED": "1",
+            "LINE_CHANNEL_ACCESS_TOKEN": "mock_token_123",
+            "LINE_USER_ID": "U1234567890abcdef",
+        }):
+            self.vm.dictate('s" Hello LINE test!" line-notify')
+            res = self.vm.pop()
+            self.assertIsInstance(res, dict)
+            self.assertEqual(res.get("status_code"), 200)
+            self.assertTrue(res.get("disabled"))
+            self.assertEqual(res.get("payload", {}).get("to"), "U1234567890abcdef")
+            self.assertEqual(
+                res.get("payload", {}).get("messages", [{}])[0].get("text"),
+                "Hello LINE test!",
+            )
+
+        # 2. Test missing credentials error
+        with patch.dict(os.environ, {
+            "LINE_NOTIFY_DISABLED": "0",
+            "LINE_CHANNEL_ACCESS_TOKEN": "",
+            "LINE_USER_ID": "",
+        }):
+            self.vm.dictate('s" Test without credentials" line-notify')
+            res_err = self.vm.pop()
+            self.assertIsInstance(res_err, dict)
+            self.assertIsNone(res_err.get("status_code"))
+            self.assertIn("must be set", res_err.get("error", ""))
+
+        # 3. Test type check: non-string TOS raises KernelError wrapping TypeError
+        from projectk import KernelError
+        with self.assertRaises(KernelError):
+            self.vm.dictate("12345 line-notify")
 
     def test_normalize_forth_source_and_py_spacing(self):
         import ai
