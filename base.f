@@ -1415,8 +1415,8 @@ code (:>)
 \ --- 11. REPL Greeting Text ---
 : greeting ( -- )
     cr
-    ." peforth 2.1.0 (with AI support)"
-    cr
-    ." Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode, 'bye' to exit."
+    ." Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth." cr
+    ." Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode." cr
+    ." [Enter] submits / [Ctrl+J] adds a line / [Esc] interrupt." cr
     cr ;
 last :: safe=True

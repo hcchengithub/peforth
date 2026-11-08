@@ -35,10 +35,25 @@ code repl
     paused_tasks = vm.host.setdefault('paused_tasks', [])
     code_buffer = []
 
-    print("peforth 2.1.0 (with AI support)")
-    print("Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode, 'bye' to exit.")
-    if sys.stdin.isatty():
-        print("Keys: [Enter] submit, [Ctrl+J] or [Shift+Enter] multiline newline, [Esc] interrupt.")
+    import ai
+    runtime_latest = (ai.detect_system_info(vm).get("runtime_latest") or {})
+    runtime_modified = runtime_latest.get("modified")
+    try:
+        from prompt_toolkit.formatted_text import FormattedText
+        from prompt_toolkit.shortcuts import print_formatted_text
+        from prompt_toolkit.styles import Style
+        print_formatted_text(
+            FormattedText([("class:greeting.title", "\np e f o r t h   v 2")]),
+            style=Style.from_dict({"greeting.title": "bold #5fd7ff"}),
+        )
+    except Exception:
+        print("\np e f o r t h   v 2")
+    if isinstance(runtime_modified, str) and runtime_modified:
+        print(f"2.1.0 - Runtime modified: {runtime_modified}")
+    else:
+        print("2.1.0")
+    # Keep the rest of the startup guidance in the Forth greeting word.
+    vm.dictate("greeting")
 
     # Try prompt_toolkit for modern CLI multiline & tab completion support if connected to an interactive TTY
     pt_session = None

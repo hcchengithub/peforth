@@ -1510,7 +1510,12 @@ class TestCLISmoke(unittest.TestCase):
             timeout=10
         )
         self.assertEqual(proc.returncode, 0, f"main.py exited with non-zero: {proc.stderr}")
-        self.assertIn("peforth 2.1.0 (with AI support)", proc.stdout)
+        self.assertIn("p e f o r t h   v 2", proc.stdout)
+        self.assertRegex(proc.stdout, r"2\.1\.0 - Runtime modified: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+        self.assertIn("Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth.", proc.stdout)
+        self.assertIn("Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode.", proc.stdout)
+        self.assertIn("[Enter] submits / [Ctrl+J] adds a line / [Esc] interrupt.", proc.stdout)
+        self.assertNotIn("Keys: [Enter] submit", proc.stdout)
         self.assertIn("3", proc.stdout)
         self.assertIn("17", proc.stdout)  # len of "smoke test passed"
 
