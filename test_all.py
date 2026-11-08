@@ -881,6 +881,27 @@ class TestSafePropertyAudit(unittest.TestCase):
         with self.assertRaises(KernelError):
             self.vm.dictate("12345 line-notify")
 
+    def test_clipboard_forth_words(self):
+        w_set = self.vm.tick("clipboard!")
+        w_get = self.vm.tick("clipboard@")
+        self.assertIsNotNone(w_set, "clipboard! word must exist in dictionary")
+        self.assertIsNotNone(w_get, "clipboard@ word must exist in dictionary")
+        self.assertTrue(getattr(w_set, "safe", False), "clipboard! must be marked safe=True")
+        self.assertTrue(getattr(w_get, "safe", False), "clipboard@ must be marked safe=True")
+
+        # 1. Round-trip unicode & emoji string
+        test_payload = "peforth clipboard test 🛠️ 測試 🎉 1.06"
+        self.vm.push(test_payload)
+        self.vm.dictate("clipboard! clipboard@")
+        result = self.vm.pop()
+        self.assertEqual(result, test_payload)
+
+        # 2. Non-string auto-converted to string
+        self.vm.push(98765)
+        self.vm.dictate("clipboard! clipboard@")
+        result_num = self.vm.pop()
+        self.assertEqual(result_num, "98765")
+
     def test_normalize_forth_source_and_py_spacing(self):
         import ai
         # 1. Opening <py> without trailing space gets auto-spaced

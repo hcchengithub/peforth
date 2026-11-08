@@ -20,6 +20,163 @@ code stringify
     // ( object -- pretty-string ) Convert a Python or JSON object to indented string.
     last :: safe=True
 
+code clipboard!
+    import os
+    import time
+    import shutil
+    import subprocess
+
+    val = vm.pop()
+    text = val if isinstance(val, str) else str(val)
+    vm.host["__clipboard_buffer__"] = text
+
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        CF_UNICODETEXT = 13
+        GMEM_MOVEABLE = 0x0002
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        user32.OpenClipboard.argtypes = [wintypes.HWND]
+        user32.OpenClipboard.restype = wintypes.BOOL
+        user32.EmptyClipboard.argtypes = []
+        user32.EmptyClipboard.restype = wintypes.BOOL
+        user32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+        user32.SetClipboardData.restype = wintypes.HANDLE
+        user32.CloseClipboard.argtypes = []
+        user32.CloseClipboard.restype = wintypes.BOOL
+
+        kernel32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+        kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+        kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalLock.restype = wintypes.LPVOID
+        kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalUnlock.restype = wintypes.BOOL
+
+        opened = False
+        for _ in range(10):
+            if user32.OpenClipboard(None):
+                opened = True
+                break
+            time.sleep(0.02)
+        if not opened:
+            raise KernelError("clipboard! failed: clipboard is locked by another process.")
+
+        try:
+            user32.EmptyClipboard()
+            encoded = text.encode("utf-16le") + b"\x00\x00"
+            h_mem = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(encoded))
+            if not h_mem:
+                raise KernelError("clipboard! failed: GlobalAlloc error.")
+            ptr = kernel32.GlobalLock(h_mem)
+            if not ptr:
+                raise KernelError("clipboard! failed: GlobalLock error.")
+            ctypes.memmove(ptr, encoded, len(encoded))
+            kernel32.GlobalUnlock(h_mem)
+            if not user32.SetClipboardData(CF_UNICODETEXT, h_mem):
+                raise KernelError("clipboard! failed: SetClipboardData error.")
+        finally:
+            user32.CloseClipboard()
+    elif shutil.which("clip.exe"):
+        try:
+            subprocess.run([shutil.which("clip.exe")], input=text.encode("utf-16le"), check=True)
+        except Exception:
+            pass
+    elif shutil.which("pbcopy"):
+        try:
+            subprocess.run(["pbcopy"], input=text.encode("utf-8"), check=True)
+        except Exception:
+            pass
+    elif shutil.which("wl-copy"):
+        try:
+            subprocess.run(["wl-copy"], input=text.encode("utf-8"), check=True)
+        except Exception:
+            pass
+    elif shutil.which("xclip"):
+        try:
+            subprocess.run(["xclip", "-selection", "clipboard"], input=text.encode("utf-8"), check=True)
+        except Exception:
+            pass
+    end-code
+    // ( object|string -- ) Store TOS into system clipboard with full Unicode/Emoji support.
+    /// Converts non-string objects to str automatically. Preserves full UTF-16 / Unicode without CP950 limits.
+    /// Example: s" Hello world" clipboard!
+    last :: safe=True
+
+code clipboard@
+    import os
+    import time
+    import shutil
+    import subprocess
+
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        CF_UNICODETEXT = 13
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        user32.OpenClipboard.argtypes = [wintypes.HWND]
+        user32.OpenClipboard.restype = wintypes.BOOL
+        user32.GetClipboardData.argtypes = [wintypes.UINT]
+        user32.GetClipboardData.restype = wintypes.HANDLE
+        user32.CloseClipboard.argtypes = []
+        user32.CloseClipboard.restype = wintypes.BOOL
+
+        kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalLock.restype = wintypes.LPVOID
+        kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        kernel32.GlobalUnlock.restype = wintypes.BOOL
+
+        opened = False
+        for _ in range(10):
+            if user32.OpenClipboard(None):
+                opened = True
+                break
+            time.sleep(0.02)
+        if not opened:
+            vm.push(vm.host.get("__clipboard_buffer__", ""))
+            return
+
+        try:
+            h_mem = user32.GetClipboardData(CF_UNICODETEXT)
+            if not h_mem:
+                vm.push(vm.host.get("__clipboard_buffer__", ""))
+                return
+            ptr = kernel32.GlobalLock(h_mem)
+            if not ptr:
+                vm.push(vm.host.get("__clipboard_buffer__", ""))
+                return
+            try:
+                vm.push(ctypes.wstring_at(ptr))
+            finally:
+                kernel32.GlobalUnlock(h_mem)
+        finally:
+            user32.CloseClipboard()
+    elif shutil.which("pbpaste"):
+        try:
+            vm.push(subprocess.check_output(["pbpaste"]).decode("utf-8", errors="replace"))
+        except Exception:
+            vm.push(vm.host.get("__clipboard_buffer__", ""))
+    elif shutil.which("wl-paste"):
+        try:
+            vm.push(subprocess.check_output(["wl-paste"]).decode("utf-8", errors="replace"))
+        except Exception:
+            vm.push(vm.host.get("__clipboard_buffer__", ""))
+    elif shutil.which("xclip"):
+        try:
+            vm.push(subprocess.check_output(["xclip", "-selection", "clipboard", "-o"]).decode("utf-8", errors="replace"))
+        except Exception:
+            vm.push(vm.host.get("__clipboard_buffer__", ""))
+    else:
+        vm.push(vm.host.get("__clipboard_buffer__", ""))
+    end-code
+    // ( -- string ) Fetch text from system clipboard onto data stack.
+    /// Returns clipboard text with full Unicode support, or empty string if clipboard is empty.
+    /// Example: clipboard@ . cr
+    last :: safe=True
+
 
 \ --- 2. Audio Chimes & Notifications ---
 
