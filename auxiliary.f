@@ -191,9 +191,15 @@ code (play-notes)
     if ps:
         script = "; ".join([f"[Console]::Beep({f}, {d}); Start-Sleep -Milliseconds 25" for f, d in notes])
         try:
-            kwargs = {}
+            kwargs = {
+                "stdin": subprocess.DEVNULL,
+                "stdout": subprocess.DEVNULL,
+                "stderr": subprocess.DEVNULL,
+            }
             if os.name == "nt":
                 kwargs["creationflags"] = 0x08000000 # CREATE_NO_WINDOW
+            else:
+                kwargs["start_new_session"] = True   # Detach from controlling terminal in POSIX/WSL
             subprocess.Popen([ps, "-NoProfile", "-NonInteractive", "-Command", script], **kwargs)
         except Exception:
             pass
