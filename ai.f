@@ -603,7 +603,11 @@ code ai-cleanup
     index, row = ai._resolve_session_selector(rows, selector)
     session_id = row.get("id") or row.get("session_id")
     print(f"This permanently deletes session {index}: {session_id} and its conversation.")
-    result = ai._api_delete(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+    result = ai._api_delete(
+        f"/sessions/{urllib.parse.quote(session_id, safe='')}",
+        vm=vm,
+        operation=f"delete session {ai._short_id(session_id)}",
+    )
     if result.get("deleted") is not True:
         raise RuntimeError("Agents API did not confirm session deletion.")
     db_path = ai._session_db_path()

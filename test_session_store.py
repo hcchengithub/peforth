@@ -426,6 +426,45 @@ class SessionStoreAndSyncTests(unittest.TestCase):
         self.assertEqual(len(res["sessions"]), 1)
         self.assertEqual(res["sessions"][0]["session_id"], "sess_direct_12345678")
 
+    def test_sync_sessions_logs_diagnostic_timeline_events(self):
+        diag_db = self.config_dir / "test_diag.sqlite3"
+        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "normal"}):
+            logger = ai.init_diagnostics(self.vm, database_path=diag_db, force=True)
+            self.assertIsNotNone(logger)
+            remote_data = [
+                {
+                    "id": "sess_logged_1",
+                    "created_at": 1700000000,
+                    "last_active_at": 1700000100,
+                    "status": "idle",
+                    "agent": {"model": "gpt-4o-mini"},
+                }
+            ]
+            items_data = [
+                {
+                    "id": "m1",
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello logger"}],
+                }
+            ]
+            with patch.object(ai, "_list_remote_sessions", return_value=remote_data), \
+                    patch.object(ai, "_fetch_session_items", return_value=items_data):
+                stats = ai.sync_sessions(self.vm)
+                self.assertEqual(stats["synced"], 1)
+
+            import sqlite3
+            conn = sqlite3.connect(str(diag_db))
+            events = [r[0] for r in conn.execute("SELECT event_type FROM timeline ORDER BY event_id ASC").fetchall()]
+            conn.close()
+            logger.close()
+
+        self.assertIn("session_sync_started", events)
+        self.assertIn("session_sync_remote_listed", events)
+        self.assertIn("session_items_sync_started", events)
+        self.assertIn("session_items_sync_completed", events)
+        self.assertIn("session_sync_completed", events)
+
 
 if __name__ == "__main__":
     unittest.main()

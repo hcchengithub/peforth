@@ -8,6 +8,7 @@ Implements:
 
 import _thread
 import atexit
+import contextlib
 from datetime import datetime, timezone
 import io
 import json
@@ -1455,7 +1456,21 @@ def _saved_session(vm):
     return vm.host.get("ai_active_session_id") or ""
 
 
-def _api_request(method, path, payload=None, stream=False, timeout=30):
+_current_sync_vm = None
+
+
+@contextlib.contextmanager
+def _sync_context(vm):
+    global _current_sync_vm
+    prev = _current_sync_vm
+    _current_sync_vm = vm
+    try:
+        yield
+    finally:
+        _current_sync_vm = prev
+
+
+def _api_request(method, path, payload=None, stream=False, timeout=30, *, vm=None, operation=None):
     load_dotenv()
     key = os.environ.get("OPENAI_API_KEY", "").strip()
     if not key:
@@ -1473,16 +1488,68 @@ def _api_request(method, path, payload=None, stream=False, timeout=30):
         "Accept": "text/event-stream" if stream else "application/json",
     }
     req = urllib.request.Request(url, data=body, method=method.upper(), headers=headers)
-    return _urlopen_interruptible(req, timeout=timeout)
+    t0 = time.monotonic()
+    effective_vm = vm if vm is not None else _current_sync_vm
+    if effective_vm is not None:
+        _log_event(
+            effective_vm,
+            "http_request_started",
+            http_method=method.upper(),
+            url=url,
+            operation=operation or path,
+            payload={"path": path} if payload is None else payload,
+        )
+    try:
+        response = _urlopen_interruptible(req, timeout=timeout)
+        if effective_vm is not None:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            http_status = getattr(response, "status", getattr(response, "code", 200))
+            _log_event(
+                effective_vm,
+                "http_response_received",
+                http_method=method.upper(),
+                url=url,
+                http_status=http_status,
+                elapsed_ms=elapsed_ms,
+                operation=operation or path,
+            )
+        return response
+    except urllib.error.HTTPError as e:
+        if effective_vm is not None:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            _log_event(
+                effective_vm,
+                "http_request_failed",
+                http_method=method.upper(),
+                url=url,
+                http_status=e.code,
+                elapsed_ms=elapsed_ms,
+                operation=operation or path,
+                error=e,
+            )
+        raise
+    except Exception as e:
+        if effective_vm is not None:
+            elapsed_ms = (time.monotonic() - t0) * 1000.0
+            _log_event(
+                effective_vm,
+                "http_request_failed",
+                http_method=method.upper(),
+                url=url,
+                elapsed_ms=elapsed_ms,
+                operation=operation or path,
+                error=e,
+            )
+        raise
 
 
-def _api_get(path, timeout=30):
-    with _api_request("GET", path, timeout=timeout) as response:
+def _api_get(path, timeout=30, *, vm=None, operation=None):
+    with _api_request("GET", path, timeout=timeout, vm=vm, operation=operation) as response:
         return json.load(response)
 
 
-def _api_delete(path, timeout=30):
-    with _api_request("DELETE", path, timeout=timeout) as response:
+def _api_delete(path, timeout=30, *, vm=None, operation=None):
+    with _api_request("DELETE", path, timeout=timeout, vm=vm, operation=operation) as response:
         return json.load(response)
 
 
@@ -1490,70 +1557,113 @@ def _list_remote_sessions():
     """Fetch remote session records using the API's cursor pagination."""
     sessions = []
     after = ""
+    page = 1
     while True:
         query = urllib.parse.urlencode({"limit": 100, "order": "desc", **({"after": after} if after else {})})
-        page = _api_get(f"/sessions?{query}")
-        sessions.extend(page.get("data") or [])
-        if not page.get("has_more") or not page.get("last_id") or page["last_id"] == after:
+        op = f"/sessions (page {page})"
+        data = _api_get(f"/sessions?{query}", operation=op)
+        sessions.extend(data.get("data") or [])
+        if not data.get("has_more") or not data.get("last_id") or data["last_id"] == after:
             return sessions
-        after = page["last_id"]
+        after = data["last_id"]
+        page += 1
 
 
 def _fetch_session_items(session_id):
     """Fetch all remote items for a session in ascending sequence order."""
     encoded_id = urllib.parse.quote(session_id, safe="")
+    short_sid = _short_id(session_id)
     items = []
     after = None
+    page = 1
     while True:
         query = {"limit": 100, "order": "asc"}
         if after:
             query["after"] = after
-        page = _api_get(
-            f"/sessions/{encoded_id}/items?{urllib.parse.urlencode(query)}"
+        op = f"/sessions/{short_sid}/items (page {page})"
+        data = _api_get(
+            f"/sessions/{encoded_id}/items?{urllib.parse.urlencode(query)}",
+            operation=op,
         )
-        items.extend(page.get("data") or [])
-        last_id = page.get("last_id")
-        if not page.get("has_more") or not last_id or last_id == after:
+        items.extend(data.get("data") or [])
+        last_id = data.get("last_id")
+        if not data.get("has_more") or not last_id or last_id == after:
             break
         after = last_id
+        page += 1
     return items
 
 
 def sync_sessions(vm=None):
     """Incrementally sync remote sessions and items into the local SQLite mirror."""
-    remote_sessions = _list_remote_sessions()
-    synced = 0
-    skipped = 0
-    remote_ids = []
-    with _open_session_store() as store:
-        for remote in remote_sessions:
-            if not isinstance(remote, dict):
-                continue
-            session_id = remote.get("id") or remote.get("session_id")
-            if not isinstance(session_id, str) or not session_id:
-                continue
-            remote_ids.append(session_id)
-            if store.needs_item_sync(remote):
-                items = _fetch_session_items(session_id)
-                store.sync_session(remote, items)
-                synced += 1
-            else:
-                store.update_session_metadata(remote)
-                skipped += 1
-        deleted = store.mark_missing_remote_deleted(remote_ids)
-        local_by_id = {
-            row["id"]: row for row in store.list_sessions(include_deleted=False)
+    with _sync_context(vm):
+        t_start = time.monotonic()
+        if vm is not None:
+            _log_event(vm, "session_sync_started", operation="fetching remote sessions")
+        remote_sessions = _list_remote_sessions()
+        synced = 0
+        skipped = 0
+        remote_ids = []
+        if vm is not None:
+            _log_event(
+                vm,
+                "session_sync_remote_listed",
+                operation=f"found {len(remote_sessions)} remote sessions",
+                payload={"total_remote": len(remote_sessions)},
+            )
+        with _open_session_store() as store:
+            for remote in remote_sessions:
+                if not isinstance(remote, dict):
+                    continue
+                session_id = remote.get("id") or remote.get("session_id")
+                if not isinstance(session_id, str) or not session_id:
+                    continue
+                remote_ids.append(session_id)
+                if store.needs_item_sync(remote):
+                    short_sid = _short_id(session_id)
+                    if vm is not None:
+                        _log_event(
+                            vm,
+                            "session_items_sync_started",
+                            session_id=session_id,
+                            operation=f"syncing items for {short_sid}",
+                        )
+                    items = _fetch_session_items(session_id)
+                    store.sync_session(remote, items)
+                    synced += 1
+                    if vm is not None:
+                        _log_event(
+                            vm,
+                            "session_items_sync_completed",
+                            session_id=session_id,
+                            operation=f"synced {len(items)} items for {short_sid}",
+                            payload={"count": len(items)},
+                        )
+                else:
+                    store.update_session_metadata(remote)
+                    skipped += 1
+            deleted = store.mark_missing_remote_deleted(remote_ids)
+            local_by_id = {
+                row["id"]: row for row in store.list_sessions(include_deleted=False)
+            }
+            rows = [local_by_id[sid] for sid in remote_ids if sid in local_by_id]
+        if vm is not None:
+            vm.host["ai_session_rows"] = rows
+            elapsed_total = (time.monotonic() - t_start) * 1000.0
+            _log_event(
+                vm,
+                "session_sync_completed",
+                elapsed_ms=elapsed_total,
+                operation=f"synced={synced} skipped={skipped} deleted={deleted}",
+                payload={"total": len(remote_ids), "synced": synced, "skipped": skipped, "deleted": deleted},
+            )
+        return {
+            "total": len(remote_ids),
+            "synced": synced,
+            "skipped": skipped,
+            "deleted": deleted,
+            "rows": rows,
         }
-        rows = [local_by_id[sid] for sid in remote_ids if sid in local_by_id]
-    if vm is not None:
-        vm.host["ai_session_rows"] = rows
-    return {
-        "total": len(remote_ids),
-        "synced": synced,
-        "skipped": skipped,
-        "deleted": deleted,
-        "rows": rows,
-    }
 
 
 def list_local_sessions(vm=None, *, include_deleted=False):
@@ -1703,11 +1813,14 @@ def get_ai_context(vm) -> dict:
     active_id = vm.host.get("ai_active_session_id")
     if active_id:
         items = []
-        with _open_session_store() as store:
+        with _sync_context(vm), _open_session_store() as store:
             remote_session = None
             try:
                 encoded_id = urllib.parse.quote(active_id, safe="")
-                remote_session = _api_get(f"/sessions/{encoded_id}")
+                remote_session = _api_get(
+                    f"/sessions/{encoded_id}",
+                    operation=f"get session {_short_id(active_id)}",
+                )
             except Exception:
                 remote_session = None
 

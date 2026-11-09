@@ -27,6 +27,11 @@ from tools.peforth_watchdog import (
 EMOJI = {
     "runtime_started": "🚀",
     "runtime_finished": "🏁",
+    "session_sync_started": "🔄",
+    "session_sync_remote_listed": "📋",
+    "session_items_sync_started": "📥",
+    "session_items_sync_completed": "📦",
+    "session_sync_completed": "✨",
     "http_request_started": "🌐",
     "http_response_received": "✅",
     "http_request_failed": "❌",
@@ -122,6 +127,11 @@ def _description(row: dict) -> str:
     descriptions = {
         "runtime_started": "runtime started",
         "runtime_finished": "runtime finished",
+        "session_sync_started": "session sync started",
+        "session_sync_remote_listed": "remote sessions listed",
+        "session_items_sync_started": "session items sync started",
+        "session_items_sync_completed": "session items sync completed",
+        "session_sync_completed": "session sync completed",
         "http_request_started": "HTTP request started",
         "http_response_received": "HTTP response received",
         "http_request_failed": "HTTP request failed",
