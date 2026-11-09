@@ -108,39 +108,39 @@ PEFORTH_AI_LOG_MODE=normal
 
 ## Quick Start
 
-Launch `f` to enter the interactive Forth REPL:
+Launch `f` (or `python main.py`) to start peforth:
 
-```forth
-\ Basic arithmetic and stack operations
-1 2 + . cr
-: square dup * ;
-5 square . cr
+peforth enters in conversational **Chat mode** (`chat>`) by default. You can talk to AI directly, or run Forth commands using the `/` prefix:
 
-\ Documentation & dictionary inspection
-help          \ Interactive user guide & tutorial
-help *        \ List help and comments for all words
-help nokia    \ Look up specific word documentation
-words py >>   \ Filter word names
-
-\ Audio chime notification (Windows & WSL)
-nokia
-nokia2
-nokia-full
-
-\ Switch to conversational AI Chat mode
-chat
+```text
 chat> tell me a joke
-chat> /forth
+chat> /help
+chat> /1 2 + . cr
 ```
 
-Or ask the AI directly from Forth mode:
+Switch to Forth mode anytime with `/forth`, or return to chat mode with `chat`:
+
+```text
+chat> /forth
+Switched to Forth mode (>). Type 'chat' to return to chat mode.
+> 1 2 + . cr
+> : square dup * ;
+> 5 square . cr
+> help          \ Interactive user guide & tutorial
+> words py >>   \ Filter word names
+> chat
+Switched to chat mode (chat>). Type '/forth' to return to Forth mode.
+chat>
+```
+
+In Forth mode, you can still ask the AI directly using `ai:`:
 ```forth
 ai: calculate 355 113 / in Forth
 ```
 
 To exit peforth:
-```forth
-bye
+```text
+chat> /bye
 ```
 
 ---

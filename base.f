@@ -1413,10 +1413,22 @@ code (:>)
     /// Read next token as attribute or method call, evaluate on TOS, and push the result.
 
 \ --- 11. REPL Greeting Text ---
+code (greeting-guide)
+    mode = vm.host.get("repl_mode", "forth")
+    if mode == "chat":
+        print("Chat with AI directly. Type '/help' for instructions, '/forth' for Forth mode.")
+    else:
+        import os
+        if os.environ.get("OPENAI_API_KEY", "").strip():
+            print("Type 'help' for instructions, 'ai: <prompt>' for AI, 'chat' for chat mode.")
+        else:
+            print("Type 'help' for instructions, 'bye' to exit.")
+    end-code
+
 : greeting ( -- )
     cr
     ." Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth." cr
-    ." Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode." cr
+    (greeting-guide) cr
     ." [Enter] submits / [Ctrl+J] adds a line / [Esc] interrupt." cr
     cr ;
 last :: safe=True

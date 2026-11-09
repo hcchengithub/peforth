@@ -218,10 +218,27 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertEqual(getattr(alias_word, "type", "alias"), "alias")
 
     def test_chat_and_forth_mode_switching(self):
-        self.vm.dictate("chat")
         self.assertEqual(self.vm.host.get("repl_mode"), "chat")
         self.vm.dictate("forth")
         self.assertEqual(self.vm.host.get("repl_mode"), "forth")
+        self.vm.dictate("chat")
+        self.assertEqual(self.vm.host.get("repl_mode"), "chat")
+
+    def test_missing_api_key_fallbacks_to_forth_mode(self):
+        import unittest.mock
+        from contextlib import redirect_stdout
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        with unittest.mock.patch("ai.load_dotenv", lambda *a, **k: None), \
+             unittest.mock.patch.dict("os.environ", {"OPENAI_API_KEY": ""}):
+            vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+            self.assertEqual(vm.host.get("repl_mode"), "forth")
+
+            # In forth mode without API key, trying to switch to chat is blocked
+            out = io.StringIO()
+            with redirect_stdout(out):
+                vm.dictate("chat")
+            self.assertEqual(vm.host.get("repl_mode"), "forth")
+            self.assertIn("OPENAI_API_KEY is not set", out.getvalue())
 
     def test_chat_mode_slash_leading_forth_tib(self):
         import projectk
@@ -491,10 +508,10 @@ class TestSafePropertyAudit(unittest.TestCase):
         with redirect_stdout(buf):
             self.vm.dictate("help")
         output = buf.getvalue()
-        self.assertIn("=== Welcome to peforth ===", output)
-        self.assertIn("Basic Usage:", output)
-        self.assertIn("Ask AI anytime:", output)
-        self.assertIn("Have a question? Just ask peforth!", output)
+        self.assertIn("=== peforth: You describe what you want. AI writes the Forth. ===", output)
+        self.assertIn("Try asking the AI:", output)
+        self.assertIn("Get started (in chat mode):", output)
+        self.assertIn("/forth", output)
 
         # Test help * (lists all words' help + comments)
         buf = io.StringIO()
@@ -1501,7 +1518,7 @@ class TestCLISmoke(unittest.TestCase):
 
     def test_cli_pipe_execution(self):
         cmd = [sys.executable, str(HERE / "main.py")]
-        input_script = '1 2 + . cr s" smoke test passed" count . cr bye\n'
+        input_script = '/1 2 + . cr s" smoke test passed" count . cr /bye\n'
         proc = subprocess.run(
             cmd,
             input=input_script,
@@ -1513,7 +1530,7 @@ class TestCLISmoke(unittest.TestCase):
         self.assertIn("p e f o r t h   v 2", proc.stdout)
         self.assertRegex(proc.stdout, r"2\.1\.0 - Runtime modified: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
         self.assertIn("Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth.", proc.stdout)
-        self.assertIn("Type 'help' for instructions, 'ai: <prompt>' for AI assistance, 'chat' for chat mode.", proc.stdout)
+        self.assertIn("Chat with AI directly. Type '/help' for instructions, '/forth' for Forth mode.", proc.stdout)
         self.assertIn("[Enter] submits / [Ctrl+J] adds a line / [Esc] interrupt.", proc.stdout)
         self.assertNotIn("Keys: [Enter] submit", proc.stdout)
         self.assertIn("3", proc.stdout)
@@ -2402,7 +2419,7 @@ class TestSessionStoreAndSync(unittest.TestCase):
         vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
         vm.define("interrupt-me", lambda _v: (_ for _ in ()).throw(KeyboardInterrupt()), properties={"safe": True})
 
-        inputs = iter(["interrupt-me", "21 2 *", "bye"])
+        inputs = iter(["/interrupt-me", "/21 2 *", "/bye"])
         out = io.StringIO()
         with patch("builtins.input", side_effect=lambda *_a: next(inputs)):
             with patch("sys.stdin.isatty", return_value=False):

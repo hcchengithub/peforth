@@ -242,41 +242,58 @@ code help
     pattern = line.strip()
 
     if not pattern:
-        print("""=== Welcome to peforth ===
-peforth is an AI-first Forth environment hosted by Python.
+        print("""\n        === peforth: You describe what you want. AI writes the Forth. ===
 
-1. Basic Usage:
-   - Forth mode (prompt '>'):
-     Enter Forth expressions and stack words directly.
-     Examples:
-       10 20 + .              ( Calculate and print: 30 )
-       words                  ( List available Forth words )
-       see <word>             ( Decompile and view source of a word )
+    Try asking the AI:
 
-   - Chat mode (prompt 'chat>'):
-     Switch to conversational AI mode by typing 'chat'.
-     Chat directly with peforth. Type '/forth' to return to Forth mode.
+      Do I need to know Forth to use peforth?
+      Check the GPU status on this computer.
 
-   - Ask AI anytime:
-     From Forth mode, use 'ai: <question>' or 'AI: <question>' (with chime).
-     Examples:
-       ai: How do I define a new word with a loop?
-       ai: What does the word 'over' do?
+    peforth lets you work with AI directly and turn tasks you repeat into reusable
+    words. You do not need to learn Forth first: describe what you want to do, and
+    ask the AI to create, explain, or improve a tool for you.
 
-2. Python Interoperability:
-   - Execute inline Python code inside Forth with <py> ... </py>:
-       <py> import math; vm.push(math.sqrt(144)) </py> . cr
+    For example, in Forth mode, define a word once and then call it by name:
 
-3. Help & Exploration:
-   - help             Display this user guide.
-   - help *           List help and comments for all words in the dictionary.
-   - help <pattern>   Look up documentation for specific word(s) (e.g. 'help dup').
-   - words <pattern>  Filter dictionary words by name.
+      : greet s" Hello!" . ;
+      greet
 
-💡 Have a question? Just ask peforth!
-   peforth has full access to its own source code, live dictionary, and system
-   architecture. It can explain any word, diagnose code, or guide your workflow.
-   Try: ai: <your question>""")
+    Why make a task into a word?
+
+      - Precise: define the steps and behavior explicitly.
+      - Fast: call the tool by name instead of repeating the instructions.
+      - Compact: one short name can stand for a reusable procedure.
+      - Composable: combine small tools to build larger workflows.
+      - Yours to improve: inspect, edit, and extend your own tools.
+
+    You can ask the AI in plain language, for example:
+
+      Help me create a word that organizes today's log files.
+
+    Words and AI skills are useful in different ways:
+
+      - A word is an executable tool in peforth. It is well suited to clear,
+        stable, repeatable operations—and can make them precise, fast, and compact.
+      - A skill gives an AI agent guidance. It can explain when and how to use
+        tools, provide background and examples, and help with tasks that require
+        flexible, context-dependent judgment.
+
+    In short: skills guide the AI; words carry out well-defined operations.
+    They work well together: a skill can guide the AI, which then uses words to
+    perform reliable, repeatable tasks.
+
+    Get started (in chat mode):
+
+      /help              Show this help
+      /help <pattern>    Show help matching a word name, help text, or comment
+      /see <word>        Inspect a word's documentation and definition
+      /words <pattern>   Search for words
+      /forth             Switch to Forth mode (> prompt; type 'chat' to return)
+      /bye               Exit peforth
+
+    You can get started without knowing Forth. When needed, ask the AI to explain
+    the code or provide a definition you can use directly.
+""")
     else:
         if pattern == "*":
             matched_words = list(vm.words.values())
@@ -314,9 +331,9 @@ peforth is an AI-first Forth environment hosted by Python.
                 print("\n\n".join(entries))
     end-code immediate
     // ( [<pattern>] -- ) Display tutorial guide, all words ('*'), or matching word help.
-    /// With no arguments, displays a comprehensive introduction to peforth.
-    /// 'help *' lists help and comments for all words in the dictionary.
-    /// 'help <pattern>' searches word names, help, and comments.
+    /// Displays the getting-started guide when no pattern is supplied.
+    /// `help *` lists help and comments for all words in the dictionary.
+    /// `help <word>` searches word names, help, and comments.
     last :: safe=True
 
 \ --- 8. Load Master peforth ---

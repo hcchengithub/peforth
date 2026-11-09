@@ -44,6 +44,11 @@ code cancel-task
 \ --- 3. REPL Mode Switching (chat / forth) ---
 
 code chat
+    import os, ai
+    ai.load_dotenv()
+    if not os.environ.get("OPENAI_API_KEY", "").strip():
+        print("[AI] OPENAI_API_KEY is not set. Please configure OPENAI_API_KEY to use chat mode.")
+        return
     vm.host["repl_mode"] = "chat"
     print("Switched to chat mode (chat>). Type '/forth' to return to Forth mode.")
     end-code
@@ -52,10 +57,19 @@ code chat
 
 code forth
     vm.host["repl_mode"] = "forth"
-    print("Switched to Forth mode (>).")
+    print("Switched to Forth mode (>). Type 'chat' to return to chat mode.")
     end-code
     // ( -- ) Switch REPL to Forth mode (>).
     last :: safe=True
+
+<py>
+import os, ai
+ai.load_dotenv()
+if os.environ.get("OPENAI_API_KEY", "").strip():
+    vm.host.setdefault("repl_mode", "chat")
+else:
+    vm.host["repl_mode"] = "forth"
+</py>
 
 code list-skills
     import ai

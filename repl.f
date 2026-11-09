@@ -30,12 +30,20 @@ except ImportError:
 code repl
     import re
     import sys
+    import os
+    import ai
 
     vm.host.pop("exit_requested", None)
     paused_tasks = vm.host.setdefault('paused_tasks', [])
     code_buffer = []
 
-    import ai
+    ai.load_dotenv()
+    has_api_key = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    if not has_api_key:
+        vm.host["repl_mode"] = "forth"
+    else:
+        vm.host.setdefault("repl_mode", "chat")
+
     runtime_latest = (ai.detect_system_info(vm).get("runtime_latest") or {})
     runtime_modified = runtime_latest.get("modified")
     try:
@@ -52,6 +60,9 @@ code repl
         print(f"2.1.0 - Runtime modified: {runtime_modified}")
     else:
         print("2.1.0")
+    if not has_api_key:
+        print("\n[Notice] OPENAI_API_KEY is not set; AI features are unavailable.")
+        print("Falling back to Forth mode (>). Configure OPENAI_API_KEY in .env to enable chat mode.")
     # Keep the rest of the startup guidance in the Forth greeting word.
     vm.dictate("greeting")
 
@@ -184,7 +195,7 @@ code repl
                 complete_style=CompleteStyle.MULTI_COLUMN,
                 style=repl_style,
                 prompt_continuation=lambda width, line_number, is_soft_wrap: (
-                    "  " if vm.host.get("repl_mode", "forth") == "chat" else "... "
+                    "  " if vm.host.get("repl_mode", "chat") == "chat" else "... "
                 ),
             )
 
@@ -196,7 +207,7 @@ code repl
     try:
         while True:
             is_continuing = bool(code_buffer) or vm.compiling
-            mode = vm.host.get("repl_mode", "forth")
+            mode = vm.host.get("repl_mode", "chat")
             if is_continuing:
                 prompt_str = "... "
             elif mode == "chat":
@@ -246,7 +257,9 @@ code repl
             try:
                 with monitor_ctx:
                     if mode == "chat" and not is_continuing:
-                        if clean_text.startswith("/"):
+                        if clean_text in ("chat", "/chat"):
+                            task = vm.dictate("chat")
+                        elif clean_text.startswith("/"):
                             task = vm.dictate(clean_text[1:])
                         else:
                             task = vm.dictate(f"ai: {clean_text}")
@@ -277,8 +290,8 @@ code repl
             if t.status in ("ready", "paused"):
                 t.cancel()
     end-code
-    // ( -- ) Start interactive Forth REPL loop.
-    /// Run Forth prompt loop (forth>) until bye or EOF.
+    // ( -- ) Start interactive peforth REPL loop.
+    /// Run interactive prompt loop in chat mode (chat>) or Forth mode (>) until bye or EOF.
     last :: safe=True
 
 code ?cli
