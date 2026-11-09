@@ -70,7 +70,7 @@ code list-skills
 
 code initial-ai-model
     import os
-    vm.push(os.environ.get("OPENAI_MODEL") or os.environ.get("PEFORTH_AI_MODEL") or "gpt-4o-mini")
+    vm.push(os.environ.get("OPENAI_MODEL") or os.environ.get("PEFORTH_AI_MODEL") or "gpt-6-luna")
     end-code
 last :: safe=True
 
@@ -562,7 +562,7 @@ code ai-status
                         first_text = part.get("text", "")
                         break
             first_sentence = ai.extract_first_sentence(first_text, max_chars=80)
-            model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini").strip()
+            model = os.environ.get("OPENAI_MODEL", "gpt-6-luna").strip()
             runtime_id = vm.host.get("diagnostic_runtime_id")
             local_id = ctx.get("session_id") or vm.host.get("ai_local_session_id") or ai._ensure_local_session_id(vm)
             print(f"Active AI session: local (in-memory) [{local_id}]")

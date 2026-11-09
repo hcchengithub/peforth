@@ -87,17 +87,20 @@ f
 Copy `.env.example` to `.env` in your runtime directory (Windows: `$HOME\.peforth\.env`, Ubuntu/WSL: `~/.peforth/.env`):
 
 ```env
-# AI Assistant configuration
-OPENAI_API_KEY=sk-...
+# Start from the repository's .env.example and fill in required credentials.
+OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL=gpt-6-luna
 # OPENAI_REASONING_EFFORT=none
 
 # Diagnostic logging mode: normal (default), verbose, or disabled
 PEFORTH_AI_LOG_MODE=normal
 
-# Custom config/database directory (optional; defaults to ~/.peforth)
+# Optional: custom config/database directory (defaults to ~/.peforth)
 # PEFORTH_CONFIG_DIR=~/.peforth
+
+# Optional: source checkout for development; defaults to the runtime directory
+# PEFORTH_SOURCE_PATH=/path/to/peforth
 ```
 
 
