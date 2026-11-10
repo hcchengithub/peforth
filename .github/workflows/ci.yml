@@ -37,6 +37,8 @@ jobs:
           pip install prompt_toolkit
 
       - name: Run Architectural & Self-Test Suite
+        env:
+          OPENAI_API_KEY: "test-mock-ci-key"
         run: |
           python test_all.py
 

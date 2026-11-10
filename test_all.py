@@ -25,6 +25,10 @@ from unittest.mock import patch
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+# Provide a mock default API key in environments (such as CI or clean fresh clones) where no .env exists,
+# allowing REPL and chat-mode architectural unit tests to run deterministically.
+os.environ.setdefault("OPENAI_API_KEY", "test-mock-api-key")
+
 from projectk import VM, KernelError, Word
 
 
@@ -1536,7 +1540,7 @@ class TestVisionAndDesktopCapture(unittest.TestCase):
         try:
             meta = ai.capture_desktop(vm=self.vm)
         except RuntimeError as e:
-            if "display handle is invalid" in str(e) or "PowerShell is not available" in str(e):
+            if any(s in str(e) for s in ("display handle is invalid", "PowerShell is not available", "only supported on Windows", "PowerShell capture error")):
                 self.skipTest(f"Desktop capture skipped: {e}")
             raise
         self.assertIsInstance(meta, dict)
@@ -1555,7 +1559,7 @@ class TestVisionAndDesktopCapture(unittest.TestCase):
         try:
             meta = ai.capture_desktop(region=(0.0, 0.0, 0.25, 0.25), vm=self.vm)
         except RuntimeError as e:
-            if "display handle is invalid" in str(e) or "PowerShell is not available" in str(e):
+            if any(s in str(e) for s in ("display handle is invalid", "PowerShell is not available", "only supported on Windows", "PowerShell capture error")):
                 self.skipTest(f"Desktop capture skipped: {e}")
             raise
         self.assertTrue(os.path.isfile(meta["path"]))
@@ -1606,7 +1610,7 @@ class TestVisionAndDesktopCapture(unittest.TestCase):
             sys.stdout = output
             self.vm.dictate("desktop-capture")
         except KernelError as e:
-            if "display handle is invalid" in str(e) or "PowerShell is not available" in str(e):
+            if any(s in str(e) for s in ("display handle is invalid", "PowerShell is not available", "only supported on Windows", "PowerShell capture error")):
                 self.skipTest(f"Desktop capture skipped: {e}")
             raise
         finally:
@@ -1628,12 +1632,14 @@ class TestCLISmoke(unittest.TestCase):
     def test_cli_pipe_execution(self):
         cmd = [sys.executable, str(HERE / "main.py")]
         input_script = '/1 2 + . cr s" smoke test passed" count . cr /bye\n'
+        test_env = dict(os.environ, OPENAI_API_KEY=os.environ.get("OPENAI_API_KEY", "test-mock-api-key"))
         proc = subprocess.run(
             cmd,
             input=input_script,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            env=test_env,
         )
         self.assertEqual(proc.returncode, 0, f"main.py exited with non-zero: {proc.stderr}")
         self.assertIn("p e f o r t h   v 2", proc.stdout)

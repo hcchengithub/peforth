@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -383,20 +384,23 @@ _IMAGE_DATA_URI_MAX_LEN = 1_048_576
 
 
 def _powershell_executable(vm=None):
-    if vm is not None:
-        info = vm.host.get("system_info")
-        if isinstance(info, dict):
-            pwsh = (info.get("shells") or {}).get("pwsh") or {}
-            if pwsh.get("available") and pwsh.get("path"):
-                return str(pwsh["path"])
-    for candidate in ("pwsh", "powershell", "pwsh.exe", "powershell.exe"):
-        found = shutil.which(candidate)
-        if found:
-            return found
-    wsl_fallback = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-    if os.path.isfile(wsl_fallback):
-        return wsl_fallback
-    raise RuntimeError("PowerShell is not available for Windows desktop capture.")
+    if os.name == "nt":
+        if vm is not None:
+            info = vm.host.get("system_info")
+            if isinstance(info, dict):
+                pwsh = (info.get("shells") or {}).get("pwsh") or {}
+                if pwsh.get("available") and pwsh.get("path"):
+                    return str(pwsh["path"])
+        for candidate in ("pwsh", "powershell", "pwsh.exe", "powershell.exe"):
+            found = shutil.which(candidate)
+            if found:
+                return found
+        raise RuntimeError("PowerShell is not available for Windows desktop capture.")
+    else:
+        wsl_fallback = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+        if os.path.isfile(wsl_fallback):
+            return wsl_fallback
+        raise RuntimeError("Windows desktop capture is only supported on Windows or WSL.")
 
 
 def _windows_to_local_path(win_path):
@@ -791,6 +795,16 @@ def _latest_runtime_file_info(runtime_path: Path) -> dict | None:
     }
 
 
+def _safe_home_dir() -> Path:
+    try:
+        return Path.home()
+    except Exception:
+        env_home = os.environ.get("USERPROFILE") or os.environ.get("HOME")
+        if env_home:
+            return Path(env_home)
+        return Path(tempfile.gettempdir())
+
+
 def detect_system_info(vm=None) -> dict:
     load_dotenv()
     is_windows = os.name == "nt"
@@ -861,7 +875,7 @@ def detect_system_info(vm=None) -> dict:
     venv_active = prefix != base_prefix
 
     config_dir_raw = os.environ.get("PEFORTH_CONFIG_DIR", "").strip()
-    resolved_config_dir = str(Path(_expand_env_vars(config_dir_raw)).resolve()) if config_dir_raw else str((Path.home() / ".peforth").resolve())
+    resolved_config_dir = str(Path(_expand_env_vars(config_dir_raw)).resolve()) if config_dir_raw else str((_safe_home_dir() / ".peforth").resolve())
     skills_dir_raw = (os.environ.get("PEFORTH_SKILLS_DIR", "") or os.environ.get("PEFORTH_AI_SKILLS_DIR", "")).strip()
 
     config_snapshot = {
@@ -919,7 +933,7 @@ def load_dotenv(env_path=None):
             Path.cwd() / ".env",
             Path(__file__).resolve().parent / ".env",
             Path(__file__).resolve().parent.parent / ".env",
-            Path.home() / ".peforth" / ".env",
+            _safe_home_dir() / ".peforth" / ".env",
         ]
         for c in candidates:
             if c.exists():
@@ -1006,11 +1020,11 @@ def get_providers_yaml_path(vm=None) -> Path | None:
         Path.cwd() / "providers.yml",
         Path(file_dir).resolve() / "providers.yaml" if file_dir else None,
         Path(__file__).resolve().parent / "providers.yaml",
-        Path.home() / ".peforth" / "providers.yaml",
+        _safe_home_dir() / ".peforth" / "providers.yaml",
         Path.cwd() / "providers.yaml.example",
         Path(file_dir).resolve() / "providers.yaml.example" if file_dir else None,
         Path(__file__).resolve().parent / "providers.yaml.example",
-        Path.home() / ".peforth" / "providers.yaml.example",
+        _safe_home_dir() / ".peforth" / "providers.yaml.example",
     ]
     for c in candidates:
         if c and c.exists():
@@ -1325,7 +1339,7 @@ def init_diagnostics(vm, *, database_path=None, force=False):
         env = "windows" if os.name == "nt" else "wsl"
         if database_path is None:
             config_dir = os.environ.get("PEFORTH_CONFIG_DIR")
-            db_dir = Path(config_dir).expanduser() if config_dir else Path.home() / ".peforth"
+            db_dir = Path(config_dir).expanduser() if config_dir else _safe_home_dir() / ".peforth"
             database_path = db_dir / "ai-diagnostics.sqlite3"
 
         logger = DiagnosticLog(database_path, environment=env)
@@ -1772,7 +1786,7 @@ def _runtime_config_path() -> Path:
     if configured:
         path = Path(configured).expanduser()
         return path if path.is_absolute() else (Path.cwd() / path).resolve()
-    return Path.home() / ".peforth"
+    return _safe_home_dir() / ".peforth"
 
 
 def _session_db_path() -> Path:
@@ -2294,7 +2308,7 @@ def get_skills_dir(vm=None) -> Path:
     candidate = Path(__file__).resolve().parent / "skills"
     if candidate.is_dir():
         return candidate.resolve()
-    runtime_skills = Path.home() / ".peforth" / "skills"
+    runtime_skills = _safe_home_dir() / ".peforth" / "skills"
     if runtime_skills.is_dir():
         return runtime_skills.resolve()
     return candidate

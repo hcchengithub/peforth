@@ -11,6 +11,7 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from urllib.parse import quote
 
@@ -54,7 +55,14 @@ EMOJI = {
 
 def default_database() -> Path:
     configured = os.environ.get("PEFORTH_CONFIG_DIR")
-    directory = Path(configured).expanduser() if configured else Path.home() / ".peforth"
+    if configured:
+        directory = Path(configured).expanduser()
+    else:
+        try:
+            home = Path.home()
+        except Exception:
+            home = Path(os.environ.get("USERPROFILE") or os.environ.get("HOME") or tempfile.gettempdir())
+        directory = home / ".peforth"
     return directory / "ai-diagnostics.sqlite3"
 
 
