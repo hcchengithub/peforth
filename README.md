@@ -47,6 +47,7 @@ cd ~/.peforth
 uv venv
 uv pip install --python .venv -e .
 ~/.peforth/.venv/bin/f
+```
 
 To invoke `f` by name from anywhere in your shell:
 
