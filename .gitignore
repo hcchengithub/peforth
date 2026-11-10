@@ -1,5 +1,7 @@
 .env
 .env.*.tmp
+providers.yaml
+providers.yml
 __pycache__/
 *.py[cod]
 *$py.class

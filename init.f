@@ -288,6 +288,7 @@ code help
       /help <pattern>    Show help matching a word name, help text, or comment
       /see <word>        Inspect a word's documentation and definition
       /words <pattern>   Search for words
+      /provider [<spec>] Switch or view AI provider (e.g. Gemini, DeepSeek, o3-mini)
       /forth             Switch to Forth mode (> prompt; type 'chat' to return)
       /bye               Exit peforth
 

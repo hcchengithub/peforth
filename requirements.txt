@@ -1,1 +1,2 @@
 prompt_toolkit>=3.0.52,<4
+pyyaml>=6.0

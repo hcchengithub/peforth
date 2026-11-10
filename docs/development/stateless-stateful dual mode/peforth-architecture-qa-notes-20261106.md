@@ -13,13 +13,13 @@
 
 ---
 
-### Q2：w2:p3 正在煩惱整串對話的歷史不知道紀錄在哪裡。我相信是一定有紀錄，可是 peforth 本身好像搞不清楚自己的紀錄在哪裡，它倒出來的結果 (d:\Downloads\peforth-session-20261106.json) 內容也不好，怪怪的. 如果從 peforth 的 source code (c:\Users\8304018\OneDrive\Documents\GitHub\peforth) 來查的話，應該可以發現 vm.host['something like messages'] 之類的東西，應該就是我們要找的東西.
+### Q2：w2:p3 正在煩惱整串對話的歷史不知道紀錄在哪裡。我相信是一定有紀錄，可是 peforth 本身好像搞不清楚自己的紀錄在哪裡，它倒出來的結果 (~/Downloads/peforth-session-20261106.json) 內容也不好，怪怪的. 如果從 peforth 的 source code 查的話，應該可以發現 vm.host['something like messages'] 之類的東西，應該就是我們要找的東西.
 
 **A2：**
 您的推斷完全正確。在 peforth 原始碼中：
 1. **記憶體核心**：當前對話歷史確實存放在 **`vm.host["ai_messages"]`**（標準 OpenAI Chat Completions 訊息陣列）。
 2. **先前倒出檔案怪怪的原因**：`w2:p3` 先前因為不清楚儲存機制，誤用 `herdr pane read w2:p3` 去抓終端機的 scrollback（只有 799 行），並手動湊出一個只有提問與摘要的 JSON。
-3. **本機資料庫**：peforth 背景其實已完整記錄在 `C:\Users\8304018\.peforth\ai-diagnostics.sqlite3` 與 `sessions.sqlite3` 中。
+3. **本機資料庫**：peforth 背景其實已完整記錄在 `~/.peforth/ai-diagnostics.sqlite3` 與 `sessions.sqlite3` 中。
 4. **匯出與恢復方法**：
    * 匯出：直接把 `vm.host["ai_messages"]` 以 JSON 寫入檔案。
    * 恢復：重啟 peforth 後，直接把 JSON 載回 `vm.host["ai_messages"]` 即可接續上下文。
@@ -30,10 +30,10 @@
 
 **A3：**
 可以，而且 100% 完整追溯回來了。
-在 `C:\Users\8304018\.peforth\ai-diagnostics.sqlite3` 中找到了 `w2:p3` 的完整紀錄：
+在 `~/.peforth/ai-diagnostics.sqlite3` 中找到了 `w2:p3` 的完整紀錄：
 * **Runtime ID**：`857179d0-fb70-4ecb-b806-3f55fb148701`
 * **對話輪數**：共 23 輪（從 `pwd`、OneDrive 衝突副本與 SQLite 比對，到關閉 OneDrive、導出問題討論，直到 `bye` 全部完整保留）。
-* **已產生檔案**：已復原並產出至 `D:\Downloads\`（含 Resume JSON、詳細結構化 JSON 及 Markdown 筆記）。
+* **已產生檔案**：已復原並產出至 `~/Downloads/`（含 Resume JSON、詳細結構化 JSON 及 Markdown 筆記）。
 
 ---
 
@@ -43,9 +43,9 @@
 是的，第一版為了先快速整理文字大綱，確實先提取了 `turns` 表的 prompt 與 output。
 但在資料庫的 `timeline` 表中，**全部 98 次 Tool Calls**（包含 88 次 `peforth_run_forth`、10 次 `peforth_search_words`）的呼叫參數、執行目的（Purpose）、執行的代碼與輸出（stdout/error）皆完整無損。
 隨後已重新生成完整包含所有 Tool Calls / Results 的檔案：
-* `D:\Downloads\peforth-session-20261106-complete-with-tools.json`（共 243 則完整訊息，496 KB）
-* `D:\Downloads\peforth-session-20261106-detailed-turns.json`
-* `D:\Downloads\peforth-session-20261106-transcript-with-tools.md`
+* `~/Downloads/peforth-session-20261106-complete-with-tools.json`（共 243 則完整訊息，496 KB）
+* `~/Downloads/peforth-session-20261106-detailed-turns.json`
+* `~/Downloads/peforth-session-20261106-transcript-with-tools.md`
 
 ---
 

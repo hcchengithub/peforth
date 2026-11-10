@@ -226,10 +226,13 @@ class TestSafePropertyAudit(unittest.TestCase):
 
     def test_missing_api_key_fallbacks_to_forth_mode(self):
         import unittest.mock
+        import ai
         from contextlib import redirect_stdout
         vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        active_prof = ai.get_active_stateless_profile(vm)
+        req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
         with unittest.mock.patch("ai.load_dotenv", lambda *a, **k: None), \
-             unittest.mock.patch.dict("os.environ", {"OPENAI_API_KEY": ""}):
+             unittest.mock.patch.dict("os.environ", {req_env: "", "OPENAI_API_KEY": "", "GEMINI_API_KEY": "", "DEEPSEEK_API_KEY": ""}):
             vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
             self.assertEqual(vm.host.get("repl_mode"), "forth")
 
@@ -238,7 +241,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             with redirect_stdout(out):
                 vm.dictate("chat")
             self.assertEqual(vm.host.get("repl_mode"), "forth")
-            self.assertIn("OPENAI_API_KEY is not set", out.getvalue())
+            self.assertIn(req_env, out.getvalue())
+            self.assertIn("is not set", out.getvalue())
 
     def test_chat_mode_slash_leading_forth_tib(self):
         import projectk
@@ -353,12 +357,8 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.vm.dictate("1 sleep")
         self.vm.dictate("greeting")
 
-        # 6. aiModel and initial-ai-model
-        self.vm.dictate("aiModel")
-        val = self.vm.pop()
-        self.assertIsInstance(val, str)
-        self.vm.dictate('s" test-custom-model" to aiModel aiModel')
-        self.assertEqual(self.vm.pop(), "test-custom-model")
+        # 6. provider word
+        self.assertIsNotNone(self.vm.tick("provider"))
 
     def test_inherited_shell_and_debug_words_are_unsafe(self):
         unsafe_inherited = ["*debug*", "bash", "(bash)", "pwsh", "(pwsh)", "sudo", "(sudo)"]
@@ -586,13 +586,14 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("code (play-notes)", output)
         self.assertIn("end-code", output)
 
-        # 4. Test see on value word (aiModel)
+        # 4. Test see on value word
+        self.vm.dictate("42 value myVal")
         buf = io.StringIO()
         with redirect_stdout(buf):
-            self.vm.dictate("see aiModel")
+            self.vm.dictate("see myVal")
         output_val = buf.getvalue()
         self.assertIn("'category': 'value'", output_val)
-        self.assertIn("value aiModel", output_val)
+        self.assertIn("value myVal", output_val)
 
         # 4. Test see on string-quote word (s") and print-string-quote word (.")
         buf = io.StringIO()
@@ -999,6 +1000,10 @@ vm.push(calc(a, b))
         bottom = ai._chat_turn_bottom()
         self.assertTrue(bottom.startswith("╰─"))
         self.assertTrue(bottom.endswith("╯"))
+        self.assertRegex(bottom, r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+
+        asst_header_meta = ai._chat_turn_header("assistant", {"provider": "Google", "model": "Gemini 3.8 Flash", "reasoning": "Medium"})
+        self.assertIn("Google │ Gemini 3.8 Flash │ Medium", asst_header_meta)
 
         # 2. Non-streaming streamer is completely quiet
         trap = io.StringIO()
@@ -1030,6 +1035,110 @@ vm.push(calc(a, b))
             self.assertIn("╰─", output)
         finally:
             sys.stdout = old_stdout
+
+    def test_multi_provider_configuration_and_switching(self):
+        import ai
+        from unittest.mock import patch
+        import contextlib
+
+        # 1. Verify default providers config structure
+        cfg = ai.load_providers_config(self.vm)
+        self.assertIn("stateful", cfg)
+        self.assertIn("stateless", cfg)
+        self.assertEqual(cfg["stateful"]["provider"], "OpenAI")
+        self.assertIn("google-gemini-3.8-flash", cfg["stateless"]["profiles"])
+
+        # 2. Test Forth provider word without args lists active and available
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.vm.dictate("provider")
+        out = buf.getvalue()
+        self.assertIn("Active Provider:", out)
+        self.assertIn("Available providers:", out)
+        self.assertIn("google-gemini-3.8-flash", out)
+
+        # 3. Test switching without API key fails gracefully
+        with patch.dict("os.environ", {"GEMINI_API_KEY": ""}):
+            buf_fail = io.StringIO()
+            with contextlib.redirect_stdout(buf_fail):
+                self.vm.dictate("provider Gemini 3.8 Flash, Medium")
+            self.assertIn("[Provider Error]", buf_fail.getvalue())
+            self.assertIn("GEMINI_API_KEY", buf_fail.getvalue())
+
+        # 4. Test switching with API key succeeds
+        with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key-gemini"}):
+            buf_ok = io.StringIO()
+            with contextlib.redirect_stdout(buf_ok):
+                self.vm.dictate("provider Gemini 3.8 Flash, Medium")
+            self.assertIn("[AI] Switched Stateless provider to Google | gemini-3.8-flash (Reasoning: Medium).", buf_ok.getvalue())
+            info = ai.get_active_provider_info(self.vm)
+            self.assertEqual(info["provider"], "Google")
+            self.assertEqual(info["model"], "gemini-3.8-flash")
+            self.assertEqual(info["reasoning"], "Medium")
+
+        # 5. Test ai-provider alias works identically
+        if "deepseek-chat" in cfg["stateless"]["profiles"]:
+            with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key-deepseek"}):
+                buf_alias = io.StringIO()
+                with contextlib.redirect_stdout(buf_alias):
+                    self.vm.dictate("ai-provider deepseek")
+                self.assertIn("[AI] Switched Stateless provider to DeepSeek | deepseek-chat.", buf_alias.getvalue())
+                info = ai.get_active_provider_info(self.vm)
+                self.assertEqual(info["provider"], "DeepSeek")
+        else:
+            with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key-gemini"}):
+                buf_alias = io.StringIO()
+                with contextlib.redirect_stdout(buf_alias):
+                    self.vm.dictate("ai-provider google")
+                self.assertIn("[AI] Switched Stateless provider to Google | gemini-3.8-flash (Reasoning: Medium).", buf_alias.getvalue())
+                info = ai.get_active_provider_info(self.vm)
+                self.assertEqual(info["provider"], "Google")
+
+        # 6. Test switch_provider tool is present in TOOLS_DEFINITION
+        tool_names = [t["function"]["name"] for t in ai.TOOLS_DEFINITION]
+        self.assertIn("switch_provider", tool_names)
+
+        # 7. Test _parse_simple_yaml standalone parser
+        raw_yaml = """
+stateful:
+  provider: "OpenAI"
+  model: "gpt-6-luna"
+stateless:
+  default_profile: "custom-proxy-model"
+  profiles:
+    custom-proxy-model:
+      provider: "CustomProxy"
+      model: "gpt-6-luna"
+      api_key_env: "CUSTOM_API_KEY"
+      aliases: ["custom proxy", "custom"]
+"""
+        parsed = ai._parse_simple_yaml(raw_yaml)
+        self.assertEqual(parsed["stateless"]["default_profile"], "custom-proxy-model")
+        self.assertEqual(parsed["stateless"]["profiles"]["custom-proxy-model"]["provider"], "CustomProxy")
+        self.assertEqual(parsed["stateless"]["profiles"]["custom-proxy-model"]["aliases"], ["custom proxy", "custom"])
+
+    def test_chat_mode_natural_language_provider_switch(self):
+        import unittest.mock
+        import ai
+        import contextlib
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.dictate((HERE / "repl.f").read_text(encoding="utf-8"))
+
+        inputs = [
+            "切換到 Gemini 3.8 Flash，Medium",
+            "你把 AI 換成 Gemini 3.8 Flash",
+            "/bye"
+        ]
+        with unittest.mock.patch.dict("os.environ", {"GEMINI_API_KEY": "test-gemini-key"}), \
+             unittest.mock.patch("sys.stdin.isatty", return_value=False), \
+             unittest.mock.patch("builtins.input", side_effect=inputs):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                vm.dictate("repl")
+            self.assertIn("Switched Stateless provider to Google | gemini-3.8-flash (Reasoning: Medium).", out.getvalue())
+            info = ai.get_active_provider_info(vm)
+            self.assertEqual(info["provider"], "Google")
 
     def test_herdr_words_and_security_annotations(self):
         safe_words = [

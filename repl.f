@@ -38,7 +38,7 @@ code repl
     code_buffer = []
 
     ai.load_dotenv()
-    has_api_key = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    has_api_key = ai.has_valid_api_key(vm)
     if not has_api_key:
         vm.host["repl_mode"] = "forth"
     else:
@@ -61,7 +61,9 @@ code repl
     else:
         print("2.1.0")
     if not has_api_key:
-        print("\n[Notice] OPENAI_API_KEY is not set; AI features are unavailable.")
+        active_prof = ai.get_active_stateless_profile(vm)
+        req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
+        print(f"\n[Notice] {req_env} is not set; AI features are unavailable.")
         print("Falling back to Forth mode (>). Configure OPENAI_API_KEY in .env to enable chat mode.")
     # Keep the rest of the startup guidance in the Forth greeting word.
     vm.dictate("greeting")
@@ -262,7 +264,12 @@ code repl
                         elif clean_text.startswith("/"):
                             task = vm.dictate(clean_text[1:])
                         else:
-                            task = vm.dictate(f"ai: {clean_text}")
+                            switch_match = re.match(r"^\s*(?:(?:你?把\s*AI\s*)?(?:切換(?:到|至)?|換成|改成)|switch\s+to|change\s+to)\s+(.+)$", clean_text, re.I)
+                            if switch_match:
+                                target_spec = switch_match.group(1).strip()
+                                task = vm.dictate(f"provider {target_spec}")
+                            else:
+                                task = vm.dictate(f"ai: {clean_text}")
                     else:
                         task = vm.dictate(clean_text)
                 if vm.host.get("exit_requested"):

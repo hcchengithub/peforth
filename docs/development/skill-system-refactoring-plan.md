@@ -29,7 +29,7 @@ if combined_skills:
 根據使用者明確指示與架構討論，本次重構必須嚴格遵守以下原則：
 
 ### 原則一：System Prompt 絕對不包含本機絕對路徑（Strict No Absolute Paths）
-* **禁止項目**：System Prompt 中**嚴禁出現任何本機路徑**（如 `C:\Users\hcche\...`、`/home/user/...`、`~/.peforth/...`）。
+* **禁止項目**：System Prompt 中**嚴禁出現任何本機路徑**（如 `C:\Users\username\...`、`/home/user/...`、`~/.peforth/...`）。
 * **原因**：
   1. **跨平台可移植性**：peforth 在 Windows (CMD/PowerShell)、WSL、Linux 皆可運行，System Prompt 應為純邏輯描述，不受本機環境干擾。
   2. **安全與隱私**：不向 AI 模型暴露本地使用者帳號名稱與目錄結構。
@@ -210,8 +210,7 @@ def tool_read_skill(vm, skill_name: str, file_path: str = None) -> dict:
   - 測試 4：`test_tool_read_skill_security_traversal`（測試 `../../ai.py` 或絕對路徑時正確被阻擋報錯）。
 
 ### 5.2 執行與同步步驟
-1. 在 Repo `OneDrive/Documents/GitHub/peforth` 進行修改。
+1. 在 Repo 進行修改。
 2. 執行全套單元測試：`python test_all.py`（確保 70+ 個測試全數 PASS）。
-3. 同步至執行時目錄：`C:\Users\hcche\.peforth\`。
-4. 更新開發日誌：`C:\Users\hcche\OneDrive\Documents\Docs\peforth-devlog.txt`。
-5. 提交 Git Commit。
+3. 同步至執行時目錄：`~/.peforth/`。
+4. 提交 Git Commit。

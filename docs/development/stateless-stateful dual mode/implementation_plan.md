@@ -2,7 +2,7 @@
 
 ## 目標說明
 
-根據 [`peforth-architecture-qa-notes-20261106.md`](file:///c:/Users/hcche/OneDrive/Documents/GitHub/peforth/docs/development/peforth-architecture-qa-notes-20261106.md)（Q6、Q10、Q12、Q13）的設計結論，將 `peforth v2.1.0` 的 AI 子系統升級為**雙模混合架構（Dual-Mode Hybrid Architecture）**，並實作 **`ai-promote`** 指令：
+根據 [`peforth-architecture-qa-notes-20261106.md`](peforth-architecture-qa-notes-20261106.md)（Q6、Q10、Q12、Q13）的設計結論，將 `peforth v2.1.0` 的 AI 子系統升級為**雙模混合架構（Dual-Mode Hybrid Architecture）**，並實作 **`ai-promote`** 指令：
 
 1. **預設 Stateless 模式（無 `ai_active_session_id`）**：
    - 啟動後預設（或執行 `ai-new` 後）使用輕量、快速的 `POST /chat/completions` 端點，上下文維護於本地記憶體 `vm.host["ai_messages"]`。
@@ -56,7 +56,7 @@ flowchart TD
 
 ### 1. AI 傳輸與雙模引擎 (`ai.py`)
 
-#### [MODIFY] [ai.py](file:///C:/Users/hcche/OneDrive/Documents/GitHub/peforth/ai.py)
+#### [MODIFY] [ai.py](../../ai.py)
 
 1. **新增本地對話去雜質整理函式 `distill_messages_for_promotion(messages)`**：
    - 輸入 `vm.host["ai_messages"]`，依上述規則過濾雜質，回傳 `(distilled_text, stats_dict)`（包含保留的對話輪數、過濾掉的雜訊筆數、整理前後字元數對比）。
@@ -84,7 +84,7 @@ flowchart TD
 
 ### 2. Forth AI 詞彙層 (`ai.f`)
 
-#### [MODIFY] [ai.f](file:///C:/Users/hcche/OneDrive/Documents/GitHub/peforth/ai.f)
+#### [MODIFY] [ai.f](../../ai.f)
 
 1. **新增 `code ai-promote`**：
    ```forth
@@ -106,7 +106,7 @@ flowchart TD
 
 ### 3. 文件更新 (`skills/peforth-forth/`)
 
-#### [MODIFY] [SKILL.md](file:///C:/Users/hcche/OneDrive/Documents/GitHub/peforth/skills/peforth-forth/SKILL.md) & [forth-reference.md](file:///C:/Users/hcche/OneDrive/Documents/GitHub/peforth/skills/peforth-forth/references/forth-reference.md)
+#### [MODIFY] [SKILL.md](../../skills/peforth-forth/SKILL.md) & [forth-reference.md](../../skills/peforth-forth/references/forth-reference.md)
 - 補充說明雙模架構（預設 Stateless、透過 `ai-use` 或 `ai-promote` 切換為 Stateful）與 `ai-promote` 的用途。
 
 ---
@@ -116,7 +116,7 @@ flowchart TD
 ### 自動化測試 (`test_all.py`)
 執行指令：
 ```powershell
-C:\Users\hcche\venvs\misc\Scripts\python.exe -m unittest test_all.py
+python -m unittest test_all.py
 ```
 新增測試案例：
 1. `test_distill_messages_for_promotion`：驗證 `system` prompt、`peforth_search_words` 傾印、失敗的 `peforth_run_forth`、ANSI 審核字串、以及 Base64 圖片是否都被乾淨濾除，且保留所有有效對話與成功執行的程式碼摘要。

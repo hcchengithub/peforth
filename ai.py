@@ -936,6 +936,356 @@ def load_dotenv(env_path=None):
                     os.environ.setdefault(key, val)
 
 
+DEFAULT_PROVIDERS_CONFIG = {
+    "stateful": {
+        "provider": "OpenAI",
+        "endpoint": "https://api.openai.com/v1",
+        "model": "gpt-4o",
+        "api_key_env": "OPENAI_API_KEY",
+    },
+    "stateless": {
+        "default_profile": "openai-gpt-4o-mini",
+        "profiles": {
+            "openai-gpt-4o-mini": {
+                "provider": "OpenAI",
+                "endpoint": "https://api.openai.com/v1",
+                "model": "gpt-4o-mini",
+                "reasoning": "none",
+                "api_key_env": "OPENAI_API_KEY",
+                "aliases": ["gpt-4o-mini", "4o-mini", "openai"],
+            },
+            "openai-o3-mini": {
+                "provider": "OpenAI",
+                "endpoint": "https://api.openai.com/v1",
+                "model": "o3-mini",
+                "reasoning": "medium",
+                "api_key_env": "OPENAI_API_KEY",
+                "aliases": ["o3-mini", "o3"],
+            },
+            "google-gemini-3.8-flash": {
+                "provider": "Google",
+                "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                "model": "gemini-3.8-flash",
+                "reasoning": "Medium",
+                "api_key_env": "GEMINI_API_KEY",
+                "aliases": ["Gemini 3.8 Flash", "gemini-flash", "gemini", "google"],
+            },
+            "deepseek-chat": {
+                "provider": "DeepSeek",
+                "endpoint": "https://api.deepseek.com/v1",
+                "model": "deepseek-chat",
+                "reasoning": "none",
+                "api_key_env": "DEEPSEEK_API_KEY",
+                "aliases": ["deepseek", "deepseek-v3"],
+            },
+            "groq-llama-3.3-70b": {
+                "provider": "Groq",
+                "endpoint": "https://api.groq.com/openai/v1",
+                "model": "llama-3.3-70b-versatile",
+                "reasoning": "none",
+                "api_key_env": "GROQ_API_KEY",
+                "aliases": ["groq", "llama-3.3"],
+            },
+            "ollama-local": {
+                "provider": "Ollama",
+                "endpoint": "http://localhost:11434/v1",
+                "model": "llama3",
+                "reasoning": "none",
+                "api_key_env": "OLLAMA_API_KEY",
+                "aliases": ["ollama", "local"],
+            },
+        },
+    },
+}
+
+
+def get_providers_yaml_path(vm=None) -> Path | None:
+    file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
+    candidates = [
+        Path.cwd() / "providers.yaml",
+        Path.cwd() / "providers.yml",
+        Path(file_dir).resolve() / "providers.yaml" if file_dir else None,
+        Path(__file__).resolve().parent / "providers.yaml",
+        Path.home() / ".peforth" / "providers.yaml",
+        Path.cwd() / "providers.yaml.example",
+        Path(file_dir).resolve() / "providers.yaml.example" if file_dir else None,
+        Path(__file__).resolve().parent / "providers.yaml.example",
+        Path.home() / ".peforth" / "providers.yaml.example",
+    ]
+    for c in candidates:
+        if c and c.exists():
+            return c
+    return None
+
+
+def _parse_simple_yaml(text: str) -> dict:
+    """Parse a basic subset of YAML without external dependencies (supporting dicts, inline lists, block lists, strings)."""
+    cleaned_lines = []
+    for line in text.splitlines():
+        s = line.rstrip()
+        if not s.strip() or s.strip().startswith("#"):
+            continue
+        cleaned_lines.append(s)
+
+    root = {}
+    stack = [(-1, root)]
+
+    list_item_re = re.compile(r"^(\s*)-\s*(.*)$")
+    key_val_re = re.compile(r"^(\s*)([A-Za-z0-9_\-\.]+)\s*:\s*(.*)$")
+
+    def parse_scalar(val: str):
+        val = val.strip()
+        if not val:
+            return None
+        if val.startswith("[") and val.endswith("]"):
+            try:
+                return json.loads(val)
+            except Exception:
+                inner = val[1:-1].strip()
+                if not inner:
+                    return []
+                parts = [p.strip().strip("'\"") for p in inner.split(",")]
+                return [p for p in parts if p]
+        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+            return val[1:-1]
+        if val.lower() == "true":
+            return True
+        if val.lower() == "false":
+            return False
+        if val.lower() in ("null", "none", "~"):
+            return None
+        try:
+            if "." in val:
+                return float(val)
+            return int(val)
+        except ValueError:
+            return val
+
+    for line in cleaned_lines:
+        indent = len(line) - len(line.lstrip(" "))
+        while len(stack) > 1 and indent <= stack[-1][0]:
+            stack.pop()
+        current_parent = stack[-1][1]
+
+        m_list = list_item_re.match(line)
+        if m_list:
+            item_val = parse_scalar(m_list.group(2))
+            if isinstance(current_parent, list):
+                current_parent.append(item_val)
+            continue
+
+        m_kv = key_val_re.match(line)
+        if m_kv:
+            key = m_kv.group(2).strip()
+            rest = m_kv.group(3).strip()
+            if " #" in rest:
+                rest = rest.split(" #", 1)[0].strip()
+
+            if not rest:
+                new_dict = {}
+                if isinstance(current_parent, dict):
+                    current_parent[key] = new_dict
+                stack.append((indent, new_dict))
+            else:
+                parsed_val = parse_scalar(rest)
+                if isinstance(current_parent, dict):
+                    current_parent[key] = parsed_val
+
+    return root
+
+
+def load_providers_config(vm=None) -> dict:
+    load_dotenv()
+    config = json.loads(json.dumps(DEFAULT_PROVIDERS_CONFIG))
+    yaml_path = get_providers_yaml_path(vm)
+    if yaml_path and yaml_path.exists():
+        loaded = None
+        try:
+            import yaml
+            with open(yaml_path, "r", encoding="utf-8") as f:
+                loaded = yaml.safe_load(f)
+        except Exception:
+            pass
+        if not isinstance(loaded, dict):
+            try:
+                with open(yaml_path, "r", encoding="utf-8") as f:
+                    loaded = _parse_simple_yaml(f.read())
+            except Exception:
+                pass
+        if isinstance(loaded, dict):
+            if "stateful" in loaded and isinstance(loaded["stateful"], dict):
+                config["stateful"].update(loaded["stateful"])
+            if "stateless" in loaded and isinstance(loaded["stateless"], dict):
+                st = loaded["stateless"]
+                if "default_profile" in st:
+                    config["stateless"]["default_profile"] = st["default_profile"]
+                if "profiles" in st and isinstance(st["profiles"], dict) and st["profiles"]:
+                    config["stateless"]["profiles"] = st["profiles"]
+    return config
+
+
+def get_stateful_config(vm=None) -> dict:
+    cfg = load_providers_config(vm)
+    return cfg.get("stateful", DEFAULT_PROVIDERS_CONFIG["stateful"])
+
+
+def list_stateless_profiles(vm=None) -> list[str]:
+    cfg = load_providers_config(vm)
+    return list(cfg.get("stateless", {}).get("profiles", {}).keys())
+
+
+def get_active_stateless_profile(vm=None) -> dict:
+    if vm is not None and hasattr(vm, "host") and vm.host.get("ai_stateless_profile"):
+        return dict(vm.host["ai_stateless_profile"])
+    cfg = load_providers_config(vm)
+    stateless = cfg.get("stateless", {})
+    profiles = stateless.get("profiles", {})
+    default_name = stateless.get("default_profile", "openai-gpt-4o-mini")
+    profile = profiles.get(default_name)
+    if not profile and profiles:
+        profile = next(iter(profiles.values()))
+    if not profile:
+        profile = DEFAULT_PROVIDERS_CONFIG["stateless"]["profiles"]["openai-gpt-4o-mini"]
+    profile_copy = dict(profile)
+    env_model = os.environ.get("OPENAI_MODEL")
+    if env_model:
+        profile_copy["model"] = env_model
+    if vm is not None and hasattr(vm, "host"):
+        vm.host["ai_stateless_profile"] = profile_copy
+    return profile_copy
+
+
+def get_active_provider_info(vm=None) -> dict:
+    if vm is not None and hasattr(vm, "host") and vm.host.get("ai_active_session_id"):
+        st = get_stateful_config(vm)
+        model = st.get("model", "gpt-6-luna")
+        return {
+            "provider": st.get("provider", "OpenAI"),
+            "model": str(model),
+            "reasoning": "none",
+        }
+    prof = get_active_stateless_profile(vm)
+    model = prof.get("model", "gpt-4o-mini")
+    reasoning = prof.get("reasoning", os.environ.get("OPENAI_REASONING_EFFORT", "none"))
+    return {
+        "provider": prof.get("provider", "OpenAI"),
+        "model": str(model),
+        "reasoning": str(reasoning),
+    }
+
+
+def has_valid_api_key(vm=None) -> bool:
+    load_dotenv()
+    prof = get_active_stateless_profile(vm)
+    api_key_env = prof.get("api_key_env", "OPENAI_API_KEY")
+    if api_key_env == "OLLAMA_API_KEY":
+        return True
+    return bool(os.environ.get(api_key_env, "").strip())
+
+
+def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool, str]:
+    load_dotenv()
+    spec = (spec or "").strip()
+    if not spec:
+        return False, "[Provider Error] Provider or model specification cannot be empty."
+
+    if reasoning is None:
+        parts = re.split(r"[,，]", spec, maxsplit=1)
+        if len(parts) == 2:
+            cand_target, cand_reasoning = parts[0].strip(), parts[1].strip()
+            if cand_reasoning.lower() in ("none", "low", "medium", "high"):
+                spec = cand_target
+                reasoning = cand_reasoning.capitalize()
+        else:
+            m = re.search(r"\bwith\s+(low|medium|high|none)\s+(?:reasoning|effort)\b", spec, re.I)
+            if m:
+                reasoning = m.group(1).capitalize()
+                spec = spec[:m.start()].strip()
+
+    cfg = load_providers_config(vm)
+    profiles = cfg.get("stateless", {}).get("profiles", {})
+    spec_clean = spec.strip().lower()
+    spec_tokens = set(re.findall(r"[a-z0-9]+", spec_clean))
+
+    def _score_profile(k: str, p: dict) -> int:
+        k_lower = k.lower()
+        if k_lower == spec_clean:
+            return 1000
+        if p.get("model", "").lower() == spec_clean:
+            return 500
+        for a in p.get("aliases", []):
+            if a.lower() == spec_clean:
+                return 400
+        if p.get("provider", "").lower() == spec_clean:
+            return 300
+
+        score = 0
+        provider = p.get("provider", "").lower()
+        model = p.get("model", "").lower()
+        model_tokens = set(re.findall(r"[a-z0-9]+", model))
+        key_tokens = set(re.findall(r"[a-z0-9]+", k_lower))
+
+        if provider and provider in spec_tokens:
+            score += 50
+        elif provider and not (provider in spec_tokens):
+            all_known_providers = {prof.get("provider", "").lower() for prof in profiles.values()} - {""}
+            if any(kp in spec_tokens for kp in all_known_providers):
+                score -= 100
+
+        if model_tokens and model_tokens.issubset(spec_tokens):
+            score += 40
+        elif any(t in spec_tokens for t in model_tokens):
+            score += 20
+
+        for a in p.get("aliases", []):
+            a_tokens = set(re.findall(r"[a-z0-9]+", a.lower()))
+            if a_tokens and a_tokens.issubset(spec_tokens):
+                score += 30
+                break
+
+        if key_tokens and key_tokens.issubset(spec_tokens):
+            score += 30
+
+        return score
+
+    best_match = None
+    best_key = None
+    best_score = 0
+
+    for k, p in profiles.items():
+        s = _score_profile(k, p)
+        if s > best_score:
+            best_score = s
+            best_key, best_match = k, p
+
+    if not best_match:
+        available = ", ".join(list_stateless_profiles(vm))
+        return False, f"[Provider Error] Unknown provider or model '{spec}'. Available profiles: {available}"
+
+    matched_key, matched_profile = best_key, best_match
+
+    active = dict(matched_profile)
+    api_key_env = active.get("api_key_env", "OPENAI_API_KEY")
+    api_key = os.environ.get(api_key_env, "").strip()
+
+    if not api_key and api_key_env != "OLLAMA_API_KEY":
+        return False, f"[Provider Error] API key '{api_key_env}' is not set in environment or .env."
+
+    if reasoning is not None:
+        active["reasoning"] = reasoning.capitalize() if reasoning.lower() in ("low", "medium", "high") else reasoning
+
+    if vm is not None and hasattr(vm, "host"):
+        vm.host["ai_stateless_profile"] = active
+        vm.host.pop("ai_active_session_id", None)
+
+    if active.get("reasoning"):
+        os.environ["OPENAI_REASONING_EFFORT"] = active["reasoning"]
+
+    reasoning_disp = active.get("reasoning", "")
+    reasoning_str = f" (Reasoning: {reasoning_disp})" if reasoning_disp and reasoning_disp.lower() != "none" else ""
+    return True, f"[AI] Switched Stateless provider to {active.get('provider')} | {active.get('model')}{reasoning_str}."
+
+
 class TeeOutput(io.StringIO):
     """Mirror stdout to both the original stream and an internal buffer."""
     def __init__(self, target):
@@ -1345,6 +1695,29 @@ TOOLS_DEFINITION = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "switch_provider",
+            "description": "Switch the active AI provider, model, and reasoning effort when requested by the user in natural language (e.g. '切換到 Gemini 3.8 Flash，Medium', 'switch to o3-mini').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "provider_or_model": {
+                        "type": "string",
+                        "description": "Target provider or model name (e.g. 'Gemini 3.8 Flash', 'Google', 'o3-mini', 'DeepSeek', 'gpt-4o-mini', 'Groq').",
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "enum": ["none", "low", "medium", "high", "None", "Low", "Medium", "High"],
+                        "description": "Optional reasoning effort level.",
+                    },
+                },
+                "required": ["provider_or_model"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -1472,10 +1845,13 @@ def _sync_context(vm):
 
 def _api_request(method, path, payload=None, stream=False, timeout=30, *, vm=None, operation=None):
     load_dotenv()
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    effective_vm = vm if vm is not None else _current_sync_vm
+    st_cfg = get_stateful_config(effective_vm)
+    key_env = st_cfg.get("api_key_env", "OPENAI_API_KEY")
+    key = os.environ.get(key_env, "").strip()
     if not key:
-        raise RuntimeError("Set OPENAI_API_KEY in ~/.peforth/.env or the process environment to use AI.")
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+        raise RuntimeError(f"Set {key_env} in ~/.peforth/.env or the process environment to use AI.")
+    base_url = st_cfg.get("endpoint", "https://api.openai.com/v1").strip().rstrip("/")
     if not base_url.endswith("/agents"):
         base_url = f"{base_url}/agents"
     url = f"{base_url}{path}" if path.startswith("/") else f"{base_url}/{path}"
@@ -2517,35 +2893,66 @@ def _chat_turn_width() -> int:
     return max(24, min(shutil.get_terminal_size((80, 24)).columns, 100))
 
 
-def _chat_turn_header(role: str) -> str:
+def _chat_turn_header(role: str, provider_info: dict = None) -> str:
     try:
         from wcwidth import wcswidth
     except ImportError:
         def wcswidth(s):
             return len(s)
 
+    width = _chat_turn_width()
     if role == "user":
         title = chr(0x1F44B) + " user"
+        prefix = "╭─ " + title + " "
+        suffix = "──╮"
+        dashes = max(1, width - wcswidth(prefix) - wcswidth(suffix))
+        return prefix + "─" * dashes + suffix
     elif role == "assistant":
         title = chr(0x1FA84) + " peforth"
+        prefix = "╭─ " + title + " "
+        if provider_info:
+            p_name = provider_info.get("provider", "OpenAI")
+            m_name = provider_info.get("model", "")
+            r_level = provider_info.get("reasoning", "")
+            parts = [str(p_name)]
+            if m_name:
+                parts.append(str(m_name))
+            if r_level and str(r_level).lower() != "none":
+                parts.append(str(r_level).capitalize() if str(r_level).lower() in ("low", "medium", "high") else str(r_level))
+            meta_str = " │ ".join(parts)
+            suffix = f" {meta_str} ──╮"
+        else:
+            suffix = "──╮"
+        dashes = max(1, width - wcswidth(prefix) - wcswidth(suffix))
+        return prefix + "─" * dashes + suffix
     else:
         raise ValueError("role must be user or assistant")
-    prefix = "╭─ " + title + " "
-    dashes = max(1, _chat_turn_width() - wcswidth(prefix) - 1)
-    return prefix + "─" * dashes + "╮"
 
 
-def _chat_turn_bottom() -> str:
-    return "╰" + "─" * (_chat_turn_width() - 2) + "╯"
+def _chat_turn_bottom(timestamp: str = None) -> str:
+    try:
+        from wcwidth import wcswidth
+    except ImportError:
+        def wcswidth(s):
+            return len(s)
+
+    if timestamp is None:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    width = _chat_turn_width()
+    prefix = "╰"
+    suffix = f" {timestamp} ──╯"
+    dashes = max(1, width - wcswidth(prefix) - wcswidth(suffix))
+    return prefix + "─" * dashes + suffix
 
 
-def _print_chat_turn(role: str, text: str) -> None:
+def _print_chat_turn(role: str, text: str, provider_info: dict = None) -> None:
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
-    sys.stdout.write(_chat_turn_header(role) + "\n")
+    sys.stdout.write(_chat_turn_header(role, provider_info) + "\n")
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     for line in normalized.split("\n"):
         sys.stdout.write("  " + line + "\n")
@@ -2556,8 +2963,9 @@ def _print_chat_turn(role: str, text: str) -> None:
 class ChatBoxStreamer:
     """Manages styled chat turn output frames for terminal interactions."""
 
-    def __init__(self, stream_response: bool = True):
+    def __init__(self, stream_response: bool = True, provider_info: dict = None):
         self.stream_response = stream_response
+        self.provider_info = provider_info or {}
         self.box_open = False
         self.line_start = True
         if self.stream_response and hasattr(sys.stdout, "reconfigure"):
@@ -2575,7 +2983,7 @@ class ChatBoxStreamer:
         if not self.stream_response or not chunk:
             return
         if not self.box_open:
-            sys.stdout.write("\n" + _chat_turn_header("assistant") + "\n")
+            sys.stdout.write("\n" + _chat_turn_header("assistant", self.provider_info) + "\n")
             self.box_open = True
             self.line_start = True
 
@@ -2601,13 +3009,15 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     """Cooperative generator for one Stateful AI turn via the OpenAI Agents API (/v1/agents/sessions)."""
     init_diagnostics(vm)
     load_dotenv()
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    model = (getattr(vm.tick("aiModel"), "value", None) or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
+    stateful_cfg = get_stateful_config(vm)
+    key_env = stateful_cfg.get("api_key_env", "OPENAI_API_KEY")
+    api_key = os.environ.get(key_env, "").strip()
+    model = (stateful_cfg.get("model") or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
 
     if not api_key:
         msg = (
-            "\n[AI] OPENAI_API_KEY is not set.\n"
-            "Please configure OPENAI_API_KEY in your environment or in a .env file.\n"
+            f"\n[AI] {key_env} is not set.\n"
+            f"Please configure {key_env} in your environment or in a .env file.\n"
         )
         if stream_response:
             sys.stdout.write(msg)
@@ -2645,7 +3055,13 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
 
     accumulated_full_text = []
     remote_turn_id = None
-    streamer = ChatBoxStreamer(stream_response)
+    stateful_cfg = get_stateful_config(vm)
+    provider_info = {
+        "provider": stateful_cfg.get("provider", "OpenAI"),
+        "model": model,
+        "reasoning": "none",
+    }
+    streamer = ChatBoxStreamer(stream_response, provider_info=provider_info)
     streamer.print_user_turn(prompt)
 
     try:
@@ -2741,6 +3157,20 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                         _submit_agents_tool_result(
                             session_id, act_turn_id, call_id, True,
                             json.dumps(result_data, ensure_ascii=False),
+                        )
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+
+                    elif fn_name == "switch_provider":
+                        target = args.get("provider_or_model", "")
+                        r_level = args.get("reasoning")
+                        ok, msg = apply_stateless_provider(vm, target, reasoning=r_level)
+                        if stream_response:
+                            sys.stdout.write(f"\n{msg}\n")
+                            sys.stdout.flush()
+                        _submit_agents_tool_result(
+                            session_id, act_turn_id, call_id, ok,
+                            json.dumps({"success": ok, "message": msg}, ensure_ascii=False),
                         )
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
@@ -2986,14 +3416,17 @@ def ai_turn(vm, prompt, stream_response):
 
     init_diagnostics(vm)
     load_dotenv()
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").strip()
-    model = (getattr(vm.tick("aiModel"), "value", None) or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
+    prof = get_active_stateless_profile(vm)
+    p_name = prof.get("provider", "OpenAI")
+    base_url = prof.get("endpoint", "https://api.openai.com/v1").strip()
+    model = (prof.get("model") or "gpt-4o-mini").strip()
+    api_key_env = prof.get("api_key_env", "OPENAI_API_KEY")
+    api_key = os.environ.get(api_key_env, "").strip()
 
-    if not api_key:
-        msg = ("\n[AI] OPENAI_API_KEY is not set.\n"
-               "Please configure OPENAI_API_KEY in your environment or in a .env file.\n"
-               "Example: export OPENAI_API_KEY=\"sk-...\"\n")
+    if not api_key and api_key_env != "OLLAMA_API_KEY":
+        msg = (f"\n[AI] API key '{api_key_env}' is not set for provider '{p_name}'.\n"
+               f"Please configure {api_key_env} in your environment or in a .env file.\n"
+               f"Example: export {api_key_env}=\"sk-...\"\n")
         if stream_response:
             sys.stdout.write(msg)
             sys.stdout.flush()
@@ -3055,7 +3488,8 @@ def ai_turn(vm, prompt, stream_response):
         vm.host["ai_messages"] = messages
 
     accumulated_full_text = []
-    streamer = ChatBoxStreamer(stream_response)
+    provider_info = get_active_provider_info(vm)
+    streamer = ChatBoxStreamer(stream_response, provider_info=provider_info)
     streamer.print_user_turn(prompt)
 
     # Outer loop for handling multi-turn tool calling
@@ -3218,6 +3652,21 @@ def ai_turn(vm, prompt, stream_response):
                             "role": "tool",
                             "tool_call_id": call_id,
                             "content": json.dumps(result_data, ensure_ascii=False)
+                        })
+                        _log_event(vm, "tool_result_submitted", turn_id=turn_id,
+                                   call_id=call_id, operation=fn_name)
+
+                    elif fn_name == "switch_provider":
+                        target = args.get("provider_or_model", "")
+                        r_level = args.get("reasoning")
+                        ok, msg = apply_stateless_provider(vm, target, reasoning=r_level)
+                        if stream_response:
+                            sys.stdout.write(f"\n{msg}\n")
+                            sys.stdout.flush()
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call_id,
+                            "content": json.dumps({"success": ok, "message": msg}, ensure_ascii=False),
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)

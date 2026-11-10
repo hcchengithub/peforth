@@ -82,25 +82,27 @@ f
 
 ---
 
-## Configuration (`.env`)
+## Configuration (`.env` & `providers.yaml`)
 
 Copy `.env.example` to `.env` in your runtime directory (Windows: `$HOME\.peforth\.env`, Ubuntu/WSL: `~/.peforth/.env`):
 
 ```env
 # Start from the repository's .env.example and fill in required credentials.
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-6-luna
-# OPENAI_REASONING_EFFORT=none
+GEMINI_API_KEY=your_gemini_api_key_here
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+```
 
-# Diagnostic logging mode: normal (default), verbose, or disabled
-PEFORTH_AI_LOG_MODE=normal
+### Multi-Provider Configuration (`providers.yaml`)
 
-# Optional: custom config/database directory (defaults to ~/.peforth)
-# PEFORTH_CONFIG_DIR=~/.peforth
+peforth separates **Stateful** (OpenAI Agents API sessions) and **Stateless** (OpenAI-compatible `/chat/completions`) profiles in `providers.yaml`.
+You can switch providers dynamically using natural language or the `/provider` command:
 
-# Optional: source checkout for development; defaults to the runtime directory
-# PEFORTH_SOURCE_PATH=/path/to/peforth
+```text
+chat> 切換到 Gemini 3.8 Flash，Medium
+chat> /provider deepseek-chat
+chat> /provider
 ```
 
 

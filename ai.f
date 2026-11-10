@@ -46,8 +46,10 @@ code cancel-task
 code chat
     import os, ai
     ai.load_dotenv()
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        print("[AI] OPENAI_API_KEY is not set. Please configure OPENAI_API_KEY to use chat mode.")
+    if not ai.has_valid_api_key(vm):
+        prof = ai.get_active_stateless_profile(vm)
+        req_env = prof.get("api_key_env", "OPENAI_API_KEY")
+        print(f"[AI] API key '{req_env}' is not set. Please configure {req_env} to use chat mode.")
         return
     vm.host["repl_mode"] = "chat"
     print("Switched to chat mode (chat>). Type '/forth' to return to Forth mode.")
@@ -62,10 +64,30 @@ code forth
     // ( -- ) Switch REPL to Forth mode (>).
     last :: safe=True
 
+code provider
+    line = vm.input.read(until="\n") if "\n" in vm.input.remaining else vm.input.rest()
+    spec = line.strip()
+    import ai
+    if not spec:
+        info = ai.get_active_provider_info(vm)
+        reasoning_str = f" | {info['reasoning']}" if info.get("reasoning") and str(info["reasoning"]).lower() != "none" else ""
+        print(f"Active Provider: {info['provider']} | {info['model']}{reasoning_str}")
+        print("Available providers: " + ", ".join(ai.list_stateless_profiles(vm)))
+        return
+    ok, msg = ai.apply_stateless_provider(vm, spec)
+    print(msg)
+    end-code
+    // ( [<spec>] -- ) Switch active Stateless provider or inspect available providers.
+    /// Usage: provider Gemini 3.8 Flash, Medium
+    /// Usage: provider  (lists active and available providers)
+    last :: safe=True
+
+' provider alias ai-provider
+
 <py>
 import os, ai
 ai.load_dotenv()
-if os.environ.get("OPENAI_API_KEY", "").strip():
+if ai.has_valid_api_key(vm):
     vm.host.setdefault("repl_mode", "chat")
 else:
     vm.host["repl_mode"] = "forth"
@@ -81,16 +103,6 @@ code list-skills
 
 
 \ --- 3.5 System Info & Shell Execution Primitives ---
-
-code initial-ai-model
-    import os
-    vm.push(os.environ.get("OPENAI_MODEL") or os.environ.get("PEFORTH_AI_MODEL") or "gpt-6-luna")
-    end-code
-last :: safe=True
-
-initial-ai-model value aiModel
-    // ( -- model-name ) Current AI model. Change with: s" model-name" to aiModel.
-last :: safe=True
 
 code (ai-tool-error)
     message = vm.pop()
