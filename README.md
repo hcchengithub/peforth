@@ -42,12 +42,11 @@ peforth distinguishes between the **development repository** and **runtime execu
 For WSL, keep this Linux checkout inside its native Linux filesystem (`~/.peforth`), not under `/mnt/c`:
 
 ```bash
-git clone -b develop-210 https://github.com/hcchengithub/peforth.git ~/.peforth
+git clone https://github.com/hcchengithub/peforth.git ~/.peforth
 cd ~/.peforth
 uv venv
 uv pip install --python .venv -e .
 ~/.peforth/.venv/bin/f
-```
 
 To invoke `f` by name from anywhere in your shell:
 
@@ -61,7 +60,7 @@ f
 ### 2. Windows PowerShell Runtime
 
 ```powershell
-git clone -b develop-210 https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
+git clone https://github.com/hcchengithub/peforth.git "$HOME\.peforth"
 Set-Location "$HOME\.peforth"
 uv venv
 uv pip install --python .venv -e .
@@ -97,14 +96,19 @@ GROQ_API_KEY=your_groq_api_key_here
 ### Multi-Provider Configuration (`providers.yaml`)
 
 peforth separates **Stateful** (OpenAI Agents API sessions) and **Stateless** (OpenAI-compatible `/chat/completions`) profiles in `providers.yaml`.
-You can switch providers dynamically using natural language or the `/provider` command:
+You can inspect available profiles or switch providers dynamically using the `/provider` command or natural language:
 
 ```text
-chat> 切換到 Gemini 3.8 Flash，Medium
-chat> /provider deepseek-chat
 chat> /provider
-```
+Current provider: gpt-6-luna (Stateful)
+Available profiles: gpt-6-luna, gemini-flash, deepseek-v3
 
+chat> /provider gpt-6-luna
+Switched to provider profile: gpt-6-luna
+
+chat> please switch LLM to Gemini Flash
+Switched to provider profile: gemini-flash
+```
 
 ---
 
