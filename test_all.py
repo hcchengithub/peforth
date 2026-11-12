@@ -291,7 +291,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         active_prof = ai.get_active_stateless_profile(vm)
         req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
         with unittest.mock.patch("ai.load_dotenv", lambda *a, **k: None), \
-             unittest.mock.patch.dict("os.environ", {req_env: "", "OPENAI_API_KEY": "", "GEMINI_API_KEY": "", "DEEPSEEK_API_KEY": ""}):
+             unittest.mock.patch.dict("os.environ", {req_env: "", "OPENAI_API_KEY": "", "GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
             vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
             self.assertEqual(vm.host.get("repl_mode"), "forth")
 
@@ -1136,14 +1136,14 @@ vm.push(calc(a, b))
             self.assertEqual(info["reasoning"], "Medium")
 
         # 5. Test ai-provider alias works identically
-        if "deepseek-chat" in cfg["stateless"]["profiles"]:
-            with patch.dict("os.environ", {"DEEPSEEK_API_KEY": "test-key-deepseek"}):
+        if "groq-llama-3.3-70b" in cfg["stateless"]["profiles"]:
+            with patch.dict("os.environ", {"GROQ_API_KEY": "test-key-groq"}):
                 buf_alias = io.StringIO()
                 with contextlib.redirect_stdout(buf_alias):
-                    self.vm.dictate("ai-provider deepseek")
-                self.assertIn("[AI] Switched Stateless provider to DeepSeek | deepseek-chat.", buf_alias.getvalue())
+                    self.vm.dictate("ai-provider groq")
+                self.assertIn("[AI] Switched Stateless provider to Groq | llama-3.3-70b-versatile.", buf_alias.getvalue())
                 info = ai.get_active_provider_info(self.vm)
-                self.assertEqual(info["provider"], "DeepSeek")
+                self.assertEqual(info["provider"], "Groq")
         else:
             with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key-gemini"}):
                 buf_alias = io.StringIO()

@@ -23,7 +23,7 @@ flowchart TD
     end
 
     subgraph DualModeExecution ["雙模式執行層"]
-        ActiveProfile --> StatelessExec["Stateless 模式 (/chat/completions)\n支援 OpenAI / Google / DeepSeek / Groq / 本地模型"]
+        ActiveProfile --> StatelessExec["Stateless 模式 (/chat/completions)\n支援 OpenAI / Google / Groq / 本地模型"]
         StatefulExec["Stateful 模式 (OpenAI Agents API /v1/agents)\n獨立設定，不受 Stateless 切換影響"]
     end
 
@@ -80,14 +80,6 @@ stateless:
       api_key_env: "GEMINI_API_KEY"
       aliases: ["Gemini 3.8 Flash", "gemini-flash", "gemini", "google"]
 
-    deepseek-chat:
-      provider: "DeepSeek"
-      endpoint: "https://api.deepseek.com/v1"
-      model: "deepseek-chat"
-      reasoning: "none"
-      api_key_env: "DEEPSEEK_API_KEY"
-      aliases: ["deepseek", "deepseek-v3"]
-
     groq-llama-3.3-70b:
       provider: "Groq"
       endpoint: "https://api.groq.com/openai/v1"
@@ -113,7 +105,6 @@ stateless:
   ```bash
   OPENAI_API_KEY="sk-..."
   GEMINI_API_KEY="AIza..."
-  DEEPSEEK_API_KEY="sk-..."
   GROQ_API_KEY="gsk_..."
   ```
 - 確認 `.env` 已登錄在 `.gitignore` 中，杜絕外洩風險。
@@ -152,7 +143,7 @@ ai-provider ( <profile-or-spec> -- )
        "parameters": {
          "type": "object",
          "properties": {
-           "provider_or_model": { "type": "string", "description": "Target provider or model name (e.g. 'Gemini 3.8 Flash', 'DeepSeek', 'o3-mini')" },
+           "provider_or_model": { "type": "string", "description": "Target provider or model name (e.g. 'Gemini 3.8 Flash', 'Groq', 'o3-mini')" },
            "reasoning": { "type": "string", "enum": ["none", "low", "medium", "high", "None", "Low", "Medium", "High"], "description": "Optional reasoning effort level" }
          },
          "required": ["provider_or_model"]

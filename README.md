@@ -90,7 +90,6 @@ Copy `.env.example` to `.env` in your runtime directory (Windows: `$HOME\.pefort
 # Start from the repository's .env.example and fill in required credentials.
 OPENAI_API_KEY=your_openai_api_key_here
 GEMINI_API_KEY=your_gemini_api_key_here
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
@@ -102,7 +101,7 @@ You can inspect available profiles or switch providers dynamically using the `/p
 ```text
 chat> /provider
 Current provider: gpt-6-luna (Stateful)
-Available profiles: gpt-6-luna, gemini-flash, deepseek-v3
+Available profiles: gpt-6-luna, gemini-flash, groq-llama-3.3-70b
 
 chat> /provider gpt-6-luna
 Switched to provider profile: gpt-6-luna
