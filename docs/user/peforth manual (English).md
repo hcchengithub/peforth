@@ -1,9 +1,9 @@
-# peforth v2.1.0 — Forth Kernel Technical Manual and Architectural Philosophy
+# peforth 2.1.0 — Forth Kernel Technical Manual and Architectural Philosophy
 
 > English edition · Companion to the Traditional Chinese [peforth manual](peforth%20manual.md).
 >
 > Runtime: Python 3.10+ on Linux, WSL, and Windows.
-> Principal sources: `main.py`, `init.f`, `peforth.f`, `projectk.py`, `repl.f`, `base.f`, `ai.f`, and `ai.py`.
+> Principal sources: `main.py`, `init.f`, `peforth.f`, `projectk.py`, `base.f`, `auxiliary.f`, `ai.f`, `herdr.f`, `repl.f`, and `ai.py`.
 
 This is an **architecture and design manual**, not an exhaustive dictionary word reference. Every Forth word provides runtime help and comments via `help` and `see`. For installation, virtual environment setup, configuration (`.env` and `providers.yaml`), the `f` CLI command, and quick start instructions, please consult the repository [README](../../README.md). For details on the AI assistant, also see [AI User Manual](ai.md).
 
@@ -15,11 +15,11 @@ Forth's enduring appeal lies in its small stack machine, postfix notation, open 
 
 **peforth (Python Edition)** takes another path: retain Forth's programmable language machinery while letting Python supply objects, libraries, I/O, and system integration. Rather than making Python look like Forth or turning Forth into a conventional Python wrapper, the two languages cooperate. Forth orchestrates; Python provides rich capabilities.
 
-In `peforth v2.1.0`, this philosophy reaches its definitive expression:
+In `peforth 2.1.0`, this philosophy reaches its definitive expression:
 
 > **"Forth drives Forth; Python provides host primitives."**
 
-Instead of a monolithic Python supervisor controlling the outer loop, peforth 2.1.0 boots from a tiny 9-line shim (`main.py`), initializes its micro-kernel (`projectk.py`), constructs its compiler through `init.f`, loads its modules via `peforth.f`, and drives its interactive REPL directly inside Forth (`repl.f`).
+Instead of a monolithic Python supervisor controlling the outer loop, peforth 2.1.0 boots from a tiny under-20-line shim (`main.py`), initializes its micro-kernel (`projectk.py`), constructs its compiler through `init.f`, loads its modules via `peforth.f`, and drives its interactive REPL directly inside Forth (`repl.f`).
 
 ---
 
@@ -41,7 +41,7 @@ peforth divides computation and task-local state across three distinct stacks:
 flowchart TB
     subgraph VM ["VM Instance"]
         direction LR
-        subgraph DS ["Data Stack (vm.stack)"]
+        subgraph DS ["Data Stack (vm.dstack)"]
             direction TB
             D1["TOS (Top of Stack)"]
             D2["..."]
@@ -66,9 +66,9 @@ flowchart TB
     end
 ```
 
-1. **Data Stack (`vm.stack`)**:
+1. **Data Stack (`vm.dstack`)**:
    - The shared operand highway across executions within the same VM instance.
-   - Implemented as a native Python list. Popping from an empty stack triggers a clean `KernelError("Data stack underflow")`, preventing memory corruption.
+   - Implemented as a native Python list. Popping from an empty stack triggers a clean `KernelError: Invalid data stack depth (or empty stack)`, preventing memory corruption.
 2. **Return Stack (`Task.rstack`)**:
    - **Task-Private**: Each Task maintains its own return stack. `vm.rstack` dynamically proxies operations to the currently active Task.
    - Holds loop counters (for `for ... next / aft`) and temporary values (`>r`, `r>`, `r@`, `rdrop`). When a Task pauses, its loop state remains isolated and safe from interference by other tasks.
@@ -98,12 +98,14 @@ In peforth 2.1.0, execution flows strictly from minimal bootstrapping to Forth-d
 
 ```mermaid
 flowchart TD
-    A["main.py (9 lines)\nInstantiates VM & dictates init.f"] --> B["init.f (Bootstrap Core)\nDefines :, ;, comments, pause/resume, include"]
+    A["main.py (fewer than 20 lines)\nInstantiates VM & dictates init.f"] --> B["init.f (Bootstrap Core)\nDefines :, ;, comments, pause/resume, include"]
     B --> C["peforth.f (Master Manifest)\nLoads modules in sequence"]
-    C --> D["ai.f\nTask security guards & ai:"]
-    C --> E["base.f\nStandard vocabulary with safe=True annotations"]
-    C --> F["repl.f\nInteractive multiline REPL loop in Forth"]
-    C --> G["?repl\nLaunches REPL (skipped if headless=True)"]
+    C --> D["base.f\nStandard vocabulary with safe=True annotations"]
+    D --> E["auxiliary.f\nAuxiliary words"]
+    E --> F["ai.f\nTask security guards & ai:"]
+    F --> G["herdr.f\nExtension module"]
+    G --> H["repl.f\nInteractive multiline REPL loop"]
+    H --> I["?repl\nLaunches REPL (skipped if headless=True)"]
 ```
 
 1. **`main.py`**:
@@ -114,7 +116,7 @@ flowchart TD
    include peforth.f
    ```
 3. **`peforth.f`**:
-   The master manifest that includes `ai.f`, `base.f`, and `repl.f`, culminating in the conditional invocation word `?repl`. Setting `vm.host["headless"] = True` enables headless execution for automated testing without hanging on terminal input.
+   The master manifest that includes `base.f`, `auxiliary.f`, `ai.f`, `herdr.f`, and `repl.f`, culminating in the conditional invocation word `?repl`. Setting `vm.host["headless"] = True` enables headless execution for automated testing without hanging on terminal input.
 4. **`repl.f`**:
    The interactive REPL is implemented as a Forth word (`code repl`). It supports multiline input accumulation, state-aware continuation (`chat>` vs `>` vs `... `), and optional `prompt_toolkit` bindings with graceful fallback to standard `input()`.
 
@@ -202,7 +204,7 @@ end-code
 
 ## 7. Tasks, Cooperative Pause, and Coroutines
 
-peforth v2.1.0 manages execution through cooperative Tasks built on Python generators.
+peforth 2.1.0 manages execution through cooperative Tasks built on Python generators.
 
 ### 7.1 Task Lifecycle & State Transitions
 
@@ -291,7 +293,7 @@ Installing in editable mode (`uv pip install -e .`) exposes the `f` executable d
 
 ### 10.3 Triple-Guard Verification Suite
 To prevent regressions, peforth 2.1.0 incorporates three layers of automated verification:
-1. **Architectural AST Contract Tests**: Enforce architectural rules (e.g., `main.py` is under 15 lines and contains no loops; `init.f` ends strictly with `include peforth.f`).
+1. **Architectural AST Contract Tests**: Enforce architectural rules (e.g., `main.py` is under 20 lines and contains no loops; `init.f` ends strictly with `include peforth.f`).
 2. **Native Forth Self-Test (`selftest.f`)**: A self-contained Forth test suite executed directly in the VM.
 3. **Comprehensive Unit Suite (`test_all.py`)**: Tests data stacks, loops, control structures, tokenizers, multiline parsing, session storage, and security guards. Run tests via:
    ```bash
@@ -300,6 +302,44 @@ To prevent regressions, peforth 2.1.0 incorporates three layers of automated ver
 
 ---
 
+## 11. Diagnostics Logging — Reconstructing AI Execution History
+
+peforth 2.1.0 introduces SQLite-backed Diagnostics Logging so that AI activity can be studied beyond the final response. In the `2.1.0` tag, `diagnostic_log.py` and `ai.py` implement `ai-diagnostics.sqlite3` with `runtimes`, `turns`, `timeline`, and `contents` tables, connecting execution environments, conversation turns, timestamped events, and recorded content.
+
+- **Conversation reconstruction**: Follow a particular session, turn, or point in time to examine prompts, responses, and associated execution events.
+- **Tool calling and debugging**: Inspect event sequences, call IDs, HTTP statuses, durations, and errors to understand how an AI invoked tools, what difficulties arose, whether it retried, and how execution progressed. The available detail depends on what was recorded at the time.
+- **Live observation**: `tools/peforth_logging_monitor.py` provides a terminal monitor, while `tools/peforth_watchdog.py` helps identify AI turns that have stopped making observable progress.
+
+The execution process itself becomes useful evidence for debugging, evaluation, and further development. For detailed schema relationships and queries, explore `diagnostic_log.py` and the monitor source with an AI coding assistant.
+
+---
+
+## 12. Session Mirror and the Stateful / Stateless Architecture
+
+### 12.1 Session Mirror — Bringing Remote History into a Local Database
+
+In peforth 2.1.0, `session_store.py` implements a SQLite mirror of OpenAI Agents API sessions. The `sessions.sqlite3` database stores session metadata and ordered session items, including their original JSON and turn associations, in `sessions` and `session_items` tables. This is designed as a **read-only mirror**: editing the local database does not modify remote sessions.
+
+The `sync_sessions()` implementation in `ai.py` lists remote sessions, downloads items for new or updated sessions, refreshes metadata for unchanged sessions, and marks sessions that no longer appear remotely. Incremental synchronization makes historical conversations available locally for inspection, searching, and research.
+
+Session Mirror provides a **persistent, searchable foundation for long-term history and memory**. It does not mean every AI inference automatically receives every previous conversation; relevant history must still be retrieved and supplied as context when needed.
+
+### 12.2 Stateful and Stateless — Two Complementary AI Paths
+
+The `DEFAULT_PROVIDERS_CONFIG` in `ai.py` explicitly separates `stateful` and `stateless` configurations:
+
+- **Stateful** uses remote sessions managed by the OpenAI Agents API, with Session Mirror available for local historical access.
+- **Stateless** uses OpenAI-compatible endpoints and selectable provider profiles, supporting providers such as OpenAI, Gemini, Groq, and Ollama. Here, *stateless* means the application does not rely on Agents API remote session management; it can still maintain conversation history on its own.
+
+Both paths operate within peforth's Forth / Python environment, offering flexibility in model selection, session management, and experimentation.
+
+> [!TIP]
+> Rather than expanding every implementation detail into a long manual, use GitHub Copilot or the Gemini sidebar in Chrome to explore the repository directly. Ask about `ai.py`, `session_store.py`, `diagnostic_log.py`, and `ai.f`, then follow up on specific tool calls, retry events, SQLite schemas, or provider-switching behavior.
+
+---
+
 ## Conclusion — An Elegant Synthesis
 
 peforth 2.1.0 demonstrates that minimalism and modern capabilities are not mutually exclusive. By establishing the golden rule—**"Forth drives Forth; Python provides host primitives"**—peforth achieves an extraordinarily lightweight micro-kernel, a flexible multi-provider AI pair programmer, and a secure, introspectable computing environment.
+
+---
