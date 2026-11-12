@@ -38,7 +38,10 @@ code repl
     code_buffer = []
 
     ai.load_dotenv()
-    has_api_key = ai.has_valid_api_key(vm)
+    has_api_key, fallback_profile = ai.select_startup_stateless_profile(vm)
+    if fallback_profile:
+        active = ai.get_active_stateless_profile(vm)
+        print(f"[AI] Active provider key is unavailable; using {active.get('provider')} | {active.get('model')} (profile: {fallback_profile}).")
     if not has_api_key:
         vm.host["repl_mode"] = "forth"
     else:
@@ -63,8 +66,8 @@ code repl
     if not has_api_key:
         active_prof = ai.get_active_stateless_profile(vm)
         req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
-        print(f"\n[Notice] {req_env} is not set; AI features are unavailable.")
-        print("Falling back to Forth mode (>). Configure OPENAI_API_KEY in .env to enable chat mode.")
+        print(f"\n[Notice] {req_env} is not set; no configured provider has usable credentials, so AI features are unavailable.")
+        print("Falling back to Forth mode (>). Configure the API key required by a provider in .env to enable chat mode.")
     # Keep the rest of the startup guidance in the Forth greeting word.
     vm.dictate("greeting")
 

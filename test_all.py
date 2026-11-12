@@ -228,6 +228,61 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.vm.dictate("chat")
         self.assertEqual(self.vm.host.get("repl_mode"), "chat")
 
+    def test_startup_provider_keeps_active_profile_when_key_exists(self):
+        import ai
+        import unittest.mock
+
+        profiles = {
+            "preferred": {"provider": "Preferred", "model": "p-model", "api_key_env": "PREFERRED_KEY"},
+            "fallback": {"provider": "Fallback", "model": "f-model", "api_key_env": "FALLBACK_KEY"},
+        }
+        config = {"stateless": {"default_profile": "preferred", "profiles": profiles}}
+        vm = VM({"headless": True})
+        with unittest.mock.patch("ai.load_dotenv", lambda *a, **k: None), \
+             unittest.mock.patch("ai.load_providers_config", return_value=config), \
+             unittest.mock.patch.dict(os.environ, {"PREFERRED_KEY": "present", "FALLBACK_KEY": "also-present"}, clear=True):
+            ok, selected = ai.select_startup_stateless_profile(vm)
+        self.assertTrue(ok)
+        self.assertIsNone(selected)
+        self.assertEqual(vm.host["ai_stateless_profile"]["provider"], "Preferred")
+
+    def test_startup_provider_uses_first_profile_with_configured_key(self):
+        import ai
+        import unittest.mock
+
+        profiles = {
+            "openai": {"provider": "OpenAI", "model": "o-model", "api_key_env": "OPENAI_API_KEY"},
+            "first-fallback": {"provider": "Fallback A", "model": "a-model", "api_key_env": "FALLBACK_A_KEY"},
+            "second-fallback": {"provider": "Fallback B", "model": "b-model", "api_key_env": "FALLBACK_B_KEY"},
+        }
+        config = {"stateless": {"default_profile": "openai", "profiles": profiles}}
+        vm = VM({"headless": True})
+        env = {"OPENAI_API_KEY": "", "FALLBACK_A_KEY": "configured", "FALLBACK_B_KEY": "configured-too"}
+        with unittest.mock.patch("ai.load_dotenv", lambda *a, **k: None), \
+             unittest.mock.patch("ai.load_providers_config", return_value=config), \
+             unittest.mock.patch.dict(os.environ, env, clear=True):
+            ok, selected = ai.select_startup_stateless_profile(vm)
+        self.assertTrue(ok)
+        self.assertEqual(selected, "first-fallback")
+        self.assertEqual(vm.host["ai_stateless_profile"]["provider"], "Fallback A")
+
+    def test_startup_provider_fails_when_no_profile_has_credentials(self):
+        import ai
+        import unittest.mock
+
+        profiles = {
+            "openai": {"provider": "OpenAI", "model": "o-model", "api_key_env": "OPENAI_API_KEY"},
+            "other": {"provider": "Other", "model": "x-model", "api_key_env": "OTHER_KEY"},
+        }
+        config = {"stateless": {"default_profile": "openai", "profiles": profiles}}
+        vm = VM({"headless": True})
+        with unittest.mock.patch("ai.load_dotenv", lambda *a, **k: None), \
+             unittest.mock.patch("ai.load_providers_config", return_value=config), \
+             unittest.mock.patch.dict(os.environ, {"OPENAI_API_KEY": "", "OTHER_KEY": ""}, clear=True):
+            ok, selected = ai.select_startup_stateless_profile(vm)
+        self.assertFalse(ok)
+        self.assertIsNone(selected)
+
     def test_missing_api_key_fallbacks_to_forth_mode(self):
         import unittest.mock
         import ai

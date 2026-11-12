@@ -1197,6 +1197,22 @@ def has_valid_api_key(vm=None) -> bool:
     return bool(os.environ.get(api_key_env, "").strip())
 
 
+def select_startup_stateless_profile(vm=None) -> tuple[bool, str | None]:
+    """Keep the active profile when usable; otherwise select first configured profile with credentials."""
+    load_dotenv()
+    if has_valid_api_key(vm):
+        return True, None
+
+    profiles = load_providers_config(vm).get("stateless", {}).get("profiles", {})
+    for name, profile in profiles.items():
+        api_key_env = profile.get("api_key_env", "OPENAI_API_KEY")
+        if api_key_env == "OLLAMA_API_KEY" or os.environ.get(api_key_env, "").strip():
+            ok, _message = apply_stateless_provider(vm, name)
+            if ok:
+                return True, name
+    return False, None
+
+
 def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool, str]:
     load_dotenv()
     spec = (spec or "").strip()
