@@ -61,17 +61,24 @@ EMOJI = {
 def default_database() -> Path:
     configured = os.environ.get("PEFORTH_CONFIG_DIR")
     if configured:
-        directory = Path(configured).expanduser()
+        directory = Path(os.path.expanduser(os.path.expandvars(configured.strip())))
     else:
         try:
             home = Path.home()
         except Exception:
             home = Path(os.environ.get("USERPROFILE") or os.environ.get("HOME") or tempfile.gettempdir())
         directory = home / ".peforth"
-    return directory / "ai-diagnostics.sqlite3"
+    cand_db = directory / "db" / "ai-diagnostics.sqlite3"
+    if not cand_db.exists() and (directory / "ai-diagnostics.sqlite3").exists():
+        return directory / "ai-diagnostics.sqlite3"
+    return cand_db
 
 
 def connect_readonly(path: Path) -> sqlite3.Connection:
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn_init = sqlite3.connect(str(path.expanduser().resolve()))
+        conn_init.close()
     resolved = str(path.expanduser().resolve())
     uri = f"file:{quote(resolved, safe='/:')}?mode=ro"
     connection = sqlite3.connect(uri, uri=True)

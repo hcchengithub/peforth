@@ -1527,6 +1527,22 @@ class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):
         self.assertIn("🛠️", rendered[3])
         self.assertIn("peforth_run_forth", rendered[3])
 
+    def test_peforth_logging_monitor_default_database_expands_env_vars(self):
+        from tools.peforth_logging_monitor import default_database, connect_readonly
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_db_dir = Path(tmpdir) / "custom_dir"
+            (test_db_dir / "db").mkdir(parents=True)
+            db_file = test_db_dir / "db" / "ai-diagnostics.sqlite3"
+            db_file.touch()
+
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(test_db_dir)}):
+                resolved_db = default_database()
+                self.assertEqual(resolved_db, db_file)
+                conn = connect_readonly(resolved_db)
+                self.assertIsNotNone(conn)
+                conn.close()
+
     def test_ai_diagnostics_query_tool(self):
         from diagnostic_log import DiagnosticLog
         import tools.ai_diagnostics as diag_tool
@@ -1894,7 +1910,7 @@ class TestSessionStoreAndSync(unittest.TestCase):
         import ai
         from session_store import SessionStore, SCHEMA_VERSION
         db_path = ai._session_db_path()
-        self.assertEqual(db_path, self.config_dir / "sessions" / "sessions.sqlite3")
+        self.assertEqual(db_path, self.config_dir / "db" / "sessions.sqlite3")
         with SessionStore(db_path) as store:
             version = store.connection.execute("PRAGMA user_version").fetchone()[0]
             self.assertEqual(version, SCHEMA_VERSION)
@@ -3020,6 +3036,74 @@ class TestStatefulModelSwitching(unittest.TestCase):
         val = out.getvalue()
         self.assertIn("Mode: Stateless", val)
         self.assertIn("Model: Google | gemini-3.8-flash (Reasoning: Medium)", val)
+
+
+class TestRequiredProvidersYaml(unittest.TestCase):
+    def test_get_providers_yaml_path_does_not_fallback_to_example(self):
+        import ai
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            (tmp_path / "providers.yaml.example").write_text("stateful:\n  provider: OpenAI\n", encoding="utf-8")
+            vm = VM({"headless": True, "__file__dir__": str(tmp_path)})
+            fake_ai_file = str(tmp_path / "ai.py")
+            with patch.object(Path, "cwd", return_value=tmp_path), \
+                 patch.object(ai, "__file__", fake_ai_file), \
+                 patch.object(ai, "_safe_home_dir", return_value=tmp_path / "home"):
+                self.assertIsNone(ai.get_providers_yaml_path(vm))
+
+    def test_missing_providers_yaml_raises_and_guides_from_example(self):
+        import ai
+        import contextlib
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        with patch.object(ai, "get_providers_yaml_path", return_value=None):
+            vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+            self.assertEqual(vm.host.get("repl_mode"), "forth")
+            with self.assertRaises(ai.ProvidersConfigError) as ctx:
+                ai.load_providers_config(vm)
+            err_msg = str(ctx.exception)
+            self.assertIn("providers.yaml", err_msg)
+            self.assertIn("providers.yaml.example", err_msg)
+
+            self.assertFalse(ai.has_valid_api_key(vm))
+            self.assertEqual(ai.select_startup_stateless_profile(vm), (False, None))
+
+            ok, switch_msg = ai.apply_stateless_provider(vm, "Google")
+            self.assertFalse(ok)
+            self.assertIn("providers.yaml.example", switch_msg)
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                vm.dictate("chat")
+            self.assertIn("providers.yaml.example", out.getvalue())
+
+
+    def test_system_prompt_and_db_paths_use_db_subdir(self):
+        import ai
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            vm = VM({"headless": True, "__file__dir__": str(HERE)})
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                diag_path = ai._diagnostic_db_path(vm)
+                sess_path = ai._session_db_path()
+                self.assertEqual(diag_path, cfg_dir / "db" / "ai-diagnostics.sqlite3")
+                self.assertEqual(sess_path, cfg_dir / "db" / "sessions.sqlite3")
+
+                sys_info = ai.detect_system_info(vm)
+                self.assertEqual(sys_info["config"]["diagnostic_db_path"], str(diag_path))
+                self.assertEqual(sys_info["config"]["session_db_path"], str(sess_path))
+
+                prompt = ai.get_system_prompt(vm)
+                self.assertIn(f"Diagnostic Logging DB: {diag_path}", prompt)
+                self.assertIn(f"Sessions Mirror DB: {sess_path}", prompt)
 
 
 if __name__ == "__main__":

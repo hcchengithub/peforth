@@ -47,9 +47,12 @@ code chat
     import os, ai
     ai.load_dotenv()
     if not ai.has_valid_api_key(vm):
-        prof = ai.get_active_stateless_profile(vm)
-        req_env = prof.get("api_key_env", "OPENAI_API_KEY")
-        print(f"[AI] API key '{req_env}' is not set. Please configure {req_env} to use chat mode.")
+        try:
+            prof = ai.get_active_stateless_profile(vm)
+            req_env = prof.get("api_key_env", "OPENAI_API_KEY")
+            print(f"[AI] API key '{req_env}' is not set. Please configure {req_env} to use chat mode.")
+        except ai.ProvidersConfigError as e:
+            print(e)
         return
     vm.host["repl_mode"] = "chat"
     print("Switched to chat mode (chat>). Type '/forth' to return to Forth mode.")
@@ -69,10 +72,13 @@ code provider
     spec = line.strip()
     import ai
     if not spec:
-        info = ai.get_active_provider_info(vm)
-        reasoning_str = f" | {info['reasoning']}" if info.get("reasoning") and str(info["reasoning"]).lower() != "none" else ""
-        print(f"Active Provider: {info['provider']} | {info['model']}{reasoning_str}")
-        print("Available providers: " + ", ".join(ai.list_stateless_profiles(vm)))
+        try:
+            info = ai.get_active_provider_info(vm)
+            reasoning_str = f" | {info['reasoning']}" if info.get("reasoning") and str(info["reasoning"]).lower() != "none" else ""
+            print(f"Active Provider: {info['provider']} | {info['model']}{reasoning_str}")
+            print("Available providers: " + ", ".join(ai.list_stateless_profiles(vm)))
+        except ai.ProvidersConfigError as e:
+            print(e)
         return
     ok, msg = ai.apply_stateless_provider(vm, spec)
     print(msg)

@@ -156,7 +156,7 @@ class SessionStoreAndSyncTests(unittest.TestCase):
 
     def test_schema_creation_and_role_null_for_non_message_items(self):
         db_path = ai._session_db_path()
-        self.assertEqual(db_path, self.config_dir / "sessions" / "sessions.sqlite3")
+        self.assertEqual(db_path, self.config_dir / "db" / "sessions.sqlite3")
         with SessionStore(db_path) as store:
             version = store.connection.execute("PRAGMA user_version").fetchone()[0]
             self.assertEqual(version, SCHEMA_VERSION)

@@ -896,6 +896,8 @@ def detect_system_info(vm=None) -> dict:
         "HERDR_PANE_ID": os.environ.get("HERDR_PANE_ID", ""),
         "LINE_USER_ID_SET": bool(os.environ.get("LINE_USER_ID", "").strip()),
         "LINE_CHANNEL_ACCESS_TOKEN_SET": bool(os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()),
+        "diagnostic_db_path": str(_diagnostic_db_path(vm)),
+        "session_db_path": str(_session_db_path()),
     }
 
     return {
@@ -950,59 +952,31 @@ def load_dotenv(env_path=None):
                     os.environ.setdefault(key, val)
 
 
-DEFAULT_PROVIDERS_CONFIG = {
-    "stateful": {
-        "provider": "OpenAI",
-        "endpoint": "https://api.openai.com/v1",
-        "model": "gpt-4o",
-        "api_key_env": "OPENAI_API_KEY",
-    },
-    "stateless": {
-        "default_profile": "openai-gpt-4o-mini",
-        "profiles": {
-            "openai-gpt-4o-mini": {
-                "provider": "OpenAI",
-                "endpoint": "https://api.openai.com/v1",
-                "model": "gpt-4o-mini",
-                "reasoning": "none",
-                "api_key_env": "OPENAI_API_KEY",
-                "aliases": ["gpt-4o-mini", "4o-mini", "openai"],
-            },
-            "openai-o3-mini": {
-                "provider": "OpenAI",
-                "endpoint": "https://api.openai.com/v1",
-                "model": "o3-mini",
-                "reasoning": "medium",
-                "api_key_env": "OPENAI_API_KEY",
-                "aliases": ["o3-mini", "o3"],
-            },
-            "google-gemini-3.8-flash": {
-                "provider": "Google",
-                "endpoint": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                "model": "gemini-3.8-flash",
-                "reasoning": "Medium",
-                "api_key_env": "GEMINI_API_KEY",
-                "aliases": ["Gemini 3.8 Flash", "gemini-flash", "gemini", "google"],
-            },
-            "groq-llama-3.3-70b": {
-                "provider": "Groq",
-                "endpoint": "https://api.groq.com/openai/v1",
-                "model": "llama-3.3-70b-versatile",
-                "reasoning": "none",
-                "api_key_env": "GROQ_API_KEY",
-                "aliases": ["groq", "llama-3.3"],
-            },
-            "ollama-local": {
-                "provider": "Ollama",
-                "endpoint": "http://localhost:11434/v1",
-                "model": "llama3",
-                "reasoning": "none",
-                "api_key_env": "OLLAMA_API_KEY",
-                "aliases": ["ollama", "local"],
-            },
-        },
-    },
-}
+class ProvidersConfigError(RuntimeError):
+    """Raised when required providers.yaml configuration is missing or invalid."""
+
+
+def format_missing_providers_yaml_message(vm=None) -> str:
+    file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
+    example_candidates = [
+        Path.cwd() / "providers.yaml.example",
+        Path(file_dir).resolve() / "providers.yaml.example" if file_dir else None,
+        Path(__file__).resolve().parent / "providers.yaml.example",
+        _safe_home_dir() / ".peforth" / "providers.yaml.example",
+    ]
+    example_path = next(
+        (c for c in example_candidates if c and c.exists()),
+        Path(__file__).resolve().parent / "providers.yaml.example",
+    )
+    target_path = (Path(file_dir).resolve() / "providers.yaml") if file_dir else (Path(__file__).resolve().parent / "providers.yaml")
+    home_target = _safe_home_dir() / ".peforth" / "providers.yaml"
+    return (
+        "[AI Config Error] Missing required 'providers.yaml' configuration file.\n"
+        "No default provider fallback is used. Please create 'providers.yaml' from the example template:\n"
+        f"  1. Copy '{example_path}' to '{target_path}' (or '{home_target}').\n"
+        "  2. Edit 'providers.yaml' to configure your stateful/stateless providers, models, and api_key_env names.\n"
+        "  3. Ensure the corresponding API key(s) are set in your environment or .env file."
+    )
 
 
 def get_providers_yaml_path(vm=None) -> Path | None:
@@ -1013,10 +987,6 @@ def get_providers_yaml_path(vm=None) -> Path | None:
         Path(file_dir).resolve() / "providers.yaml" if file_dir else None,
         Path(__file__).resolve().parent / "providers.yaml",
         _safe_home_dir() / ".peforth" / "providers.yaml",
-        Path.cwd() / "providers.yaml.example",
-        Path(file_dir).resolve() / "providers.yaml.example" if file_dir else None,
-        Path(__file__).resolve().parent / "providers.yaml.example",
-        _safe_home_dir() / ".peforth" / "providers.yaml.example",
     ]
     for c in candidates:
         if c and c.exists():
@@ -1102,37 +1072,41 @@ def _parse_simple_yaml(text: str) -> dict:
 
 def load_providers_config(vm=None) -> dict:
     load_dotenv()
-    config = json.loads(json.dumps(DEFAULT_PROVIDERS_CONFIG))
     yaml_path = get_providers_yaml_path(vm)
-    if yaml_path and yaml_path.exists():
-        loaded = None
+    if not yaml_path or not yaml_path.exists():
+        raise ProvidersConfigError(format_missing_providers_yaml_message(vm))
+
+    loaded = None
+    try:
+        import yaml
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            loaded = yaml.safe_load(f)
+    except Exception:
+        pass
+    if not isinstance(loaded, dict):
         try:
-            import yaml
             with open(yaml_path, "r", encoding="utf-8") as f:
-                loaded = yaml.safe_load(f)
-        except Exception:
-            pass
-        if not isinstance(loaded, dict):
-            try:
-                with open(yaml_path, "r", encoding="utf-8") as f:
-                    loaded = _parse_simple_yaml(f.read())
-            except Exception:
-                pass
-        if isinstance(loaded, dict):
-            if "stateful" in loaded and isinstance(loaded["stateful"], dict):
-                config["stateful"].update(loaded["stateful"])
-            if "stateless" in loaded and isinstance(loaded["stateless"], dict):
-                st = loaded["stateless"]
-                if "default_profile" in st:
-                    config["stateless"]["default_profile"] = st["default_profile"]
-                if "profiles" in st and isinstance(st["profiles"], dict) and st["profiles"]:
-                    config["stateless"]["profiles"] = st["profiles"]
-    return config
+                loaded = _parse_simple_yaml(f.read())
+        except Exception as e:
+            raise ProvidersConfigError(
+                f"[AI Config Error] Failed to read '{yaml_path}': {e}\n{format_missing_providers_yaml_message(vm)}"
+            ) from e
+    if not isinstance(loaded, dict) or not loaded:
+        raise ProvidersConfigError(
+            f"[AI Config Error] '{yaml_path}' did not parse into a valid configuration mapping.\n"
+            f"{format_missing_providers_yaml_message(vm)}"
+        )
+    return loaded
 
 
 def get_stateful_config(vm=None) -> dict:
     cfg = load_providers_config(vm)
-    return cfg.get("stateful", DEFAULT_PROVIDERS_CONFIG["stateful"])
+    st = cfg.get("stateful")
+    if not isinstance(st, dict) or not st:
+        raise ProvidersConfigError(
+            "[AI Config Error] 'stateful' section is missing or empty in providers.yaml."
+        )
+    return st
 
 
 def list_stateless_profiles(vm=None) -> list[str]:
@@ -1146,12 +1120,14 @@ def get_active_stateless_profile(vm=None) -> dict:
     cfg = load_providers_config(vm)
     stateless = cfg.get("stateless", {})
     profiles = stateless.get("profiles", {})
-    default_name = stateless.get("default_profile", "openai-gpt-4o-mini")
-    profile = profiles.get(default_name)
-    if not profile and profiles:
-        profile = next(iter(profiles.values()))
+    if not isinstance(profiles, dict) or not profiles:
+        raise ProvidersConfigError(
+            "[AI Config Error] 'stateless.profiles' section is missing or empty in providers.yaml."
+        )
+    default_name = stateless.get("default_profile")
+    profile = profiles.get(default_name) if default_name else None
     if not profile:
-        profile = DEFAULT_PROVIDERS_CONFIG["stateless"]["profiles"]["openai-gpt-4o-mini"]
+        profile = next(iter(profiles.values()))
     profile_copy = dict(profile)
     env_model = os.environ.get("OPENAI_MODEL")
     if env_model:
@@ -1183,7 +1159,10 @@ def get_active_provider_info(vm=None) -> dict:
 
 def has_valid_api_key(vm=None) -> bool:
     load_dotenv()
-    prof = get_active_stateless_profile(vm)
+    try:
+        prof = get_active_stateless_profile(vm)
+    except ProvidersConfigError:
+        return False
     api_key_env = prof.get("api_key_env", "OPENAI_API_KEY")
     if api_key_env == "OLLAMA_API_KEY":
         return True
@@ -1196,7 +1175,10 @@ def select_startup_stateless_profile(vm=None) -> tuple[bool, str | None]:
     if has_valid_api_key(vm):
         return True, None
 
-    profiles = load_providers_config(vm).get("stateless", {}).get("profiles", {})
+    try:
+        profiles = load_providers_config(vm).get("stateless", {}).get("profiles", {})
+    except ProvidersConfigError:
+        return False, None
     for name, profile in profiles.items():
         api_key_env = profile.get("api_key_env", "OPENAI_API_KEY")
         if api_key_env == "OLLAMA_API_KEY" or os.environ.get(api_key_env, "").strip():
@@ -1309,7 +1291,10 @@ def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool
                 reasoning = m.group(1).capitalize()
                 spec = spec[:m.start()].strip()
 
-    cfg = load_providers_config(vm)
+    try:
+        cfg = load_providers_config(vm)
+    except ProvidersConfigError as e:
+        return False, str(e)
     profiles = cfg.get("stateless", {}).get("profiles", {})
     spec_clean = spec.strip().lower()
     spec_tokens = set(re.findall(r"[a-z0-9]+", spec_clean))
@@ -1366,10 +1351,10 @@ def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool
             best_key, best_match = k, p
 
     active_session_id = vm.host.get("ai_active_session_id") if (vm is not None and hasattr(vm, "host")) else None
-    st_cfg = get_stateful_config(vm)
-    st_provider_lower = (st_cfg.get("provider") or "OpenAI").strip().lower()
 
     if active_session_id:
+        st_cfg = get_stateful_config(vm)
+        st_provider_lower = (st_cfg.get("provider") or "OpenAI").strip().lower()
         non_stateful_providers = {
             (p.get("provider") or "").strip().lower()
             for p in profiles.values()
@@ -1392,6 +1377,8 @@ def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool
     matched_key, matched_profile = best_key, best_match
 
     if active_session_id:
+        st_cfg = get_stateful_config(vm)
+        st_provider_lower = (st_cfg.get("provider") or "OpenAI").strip().lower()
         if not _is_stateful_compatible_profile(vm, matched_profile):
             cur_info = get_active_provider_info(vm)
             cur_provider = cur_info.get("provider", st_cfg.get("provider", "OpenAI"))
@@ -1484,9 +1471,7 @@ def init_diagnostics(vm, *, database_path=None, force=False):
     try:
         env = "windows" if os.name == "nt" else "wsl"
         if database_path is None:
-            config_dir = os.environ.get("PEFORTH_CONFIG_DIR")
-            db_dir = Path(config_dir).expanduser() if config_dir else _safe_home_dir() / ".peforth"
-            database_path = db_dir / "ai-diagnostics.sqlite3"
+            database_path = _diagnostic_db_path(None)
 
         logger = DiagnosticLog(database_path, environment=env)
         file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
@@ -1930,14 +1915,31 @@ def tool_search_words(vm, query):
 def _runtime_config_path() -> Path:
     configured = os.environ.get("PEFORTH_CONFIG_DIR")
     if configured:
-        path = Path(configured).expanduser()
+        path = Path(_expand_env_vars(configured)).expanduser()
         return path if path.is_absolute() else (Path.cwd() / path).resolve()
     return _safe_home_dir() / ".peforth"
 
 
+def _diagnostic_db_path(vm=None) -> Path:
+    """Return the path to the diagnostic logging SQLite database."""
+    if vm is not None and hasattr(vm, "host"):
+        logger = vm.host.get("diagnostic_log")
+        if logger is not None and getattr(logger, "db_path", None):
+            return Path(logger.db_path)
+    base = _runtime_config_path()
+    cand = base / "db" / "ai-diagnostics.sqlite3"
+    if not cand.exists() and (base / "ai-diagnostics.sqlite3").exists():
+        return base / "ai-diagnostics.sqlite3"
+    return cand
+
+
 def _session_db_path() -> Path:
     """Return the path to the local SQLite session mirror database."""
-    return _runtime_config_path() / "sessions" / "sessions.sqlite3"
+    base = _runtime_config_path()
+    cand = base / "db" / "sessions.sqlite3"
+    if not cand.exists() and (base / "sessions" / "sessions.sqlite3").exists():
+        return base / "sessions" / "sessions.sqlite3"
+    return cand
 
 
 def _open_session_store() -> SessionStore:
@@ -2622,11 +2624,15 @@ def get_system_prompt(vm=None) -> str:
     sys_info = detect_system_info(vm)
     shell_label = "pwsh (PowerShell 7)" if sys_info.get("active_shell") == "pwsh" else sys_info.get("active_shell", "unknown")
     os_label = sys_info.get("os", "unknown").lower()
+    cfg_snap = sys_info.get("config") or {}
 
     env_section = (
         f"\n\n=== System Environment ===\n"
         f"- OS: {os_label}\n"
         f"- Active Shell: {shell_label}\n"
+        f"- Config Dir: {cfg_snap.get('PEFORTH_CONFIG_DIR', '')}\n"
+        f"- Diagnostic Logging DB: {cfg_snap.get('diagnostic_db_path', '')}\n"
+        f"- Sessions Mirror DB: {cfg_snap.get('session_db_path', '')}\n"
     )
 
     instructions = SYSTEM_PROMPT + env_section
@@ -3275,7 +3281,16 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     init_diagnostics(vm)
     load_dotenv()
     opts = dict(options or {})
-    stateful_cfg = get_stateful_config(vm)
+    try:
+        stateful_cfg = get_stateful_config(vm)
+    except ProvidersConfigError as e:
+        msg = f"\n{e}\n"
+        if stream_response:
+            sys.stdout.write(msg)
+            sys.stdout.flush()
+        else:
+            vm.push(msg)
+        return
     key_env = stateful_cfg.get("api_key_env", "OPENAI_API_KEY")
     api_key = os.environ.get(key_env, "").strip()
     model = (opts.get("model") or vm.host.get("ai_stateful_model") or stateful_cfg.get("model") or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
@@ -3756,13 +3771,22 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
     init_diagnostics(vm)
     load_dotenv()
     opts = dict(options or {})
-    base_prof = get_active_stateless_profile(vm)
-    prof = resolve_profile_override(
-        vm,
-        base_prof,
-        model_spec=opts.get("model"),
-        reasoning_spec=opts.get("reasoning"),
-    )
+    try:
+        base_prof = get_active_stateless_profile(vm)
+        prof = resolve_profile_override(
+            vm,
+            base_prof,
+            model_spec=opts.get("model"),
+            reasoning_spec=opts.get("reasoning"),
+        )
+    except ProvidersConfigError as e:
+        msg = f"\n{e}\n"
+        if stream_response:
+            sys.stdout.write(msg)
+            sys.stdout.flush()
+        else:
+            vm.push(msg)
+        return
     p_name = prof.get("provider", "OpenAI")
     base_url = prof.get("endpoint", "https://api.openai.com/v1").strip()
     model = (prof.get("model") or "gpt-4o-mini").strip()

@@ -64,10 +64,14 @@ code repl
     else:
         print("2.1.0")
     if not has_api_key:
-        active_prof = ai.get_active_stateless_profile(vm)
-        req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
-        print(f"\n[Notice] {req_env} is not set; no configured provider has usable credentials, so AI features are unavailable.")
-        print("Falling back to Forth mode (>). Configure the API key required by a provider in .env to enable chat mode.")
+        try:
+            active_prof = ai.get_active_stateless_profile(vm)
+            req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
+            print(f"\n[Notice] {req_env} is not set; no configured provider has usable credentials, so AI features are unavailable.")
+            print("Falling back to Forth mode (>). Configure the API key required by a provider in .env to enable chat mode.")
+        except ai.ProvidersConfigError as e:
+            print(f"\n{e}")
+            print("Falling back to Forth mode (>).")
     # Keep the rest of the startup guidance in the Forth greeting word.
     vm.dictate("greeting")
 
