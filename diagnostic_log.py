@@ -293,16 +293,17 @@ class DiagnosticLog:
 
     def start_turn(self, runtime_id: str, *, prompt_content_id: int | None = None,
                    instructions_content_id: int | None = None, remote_session_id: str | None = None,
-                   remote_turn_id: str | None = None, turn_id: str | None = None) -> str:
+                   remote_turn_id: str | None = None, turn_id: str | None = None,
+                   metadata_json: str | None = None) -> str:
         turn_id = turn_id or str(uuid.uuid4())
         with self._write_transaction():
             self.connection.execute(
                 """INSERT INTO turns
                 (turn_id, runtime_id, remote_session_id, remote_turn_id, started_at,
-                 prompt_content_id, instructions_content_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                 prompt_content_id, instructions_content_id, metadata_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (turn_id, runtime_id, remote_session_id, remote_turn_id, _now(),
-                 prompt_content_id, instructions_content_id),
+                 prompt_content_id, instructions_content_id, metadata_json),
             )
         return turn_id
 

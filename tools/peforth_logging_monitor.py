@@ -50,6 +50,11 @@ EMOJI = {
     "approval_received": "👍",
     "forth_execution_started": "▶️",
     "forth_execution_finished": "⏹️",
+    "subagent_invoked": "🤖",
+    "subagent_completed": "🎉",
+    "subagent_turn_started": "🌱",
+    "subagent_turn_completed": "🌳",
+    "subagent_turn_failed": "💥",
 }
 
 
@@ -155,11 +160,27 @@ def _description(row: dict) -> str:
         "approval_received": "approval received",
         "forth_execution_started": "Forth execution started",
         "forth_execution_finished": "Forth execution finished",
+        "subagent_invoked": "Sub-agent invoked",
+        "subagent_completed": "Sub-agent completed",
+        "subagent_turn_started": "Sub-agent turn started",
+        "subagent_turn_completed": "Sub-agent turn completed",
+        "subagent_turn_failed": "Sub-agent turn failed",
     }
     description = descriptions.get(event_type, event_type.replace("_", " "))
     operation = row.get("operation")
     if operation:
         description += f" ({operation})"
+    if event_type in ("subagent_invoked", "subagent_completed", "subagent_turn_started", "subagent_turn_completed", "subagent_turn_failed"):
+        pl = _payload(row)
+        details = []
+        if pl.get("model"):
+            details.append(f"model={pl['model']}")
+        if pl.get("subagent_turn_id"):
+            details.append(f"sub_turn={str(pl['subagent_turn_id'])[:8]}")
+        if pl.get("parent_turn_id"):
+            details.append(f"parent={str(pl['parent_turn_id'])[:8]}")
+        if details:
+            description += f" ({', '.join(details)})"
     event_name = _payload(row).get("event_type")
     if event_name and event_name != event_type:
         description += f" [{event_name}]"

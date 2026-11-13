@@ -152,6 +152,29 @@ def turn_contents(connection: sqlite3.Connection, turn_id: str) -> dict:
     }
 
 
+def subagents_for_turn(connection: sqlite3.Connection, parent_turn_id: str) -> list[dict]:
+    """Return all Sub-agent turns invoked by the given parent_turn_id."""
+    rows = _dict_rows(connection.execute(
+        """SELECT t.*, prompt.content_text AS prompt_text,
+                  output.content_text AS output_text
+        FROM turns AS t
+        LEFT JOIN contents AS prompt ON prompt.content_id = t.prompt_content_id
+        LEFT JOIN contents AS output ON output.content_id = t.output_content_id
+        WHERE t.metadata_json IS NOT NULL
+        ORDER BY t.started_at""",
+    ))
+    matched = []
+    for row in rows:
+        try:
+            meta = json.loads(row.get("metadata_json") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(meta, dict) and meta.get("kind") == "subagent" and meta.get("parent_turn_id") == parent_turn_id:
+            row["metadata"] = meta
+            matched.append(row)
+    return matched
+
+
 def export_turn(connection: sqlite3.Connection, turn_id: str) -> dict:
     contents = turn_contents(connection, turn_id)
     return {
@@ -163,6 +186,7 @@ def export_turn(connection: sqlite3.Connection, turn_id: str) -> dict:
             "output_status": contents["output_status"],
         },
         "timeline": timeline_for_turn(connection, turn_id),
+        "subagents": subagents_for_turn(connection, turn_id),
     }
 
 

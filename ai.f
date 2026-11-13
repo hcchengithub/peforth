@@ -266,6 +266,74 @@ last :: safe=True
     // ( <prompt> -- ) Stream prompt to AI and always play nokia2 chime upon completion.
 last :: safe=True
 
+code with-model
+    import ai
+    ai.set_pending_turn_option(vm, "model")
+    end-code
+    // ( [model-str] | <model> -- ) Temporarily set the AI model for the next ai: or subagent: turn.
+    /// Automatically resets after the turn completes.
+last :: safe=True
+
+code with-reasoning
+    import ai
+    ai.set_pending_turn_option(vm, "reasoning")
+    end-code
+    // ( [effort-str] | <effort> -- ) Temporarily set reasoning effort (none/low/medium/high) for the next ai: or subagent: turn.
+    /// Automatically resets after the turn completes.
+last :: safe=True
+
+code with-instruction
+    import ai
+    ai.set_pending_turn_option(vm, "instruction")
+    end-code
+    // ( [instruction-str] | <instruction> -- ) Temporarily set custom system instructions for the next ai: or subagent: turn.
+    /// Automatically resets after the turn completes.
+last :: safe=True
+
+code with-tools
+    import ai
+    ai.set_pending_turn_option(vm, "tools")
+    end-code
+    // ( [tools-spec] | <tools-spec> -- ) Temporarily set tool availability (e.g. 'none', 'all', or tool list) for the next ai: or subagent: turn.
+    /// Automatically resets after the turn completes.
+last :: safe=True
+
+code (subagent)
+    import ai
+    stream_response = vm.pop()
+    prompt = vm.pop()
+    options = vm.pop()
+    if not isinstance(prompt, str):
+        raise KernelError("(subagent) expects a prompt string on stack")
+    if not isinstance(stream_response, bool):
+        raise KernelError("(subagent) expects a boolean stream flag on stack")
+    if options is not None and not isinstance(options, dict):
+        raise KernelError("(subagent) expects options dict or None on stack")
+    yield from ai.ai_subagent_turn(vm, prompt, stream_response, options=options)
+    end-code
+    // ( options prompt stream? -- [response] ) Isolated one-shot Sub-agent turn generator.
+    /// Runs an ephemeral task with isolated context, leaving main session history untouched.
+    /// Options dict (or None) may specify: model, instruction, tools, reasoning.
+last :: safe=True
+
+: subagent:
+    none "" word
+    (ai-monotonic-time) >t
+    true (subagent)
+    (ai-monotonic-time) t> -
+    [ last literal ] :> nokia2_after_seconds
+    > if nokia2 then
+    ; immediate
+    // ( <prompt> -- ) Stream prompt to an isolated one-shot Sub-agent; supports with-* prefixes.
+' subagent: :: nokia2_after_seconds=30
+last :: safe=True
+
+: SUBAGENT:
+    none "" word true (subagent) nokia2
+    ; immediate
+    // ( <prompt> -- ) Stream prompt to an isolated one-shot Sub-agent and always play nokia2 chime.
+last :: safe=True
+
 \ --- 6. Vision & Desktop Capture Words ---
 
 code desktop-capture

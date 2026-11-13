@@ -2437,6 +2437,191 @@ class TestSessionStoreAndSync(unittest.TestCase):
         self.assertEqual(call_sequence[1]["path"], "/sessions/sess_mock_123/events?stream=true")
         self.assertTrue(call_sequence[1]["stream"])
 
+    def test_subagent_stack_and_colon_with_prefixes(self):
+        """Verify (subagent), subagent:, and with-* prefixes run isolated one-shot turns
+        without touching mainstream ai_messages and auto-reset options afterwards."""
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.host["ai_messages"] = [
+            {"role": "system", "content": "mainstream sys"},
+            {"role": "user", "content": "mainstream hello"},
+        ]
+
+        recorded_calls = []
+
+        class FakeSSE:
+            status = 200
+            def __init__(self, reply_text):
+                self.reply_text = reply_text
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def __iter__(self):
+                payload = json.dumps({"choices": [{"delta": {"content": self.reply_text}}]})
+                yield f"data: {payload}\n\n".encode("utf-8")
+                yield b"data: [DONE]\n\n"
+
+        def fake_chat_stream(base_url, api_key, model, messages, tools, **kwargs):
+            recorded_calls.append({
+                "model": model,
+                "messages": list(messages),
+                "tools": list(tools) if tools else [],
+                "kwargs": kwargs,
+            })
+            return FakeSSE(f"Reply from {model}")
+
+        with patch.object(ai, "_http_chat_stream", side_effect=fake_chat_stream), \
+             patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test-key", "GEMINI_API_KEY": "gm-test-key"}):
+            # 1. Stack-based (subagent) with options dict (custom model, instruction, tools=[])
+            vm.push({"model": "o3-mini", "instruction": "JSON parser only.", "tools": []})
+            vm.push("parse x=42")
+            vm.push(False)
+            vm.dictate("(subagent)")
+            res1 = vm.pop()
+            self.assertEqual(res1, "Reply from o3-mini")
+            self.assertEqual(len(recorded_calls), 1)
+            self.assertEqual(recorded_calls[0]["model"], "o3-mini")
+            self.assertEqual(recorded_calls[0]["messages"][0]["content"], "JSON parser only.")
+            self.assertEqual(recorded_calls[0]["tools"], [])
+            # Mainstream ai_messages MUST remain untouched
+            self.assertEqual(len(vm.host["ai_messages"]), 2)
+
+            # 2. Prefix words with subagent: (TIB tokens + stack instruction)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                vm.dictate('s" Custom subagent prompt" with-instruction with-model o3-mini with-reasoning high with-tools none subagent: Solve puzzle')
+            self.assertEqual(len(recorded_calls), 2)
+            self.assertEqual(recorded_calls[1]["model"], "o3-mini")
+            self.assertEqual(recorded_calls[1]["messages"][0]["content"], "Custom subagent prompt")
+            self.assertEqual(recorded_calls[1]["messages"][1]["content"].strip(), "Solve puzzle")
+            self.assertEqual(recorded_calls[1]["tools"], [])
+            self.assertEqual(recorded_calls[1]["kwargs"].get("reasoning_effort"), "High")
+            self.assertIn("Subagent", out.getvalue())
+            # Pending options MUST be auto-cleared after subagent:
+            self.assertIsNone(vm.host.get("ai_pending_turn_options"))
+            self.assertEqual(len(vm.host["ai_messages"]), 2)
+
+    def test_ai_colon_with_temporary_model_override(self):
+        """Verify with-model and with-reasoning temporarily override the model for a single
+        ai: mainstream turn and revert to the default profile on the next turn."""
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        models_used = []
+
+        class FakeSSE:
+            status = 200
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def __iter__(self):
+                yield b'data: {"choices": [{"delta": {"content": "ok"}}]}\n\n'
+                yield b"data: [DONE]\n\n"
+
+        def fake_chat_stream(base_url, api_key, model, messages, tools, **kwargs):
+            models_used.append(model)
+            return FakeSSE()
+
+        out = io.StringIO()
+        with patch.object(ai, "_http_chat_stream", side_effect=fake_chat_stream), \
+             patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test-key"}), \
+             contextlib.redirect_stdout(out):
+            # Turn 1: Temporary override to o3-mini
+            vm.dictate("with-model o3-mini ai: Tricky question")
+            # Turn 2: Normal turn without with-model -> reverts to default model
+            vm.dictate("ai: Follow-up question")
+
+        self.assertEqual(len(models_used), 2)
+        self.assertEqual(models_used[0], "o3-mini")
+        self.assertNotEqual(models_used[1], "o3-mini")
+        # Both turns were recorded in mainstream ai_messages
+        self.assertGreaterEqual(len(vm.host.get("ai_messages", [])), 5)
+
+    def test_reentrant_ai_inside_tool_task_routes_to_subagent_and_logs_lineage(self):
+        """Verify that calling (ai) or subagent: while in_ai_task is active routes to
+        an isolated subagent turn (preventing 409 Conflict) and records parent-child
+        lineage in the SQLite diagnostic database."""
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import ai
+        import tools.ai_diagnostics as diag_tool
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "diag_subagent.sqlite3"
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "PEFORTH_AI_LOG_MODE": "normal"}):
+                logger = ai.init_diagnostics(vm, database_path=db_path, force=True)
+                self.assertIsNotNone(logger)
+                try:
+                    runtime_id = vm.host["diagnostic_runtime_id"]
+
+                    # Simulate an active parent mainstream turn in Stateful mode
+                    parent_turn_id = logger.start_turn(runtime_id, remote_session_id="sess_active_999")
+                    vm.host["ai_current_turn_id"] = parent_turn_id
+                    vm.host["ai_active_session_id"] = "sess_active_999"
+                    vm.host["in_ai_task"] = object()
+
+                    class FakeSSE:
+                        status = 200
+                        def __enter__(self):
+                            return self
+                        def __exit__(self, *args):
+                            pass
+                        def __iter__(self):
+                            yield b'data: {"choices": [{"delta": {"content": "Subagent computed 42"}}]}\n\n'
+                            yield b"data: [DONE]\n\n"
+
+                    stateful_called = []
+                    with patch.object(ai, "ai_turn_stateful", side_effect=lambda *a, **kw: stateful_called.append(True)), \
+                         patch.object(ai, "_http_chat_stream", return_value=FakeSSE()), \
+                         contextlib.redirect_stdout(io.StringIO()):
+                        # Even though ai_active_session_id is set, calling (ai) inside in_ai_task
+                        # MUST route to stateless subagent and NOT call ai_turn_stateful!
+                        vm.dictate('s" Compute sub-task" false (ai)')
+
+                    self.assertEqual(vm.pop(), "Subagent computed 42")
+                    self.assertEqual(len(stateful_called), 0)
+                    # Parent turn ID must be restored after subagent finishes
+                    self.assertEqual(vm.host.get("ai_current_turn_id"), parent_turn_id)
+
+                    # Verify diagnostic DB lineage
+                    conn = diag_tool.connect_readonly(db_path)
+                    try:
+                        subagents = diag_tool.subagents_for_turn(conn, parent_turn_id)
+                        self.assertEqual(len(subagents), 1)
+                        self.assertEqual(subagents[0]["metadata"]["kind"], "subagent")
+                        self.assertEqual(subagents[0]["metadata"]["parent_turn_id"], parent_turn_id)
+                        self.assertEqual(subagents[0]["output_text"], "Subagent computed 42")
+
+                        parent_events = [e["event_type"] for e in diag_tool.timeline_for_turn(conn, parent_turn_id)]
+                        self.assertIn("subagent_invoked", parent_events)
+                        self.assertIn("subagent_completed", parent_events)
+
+                        sub_events = [e["event_type"] for e in diag_tool.timeline_for_turn(conn, subagents[0]["turn_id"])]
+                        self.assertIn("subagent_turn_started", sub_events)
+                        self.assertIn("subagent_turn_completed", sub_events)
+                    finally:
+                        conn.close()
+                finally:
+                    vm.host["in_ai_task"] = None
+                    vm.host["ai_current_turn_id"] = None
+                    logger.close()
+
     def test_ai_context_dual_mode(self):
         import io
         import contextlib

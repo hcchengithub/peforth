@@ -2266,25 +2266,22 @@ def normalize_forth_source(source: str) -> str:
 SYSTEM_PROMPT = """You are an intelligent AI pair programmer embedded inside the peforth Forth environment.
 peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges Forth with Python: you can run native Forth, write Python host definitions, and execute Python code directly inside Forth!
 
+=== The Two Pillars of peforth: Skills & Forth Words ===
+1. SKILLS (Knowledge & SOPs): You do not need to memorize every procedure or domain upfront. When you need guidelines, workflows, or specialized knowledge, inspect === Available Skills === and use `peforth_read_skill` to retrieve detailed instructions just-in-time.
+2. FORTH WORDS (Capabilities & Execution): When you need to inspect or act upon the system, search the live dictionary using `peforth_search_words` and execute clean Forth code via `peforth_run_forth`.
+
 === When to Respond Directly vs. When to Use Tools ===
 - CONVERSATION & Q&A: For general conversation, greetings, questions, explanations, discussions, or telling jokes, respond DIRECTLY with natural language text! Your text reply is streamed immediately to the user's terminal.
   DO NOT use peforth_run_forth or print statements (e.g. s" ..." . cr) just to speak to the user or tell a joke!
 - CODE EXECUTION: ONLY call peforth_run_forth when you genuinely need to execute Forth code, define new words, test behavior in the VM, perform calculations, or run Python interop requested by the user.
 - AVOID DUPLICATE OUTPUT: When you use peforth_run_forth to execute code that produces output in the terminal, DO NOT repeat or echo that entire stdout in your final assistant reply; just briefly explain the result if necessary.
-- DICTIONARY SEARCH: Use peforth_search_words when you need to look up available Forth words, syntax, or documentation before proposing code.
+- SUBAGENT DELEGATION: If a Forth task requires isolated one-shot AI inference, formatting, or analysis without polluting the main conversation history, use `(subagent)` or `subagent:` (with optional `with-model`, `with-tools`, `with-instruction`, `with-reasoning` prefixes). Do NOT invoke recursive mainstream `ai:` from within a tool task.
 
 === Full Source Code Access & Self-Understanding ===
 - You have full access to your own live Forth dictionary and underlying Python source code!
 - Through `peforth_search_words`, you can inspect any word's help description, extended comments, and full implementation source code (both Forth colon definitions and host Python code).
 - Because you have complete visibility into your own source code and architecture, you are fully equipped and encouraged to answer ANY questions the user asks about peforth itself, its internal mechanisms, word semantics, Forth stack effects, and Python bridge capabilities.
 - When the user asks how peforth works or how to use a specific feature, consult your dictionary/skills to give accurate, authoritative, and helpful answers.
-
-You have access to tools:
-1. peforth_search_words: search available Forth vocabulary, words, help strings, comments, and implementation source. Pure read-only.
-   *IMPORTANT*: peforth is a rich, evolving environment. When unsure whether a word exists or how it interacts with the VM, ALWAYS search the dictionary first to inspect its documentation and source!
-2. peforth_search_sessions: Search or read past AI conversations from the local SQLite session mirror (sessions.sqlite3). Read-only; runs without user approval. Pass query to search across all sessions, or session_id to read messages from a specific session.
-3. peforth_read_skill: Read the full instructions, workflow, or companion reference/script files of an available skill from === Available Skills ===. Read-only; runs without user approval.
-4. peforth_run_forth: propose and execute Forth source code in the user's local VM.
 
 === Forth & Python Bridge Syntax Guide ===
 - WHITESPACE DELIMITATION: In Forth, all words and tokens MUST be separated by whitespace (spaces or newlines).
@@ -2639,7 +2636,108 @@ def read_numbered_choice(
             return default
 
 
-def _http_chat_stream(base_url, api_key, model, messages, tools):
+def _resolve_tools_list(base_tools: list, tools_spec) -> list:
+    """Resolve tools specification into a filtered list of tool schemas."""
+    if tools_spec is None:
+        return list(base_tools)
+    if isinstance(tools_spec, str):
+        clean = tools_spec.strip().lower()
+        if clean in ("none", "off", "false", "0", "empty", "[]"):
+            return []
+        if clean in ("all", "default", "*"):
+            return list(base_tools)
+        wanted = {t.strip() for t in tools_spec.split(",") if t.strip()}
+        return [
+            t for t in base_tools
+            if (t.get("name") or t.get("function", {}).get("name")) in wanted
+        ]
+    if isinstance(tools_spec, (list, tuple, set)):
+        if not tools_spec:
+            return []
+        first = next(iter(tools_spec))
+        if isinstance(first, dict):
+            return list(tools_spec)
+        wanted = {str(x).strip() for x in tools_spec if str(x).strip()}
+        if wanted <= {"none", "off", "false", "0", "empty", "[]"}:
+            return []
+        if "all" in wanted or "*" in wanted:
+            return list(base_tools)
+        return [
+            t for t in base_tools
+            if (t.get("name") or t.get("function", {}).get("name")) in wanted
+        ]
+    return list(base_tools)
+
+
+def resolve_profile_override(vm, base_profile: dict, model_spec: str = None, reasoning_spec: str = None) -> dict:
+    """Return a profile dict incorporating optional model/provider and reasoning overrides without mutating global state."""
+    prof = dict(base_profile)
+    if model_spec:
+        spec = str(model_spec).strip()
+        cfg = load_providers_config(vm)
+        profiles = cfg.get("stateless", {}).get("profiles", {})
+        spec_clean = spec.lower()
+        spec_tokens = set(re.findall(r"[a-z0-9]+", spec_clean))
+
+        best_match = None
+        best_score = 0
+        for k, p in profiles.items():
+            k_lower = k.lower()
+            score = 0
+            if k_lower == spec_clean:
+                score = 1000
+            elif p.get("model", "").lower() == spec_clean:
+                score = 500
+            elif any(a.lower() == spec_clean for a in p.get("aliases", [])):
+                score = 400
+            elif p.get("provider", "").lower() == spec_clean:
+                score = 300
+            else:
+                model_tokens = set(re.findall(r"[a-z0-9]+", p.get("model", "").lower()))
+                if model_tokens and model_tokens.issubset(spec_tokens):
+                    score += 40
+            if score > best_score:
+                best_score = score
+                best_match = p
+
+        if best_match is not None:
+            prof = dict(best_match)
+        else:
+            prof["model"] = spec
+
+    if reasoning_spec is not None:
+        r_clean = str(reasoning_spec).strip()
+        prof["reasoning"] = r_clean.capitalize() if r_clean.lower() in ("low", "medium", "high") else r_clean
+
+    return prof
+
+
+_WITH_FOLLOWERS = {
+    "ai:", "AI:", "subagent:", "SUBAGENT:", "(ai)", "(subagent)",
+    "with-model", "with-reasoning", "with-instruction", "with-tools",
+}
+
+
+def set_pending_turn_option(vm, key: str) -> None:
+    """Parse and store a temporary turn option from TIB or data stack for with-* words."""
+    rem = (vm.input.remaining if getattr(vm, "input", None) else "").lstrip()
+    next_tok = rem.split(None, 1)[0] if rem else ""
+    if (not next_tok or next_tok in _WITH_FOLLOWERS) and vm.dstack:
+        val = vm.pop()
+    elif next_tok:
+        val = (vm.input.read() or "").strip()
+    elif vm.dstack:
+        val = vm.pop()
+    else:
+        raise RuntimeError(f"with-{key} expects a value in input or on the stack")
+
+    if isinstance(val, str):
+        val = val.strip()
+    opts = vm.host.setdefault("ai_pending_turn_options", {})
+    opts[key] = val
+
+
+def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effort=None):
     """Send streaming Chat Completion request to OpenAI-compatible endpoint."""
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
@@ -2649,17 +2747,23 @@ def _http_chat_stream(base_url, api_key, model, messages, tools):
     payload = {
         "model": model,
         "messages": messages,
-        "tools": tools,
         "stream": True,
     }
+    if tools:
+        payload["tools"] = tools
 
     # Automatically set reasoning_effort to "none" for reasoning models when using tools
-    reasoning_effort = os.environ.get("OPENAI_REASONING_EFFORT")
+    if reasoning_effort is None:
+        reasoning_effort = os.environ.get("OPENAI_REASONING_EFFORT")
     if reasoning_effort is None:
         if any(prefix in model.lower() for prefix in ("o1", "o3", "gpt-6")):
             reasoning_effort = "none"
     if reasoning_effort:
-        payload["reasoning_effort"] = reasoning_effort
+        payload["reasoning_effort"] = (
+            reasoning_effort.lower()
+            if str(reasoning_effort).lower() in ("none", "low", "medium", "high")
+            else reasoning_effort
+        )
 
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
@@ -2929,8 +3033,8 @@ def _chat_turn_header(role: str, provider_info: dict = None) -> str:
         suffix = "──╮"
         dashes = max(1, width - wcswidth(prefix) - wcswidth(suffix))
         return prefix + "─" * dashes + suffix
-    elif role == "assistant":
-        title = chr(0x1FA84) + " peforth"
+    elif role in ("assistant", "subagent"):
+        title = (chr(0x1FA84) + " Subagent") if role == "subagent" else (chr(0x1FA84) + " peforth")
         prefix = "╭─ " + title + " "
         if provider_info:
             p_name = provider_info.get("provider", "OpenAI")
@@ -2948,7 +3052,7 @@ def _chat_turn_header(role: str, provider_info: dict = None) -> str:
         dashes = max(1, width - wcswidth(prefix) - wcswidth(suffix))
         return prefix + "─" * dashes + suffix
     else:
-        raise ValueError("role must be user or assistant")
+        raise ValueError("role must be user, assistant, or subagent")
 
 
 def _chat_turn_bottom(timestamp: str = None) -> str:
@@ -2985,9 +3089,10 @@ def _print_chat_turn(role: str, text: str, provider_info: dict = None) -> None:
 class ChatBoxStreamer:
     """Manages styled chat turn output frames for terminal interactions."""
 
-    def __init__(self, stream_response: bool = True, provider_info: dict = None):
+    def __init__(self, stream_response: bool = True, provider_info: dict = None, role: str = "assistant"):
         self.stream_response = stream_response
         self.provider_info = provider_info or {}
+        self.role = role
         self.box_open = False
         self.line_start = True
         if self.stream_response and hasattr(sys.stdout, "reconfigure"):
@@ -3005,7 +3110,7 @@ class ChatBoxStreamer:
         if not self.stream_response or not chunk:
             return
         if not self.box_open:
-            sys.stdout.write("\n" + _chat_turn_header("assistant", self.provider_info) + "\n")
+            sys.stdout.write("\n" + _chat_turn_header(self.role, self.provider_info) + "\n")
             self.box_open = True
             self.line_start = True
 
@@ -3027,14 +3132,16 @@ class ChatBoxStreamer:
         self.line_start = True
 
 
-def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new=False, image_url=None, isolated_session=False):
+def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new=False, image_url=None, isolated_session=False, options=None):
     """Cooperative generator for one Stateful AI turn via the OpenAI Agents API (/v1/agents/sessions)."""
     init_diagnostics(vm)
     load_dotenv()
+    opts = dict(options or {})
     stateful_cfg = get_stateful_config(vm)
     key_env = stateful_cfg.get("api_key_env", "OPENAI_API_KEY")
     api_key = os.environ.get(key_env, "").strip()
-    model = (stateful_cfg.get("model") or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
+    model = (opts.get("model") or stateful_cfg.get("model") or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
+    reasoning_effort = opts.get("reasoning") or "none"
 
     if not api_key:
         msg = (
@@ -3048,7 +3155,8 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
             vm.push(msg)
         return
 
-    system_instructions = get_system_prompt(vm)
+    system_instructions = str(opts["instruction"]) if opts.get("instruction") else get_system_prompt(vm)
+    active_tools = [] if isolated_session else _resolve_tools_list(AGENTS_TOOLS_DEFINITION, opts.get("tools"))
     logger = vm.host.get("diagnostic_log")
     runtime_id = vm.host.get("diagnostic_runtime_id")
     turn_id = None
@@ -3081,7 +3189,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     provider_info = {
         "provider": stateful_cfg.get("provider", "OpenAI"),
         "model": model,
-        "reasoning": "none",
+        "reasoning": reasoning_effort,
     }
     streamer = ChatBoxStreamer(stream_response, provider_info=provider_info)
     streamer.print_user_turn(prompt)
@@ -3091,7 +3199,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
             payload = {
                 "agent": {
                     "model": model,
-                    "tools": [] if isolated_session else AGENTS_TOOLS_DEFINITION,
+                    "tools": active_tools,
                     "instructions": system_instructions,
                 },
                 "environment": {"type": "none"},
@@ -3418,33 +3526,95 @@ def promote_local_session(vm):
 
 
 
+def ai_subagent_turn(vm, prompt, stream_response, *, options=None):
+    """Execute an isolated, one-shot Sub-agent turn.
+
+    Sub-agents run with an independent context, leaving the mainstream conversation
+    history (ai_messages / ai_active_session_id) completely untouched.
+    """
+    pending_opts = vm.host.pop("ai_pending_turn_options", None) or {}
+    merged_opts = dict(pending_opts)
+    if isinstance(options, dict):
+        merged_opts.update(options)
+    yield from _stateless_turn_loop(
+        vm,
+        prompt,
+        stream_response,
+        options=merged_opts,
+        is_subagent=True,
+    )
+
+
 def ai_turn(vm, prompt, stream_response):
     """Cooperative generator for one AI conversation turn.
 
     Routes to Stateful OpenAI Agents API mode if vm.host['ai_active_session_id']
     is set (unless ai_isolated_session_once is set), or defaults to Stateless
     /chat/completions mode using vm.host['ai_messages'].
+    Automatically routes re-entrant calls inside an AI tool task (in_ai_task)
+    to ai_subagent_turn to prevent deadlocks and HTTP 409 Conflicts.
     """
-    active_session_id = vm.host.get("ai_active_session_id")
-    if active_session_id and not vm.host.get("ai_isolated_session_once", False):
-        image_url = vm.host.pop("ai_image_url_once", None)
-        isolated_session = vm.host.pop("ai_isolated_session_once", False)
-        yield from ai_turn_stateful(
-            vm,
-            prompt,
-            stream_response,
-            session_id=active_session_id,
-            image_url=image_url,
-            isolated_session=isolated_session,
-        )
+    if vm.host.get("in_ai_task"):
+        pending_opts = vm.host.pop("ai_pending_turn_options", None)
+        yield from ai_subagent_turn(vm, prompt, stream_response, options=pending_opts)
         return
 
+    pending_opts = vm.host.pop("ai_pending_turn_options", None) or {}
+    active_session_id = vm.host.get("ai_active_session_id")
+    if active_session_id and not vm.host.get("ai_isolated_session_once", False):
+        # If user temporarily requested a non-OpenAI stateless provider via with-model,
+        # route this single turn through the stateless engine while keeping the active session.
+        use_stateless_for_override = False
+        if pending_opts.get("model"):
+            cand_prof = resolve_profile_override(
+                vm, get_active_stateless_profile(vm), model_spec=pending_opts["model"]
+            )
+            if cand_prof.get("provider", "OpenAI").lower() != "openai":
+                use_stateless_for_override = True
+
+        if not use_stateless_for_override:
+            image_url = vm.host.pop("ai_image_url_once", None)
+            isolated_session = vm.host.pop("ai_isolated_session_once", False)
+            stateful_kwargs = {
+                "session_id": active_session_id,
+                "image_url": image_url,
+                "isolated_session": isolated_session,
+            }
+            if pending_opts:
+                stateful_kwargs["options"] = pending_opts
+            yield from ai_turn_stateful(
+                vm,
+                prompt,
+                stream_response,
+                **stateful_kwargs,
+            )
+            return
+
+    yield from _stateless_turn_loop(
+        vm,
+        prompt,
+        stream_response,
+        options=pending_opts,
+        is_subagent=False,
+    )
+
+
+def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subagent=False):
+    """Core Stateless /chat/completions turn engine supporting both Mainstream and Sub-agent turns."""
     init_diagnostics(vm)
     load_dotenv()
-    prof = get_active_stateless_profile(vm)
+    opts = dict(options or {})
+    base_prof = get_active_stateless_profile(vm)
+    prof = resolve_profile_override(
+        vm,
+        base_prof,
+        model_spec=opts.get("model"),
+        reasoning_spec=opts.get("reasoning"),
+    )
     p_name = prof.get("provider", "OpenAI")
     base_url = prof.get("endpoint", "https://api.openai.com/v1").strip()
     model = (prof.get("model") or "gpt-4o-mini").strip()
+    reasoning_effort = prof.get("reasoning")
     api_key_env = prof.get("api_key_env", "OPENAI_API_KEY")
     api_key = os.environ.get(api_key_env, "").strip()
 
@@ -3459,35 +3629,81 @@ def ai_turn(vm, prompt, stream_response):
             vm.push(msg)
         return
 
-    image_url = vm.host.pop("ai_image_url_once", None)
-    isolated_session = vm.host.pop("ai_isolated_session_once", False)
-    diag_session_id = (
-        f"isolated_{uuid.uuid4().hex[:16]}"
-        if isolated_session
-        else _ensure_local_session_id(vm)
-    )
+    image_url = opts.get("image_url") or vm.host.pop("ai_image_url_once", None)
+    isolated_session = is_subagent or bool(opts.get("isolated_session")) or vm.host.pop("ai_isolated_session_once", False)
+    if is_subagent:
+        diag_session_id = f"subagent_{uuid.uuid4().hex[:16]}"
+    elif isolated_session:
+        diag_session_id = f"isolated_{uuid.uuid4().hex[:16]}"
+    else:
+        diag_session_id = _ensure_local_session_id(vm)
 
     # Start diagnostic turn tracking if enabled
-    system_instructions = get_system_prompt(vm)
+    system_instructions = str(opts["instruction"]) if opts.get("instruction") else get_system_prompt(vm)
+    active_tools = _resolve_tools_list(TOOLS_DEFINITION, opts.get("tools"))
     logger = vm.host.get("diagnostic_log")
     runtime_id = vm.host.get("diagnostic_runtime_id")
+    parent_turn_id = vm.host.get("ai_current_turn_id")
     turn_id = None
     if logger is not None and runtime_id is not None:
         try:
             prompt_cid = logger.store_content("prompt", prompt)
             instr_cid = logger.store_content("agent_instructions", system_instructions)
+            if is_subagent:
+                turn_meta = {
+                    "kind": "subagent",
+                    "parent_turn_id": parent_turn_id,
+                    "model": model,
+                    "provider": p_name,
+                }
+                if opts.get("tools") is not None:
+                    turn_meta["tools"] = [t.get("function", {}).get("name") for t in active_tools]
+                meta_json = json.dumps(turn_meta, ensure_ascii=False)
+            elif opts:
+                meta_json = json.dumps(
+                    {"kind": "mainstream", "model": model, "provider": p_name},
+                    ensure_ascii=False,
+                )
+            else:
+                meta_json = None
+
             turn_id = logger.start_turn(
                 runtime_id,
                 prompt_content_id=prompt_cid,
                 instructions_content_id=instr_cid,
                 remote_session_id=diag_session_id,
+                metadata_json=meta_json,
             )
             vm.host["ai_current_turn_id"] = turn_id
-            logger.append_event(
-                runtime_id, turn_id, "ai_turn_started",
-                session_id=diag_session_id,
-                payload={"model": model, "stream_response": bool(stream_response)},
-            )
+            if is_subagent:
+                if parent_turn_id is not None:
+                    logger.append_event(
+                        runtime_id, parent_turn_id, "subagent_invoked",
+                        session_id=_current_diagnostic_session_id(vm),
+                        payload={
+                            "subagent_turn_id": turn_id,
+                            "model": model,
+                            "provider": p_name,
+                            "prompt": prompt[:200],
+                        },
+                    )
+                logger.append_event(
+                    runtime_id, turn_id, "subagent_turn_started",
+                    session_id=diag_session_id,
+                    payload={
+                        "parent_turn_id": parent_turn_id,
+                        "model": model,
+                        "provider": p_name,
+                        "stream_response": bool(stream_response),
+                        "mode": "subagent",
+                    },
+                )
+            else:
+                logger.append_event(
+                    runtime_id, turn_id, "ai_turn_started",
+                    session_id=diag_session_id,
+                    payload={"model": model, "stream_response": bool(stream_response)},
+                )
         except Exception:
             turn_id = None
 
@@ -3513,9 +3729,54 @@ def ai_turn(vm, prompt, stream_response):
         vm.host["ai_messages"] = messages
 
     accumulated_full_text = []
-    provider_info = get_active_provider_info(vm)
-    streamer = ChatBoxStreamer(stream_response, provider_info=provider_info)
+    if opts.get("model") or opts.get("reasoning") or is_subagent:
+        provider_info = {
+            "provider": p_name,
+            "model": model,
+            "reasoning": reasoning_effort or "none",
+        }
+    else:
+        provider_info = get_active_provider_info(vm)
+    streamer = ChatBoxStreamer(
+        stream_response,
+        provider_info=provider_info,
+        role="subagent" if is_subagent else "assistant",
+    )
     streamer.print_user_turn(prompt)
+
+    def _restore_turn_id():
+        vm.host["ai_current_turn_id"] = parent_turn_id if is_subagent else None
+
+    def _log_subagent_end(failed_error=None):
+        if not is_subagent or logger is None or runtime_id is None or turn_id is None:
+            return
+        try:
+            if failed_error is not None:
+                logger.append_event(
+                    runtime_id, turn_id, "subagent_turn_failed",
+                    session_id=diag_session_id,
+                    payload={"parent_turn_id": parent_turn_id, "model": model},
+                    error_type=type(failed_error).__name__,
+                    error_message=str(failed_error),
+                )
+            else:
+                logger.append_event(
+                    runtime_id, turn_id, "subagent_turn_completed",
+                    session_id=diag_session_id,
+                    payload={"parent_turn_id": parent_turn_id, "model": model},
+                )
+            if parent_turn_id is not None:
+                logger.append_event(
+                    runtime_id, parent_turn_id, "subagent_completed",
+                    session_id=_current_diagnostic_session_id(vm),
+                    payload={
+                        "subagent_turn_id": turn_id,
+                        "model": model,
+                        "status": "failed" if failed_error is not None else "completed",
+                    },
+                )
+        except Exception:
+            pass
 
     # Outer loop for handling multi-turn tool calling
     assistant_content = ""
@@ -3526,7 +3787,16 @@ def ai_turn(vm, prompt, stream_response):
             _log_event(vm, "http_request_started", turn_id=turn_id,
                        http_method="POST", url=req_url, payload={"model": model})
             try:
-                response = _http_chat_stream(base_url, api_key, model, messages, TOOLS_DEFINITION)
+                if opts.get("reasoning") is not None:
+                    try:
+                        response = _http_chat_stream(
+                            base_url, api_key, model, messages, active_tools,
+                            reasoning_effort=reasoning_effort,
+                        )
+                    except TypeError:
+                        response = _http_chat_stream(base_url, api_key, model, messages, active_tools)
+                else:
+                    response = _http_chat_stream(base_url, api_key, model, messages, active_tools)
                 elapsed_ms = (time.monotonic() - t0) * 1000.0
                 http_status = getattr(response, "status", 200)
                 _log_event(vm, "http_response_received", turn_id=turn_id,
@@ -3535,11 +3805,12 @@ def ai_turn(vm, prompt, stream_response):
                 elapsed_ms = (time.monotonic() - t0) * 1000.0
                 _log_event(vm, "http_request_failed", turn_id=turn_id,
                            http_status=e.code, elapsed_ms=elapsed_ms, error=e)
+                _log_subagent_end(failed_error=e)
                 _finish_turn(vm, turn_id,
                              output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
                              output_status="partial" if accumulated_full_text else "failed_before_output",
                              status="failed", error=e)
-                vm.host["ai_current_turn_id"] = None
+                _restore_turn_id()
                 err_body = e.read().decode("utf-8", errors="replace")
                 err_msg = f"\n[AI Error] HTTP {e.code}: {err_body}\n"
                 if stream_response:
@@ -3552,11 +3823,12 @@ def ai_turn(vm, prompt, stream_response):
                 elapsed_ms = (time.monotonic() - t0) * 1000.0
                 _log_event(vm, "http_request_failed", turn_id=turn_id,
                            elapsed_ms=elapsed_ms, error=e)
+                _log_subagent_end(failed_error=e)
                 _finish_turn(vm, turn_id,
                              output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
                              output_status="partial" if accumulated_full_text else "failed_before_output",
                              status="failed", error=e)
-                vm.host["ai_current_turn_id"] = None
+                _restore_turn_id()
                 err_msg = f"\n[AI Error] Network request failed: {e}\n"
                 if stream_response:
                     sys.stdout.write(err_msg)
@@ -3619,11 +3891,12 @@ def ai_turn(vm, prompt, stream_response):
                 _log_event(vm, "sse_stream_completed", turn_id=turn_id)
             except Exception as e:
                 _log_event(vm, "sse_stream_failed", turn_id=turn_id, error=e)
+                _log_subagent_end(failed_error=e)
                 _finish_turn(vm, turn_id,
                              output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
                              output_status="partial" if accumulated_full_text else "failed_before_output",
                              status="failed", error=e)
-                vm.host["ai_current_turn_id"] = None
+                _restore_turn_id()
                 raise
 
             if assistant_content:
@@ -3820,13 +4093,14 @@ def ai_turn(vm, prompt, stream_response):
         if trusted_tasks and vm.task in trusted_tasks:
             trusted_tasks.remove(vm.task)
         vm.host["pending_ai_task"] = None
+        _log_subagent_end(failed_error=e)
         _finish_turn(
             vm, turn_id,
             output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
             output_status="partial" if accumulated_full_text else "empty",
             status="cancelled", error=e,
         )
-        vm.host["ai_current_turn_id"] = None
+        _restore_turn_id()
         raise
 
     # Clean up trusted task status once turn is done
@@ -3836,11 +4110,12 @@ def ai_turn(vm, prompt, stream_response):
     vm.host["pending_ai_task"] = None
 
     streamer.close_box()
+    _log_subagent_end()
     _finish_turn(vm, turn_id,
                  output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
                  output_status="complete" if accumulated_full_text else "empty",
                  status="completed")
-    vm.host["ai_current_turn_id"] = None
+    _restore_turn_id()
 
     if not stream_response:
         vm.push("\n".join(accumulated_full_text))
