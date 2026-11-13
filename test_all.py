@@ -2379,6 +2379,64 @@ class TestSessionStoreAndSync(unittest.TestCase):
         self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
         self.assertNotIn("ai_messages", vm.host)
 
+    def test_ai_turn_stateful_subsequent_turn_posts_event_before_opening_stream(self):
+        """Verify that in subsequent turns of a stateful session (create_new=False),
+        the user message event is POSTed first to initiate the turn before opening
+        the SSE GET stream, avoiding synchronous hanging on idle sessions."""
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        call_sequence = []
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def read(self):
+                return b'{"id": "msg_001"}'
+
+        def fake_api_request(method, path, payload=None, stream=False, timeout=None):
+            call_sequence.append({
+                "method": method,
+                "path": path,
+                "payload": payload,
+                "stream": stream,
+            })
+            return DummyResponse()
+
+        def fake_event_stream(response):
+            yield {"type": "agent.session.turn.output_text.delta", "delta": "Because he was outstanding in his field."}
+
+        out = io.StringIO()
+        with patch.object(ai, "_api_request", side_effect=fake_api_request), \
+             patch.object(ai, "_agents_event_stream", side_effect=fake_event_stream), \
+             patch.dict("os.environ", {"OPENAI_API_KEY": "sk-test-key"}), \
+             contextlib.redirect_stdout(out):
+            list(ai.ai_turn_stateful(
+                vm,
+                "why is it funny?",
+                stream_response=False,
+                session_id="sess_mock_123",
+                create_new=False,
+            ))
+
+        self.assertEqual(vm.pop(), "Because he was outstanding in his field.")
+        self.assertEqual(len(call_sequence), 2)
+        # 1. First call MUST be POST to /sessions/{session_id}/events
+        self.assertEqual(call_sequence[0]["method"], "POST")
+        self.assertEqual(call_sequence[0]["path"], "/sessions/sess_mock_123/events")
+        self.assertIn("events", call_sequence[0]["payload"])
+        # 2. Second call MUST be GET to /sessions/{session_id}/events?stream=true
+        self.assertEqual(call_sequence[1]["method"], "GET")
+        self.assertEqual(call_sequence[1]["path"], "/sessions/sess_mock_123/events?stream=true")
+        self.assertTrue(call_sequence[1]["stream"])
+
     def test_ai_context_dual_mode(self):
         import io
         import contextlib

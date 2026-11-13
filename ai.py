@@ -3108,11 +3108,14 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                 "input": [{"role": "user", "content": user_content}],
             }
             _log_event(vm, "http_request_started", turn_id=turn_id,
+                       http_method="POST", url=f"/agents/sessions/{encoded_id}/events",
+                       payload={"model": model, "session_id": session_id})
+            with _api_request("POST", f"/sessions/{encoded_id}/events", payload={"events": [message_event]}, timeout=60) as post_resp:
+                post_resp.read()
+            _log_event(vm, "http_request_started", turn_id=turn_id,
                        http_method="GET", url=f"/agents/sessions/{encoded_id}/events?stream=true",
                        payload={"model": model, "session_id": session_id})
             response = _api_request("GET", f"/sessions/{encoded_id}/events?stream=true", stream=True, timeout=300)
-            with _api_request("POST", f"/sessions/{encoded_id}/events", payload={"events": [message_event]}, timeout=60) as post_resp:
-                post_resp.read()
 
         _log_event(vm, "sse_stream_opened", turn_id=turn_id)
         for event in _agents_event_stream(response):
