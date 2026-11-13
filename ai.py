@@ -1164,11 +1164,12 @@ def get_active_stateless_profile(vm=None) -> dict:
 def get_active_provider_info(vm=None) -> dict:
     if vm is not None and hasattr(vm, "host") and vm.host.get("ai_active_session_id"):
         st = get_stateful_config(vm)
-        model = st.get("model", "gpt-6-luna")
+        model = vm.host.get("ai_stateful_model") or st.get("model", "gpt-6-luna")
+        reasoning = vm.host.get("ai_stateful_reasoning") or st.get("reasoning") or "none"
         return {
             "provider": st.get("provider", "OpenAI"),
             "model": str(model),
-            "reasoning": "none",
+            "reasoning": str(reasoning),
         }
     prof = get_active_stateless_profile(vm)
     model = prof.get("model", "gpt-4o-mini")
@@ -1203,6 +1204,90 @@ def select_startup_stateless_profile(vm=None) -> tuple[bool, str | None]:
             if ok:
                 return True, name
     return False, None
+
+
+def _normalize_base_endpoint(url: str | None) -> str:
+    return (url or "").strip().rstrip("/").lower()
+
+
+def _is_stateful_compatible_profile(vm, profile: dict | None) -> bool:
+    """Return True if profile's provider and endpoint match the configured Stateful endpoint."""
+    if not isinstance(profile, dict):
+        return False
+    st_cfg = get_stateful_config(vm)
+    st_provider = (st_cfg.get("provider") or "OpenAI").strip().lower()
+    st_endpoint = _normalize_base_endpoint(st_cfg.get("endpoint") or "https://api.openai.com/v1")
+    prof_provider = (profile.get("provider") or "").strip().lower()
+    prof_endpoint = _normalize_base_endpoint(profile.get("endpoint") or "https://api.openai.com/v1")
+    return prof_provider == st_provider and prof_endpoint == st_endpoint
+
+
+def _update_stateful_session_model(vm, session_id: str, model: str, reasoning: str = None) -> tuple[bool, str]:
+    """Update the active Stateful remote session's model/reasoning in-place via POST /sessions/{id}."""
+    st_cfg = get_stateful_config(vm)
+    st_provider = st_cfg.get("provider", "OpenAI")
+    agent_patch = {"model": model}
+    norm_reasoning = None
+    if reasoning is not None and str(reasoning).strip():
+        norm_reasoning = str(reasoning).strip().lower()
+        agent_patch["reasoning"] = {"effort": norm_reasoning}
+
+    encoded_id = urllib.parse.quote(session_id, safe="")
+    try:
+        with _api_request(
+            "POST",
+            f"/sessions/{encoded_id}",
+            payload={"agent": agent_patch},
+            timeout=30,
+            vm=vm,
+            operation="update stateful session model",
+        ) as resp:
+            raw = resp.read().decode("utf-8", errors="replace").strip()
+            data = json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as e:
+        err_body = ""
+        try:
+            err_body = e.read().decode("utf-8", errors="replace")
+        except Exception:
+            err_body = str(e)
+        err_msg = err_body
+        try:
+            err_json = json.loads(err_body)
+            if isinstance(err_json, dict):
+                err_obj = err_json.get("error")
+                if isinstance(err_obj, dict) and err_obj.get("message"):
+                    err_msg = err_obj["message"]
+                elif err_json.get("message"):
+                    err_msg = err_json["message"]
+        except Exception:
+            pass
+        return False, (
+            f"[Provider Refused] Failed to update Stateful session '{session_id}' to model '{model}' "
+            f"(HTTP {e.code}): {err_msg}\n"
+            f"Guidance:\n"
+            f"  1. Active Stateful session '{session_id}' was kept intact.\n"
+            f"  2. Choose a supported {st_provider} Agents API model (e.g. '/provider {st_provider} gpt-6.1-terra').\n"
+            f"  3. Or run '/ai-new' to exit Stateful mode before switching to a Stateless model."
+        )
+    except Exception as e:
+        return False, f"[Provider Error] Failed to update Stateful session '{session_id}' to model '{model}': {e}"
+
+    agent_resp = data.get("agent") if isinstance(data, dict) and isinstance(data.get("agent"), dict) else {}
+    updated_model = str(agent_resp.get("model") or model)
+    updated_reasoning = norm_reasoning
+    if updated_reasoning is None and isinstance(agent_resp.get("reasoning"), dict):
+        eff = agent_resp["reasoning"].get("effort")
+        if eff:
+            updated_reasoning = str(eff).strip().lower()
+
+    if vm is not None and hasattr(vm, "host"):
+        vm.host["ai_stateful_model"] = updated_model
+        if updated_reasoning is not None:
+            vm.host["ai_stateful_reasoning"] = updated_reasoning
+
+    eff_disp = updated_reasoning or (vm.host.get("ai_stateful_reasoning") if vm is not None and hasattr(vm, "host") else None) or "none"
+    reasoning_str = f" (Reasoning: {eff_disp})" if eff_disp and str(eff_disp).lower() != "none" else ""
+    return True, f"[AI] Updated Stateful session '{session_id}' to {st_provider} | {updated_model}{reasoning_str}."
 
 
 def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool, str]:
@@ -1280,11 +1365,65 @@ def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool
             best_score = s
             best_key, best_match = k, p
 
+    active_session_id = vm.host.get("ai_active_session_id") if (vm is not None and hasattr(vm, "host")) else None
+    st_cfg = get_stateful_config(vm)
+    st_provider_lower = (st_cfg.get("provider") or "OpenAI").strip().lower()
+
+    if active_session_id:
+        non_stateful_providers = {
+            (p.get("provider") or "").strip().lower()
+            for p in profiles.values()
+            if not _is_stateful_compatible_profile(vm, p)
+        } - {""}
+        has_non_stateful_provider_token = any(np in spec_tokens for np in non_stateful_providers)
+
+        if not best_match or (not _is_stateful_compatible_profile(vm, best_match) and best_score < 50 and not has_non_stateful_provider_token):
+            if not has_non_stateful_provider_token:
+                target_model = re.sub(rf"^{re.escape(st_provider_lower)}\s+", "", spec.strip(), flags=re.I).strip()
+                if target_model and target_model.lower() != st_provider_lower:
+                    return _update_stateful_session_model(vm, active_session_id, target_model, reasoning=reasoning)
+            available = ", ".join(list_stateless_profiles(vm))
+            return False, f"[Provider Error] Unknown provider or model '{spec}'. Available profiles: {available}"
+
     if not best_match:
         available = ", ".join(list_stateless_profiles(vm))
         return False, f"[Provider Error] Unknown provider or model '{spec}'. Available profiles: {available}"
 
     matched_key, matched_profile = best_key, best_match
+
+    if active_session_id:
+        if not _is_stateful_compatible_profile(vm, matched_profile):
+            cur_info = get_active_provider_info(vm)
+            cur_provider = cur_info.get("provider", st_cfg.get("provider", "OpenAI"))
+            cur_model = cur_info.get("model", st_cfg.get("model", "gpt-6-luna"))
+            req_provider = matched_profile.get("provider", "Stateless")
+            req_model = matched_profile.get("model", matched_key)
+            refusal_msg = (
+                f"[Provider Refused] Cannot switch to Stateless provider '{req_provider} | {req_model}' "
+                f"while in Stateful mode (active remote session: {active_session_id}, provider: {cur_provider} | {cur_model}).\n"
+                f"Guidance:\n"
+                f"  1. To switch models within this Stateful session, choose an {cur_provider} Agents API compatible model (e.g. '/provider {cur_provider} gpt-6.1-terra').\n"
+                f"  2. For a one-shot task using '{req_provider} | {req_model}' without leaving Stateful mode, use:\n"
+                f"     /with-model {matched_key} subagent: <prompt>\n"
+                f"  3. To exit Stateful mode and return to local Stateless mode first, run:\n"
+                f"     /ai-new\n"
+                f"     and then switch provider again."
+            )
+            return False, refusal_msg
+
+        exact_aliases = [a.lower() for a in matched_profile.get("aliases", [])]
+        is_exact = (
+            matched_key.lower() == spec_clean
+            or matched_profile.get("model", "").lower() == spec_clean
+            or spec_clean in exact_aliases
+        )
+        if is_exact:
+            target_model = matched_profile.get("model") or spec.strip()
+        else:
+            stripped = re.sub(rf"^{re.escape(st_provider_lower)}\s+", "", spec.strip(), flags=re.I).strip()
+            target_model = stripped if (stripped and stripped.lower() != st_provider_lower) else (matched_profile.get("model") or spec.strip())
+        target_reasoning = reasoning if reasoning is not None else (matched_profile.get("reasoning") if is_exact else None)
+        return _update_stateful_session_model(vm, active_session_id, target_model, reasoning=target_reasoning)
 
     active = dict(matched_profile)
     api_key_env = active.get("api_key_env", "OPENAI_API_KEY")
@@ -1298,7 +1437,6 @@ def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool
 
     if vm is not None and hasattr(vm, "host"):
         vm.host["ai_stateless_profile"] = active
-        vm.host.pop("ai_active_session_id", None)
 
     if active.get("reasoning"):
         os.environ["OPENAI_REASONING_EFFORT"] = active["reasoning"]
@@ -3140,8 +3278,8 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
     stateful_cfg = get_stateful_config(vm)
     key_env = stateful_cfg.get("api_key_env", "OPENAI_API_KEY")
     api_key = os.environ.get(key_env, "").strip()
-    model = (opts.get("model") or stateful_cfg.get("model") or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
-    reasoning_effort = opts.get("reasoning") or "none"
+    model = (opts.get("model") or vm.host.get("ai_stateful_model") or stateful_cfg.get("model") or os.environ.get("OPENAI_MODEL", "gpt-6-luna")).strip()
+    reasoning_effort = opts.get("reasoning") or vm.host.get("ai_stateful_reasoning") or "none"
 
     if not api_key:
         msg = (
@@ -3298,6 +3436,8 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                         target = args.get("provider_or_model", "")
                         r_level = args.get("reasoning")
                         ok, msg = apply_stateless_provider(vm, target, reasoning=r_level)
+                        if ok:
+                            streamer.provider_info = get_active_provider_info(vm)
                         if stream_response:
                             sys.stdout.write(f"\n{msg}\n")
                             sys.stdout.flush()
@@ -3562,33 +3702,45 @@ def ai_turn(vm, prompt, stream_response):
     pending_opts = vm.host.pop("ai_pending_turn_options", None) or {}
     active_session_id = vm.host.get("ai_active_session_id")
     if active_session_id and not vm.host.get("ai_isolated_session_once", False):
-        # If user temporarily requested a non-OpenAI stateless provider via with-model,
-        # route this single turn through the stateless engine while keeping the active session.
-        use_stateless_for_override = False
         if pending_opts.get("model"):
             cand_prof = resolve_profile_override(
                 vm, get_active_stateless_profile(vm), model_spec=pending_opts["model"]
             )
-            if cand_prof.get("provider", "OpenAI").lower() != "openai":
-                use_stateless_for_override = True
+            if not _is_stateful_compatible_profile(vm, cand_prof):
+                cur_info = get_active_provider_info(vm)
+                refusal = (
+                    f"\n[Provider Refused] Cannot run a mainstream 'ai:' turn on Stateless-only provider "
+                    f"'{cand_prof.get('provider')} | {cand_prof.get('model')}' while in Stateful mode "
+                    f"(active remote session: {active_session_id}, provider: {cur_info.get('provider')} | {cur_info.get('model')}).\n"
+                    f"Guidance:\n"
+                    f"  1. For a one-shot task using '{cand_prof.get('provider')} | {cand_prof.get('model')}' without leaving Stateful mode, use:\n"
+                    f"     with-model {pending_opts['model']} subagent: <prompt>\n"
+                    f"  2. To exit Stateful mode and return to local Stateless mode first, run:\n"
+                    f"     ai-new\n"
+                )
+                if stream_response:
+                    sys.stdout.write(refusal)
+                    sys.stdout.flush()
+                else:
+                    vm.push(refusal.strip())
+                return
 
-        if not use_stateless_for_override:
-            image_url = vm.host.pop("ai_image_url_once", None)
-            isolated_session = vm.host.pop("ai_isolated_session_once", False)
-            stateful_kwargs = {
-                "session_id": active_session_id,
-                "image_url": image_url,
-                "isolated_session": isolated_session,
-            }
-            if pending_opts:
-                stateful_kwargs["options"] = pending_opts
-            yield from ai_turn_stateful(
-                vm,
-                prompt,
-                stream_response,
-                **stateful_kwargs,
-            )
-            return
+        image_url = vm.host.pop("ai_image_url_once", None)
+        isolated_session = vm.host.pop("ai_isolated_session_once", False)
+        stateful_kwargs = {
+            "session_id": active_session_id,
+            "image_url": image_url,
+            "isolated_session": isolated_session,
+        }
+        if pending_opts:
+            stateful_kwargs["options"] = pending_opts
+        yield from ai_turn_stateful(
+            vm,
+            prompt,
+            stream_response,
+            **stateful_kwargs,
+        )
+        return
 
     yield from _stateless_turn_loop(
         vm,
@@ -3958,6 +4110,15 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         target = args.get("provider_or_model", "")
                         r_level = args.get("reasoning")
                         ok, msg = apply_stateless_provider(vm, target, reasoning=r_level)
+                        if ok and not is_subagent:
+                            prof = get_active_stateless_profile(vm)
+                            p_name = prof.get("provider", "OpenAI")
+                            base_url = prof.get("endpoint", "https://api.openai.com/v1").strip()
+                            model = (prof.get("model") or "gpt-4o-mini").strip()
+                            reasoning_effort = prof.get("reasoning")
+                            api_key_env = prof.get("api_key_env", "OPENAI_API_KEY")
+                            api_key = os.environ.get(api_key_env, "").strip()
+                            streamer.provider_info = get_active_provider_info(vm)
                         if stream_response:
                             sys.stdout.write(f"\n{msg}\n")
                             sys.stdout.flush()

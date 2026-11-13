@@ -2846,6 +2846,182 @@ class TestSessionStoreAndSync(unittest.TestCase):
 
 
 
+class TestStatefulModelSwitching(unittest.TestCase):
+    def test_stateful_refuses_stateless_only_provider_with_guidance(self):
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.host["ai_active_session_id"] = "sess_stateful_123"
+        vm.host["ai_stateful_model"] = "gpt-6-luna"
+
+        ok, msg = ai.apply_stateless_provider(vm, "Google")
+        self.assertFalse(ok)
+        self.assertEqual(vm.host.get("ai_active_session_id"), "sess_stateful_123")
+        self.assertIn("Provider Refused", msg)
+        self.assertIn("subagent:", msg)
+        self.assertIn("/ai-new", msg)
+        self.assertIn("OpenAI", msg)
+
+    def test_stateful_allows_openai_model_switch_in_place(self):
+        import ai
+        import json
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.host["ai_active_session_id"] = "sess_stateful_456"
+        vm.host["ai_stateful_model"] = "gpt-6-luna"
+
+        captured = {}
+
+        class _FakeResp:
+            def __init__(self, body: dict):
+                self._raw = json.dumps(body).encode("utf-8")
+
+            def read(self):
+                return self._raw
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_api_request(method, path, payload=None, **kwargs):
+            captured["method"] = method
+            captured["path"] = path
+            captured["payload"] = payload
+            return _FakeResp({"id": "sess_stateful_456", "agent": payload["agent"]})
+
+        with patch.object(ai, "_api_request", side_effect=fake_api_request):
+            ok, msg = ai.apply_stateless_provider(vm, "gpt-6.1-terra", reasoning="high")
+
+        self.assertTrue(ok, msg)
+        self.assertEqual(captured["method"], "POST")
+        self.assertEqual(captured["path"], "/sessions/sess_stateful_456")
+        self.assertEqual(captured["payload"], {"agent": {"model": "gpt-6.1-terra", "reasoning": {"effort": "high"}}})
+        self.assertEqual(vm.host.get("ai_active_session_id"), "sess_stateful_456")
+        info = ai.get_active_provider_info(vm)
+        self.assertEqual(info["provider"], "OpenAI")
+        self.assertEqual(info["model"], "gpt-6.1-terra")
+        self.assertEqual(info["reasoning"], "high")
+
+    def test_stateful_rejects_unsupported_openai_model_without_losing_session(self):
+        import ai
+        import urllib.error
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.host["ai_active_session_id"] = "sess_stateful_789"
+        vm.host["ai_stateful_model"] = "gpt-6-luna"
+
+        err_stream = io.BytesIO(b'{"error":{"message":"model_not_found: bad-model","code":"model_not_found"}}')
+        http_err = urllib.error.HTTPError(
+            url="https://api.openai.com/v1/agents/sessions/sess_stateful_789",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=err_stream,
+        )
+
+        with patch.object(ai, "_api_request", side_effect=http_err):
+            ok, msg = ai.apply_stateless_provider(vm, "gpt-99-nonexistent")
+
+        self.assertFalse(ok)
+        self.assertEqual(vm.host.get("ai_active_session_id"), "sess_stateful_789")
+        self.assertEqual(vm.host.get("ai_stateful_model"), "gpt-6-luna")
+        self.assertIn("404", msg)
+        self.assertIn("model_not_found", msg)
+
+    def test_stateless_mid_turn_switch_provider_updates_followup_model(self):
+        import ai
+        import contextlib
+        import json
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        calls = []
+
+        class _FakeStream:
+            def __init__(self, lines):
+                self._lines = [l.encode("utf-8") for l in lines]
+                self.status = 200
+
+            def __iter__(self):
+                return iter(self._lines)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def fake_chat_stream(base_url, api_key, model, messages, active_tools, reasoning_effort=None):
+            calls.append({"model": model, "base_url": base_url, "reasoning": reasoning_effort})
+            if len(calls) == 1:
+                tool_call_delta = {
+                    "choices": [{
+                        "delta": {
+                            "tool_calls": [{
+                                "index": 0,
+                                "id": "call_sw_1",
+                                "function": {
+                                    "name": "switch_provider",
+                                    "arguments": json.dumps({"provider_or_model": "Gemini 3.8 Flash", "reasoning": "Medium"}),
+                                },
+                            }]
+                        }
+                    }]
+                }
+                return _FakeStream([
+                    f"data: {json.dumps(tool_call_delta)}\n",
+                    "data: [DONE]\n",
+                ])
+            return _FakeStream([
+                f"data: {json.dumps({'choices': [{'delta': {'content': 'Switched and answered!'}}]})}\n",
+                "data: [DONE]\n",
+            ])
+
+        initial_model = ai.get_active_provider_info(vm)["model"]
+        out = io.StringIO()
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-openai", "GEMINI_API_KEY": "test-gemini"}), \
+             patch.object(ai, "_http_chat_stream", side_effect=fake_chat_stream), \
+             contextlib.redirect_stdout(out):
+            gen = ai.ai_turn(vm, "switch to gemini", stream_response=True)
+            for _ in gen:
+                pass
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0]["model"], initial_model)
+        self.assertEqual(calls[1]["model"], "gemini-3.8-flash")
+        self.assertIn("Google | gemini-3.8-flash", out.getvalue())
+
+    def test_ai_status_stateless_uses_active_provider_info(self):
+        import ai
+        import contextlib
+        from unittest.mock import patch
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        with patch.dict("os.environ", {"GEMINI_API_KEY": "test-gemini"}):
+            ok, _ = ai.apply_stateless_provider(vm, "Gemini 3.8 Flash", reasoning="Medium")
+            self.assertTrue(ok)
+
+        vm.host["ai_messages"] = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            vm.dictate("ai-status")
+        val = out.getvalue()
+        self.assertIn("Mode: Stateless", val)
+        self.assertIn("Model: Google | gemini-3.8-flash (Reasoning: Medium)", val)
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print(" Running peforth Architectural & Self-Test Suite")
