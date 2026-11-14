@@ -2217,49 +2217,105 @@ def list_local_sessions(vm=None, *, include_deleted=False):
     return rows
 
 
-def export_session_json(selector, output_path=None, *, vm=None):
-    """Export a session's items from the local SQLite mirror to a JSON array file."""
-    with _open_session_store() as store:
-        rows = (vm.host.get("ai_session_rows") if vm is not None else None)
-        if rows is None:
-            rows = store.list_sessions(include_deleted=True)
+def _open_diagnostic_log_for_local_sessions(vm=None):
+    """Return (logger, should_close) using active vm diagnostic_log or opening the diagnostics DB."""
+    db_path = _diagnostic_db_path(vm)
+    if vm is not None and hasattr(vm, "host"):
+        existing = vm.host.get("diagnostic_log")
+        if existing is not None and hasattr(existing, "list_local_sessions"):
+            existing_path = getattr(existing, "db_path", None)
+            if existing_path is not None and Path(existing_path).resolve() == db_path.resolve():
+                return existing, False
+    if not db_path.is_file():
+        return None, False
+    try:
+        from diagnostic_log import DiagnosticLog
+    except ImportError:
+        from peforth.diagnostic_log import DiagnosticLog
+    env = "windows" if os.name == "nt" else "wsl"
+    return DiagnosticLog(db_path, environment=env), True
+
+
+def list_local_diagnostic_sessions(vm=None, *, limit: int = 30) -> list[dict]:
+    """List local_* stateless sessions from ai-diagnostics.sqlite3 and cache summaries."""
+    logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+    if logger is None:
+        return []
+    try:
+        rows = logger.list_local_sessions(limit=limit)
+    finally:
+        if should_close:
+            logger.close()
+    if vm is not None and hasattr(vm, "host"):
+        vm.host["ai_local_session_rows"] = rows
+    return rows
+
+
+def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict], str]:
+    """Recall a local_* stateless session from ai-diagnostics.sqlite3 into chat messages."""
+    logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+    if logger is None:
+        raise RuntimeError("No diagnostic logging database found.")
+    try:
+        rows = (vm.host.get("ai_local_session_rows") if (vm is not None and hasattr(vm, "host")) else None) or []
+        all_rows = logger.list_local_sessions(limit=200)
+        session_id = None
         if isinstance(selector, int) and not isinstance(selector, bool):
-            _, row = _resolve_session_selector(rows, selector)
-            session_id = row.get("id") or row.get("session_id")
-        elif isinstance(selector, str) and selector:
-            all_local = store.list_sessions(include_deleted=True)
-            candidates = rows or all_local
-            exact = [
-                r for r in candidates
-                if (r.get("id") or r.get("session_id")) == selector
-            ]
-            if len(exact) == 1:
-                session_id = exact[0].get("id") or exact[0].get("session_id")
-            elif store.get_session(selector) is not None:
-                session_id = selector
+            candidates = rows or all_rows
+            if 1 <= selector <= len(candidates):
+                session_id = candidates[selector - 1]["session_id"]
             else:
-                suffix = [
-                    r for r in candidates
-                    if _short_id(r.get("id") or r.get("session_id")) == selector
-                ]
-                if len(suffix) == 1:
-                    session_id = suffix[0].get("id") or suffix[0].get("session_id")
-                elif len(suffix) > 1:
-                    raise RuntimeError(f"Session ID suffix {selector!r} is ambiguous; use the full ID.")
+                matches = [r for r in all_rows if _short_id(r["session_id"]) == str(selector)]
+                if len(matches) == 1:
+                    session_id = matches[0]["session_id"]
+                elif len(matches) > 1:
+                    raise RuntimeError(f"Local session ID suffix {selector!r} is ambiguous; use the full ID.")
                 else:
-                    session_id = selector
+                    raise RuntimeError(f"No local session number or ID suffix matches {selector!r}.")
+        elif isinstance(selector, str) and selector.strip():
+            sel = selector.strip()
+            exact = [r for r in all_rows if r["session_id"] == sel]
+            if len(exact) == 1:
+                session_id = exact[0]["session_id"]
+            else:
+                suffix = [r for r in all_rows if _short_id(r["session_id"]) == sel or r["session_id"].endswith(sel)]
+                if len(suffix) == 1:
+                    session_id = suffix[0]["session_id"]
+                elif len(suffix) > 1:
+                    raise RuntimeError(f"Local session ID suffix {sel!r} is ambiguous; use the full ID.")
+                else:
+                    raise RuntimeError(f"No local session matches {sel!r}.")
         else:
-            raise RuntimeError("Expected a session number or session ID.")
+            raise RuntimeError("Expected a local session number or local_* session ID.")
 
-        local = store.get_session(session_id)
-        if local is None or not local.get("synced_at"):
-            items = _fetch_session_items(session_id)
-            store.sync_session({"id": session_id}, items)
+        turns = logger.recall_local_session_turns(session_id)
+        if not turns:
+            raise RuntimeError(f"No turns found in diagnostic DB for local session {session_id!r}.")
+        summary = logger.get_local_session_summary(session_id)
+    finally:
+        if should_close:
+            logger.close()
 
-        if output_path is None or (isinstance(output_path, str) and not output_path.strip()):
-            stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
-            output_path = f"ai-session-full-{stamp}.json"
-        return store.export_session_json(session_id, output_path)
+    messages = [{"role": "system", "content": get_system_prompt(vm)}]
+    for t in turns:
+        prompt_text = (t.get("prompt_text") or "").strip()
+        output_text = (t.get("output_text") or "").strip()
+        if prompt_text:
+            messages.append({"role": "user", "content": prompt_text})
+        if output_text:
+            messages.append({"role": "assistant", "content": output_text})
+    return session_id, messages, summary
+
+
+def distill_context_to_text(ctx_or_messages) -> str:
+    """Convert an ai-context dict or messages list into clean distilled transcript text."""
+    if isinstance(ctx_or_messages, dict):
+        items = ctx_or_messages.get("items") or []
+    elif isinstance(ctx_or_messages, list):
+        items = ctx_or_messages
+    else:
+        raise TypeError("ai-distill expects a context dict or messages list.")
+    return distill_messages_for_promotion(items).get("preview_text", "")
 
 
 def search_local_sessions(query, *, include_deleted=True):

@@ -378,15 +378,14 @@ class SessionStoreAndSyncTests(unittest.TestCase):
                 self.vm.dictate("ai-sync")
             self.assertIn("Synced AI sessions: 1 updated, 0 unchanged", sync_out.getvalue())
 
-        export_file = self.config_dir / "exported-session.json"
-        export_out = io.StringIO()
-        with contextlib.redirect_stdout(export_out):
-            self.vm.push(1)
-            self.vm.push(str(export_file))
-            self.vm.execute(self.vm.tick("ai-export-session"))
-        self.assertTrue(export_file.is_file())
-        exported_data = json.loads(export_file.read_text(encoding="utf-8"))
-        self.assertEqual(exported_data, raw_items)
+        with patch.object(ai, "_api_get", return_value=remote[0]), \
+             patch.object(ai, "_session_title", return_value="Remote Export Title"), \
+             patch.object(ai, "_fetch_session_items", return_value=raw_items), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.vm.dictate("1 ai-use ai-context stringify")
+        exported_ctx = json.loads(self.vm.pop())
+        self.assertEqual(exported_ctx["session_id"], "sess_export_12345678")
+        self.assertEqual(exported_ctx["items"], raw_items)
 
         search_out = io.StringIO()
         with contextlib.redirect_stdout(search_out):

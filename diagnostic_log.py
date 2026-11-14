@@ -11,7 +11,7 @@ import sqlite3
 import time
 import uuid
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS contents (
@@ -95,6 +95,17 @@ CREATE INDEX IF NOT EXISTS idx_timeline_session_time ON timeline(session_id, rec
 CREATE INDEX IF NOT EXISTS idx_timeline_type_time ON timeline(event_type, recorded_at, event_id);
 """
 
+_SCHEMA_V2 = """
+CREATE TABLE IF NOT EXISTS local_sessions (
+    session_id TEXT PRIMARY KEY,
+    summary TEXT,
+    created_at TEXT,
+    last_active_at TEXT,
+    turn_count INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+"""
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -138,7 +149,7 @@ class DiagnosticLog:
         if version == SCHEMA_VERSION:
             return
 
-        migrations = {1: _SCHEMA}
+        migrations = {1: _SCHEMA, 2: _SCHEMA_V2}
         self.connection.execute("BEGIN IMMEDIATE")
         try:
             while version < SCHEMA_VERSION:
@@ -335,6 +346,115 @@ class DiagnosticLog:
             event_id = cursor.lastrowid
         self._sequence = sequence_no
         return int(event_id)
+
+    def _build_local_summary(self, created_at: str | None, first_prompt: str | None, existing: str | None) -> str:
+        try:
+            from session_store import build_session_description, is_complete_description
+        except ImportError:
+            from peforth.session_store import build_session_description, is_complete_description
+        if is_complete_description(existing):
+            return existing  # type: ignore[return-value]
+        items = [{"type": "message", "role": "user", "content": first_prompt}] if first_prompt else []
+        return build_session_description(created_at, items, existing_description=existing)
+
+    def list_local_sessions(self, *, limit: int = 30) -> list[dict]:
+        """List local_* stateless sessions from turns and populate missing summaries in local_sessions."""
+        rows = self.connection.execute(
+            """
+            SELECT
+                t.remote_session_id AS session_id,
+                MIN(t.started_at) AS created_at,
+                MAX(COALESCE(t.ended_at, t.started_at)) AS last_active_at,
+                COUNT(*) AS turn_count,
+                ls.summary AS cached_summary
+            FROM turns t
+            LEFT JOIN local_sessions ls ON ls.session_id = t.remote_session_id
+            WHERE t.remote_session_id LIKE 'local_%'
+            GROUP BY t.remote_session_id
+            ORDER BY last_active_at DESC, t.remote_session_id DESC
+            LIMIT ?
+            """,
+            (max(1, int(limit or 30)),),
+        ).fetchall()
+
+        results = []
+        to_upsert = []
+        for row in rows:
+            sid = row["session_id"]
+            created_at = row["created_at"]
+            last_active_at = row["last_active_at"]
+            turn_count = int(row["turn_count"] or 0)
+            summary = row["cached_summary"]
+            first_row = self.connection.execute(
+                """
+                SELECT c.content_text AS prompt_text
+                FROM turns t
+                LEFT JOIN contents c ON c.content_id = t.prompt_content_id
+                WHERE t.remote_session_id = ?
+                ORDER BY t.started_at ASC, t.turn_id ASC
+                LIMIT 1
+                """,
+                (sid,),
+            ).fetchone()
+            first_prompt = first_row["prompt_text"] if first_row else None
+            computed = self._build_local_summary(created_at, first_prompt, summary)
+            if computed != summary:
+                summary = computed
+                to_upsert.append((sid, summary, created_at, last_active_at, turn_count, _now()))
+            results.append({
+                "session_id": sid,
+                "summary": summary or "",
+                "created_at": created_at,
+                "last_active_at": last_active_at,
+                "turn_count": turn_count,
+            })
+
+        if to_upsert:
+            with self._write_transaction():
+                self.connection.executemany(
+                    """
+                    INSERT INTO local_sessions (session_id, summary, created_at, last_active_at, turn_count, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET
+                        summary = excluded.summary,
+                        created_at = excluded.created_at,
+                        last_active_at = excluded.last_active_at,
+                        turn_count = excluded.turn_count,
+                        updated_at = excluded.updated_at
+                    """,
+                    to_upsert,
+                )
+        return results
+
+    def recall_local_session_turns(self, session_id: str) -> list[dict]:
+        """Return ordered turns (with prompt & output text) for a local_* session."""
+        rows = self.connection.execute(
+            """
+            SELECT
+                t.turn_id,
+                t.started_at,
+                t.ended_at,
+                t.status,
+                t.output_status,
+                t.metadata_json,
+                cp.content_text AS prompt_text,
+                co.content_text AS output_text
+            FROM turns t
+            LEFT JOIN contents cp ON cp.content_id = t.prompt_content_id
+            LEFT JOIN contents co ON co.content_id = t.output_content_id
+            WHERE t.remote_session_id = ?
+            ORDER BY t.started_at ASC, t.turn_id ASC
+            """,
+            (session_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_local_session_summary(self, session_id: str) -> str:
+        row = self.connection.execute(
+            "SELECT summary FROM local_sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        return str(row["summary"]) if row and row["summary"] else ""
 
     def close(self) -> None:
         self.connection.close()

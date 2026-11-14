@@ -525,11 +525,12 @@ class TestSafePropertyAudit(unittest.TestCase):
             "ai-use",
             "ai-new",
             "ai-status",
-            "ai-export-session",
+            "ai-local-sessions",
             "ai-search",
             "ai-cancel",
             "(ai-context)",
             "ai-context",
+            "ai-distill",
         ]
         for name in safe_session_words:
             word = self.vm.tick(name)
@@ -2135,15 +2136,14 @@ class TestSessionStoreAndSync(unittest.TestCase):
                 self.vm.dictate("ai-sync")
             self.assertIn("Synced AI sessions: 1 updated, 0 unchanged", sync_out.getvalue())
 
-        export_file = self.config_dir / "exported-session.json"
-        export_out = io.StringIO()
-        with contextlib.redirect_stdout(export_out):
-            self.vm.push(1)
-            self.vm.push(str(export_file))
-            self.vm.execute(self.vm.tick("ai-export-session"))
-        self.assertTrue(export_file.is_file())
-        exported_data = json.loads(export_file.read_text(encoding="utf-8"))
-        self.assertEqual(exported_data, raw_items)
+        with patch.object(ai, "_api_get", return_value=remote[0]), \
+             patch.object(ai, "_session_title", return_value="Remote Export Title"), \
+             patch.object(ai, "_fetch_session_items", return_value=raw_items), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.vm.dictate("1 ai-use ai-context stringify")
+        exported_ctx = json.loads(self.vm.pop())
+        self.assertEqual(exported_ctx["session_id"], "sess_export_12345678")
+        self.assertEqual(exported_ctx["items"], raw_items)
 
         search_out = io.StringIO()
         with contextlib.redirect_stdout(search_out):
@@ -3104,6 +3104,77 @@ class TestRequiredProvidersYaml(unittest.TestCase):
                 prompt = ai.get_system_prompt(vm)
                 self.assertIn(f"Diagnostic Logging DB: {diag_path}", prompt)
                 self.assertIn(f"Sessions Mirror DB: {sess_path}", prompt)
+
+
+class TestLocalSessionRecall(unittest.TestCase):
+    def test_local_sessions_summary_ai_use_ai_context_and_ai_distill(self):
+        import ai
+        import contextlib
+        import json
+        import tempfile
+        from unittest.mock import patch
+        from diagnostic_log import DiagnosticLog
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            db_path = cfg_dir / "db" / "ai-diagnostics.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+            try:
+                rid = logger.start_runtime(source_path="test.py", runtime_path=tmpdir, runtime_version="3.13")
+                p1 = logger.store_content("prompt", "幫我解釋 Forth 堆疊怎麼運作。第二句省略。")
+                t1 = logger.start_turn(rid, prompt_content_id=p1, remote_session_id="local_aaaabbbbcccc1111")
+                logger.finish_turn(t1, output_text="Forth 使用後進先出 (LIFO) 資料堆疊。", output_status="complete", status="completed")
+
+                p2 = logger.store_content("prompt", "請舉一個 dup swap 的例子")
+                t2 = logger.start_turn(rid, prompt_content_id=p2, remote_session_id="local_aaaabbbbcccc1111")
+                logger.finish_turn(t2, output_text="例如 `10 dup` 會得到兩個 10。", output_status="complete", status="completed")
+            finally:
+                logger.close()
+
+            vm = VM({"headless": True, "__file__dir__": str(HERE)})
+            vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+            vm.host["ai_active_session_id"] = "sess_should_be_cleared"
+
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                out_list = io.StringIO()
+                with contextlib.redirect_stdout(out_list):
+                    vm.dictate("ai-local-sessions")
+                listed = out_list.getvalue()
+                self.assertIn("幫我解釋 Forth 堆疊怎麼運作", listed)
+                self.assertIn("local_aaaabbbbcccc1111", listed)
+                self.assertIn("Turns: 2", listed)
+
+                # Verify summary was persisted in local_sessions table in diagnostics DB
+                check_logger = DiagnosticLog(db_path, environment=env)
+                try:
+                    saved_summary = check_logger.get_local_session_summary("local_aaaabbbbcccc1111")
+                    self.assertIn("幫我解釋 Forth 堆疊怎麼運作", saved_summary)
+                finally:
+                    check_logger.close()
+
+                # Resume via ai-use with local_* ID (clears stateful session & loads ai_messages)
+                out_use = io.StringIO()
+                with contextlib.redirect_stdout(out_use):
+                    vm.dictate('s" local_aaaabbbbcccc1111" ai-use')
+                self.assertIn("Using local session", out_use.getvalue())
+                self.assertNotIn("ai_active_session_id", vm.host)
+                self.assertEqual(vm.host.get("ai_local_session_id"), "local_aaaabbbbcccc1111")
+
+                # Export via ai-context stringify
+                vm.dictate("ai-context stringify")
+                ctx_json = json.loads(vm.pop())
+                self.assertEqual(ctx_json["mode"], "stateless")
+                self.assertEqual(ctx_json["session_id"], "local_aaaabbbbcccc1111")
+                user_items = [m for m in ctx_json["items"] if m.get("role") == "user"]
+                self.assertEqual(len(user_items), 2)
+
+                # Distill via ai-context ai-distill (reusing ai-promote logic)
+                vm.dictate("ai-context ai-distill")
+                transcript = vm.pop()
+                self.assertIn("User: 幫我解釋 Forth 堆疊怎麼運作。", transcript)
+                self.assertIn("Assistant: Forth 使用後進先出 (LIFO) 資料堆疊。", transcript)
+                self.assertIn("User: 請舉一個 dup swap 的例子", transcript)
 
 
 if __name__ == "__main__":

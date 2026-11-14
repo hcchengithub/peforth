@@ -518,6 +518,24 @@ code (ai-sessions-list)
     /// Fetches remote session index metadata, performs differential item synchronization, and prints the numbered session list.
     last :: safe=True
 
+code ai-local-sessions
+    import ai
+    rows = ai.list_local_diagnostic_sessions(vm)
+    active_local = vm.host.get("ai_local_session_id") if not vm.host.get("ai_active_session_id") else None
+    if not rows:
+        print("No local diagnostic sessions found.")
+    else:
+        for index, row in enumerate(rows, 1):
+            sid = row.get("session_id", "")
+            summary = row.get("summary") or "(untitled)"
+            marker = " *" if sid == active_local else ""
+            turns = row.get("turn_count", 0)
+            print(f"{index:>3}. {summary}{marker}")
+            print(f"     Turns: {turns}  Last active: {ai._format_time(row.get('last_active_at'))}\t{sid}\n")
+    end-code
+    // ( -- ) List local Stateless AI sessions from the diagnostics database and cache one-line summaries.
+    last :: safe=True
+
 code ai-sync
     import ai
     stats = ai.sync_sessions(vm)
@@ -578,11 +596,27 @@ code ai-use
     import urllib.parse
 
     choice = vm.pop()
+
+    def _activate_local(sel, label_text):
+        sid, messages, summary = ai.recall_local_session_messages(sel, vm=vm)
+        vm.host.pop("ai_active_session_id", None)
+        vm.host.pop("ai_stateful_model", None)
+        vm.host.pop("ai_stateful_reasoning", None)
+        vm.host["ai_local_session_id"] = sid
+        vm.host["ai_messages"] = messages
+        title = summary or "(untitled)"
+        user_turns = sum(1 for m in messages if isinstance(m, dict) and m.get("role") == "user")
+        print(f"Using local session {label_text}: {title} [{sid}] ({user_turns} turn(s))")
+
     if isinstance(choice, int) and not isinstance(choice, bool):
         snapshot = vm.host.get("ai_session_rows") or []
+        local_snapshot = vm.host.get("ai_local_session_rows") or []
         if 1 <= choice <= len(snapshot):
             row = snapshot[choice - 1]
             label = str(choice)
+        elif not snapshot and 1 <= choice <= len(local_snapshot):
+            _activate_local(choice, str(choice))
+            return
         else:
             matches = [row for row in ai._list_remote_sessions()
                        if ai._short_id(row.get("id")) == str(choice)]
@@ -593,14 +627,19 @@ code ai-use
             row = matches[0]
             label = str(choice)
     elif isinstance(choice, str) and choice:
+        if choice.startswith("local_"):
+            _activate_local(choice, ai._short_id(choice))
+            return
         matches = [row for row in ai._list_remote_sessions()
                    if row.get("id") == choice or ai._short_id(row.get("id")) == choice]
-        if len(matches) != 1:
-            if not matches:
-                raise RuntimeError(f"No remote session matches ID {choice!r}.")
+        if len(matches) == 1:
+            row = matches[0]
+            label = ai._short_id(row["id"])
+        elif len(matches) > 1:
             raise RuntimeError(f"Session ID suffix {choice!r} is ambiguous; use the full ID.")
-        row = matches[0]
-        label = ai._short_id(row["id"])
+        else:
+            _activate_local(choice, choice)
+            return
     else:
         raise RuntimeError("ai-use expects a session number or session ID.")
     detail = ai._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
@@ -727,31 +766,6 @@ code ai-cleanup
     /// Run ai-sessions first to refresh the session list. Cached session rows are cleared after deletion.
     last :: safe=False
 
-code ai-export-session
-    import ai
-
-    if not vm.dstack:
-        raise RuntimeError("ai-export-session expects a session number or session ID.")
-    top = vm.pop()
-    output_path = None
-    if (
-        isinstance(top, str)
-        and vm.dstack
-        and (top.endswith(".json") or "/" in top or "\\" in top)
-        and isinstance(vm.peek(), (int, str))
-        and not isinstance(vm.peek(), bool)
-    ):
-        output_path = top
-        selector = vm.pop()
-    else:
-        selector = top
-    exported = ai.export_session_json(selector, output_path, vm=vm)
-    print(f"Exported session to {exported}")
-    end-code
-    // ( session-number | session-ID [output-path] -- ) Export a session's items from the local SQLite mirror to a JSON file.
-    /// Reconstructs the full JSON array of session items in ascending sequence order (default: ai-session-full-YYYYMMDD-HHMMSS.json).
-    last :: safe=True
-
 code ai-search
     import ai
 
@@ -814,5 +828,12 @@ code (ai-context)
     // ( -- dict ) Push the current AI session context dict.
     /// In Stateful mode, checks freshness, syncs with remote if needed, and returns ordered raw items from local mirror.
     /// In Stateless mode, returns the active in-memory messages list.
+    last :: safe=True
+
+code ai-distill
+    import ai
+    vm.push(ai.distill_context_to_text(vm.pop()))
+    end-code
+    // ( context-dict | messages-list -- transcript-str ) Distill AI context into clean plain-text transcript (using ai-promote rules).
     last :: safe=True
 
