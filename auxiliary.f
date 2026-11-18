@@ -442,15 +442,22 @@ code (skip-conditional)
             if token is None:
                 end = "[else] or [then]" if stop_at_else else "[then]"
                 raise KernelError(f"Unmatched conditional; expected {end}")
-            if token in ('s"', "s'", "s`", "s|", "s^", "s/"):
+            if token in ('s"', "s'", "s`", "s|", "s^", "s/", '."', ".'", ".`", ".|", ".^", "./"):
                 quoted = vm.tick(token)
                 delim = quoted.body[0] if hasattr(quoted, "body") and quoted.body else token[1]
-                vm.input.read(until=delim)
-                continue
-            if token in ('."', ".'", ".`", ".|", ".^", "./"):
-                quoted = vm.tick(token)
-                delim = quoted.body[0] if hasattr(quoted, "body") and quoted.body else token[1]
-                vm.input.read(until=delim)
+                remaining = vm.input.remaining
+                idx = 0
+                while idx < len(remaining):
+                    ch = remaining[idx]
+                    if ch == "\\" and idx + 1 < len(remaining) and remaining[idx + 1] in (delim, "\\"):
+                        idx += 2
+                        continue
+                    if ch == delim:
+                        vm.input.consume(idx + 1)
+                        break
+                    idx += 1
+                else:
+                    raise KernelError(f"Unmatched conditional string; expected {delim!r}")
                 continue
             if token == "(":
                 vm.input.read(until=")")

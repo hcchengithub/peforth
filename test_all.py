@@ -730,8 +730,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             w = self.vm.tick(wname)
             self.assertIsNotNone(w)
             self.assertTrue(w.properties.get("safe"))
-            self.assertIn("no backslash escaping", w.help)
-            self.assertIn("Backslash escaping", w.comment)
+            self.assertIn("escaping", w.help)
+            self.assertIn("conservative backslash escaping", w.comment)
             self.assertIn("Friends: s\"", w.comment)
 
     def test_dot_string_delimiters(self):
@@ -755,8 +755,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             w = self.vm.tick(wname)
             self.assertIsNotNone(w)
             self.assertTrue(w.properties.get("safe"))
-            self.assertIn("no backslash escaping", w.help)
-            self.assertIn("Backslash escaping", w.comment)
+            self.assertIn("escaping", w.help)
+            self.assertIn("conservative backslash escaping", w.comment)
             self.assertIn("Friends: .\"", w.comment)
 
         # Compilation mode inside colon definitions
@@ -779,6 +779,67 @@ class TestSafePropertyAudit(unittest.TestCase):
             with redirect_stdout(output):
                 self.vm.dictate(word_call)
             self.assertEqual(output.getvalue(), expected)
+
+    def test_string_conservative_backslash_escaping(self):
+        import io
+        from contextlib import redirect_stdout
+        import projectk
+
+        # 1. Delimiter escaping for each string delimiter
+        self.vm.dictate(r's" say \"hello\""')
+        self.assertEqual(self.vm.pop(), 'say "hello"')
+
+        self.vm.dictate(r"s' it\'s great'")
+        self.assertEqual(self.vm.pop(), "it's great")
+
+        self.vm.dictate(r"s` code \`here\` `")
+        self.assertEqual(self.vm.pop(), "code `here` ")
+
+        self.vm.dictate(r"s| a\|b|")
+        self.assertEqual(self.vm.pop(), "a|b")
+
+        self.vm.dictate(r"s^ a\^b^")
+        self.assertEqual(self.vm.pop(), "a^b")
+
+        self.vm.dictate(r"s/ a\/b/")
+        self.assertEqual(self.vm.pop(), "a/b")
+
+        # 2. Literal backslash \\ becomes \
+        self.vm.dictate(r's" C:\\path\\to\\dir"')
+        self.assertEqual(self.vm.pop(), r'C:\path\to\dir')
+
+        # 3. Unrecognized escapes (\n, \t, etc.) are kept verbatim
+        self.vm.dictate(r's" C:\new\tools\test"')
+        self.assertEqual(self.vm.pop(), r'C:\new\tools\test')
+
+        # 4. Trailing backslash before delimiter
+        self.vm.dictate(r's" ends with backslash\\"')
+        self.assertEqual(self.vm.pop(), 'ends with backslash\\')
+
+        # 5. Compiled state s" literal with escape
+        self.vm.dictate(r': _test_esc_s s" \"compiled\"" ; _test_esc_s')
+        self.assertEqual(self.vm.pop(), '"compiled"')
+
+        # 6. Compiled state print-string friend with escape
+        self.vm.dictate(r': _test_esc_dot ." \"printed\"" ;')
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.vm.dictate("_test_esc_dot")
+        self.assertEqual(out.getvalue(), '"printed"')
+
+        # 7. Unterminated string behavior raises KernelError
+        with self.assertRaises(projectk.KernelError):
+            self.vm.dictate(r's" unterminated')
+
+        with self.assertRaises(projectk.KernelError):
+            self.vm.dictate(r's" unterminated with escaped delim \"')
+
+        # 8. Conditional skipper crosses escaped delimiters properly
+        self.vm.dictate(r'false [if] s" skipped \" [then] inside string" [then] 99')
+        self.assertEqual(self.vm.pop(), 99)
+
+        self.vm.dictate(r'false [if] ." skipped .\" [then] inside" [then] 88')
+        self.assertEqual(self.vm.pop(), 88)
 
     def test_system_info_and_windows_message_box(self):
         self.vm.host.pop("system_info", None)

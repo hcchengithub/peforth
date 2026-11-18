@@ -1049,28 +1049,44 @@ code to
 
 code (s)
     delim = vm.pop()
-    raw = vm.input.read(until=delim)
+    remaining = vm.input.remaining
+    chars = []
+    idx = 0
+    while idx < len(remaining):
+        ch = remaining[idx]
+        if ch == "\\" and idx + 1 < len(remaining) and remaining[idx + 1] in (delim, "\\"):
+            chars.append(remaining[idx + 1])
+            idx += 2
+            continue
+        if ch == delim:
+            break
+        chars.append(ch)
+        idx += 1
+    if idx >= len(remaining):
+        raise KernelError(f"Missing boundary: {delim!r}")
+    vm.input.consume(idx + 1)
+    raw = "".join(chars)
     val = raw[1:] if raw.startswith(" ") else raw
     if vm.compiling:
         vm.literal(val)
     else:
         vm.push(val)
     end-code
-    // ( delim -- string ) Internal engine for parsing raw string delimited by delim.
-    /// Reads input stream verbatim until the very next delim character, strips one leading space, and pushes or compiles the literal.
-    /// Backslash escaping (e.g. \" or \n) is NOT supported; the first occurrence of delim terminates the string immediately.
+    // ( delim -- string ) Internal engine for parsing string delimited by delim.
+    /// Parses input stream up to delim with conservative backslash escape support (\delim -> delim, \\ -> \).
+    /// Other backslashes (e.g. \n, \t) remain verbatim. Strips one leading space, then pushes or compiles the literal.
 last :: safe=True
 
 code (string-quote-doc)
     w = vm.latest
     d = w.body[0] if getattr(w, "body", None) else '"'
-    w.help = f"( <string>{d} -- string ) Parse raw string delimited by {d} (no backslash escaping)."
+    w.help = f"( <string>{d} -- string ) Parse string delimited by {d} (supports \\{d} and \\\\ escaping)."
     w.comment = (
-        f"Part of the s[\"'`|^/] raw string family. Delimiter is {d!r}.\n"
-        f"Reads verbatim until the very next {d!r} character (strips one leading space).\n"
-        f"IMPORTANT: Backslash escaping (such as \\{d} or \\n) is NOT supported; the first {d!r} immediately terminates the string.\n"
+        f"Part of the s[\"'`|^/] string family. Delimiter is {d!r}.\n"
+        f"Reads up to {d!r} with conservative backslash escaping (\\{d} and \\\\; other backslashes kept verbatim).\n"
+        f"Strips one leading space if present.\n"
         f"Friends: s\" s' s` s| s^ s/ and <text> ... </text>.\n"
-        f"If your text contains {d!r}, use an alternative delimiter from Friends or <text> ... </text>."
+        f"If your text contains {d!r}, use \\{d} or an alternative delimiter from Friends."
     )
     w.properties["safe"] = True
     w.safe = True
@@ -1082,10 +1098,10 @@ last :: safe=True
     create , [compile] immediate (string-quote-doc)
     does> ( -- string )
     @ (s) ;
-    // ( delim <name> -- ) Define an immediate raw string quote word for delim.
+    // ( delim <name> -- ) Define an immediate string quote word for delim.
     /// Factor for the s["'`|^/] family via create ... does>.
     /// Automatically populates the child word's help, comment, and safe=True property.
-    /// Child words read raw text up to delim without backslash escaping.
+    /// Child words support conservative backslash escaping for delim and \\.
 last :: safe=True
 
 char " string-quote s"
@@ -1108,13 +1124,13 @@ last :: safe=True
 code (print-string-quote-doc)
     w = vm.latest
     d = w.body[0] if getattr(w, "body", None) else '"'
-    w.help = f"( <string>{d} -- ) Parse and print raw text up to the next {d} (no backslash escaping)."
+    w.help = f"( <string>{d} -- ) Parse and print text up to the next {d} (supports \\{d} and \\\\ escaping)."
     w.comment = (
         f"Part of the .[\"'`|^/] print-string family. Delimiter is {d!r}.\n"
         f"Prints immediately while interpreting; inside a colon definition, compiles the text and prints it when called. Does not append a newline.\n"
-        f"IMPORTANT: Backslash escaping (such as \\{d} or \\n) is NOT supported; the first {d!r} immediately terminates the string.\n"
+        f"Supports conservative backslash escaping (\\{d} and \\\\; other backslashes kept verbatim).\n"
         f"Friends: .\" .' .` .| .^ ./\n"
-        f"If your text contains {d!r}, use an alternative delimiter from Friends."
+        f"If your text contains {d!r}, use \\{d} or an alternative delimiter from Friends."
     )
     w.properties["safe"] = True
     w.safe = True
@@ -1125,7 +1141,7 @@ last :: safe=True
 : print-string-quote ( delim <name> -- )
     create , [compile] immediate (print-string-quote-doc)
     does> @ (s) (print-string) ;
-    // ( delim <name> -- ) Define an immediate word that parses and prints a raw delimited string.
+    // ( delim <name> -- ) Define an immediate word that parses and prints a delimited string.
     /// Factor for the .["'`|^/] family via create ... does>.
     /// Automatically populates the child word's help, comment, and safe=True property.
     /// In interpretation mode, prints immediately without a newline; while compiling, compiles the literal and "." call.
