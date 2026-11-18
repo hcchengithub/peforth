@@ -33,6 +33,4 @@
 
 - 平常人為使用（預設）：headless 是 False，所以會執行 repl，出現提示字元讓您互動。
 - 跑單元測試時：測試程式傳入 VM({"headless": True})，?repl 就會跳過 repl 迴圈，純粹把詞彙庫載入完畢後，把控制權交回給測試腳本進行檢驗。
-
----
-
+---# Source checkout, Windows runtime, and WSL runtime	╭─ 👋 user ────────────────────────────────────────────────────────────────────────────────────────╮	  我們有 source code 所在的 subdirectory，然後又有 runtime (Runtime 裡有完整的 source code)，而且 	  runtime 又不只一個，可能有 Windows 的、可能有 WSL 的 runtime。 這三個地方該怎麼稱呼比較好呢？	╰─────────────────────────────────────────────────────────────────────────── 2026-11-19 04:00:36 ──╯	╭─ 🪄 peforth ────────────────────────────────────────────────────────────── OpenAI │ gpt-6-luna ──╮	  我會建議把三者稱為：	  - **Source checkout**（或 **source tree**）：Git 專案原始碼所在的位置，例如 `C:\Users\hcche\Documents\GitHub\peforth`	  - **Windows runtime**：Windows 上實際執行 peforth 的環境與資料位置，例如 `C:\Users\hcche\.peforth`	  - **WSL runtime**：WSL 裡另一套獨立的執行環境與資料位置	  「**repo path**」沒有錯，也很常用，但它指的是「Git repository 的路徑」；「**source path**」則可能被理解成某個原始碼目錄或 Python 的 source path。若要在設定、文件或診斷資訊中清楚區分，我會選 **source checkout path**、**Windows runtime path**、**WSL runtime path**。	  如果要簡短命名，可以用：	  ```text	  source_checkout	  runtime_windows	  runtime_wsl	  ```	  這樣也能避免把 repo 和 runtime 混為一談。	╰─────────────────────────────────────────────────────────────────────────── 2026-11-19 04:00:40 ──╯

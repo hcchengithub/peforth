@@ -1413,19 +1413,82 @@ code (:>)
     /// Read next token as attribute or method call, evaluate on TOS, and push the result.
 
 \ --- 11. REPL Greeting Text ---
+code (greeting-banner)
+    try:
+        from prompt_toolkit.formatted_text import FormattedText
+        from prompt_toolkit.shortcuts import print_formatted_text
+        from prompt_toolkit.styles import Style
+        print_formatted_text(
+            FormattedText([("class:greeting.title", "\np e f o r t h   v 2")]),
+            style=Style.from_dict({"greeting.title": "bold #5fd7ff"}),
+        )
+    except Exception:
+        print("\np e f o r t h   v 2")
+
+    runtime_modified = None
+    try:
+        import ai
+        runtime_latest = (ai.detect_system_info(vm).get("runtime_latest") or {})
+        runtime_modified = runtime_latest.get("modified")
+    except Exception:
+        pass
+
+    if isinstance(runtime_modified, str) and runtime_modified:
+        print(f"2.1.0 - Runtime modified: {runtime_modified}")
+    else:
+        print("2.1.0")
+
+    fallback_notice = vm.host.get("ai_fallback_notice")
+    if fallback_notice:
+        print(f"\n{fallback_notice}")
+
+    ai_avail = vm.host.get("ai_available")
+    if ai_avail is None:
+        try:
+            import ai
+            ai_avail = ai.has_valid_api_key(vm)
+        except Exception:
+            ai_avail = False
+
+    if not ai_avail:
+        if vm.host.get("ai_provider_config_error"):
+            print(f"\n{vm.host['ai_provider_config_error']}")
+            print("Falling back to Forth mode (>).")
+        else:
+            req_env = vm.host.get("ai_required_key_env")
+            if not req_env:
+                try:
+                    import ai
+                    active_prof = ai.get_active_stateless_profile(vm)
+                    req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
+                except Exception:
+                    req_env = "OPENAI_API_KEY"
+            print(f"\n[Notice] {req_env} is not set; no configured provider has usable credentials, so AI features are unavailable.")
+            print("Falling back to Forth mode (>). Configure the API key required by a provider in .env to enable chat mode.")
+    end-code
+last :: safe=True
+
 code (greeting-guide)
     mode = vm.host.get("repl_mode", "forth")
     if mode == "chat":
         print("Chat with AI directly. Type '/help' for instructions, '/forth' for Forth mode.")
     else:
-        import os
-        if os.environ.get("OPENAI_API_KEY", "").strip():
+        ai_avail = vm.host.get("ai_available")
+        if ai_avail is None:
+            try:
+                import ai
+                ai_avail = ai.has_valid_api_key(vm)
+            except Exception:
+                ai_avail = False
+        if ai_avail:
             print("Type 'help' for instructions, 'ai: <prompt>' for AI, 'chat' for chat mode.")
         else:
             print("Type 'help' for instructions, 'bye' to exit.")
     end-code
+last :: safe=True
 
 : greeting ( -- )
+    (greeting-banner)
     cr
     ." Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth." cr
     (greeting-guide) cr

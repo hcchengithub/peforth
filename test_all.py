@@ -1771,6 +1771,55 @@ class TestCLISmoke(unittest.TestCase):
         self.assertIn("diagnostic logging monitor", getattr(word, "help", ""))
 
 
+class TestGreetingWord(unittest.TestCase):
+    """Tests that greeting word is the single unified source of greeting output."""
+
+    def test_greeting_outputs_complete_banner_and_guidance(self):
+        import io
+        from contextlib import redirect_stdout
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.host["repl_mode"] = "chat"
+        vm.host["ai_available"] = True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            vm.dictate("greeting")
+        output = out.getvalue()
+        self.assertIn("p e f o r t h   v 2", output)
+        self.assertIn("2.1.0", output)
+        self.assertIn("Talk with our GitHub repo using Copilot for help, code samples, and the whys behind peforth.", output)
+        self.assertIn("Chat with AI directly. Type '/help' for instructions, '/forth' for Forth mode.", output)
+        self.assertIn("[Enter] submits / [Ctrl+J] adds a line / [Esc] interrupt.", output)
+
+    def test_greeting_in_forth_mode_with_ai(self):
+        import io
+        from contextlib import redirect_stdout
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.host["repl_mode"] = "forth"
+        vm.host["ai_available"] = True
+        out = io.StringIO()
+        with redirect_stdout(out):
+            vm.dictate("greeting")
+        output = out.getvalue()
+        self.assertIn("Type 'help' for instructions, 'ai: <prompt>' for AI, 'chat' for chat mode.", output)
+
+    def test_greeting_in_forth_mode_without_ai(self):
+        import io
+        from contextlib import redirect_stdout
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.host["repl_mode"] = "forth"
+        vm.host["ai_available"] = False
+        vm.host["ai_required_key_env"] = "TEST_API_KEY"
+        out = io.StringIO()
+        with redirect_stdout(out):
+            vm.dictate("greeting")
+        output = out.getvalue()
+        self.assertIn("[Notice] TEST_API_KEY is not set", output)
+        self.assertIn("Type 'help' for instructions, 'bye' to exit.", output)
+
+
 class TestSessionDescriptionRules(unittest.TestCase):
     def test_format_description_time_uses_local_timezone_static_text(self):
         from datetime import datetime, timedelta, timezone

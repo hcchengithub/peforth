@@ -39,40 +39,27 @@ code repl
 
     ai.load_dotenv()
     has_api_key, fallback_profile = ai.select_startup_stateless_profile(vm)
+    vm.host["ai_available"] = has_api_key
+    vm.host["ai_fallback_profile"] = fallback_profile
     if fallback_profile:
         active = ai.get_active_stateless_profile(vm)
-        print(f"[AI] Active provider key is unavailable; using {active.get('provider')} | {active.get('model')} (profile: {fallback_profile}).")
+        vm.host["ai_fallback_notice"] = f"[AI] Active provider key is unavailable; using {active.get('provider')} | {active.get('model')} (profile: {fallback_profile})."
+    else:
+        vm.host.pop("ai_fallback_notice", None)
+
     if not has_api_key:
         vm.host["repl_mode"] = "forth"
-    else:
-        vm.host.setdefault("repl_mode", "chat")
-
-    runtime_latest = (ai.detect_system_info(vm).get("runtime_latest") or {})
-    runtime_modified = runtime_latest.get("modified")
-    try:
-        from prompt_toolkit.formatted_text import FormattedText
-        from prompt_toolkit.shortcuts import print_formatted_text
-        from prompt_toolkit.styles import Style
-        print_formatted_text(
-            FormattedText([("class:greeting.title", "\np e f o r t h   v 2")]),
-            style=Style.from_dict({"greeting.title": "bold #5fd7ff"}),
-        )
-    except Exception:
-        print("\np e f o r t h   v 2")
-    if isinstance(runtime_modified, str) and runtime_modified:
-        print(f"2.1.0 - Runtime modified: {runtime_modified}")
-    else:
-        print("2.1.0")
-    if not has_api_key:
         try:
             active_prof = ai.get_active_stateless_profile(vm)
-            req_env = active_prof.get("api_key_env", "OPENAI_API_KEY")
-            print(f"\n[Notice] {req_env} is not set; no configured provider has usable credentials, so AI features are unavailable.")
-            print("Falling back to Forth mode (>). Configure the API key required by a provider in .env to enable chat mode.")
+            vm.host["ai_required_key_env"] = active_prof.get("api_key_env", "OPENAI_API_KEY")
+            vm.host.pop("ai_provider_config_error", None)
         except ai.ProvidersConfigError as e:
-            print(f"\n{e}")
-            print("Falling back to Forth mode (>).")
-    # Keep the rest of the startup guidance in the Forth greeting word.
+            vm.host["ai_provider_config_error"] = str(e)
+    else:
+        vm.host.setdefault("repl_mode", "chat")
+        vm.host.pop("ai_provider_config_error", None)
+
+    # The greeting word is the single source for all greeting output.
     vm.dictate("greeting")
 
     # Try prompt_toolkit for modern CLI multiline & tab completion support if connected to an interactive TTY
