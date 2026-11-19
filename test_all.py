@@ -522,7 +522,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             "ai-sync",
             "(ai-session-details)",
             "ai-session",
-            "ai-use",
+            "(ai-use)",
+            "ai-use:",
             "ai-new",
             "ai-status",
             "ai-local-sessions",
@@ -542,6 +543,7 @@ class TestSafePropertyAudit(unittest.TestCase):
         cleanup_word = self.vm.tick("ai-cleanup")
         self.assertIsNotNone(cleanup_word, "Word 'ai-cleanup' must exist in dictionary")
         self.assertFalse(cleanup_word.properties.get("safe", False), "Word 'ai-cleanup' must be safe=False")
+        self.assertIsNone(self.vm.tick("ai-use"), "Word 'ai-use' must not exist in dictionary")
         self.assertTrue(bool(getattr(cleanup_word, "help", "").strip()), "Word 'ai-cleanup' must have help documentation")
 
         promote_word = self.vm.tick("ai-promote")
@@ -2250,7 +2252,7 @@ class TestSessionStoreAndSync(unittest.TestCase):
              patch.object(ai, "_session_title", return_value="Remote Export Title"), \
              patch.object(ai, "_fetch_session_items", return_value=raw_items), \
              contextlib.redirect_stdout(io.StringIO()):
-            self.vm.dictate("1 ai-use ai-context stringify")
+            self.vm.dictate("ai-use: 1 ai-context stringify")
         exported_ctx = json.loads(self.vm.pop())
         self.assertEqual(exported_ctx["session_id"], "sess_export_12345678")
         self.assertEqual(exported_ctx["items"], raw_items)
@@ -2495,15 +2497,35 @@ class TestSessionStoreAndSync(unittest.TestCase):
             vm.dictate('s" Follow-up in remote session" false (ai)')
         self.assertEqual(routed_calls, [("sess_promoted_777", "Follow-up in remote session", False)])
 
-        # 4. ai-use switches to remote session and clears ai_messages (no 50-message preload)
+        # 4. ai-use: switches to remote session and clears ai_messages (no 50-message preload)
         vm.host["ai_messages"] = [{"role": "user", "content": "leftover"}]
         with patch.object(ai, "_list_remote_sessions", return_value=[{"id": "sess_other_888"}]), \
              patch.object(ai, "_api_get", return_value={"id": "sess_other_888"}), \
              patch.object(ai, "_session_title", return_value="Other Session"), \
              contextlib.redirect_stdout(io.StringIO()):
-            vm.dictate('s" sess_other_888" ai-use')
+            vm.dictate('ai-use: sess_other_888')
         self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
         self.assertNotIn("ai_messages", vm.host)
+
+        # 4b. (ai-use) works from data stack
+        vm.host["ai_messages"] = [{"role": "user", "content": "leftover2"}]
+        with patch.object(ai, "_list_remote_sessions", return_value=[{"id": "sess_other_888"}]), \
+             patch.object(ai, "_api_get", return_value={"id": "sess_other_888"}), \
+             patch.object(ai, "_session_title", return_value="Other Session"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            vm.dictate('s" sess_other_888" (ai-use)')
+        self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
+        self.assertNotIn("ai_messages", vm.host)
+
+        # 4c. ai-use: and (ai-use) with snapshot number
+        with patch.object(ai, "_api_get", return_value={"id": "sess_other_888"}), \
+             patch.object(ai, "_session_title", return_value="Other Session"), \
+             contextlib.redirect_stdout(io.StringIO()):
+            vm.host["ai_session_rows"] = [{"id": "sess_other_888"}]
+            vm.dictate("ai-use: 1")
+            self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
+            vm.dictate("1 (ai-use)")
+            self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
 
     def test_ai_turn_stateful_subsequent_turn_posts_event_before_opening_stream(self):
         """Verify that in subsequent turns of a stateful session (create_new=False),
@@ -2773,8 +2795,12 @@ class TestSessionStoreAndSync(unittest.TestCase):
         self.assertIsInstance(ctx, dict)
         self.assertEqual(ctx["mode"], "stateless")
         self.assertTrue(ctx["session_id"].startswith("local_"))
+        self.assertIn("timestamp", ctx)
+        self.assertIn("model", ctx)
         self.assertEqual(len(ctx["items"]), 3)
         self.assertEqual(ctx["items"][1]["content"], "Hi there")
+        self.assertIn("timestamp", ctx["items"][1])
+        self.assertIn("model", ctx["items"][2])
 
         # Mutating returned ctx does not alter vm.host["ai_messages"]
         ctx["items"].append({"role": "user", "content": "Extra"})
@@ -2814,6 +2840,8 @@ class TestSessionStoreAndSync(unittest.TestCase):
                     st_ctx = vm.pop()
                     self.assertEqual(st_ctx["mode"], "stateful")
                     self.assertEqual(st_ctx["session_id"], "sess_stateful_test")
+                    self.assertIn("timestamp", st_ctx)
+                    self.assertIn("model", st_ctx)
                     self.assertEqual(st_ctx["items"], raw_remote_items)
                     mock_fetch.assert_called_once_with("sess_stateful_test")
                     mock_store.sync_session.assert_called_once_with(remote_metadata, raw_remote_items)
@@ -2839,6 +2867,53 @@ class TestSessionStoreAndSync(unittest.TestCase):
             if (it.get("role") == "user" or (it.get("type") == "message" and it.get("role") == "user"))
         ]
         self.assertEqual(len(user_turns), 1)
+
+    def test_ai_context_and_distill_rich_metadata_and_framing(self):
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        # 1. Stateless context with timestamps and model metadata
+        vm.host.pop("ai_active_session_id", None)
+        messages = [
+            {"role": "system", "content": "Instructions"},
+            {"role": "user", "content": "Test prompt", "timestamp": "2026-11-20 01:41:36"},
+            {
+                "role": "assistant",
+                "content": "Test response",
+                "timestamp": "2026-11-20 01:41:40",
+                "model": "gpt-6-luna",
+                "provider": "OpenAI",
+            },
+        ]
+        vm.host["ai_messages"] = list(messages)
+
+        # Call ai-context
+        vm.dictate("ai-context")
+        ctx = vm.pop()
+        self.assertEqual(ctx["mode"], "stateless")
+        self.assertEqual(ctx["timestamp"], "2026-11-20 01:41:40")
+        self.assertEqual(len(ctx["items"]), 3)
+        self.assertEqual(ctx["items"][1]["timestamp"], "2026-11-20 01:41:36")
+        self.assertEqual(ctx["items"][2]["timestamp"], "2026-11-20 01:41:40")
+        self.assertEqual(ctx["items"][2]["model"], "gpt-6-luna")
+
+        # Call ai-distill on context dict
+        vm.push(ctx)
+        vm.dictate("ai-distill")
+        distilled = vm.pop()
+
+        # Check boxed turn framing
+        self.assertIn("╭─ 👋 user", distilled)
+        self.assertIn("  Test prompt", distilled)
+        self.assertIn("╰", distilled)
+        self.assertIn("2026-11-20 01:41:36 ──╯", distilled)
+
+        self.assertIn("╭─ 🪄 peforth", distilled)
+        self.assertIn("OpenAI │ gpt-6-luna ──╮", distilled)
+        self.assertIn("  Test response", distilled)
+        self.assertIn("2026-11-20 01:41:40 ──╯", distilled)
 
     def test_task_interrupt_monitor_esc_and_key_sequences(self):
         import ai
@@ -3263,10 +3338,10 @@ class TestLocalSessionRecall(unittest.TestCase):
                 finally:
                     check_logger.close()
 
-                # Resume via ai-use with local_* ID (clears stateful session & loads ai_messages)
+                # Resume via ai-use: with local_* ID (clears stateful session & loads ai_messages)
                 out_use = io.StringIO()
                 with contextlib.redirect_stdout(out_use):
-                    vm.dictate('s" local_aaaabbbbcccc1111" ai-use')
+                    vm.dictate('ai-use: local_aaaabbbbcccc1111')
                 self.assertIn("Using local session", out_use.getvalue())
                 self.assertNotIn("ai_active_session_id", vm.host)
                 self.assertEqual(vm.host.get("ai_local_session_id"), "local_aaaabbbbcccc1111")
@@ -3276,15 +3351,22 @@ class TestLocalSessionRecall(unittest.TestCase):
                 ctx_json = json.loads(vm.pop())
                 self.assertEqual(ctx_json["mode"], "stateless")
                 self.assertEqual(ctx_json["session_id"], "local_aaaabbbbcccc1111")
+                self.assertIn("timestamp", ctx_json)
+                self.assertIn("model", ctx_json)
                 user_items = [m for m in ctx_json["items"] if m.get("role") == "user"]
                 self.assertEqual(len(user_items), 2)
+                self.assertTrue(all("timestamp" in m for m in user_items))
 
-                # Distill via ai-context ai-distill (reusing ai-promote logic)
+                # Distill via ai-context ai-distill (reusing ai-promote logic with boxed turn framing)
                 vm.dictate("ai-context ai-distill")
                 transcript = vm.pop()
-                self.assertIn("User: 幫我解釋 Forth 堆疊怎麼運作。", transcript)
-                self.assertIn("Assistant: Forth 使用後進先出 (LIFO) 資料堆疊。", transcript)
-                self.assertIn("User: 請舉一個 dup swap 的例子", transcript)
+                self.assertIn("👋 user", transcript)
+                self.assertIn("🪄 peforth", transcript)
+                self.assertIn("幫我解釋 Forth 堆疊怎麼運作。", transcript)
+                self.assertIn("Forth 使用後進先出 (LIFO) 資料堆疊。", transcript)
+                self.assertIn("請舉一個 dup swap 的例子", transcript)
+                self.assertIn("╭─", transcript)
+                self.assertIn("╰─", transcript)
 
 
 if __name__ == "__main__":

@@ -2300,10 +2300,34 @@ def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict]
     for t in turns:
         prompt_text = (t.get("prompt_text") or "").strip()
         output_text = (t.get("output_text") or "").strip()
+        started_at = t.get("started_at")
+        ended_at = t.get("ended_at")
+        turn_start_ts = format_description_time(started_at) if started_at else None
+        turn_end_ts = format_description_time(ended_at) if ended_at else (turn_start_ts or None)
+
+        turn_meta = {}
+        if t.get("metadata_json"):
+            try:
+                turn_meta = json.loads(t["metadata_json"]) if isinstance(t["metadata_json"], str) else (t["metadata_json"] or {})
+            except Exception:
+                turn_meta = {}
+        turn_model = turn_meta.get("model")
+        turn_provider = turn_meta.get("provider")
+
         if prompt_text:
-            messages.append({"role": "user", "content": prompt_text})
+            u_msg = {"role": "user", "content": prompt_text}
+            if turn_start_ts:
+                u_msg["timestamp"] = turn_start_ts
+            messages.append(u_msg)
         if output_text:
-            messages.append({"role": "assistant", "content": output_text})
+            a_msg = {"role": "assistant", "content": output_text}
+            if turn_end_ts:
+                a_msg["timestamp"] = turn_end_ts
+            if turn_model:
+                a_msg["model"] = turn_model
+            if turn_provider:
+                a_msg["provider"] = turn_provider
+            messages.append(a_msg)
     return session_id, messages, summary
 
 
@@ -2426,19 +2450,109 @@ def get_ai_context(vm) -> dict:
                     store.update_session_metadata(remote_session)
 
             items = store.get_session_items(active_id)
+            session = store.get_session(active_id)
+
+        session_model = ""
+        if session and session.get("model"):
+            session_model = session["model"]
+        elif remote_session and isinstance(remote_session, dict):
+            agent_obj = remote_session.get("agent")
+            session_model = remote_session.get("model") or (agent_obj.get("model") if isinstance(agent_obj, dict) else "") or ""
+        if not session_model:
+            try:
+                stateful_cfg = get_stateful_config(vm)
+                session_model = stateful_cfg.get("model", "")
+            except Exception:
+                session_model = ""
+
+        session_ts = None
+        if session and (session.get("last_active_at") or session.get("created_at")):
+            session_ts = format_description_time(session.get("last_active_at") or session.get("created_at"))
+        if not session_ts:
+            session_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         return {
             "mode": "stateful",
             "session_id": active_id,
+            "model": session_model,
+            "timestamp": session_ts,
             "items": items,
         }
     else:
         local_id = vm.host.get("ai_local_session_id") or _ensure_local_session_id(vm)
         raw_messages = vm.host.get("ai_messages") or []
+        items = copy.deepcopy(raw_messages)
+
+        provider_info = get_active_provider_info(vm)
+        current_model = provider_info.get("model") or "unknown"
+
+        # If any user or assistant item is missing timestamp, correlate with turns from diagnostic log
+        missing_ts = any(
+            isinstance(it, dict) and it.get("role") in ("user", "assistant") and not it.get("timestamp")
+            for it in items
+        )
+        if missing_ts and local_id:
+            try:
+                logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+                if logger is not None:
+                    try:
+                        db_turns = logger.recall_local_session_turns(local_id)
+                        turn_idx = 0
+                        for item in items:
+                            if not isinstance(item, dict):
+                                continue
+                            role = item.get("role")
+                            if role == "user":
+                                if not item.get("timestamp") and turn_idx < len(db_turns):
+                                    t = db_turns[turn_idx]
+                                    if t.get("started_at"):
+                                        item["timestamp"] = format_description_time(t["started_at"])
+                            elif role == "assistant":
+                                if turn_idx < len(db_turns):
+                                    t = db_turns[turn_idx]
+                                    if not item.get("timestamp"):
+                                        ts = t.get("ended_at") or t.get("started_at")
+                                        if ts:
+                                            item["timestamp"] = format_description_time(ts)
+                                    if not item.get("model") and t.get("metadata_json"):
+                                        try:
+                                            meta = json.loads(t["metadata_json"]) if isinstance(t["metadata_json"], str) else t["metadata_json"]
+                                            if meta.get("model"):
+                                                item["model"] = meta["model"]
+                                            if meta.get("provider"):
+                                                item["provider"] = meta["provider"]
+                                        except Exception:
+                                            pass
+                                    turn_idx += 1
+                    finally:
+                        if should_close:
+                            logger.close()
+            except Exception:
+                pass
+
+        latest_ts = None
+        for item in reversed(items):
+            if isinstance(item, dict) and item.get("timestamp"):
+                latest_ts = item["timestamp"]
+                break
+        if not latest_ts:
+            latest_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        for item in items:
+            if isinstance(item, dict):
+                role = item.get("role")
+                if role == "assistant":
+                    if not item.get("model"):
+                        item["model"] = current_model
+                if role in ("user", "assistant", "tool") and not item.get("timestamp"):
+                    item["timestamp"] = latest_ts
+
         return {
             "mode": "stateless",
             "session_id": local_id,
-            "items": copy.deepcopy(raw_messages),
+            "model": current_model,
+            "timestamp": latest_ts,
+            "items": items,
         }
 
 
@@ -2944,9 +3058,24 @@ def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effor
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
     }
+    clean_messages = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        clean_m = {"role": m.get("role")}
+        if "content" in m:
+            clean_m["content"] = m["content"]
+        if "tool_calls" in m:
+            clean_m["tool_calls"] = m["tool_calls"]
+        if "tool_call_id" in m:
+            clean_m["tool_call_id"] = m["tool_call_id"]
+        if "name" in m:
+            clean_m["name"] = m["name"]
+        clean_messages.append(clean_m)
+
     payload = {
         "model": model,
-        "messages": messages,
+        "messages": clean_messages,
         "stream": True,
     }
     if tools:
@@ -3060,7 +3189,10 @@ def distill_messages_for_promotion(messages: list) -> dict:
             else:
                 text = str(content or "").strip()
             if text:
-                entries.append(f"User: {text}")
+                ts = msg.get("timestamp")
+                if not ts and msg.get("created_at"):
+                    ts = format_description_time(msg["created_at"])
+                entries.append(format_boxed_turn("user", text, timestamp=ts))
                 user_turns += 1
         elif role == "assistant":
             tool_calls = msg.get("tool_calls") or []
@@ -3103,8 +3235,27 @@ def distill_messages_for_promotion(messages: list) -> dict:
                     removed_noise_items += 1
 
             content = msg.get("content")
-            if isinstance(content, str) and content.strip():
-                entries.append(f"Assistant: {content.strip()}")
+            if isinstance(content, str):
+                text = content.strip()
+            elif isinstance(content, list):
+                parts = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+                        parts.append(str(part["text"]).strip())
+                text = "\n".join(parts).strip()
+            else:
+                text = str(content or "").strip()
+
+            if text:
+                ts = msg.get("timestamp")
+                if not ts and msg.get("created_at"):
+                    ts = format_description_time(msg["created_at"])
+                m_name = msg.get("model")
+                p_name = msg.get("provider")
+                p_info = None
+                if m_name or p_name:
+                    p_info = {"model": m_name or "", "provider": p_name or "OpenAI"}
+                entries.append(format_boxed_turn("assistant", text, timestamp=ts, provider_info=p_info))
                 assistant_replies += 1
 
     preview_text = "\n\n".join(entries)
@@ -3272,17 +3423,23 @@ def _chat_turn_bottom(timestamp: str = None) -> str:
     return prefix + "─" * dashes + suffix
 
 
+def format_boxed_turn(role: str, text: str, *, timestamp: str = None, provider_info: dict = None) -> str:
+    """Format a chat turn with styled header, 2-space indented body, and bottom border."""
+    lines = [_chat_turn_header(role, provider_info)]
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.split("\n"):
+        lines.append(f"  {line}")
+    lines.append(_chat_turn_bottom(timestamp))
+    return "\n".join(lines)
+
+
 def _print_chat_turn(role: str, text: str, provider_info: dict = None) -> None:
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
-    sys.stdout.write(_chat_turn_header(role, provider_info) + "\n")
-    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-    for line in normalized.split("\n"):
-        sys.stdout.write("  " + line + "\n")
-    sys.stdout.write(_chat_turn_bottom() + "\n")
+    sys.stdout.write(format_boxed_turn(role, text, provider_info=provider_info) + "\n")
     sys.stdout.flush()
 
 
@@ -3947,17 +4104,18 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
     else:
         user_content = prompt
 
+    turn_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if isolated_session:
         messages = [
             {"role": "system", "content": system_instructions},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": user_content, "timestamp": turn_ts},
         ]
     else:
         messages = vm.host.setdefault("ai_messages", [
             {"role": "system", "content": system_instructions}
         ])
         messages = _sanitize_messages(messages)
-        messages.append({"role": "user", "content": user_content})
+        messages.append({"role": "user", "content": user_content, "timestamp": turn_ts})
         vm.host["ai_messages"] = messages
 
     accumulated_full_text = []
@@ -4135,7 +4293,13 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                 accumulated_full_text.append(assistant_content)
 
             # Build assistant message object
-            assistant_msg = {"role": "assistant"}
+            turn_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            assistant_msg = {
+                "role": "assistant",
+                "timestamp": turn_now,
+                "model": model,
+                "provider": p_name,
+            }
             if assistant_content:
                 assistant_msg["content"] = assistant_content
             else:
@@ -4177,11 +4341,13 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         if stream_response:
                             sys.stdout.write(f"\n[AI Tool] Searching dictionary for: {query!r}...\n")
                             sys.stdout.flush()
+                        tool_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         result_data = tool_search_words(vm, query)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call_id,
-                            "content": json.dumps(result_data, ensure_ascii=False)
+                            "content": json.dumps(result_data, ensure_ascii=False),
+                            "timestamp": tool_now,
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
@@ -4202,10 +4368,12 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         if stream_response:
                             sys.stdout.write(f"\n{msg}\n")
                             sys.stdout.flush()
+                        tool_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call_id,
                             "content": json.dumps({"success": ok, "message": msg}, ensure_ascii=False),
+                            "timestamp": tool_now,
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
@@ -4232,10 +4400,12 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                                 )
                             except Exception as e:
                                 exec_result = {"error": f"{type(e).__name__}: {e}"}
+                        tool_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call_id,
-                            "content": json.dumps(exec_result, ensure_ascii=False)
+                            "content": json.dumps(exec_result, ensure_ascii=False),
+                            "timestamp": tool_now,
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
@@ -4248,10 +4418,12 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                             sys.stdout.write(f"\n[AI Tool] Reading skill: {target_disp}...\n")
                             sys.stdout.flush()
                         result_data = tool_read_skill(vm, skill_name, file_path)
+                        tool_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call_id,
-                            "content": json.dumps(result_data, ensure_ascii=False)
+                            "content": json.dumps(result_data, ensure_ascii=False),
+                            "timestamp": tool_now,
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
@@ -4305,18 +4477,22 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                             "dstack": [repr(x) for x in vm.dstack],
                             "error": error_msg
                         }
+                        tool_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call_id,
-                            "content": json.dumps(exec_result, ensure_ascii=False)
+                            "content": json.dumps(exec_result, ensure_ascii=False),
+                            "timestamp": tool_now,
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)
                     else:
+                        tool_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         messages.append({
                             "role": "tool",
                             "tool_call_id": call_id,
-                            "content": json.dumps({"error": f"Unknown tool: {fn_name}"})
+                            "content": json.dumps({"error": f"Unknown tool: {fn_name}"}),
+                            "timestamp": tool_now,
                         })
                         _log_event(vm, "tool_result_submitted", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name)

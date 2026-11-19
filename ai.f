@@ -591,11 +591,13 @@ code ai-session
     // ( session-number | full-session-ID -- ) Show remote session details.
     last :: safe=True
 
-code ai-use
+code (ai-use)
     import ai
     import urllib.parse
 
     choice = vm.pop()
+    if isinstance(choice, str) and choice.isdigit():
+        choice = int(choice)
 
     def _activate_local(sel, label_text):
         sid, messages, summary = ai.recall_local_session_messages(sel, vm=vm)
@@ -641,7 +643,7 @@ code ai-use
             _activate_local(choice, choice)
             return
     else:
-        raise RuntimeError("ai-use expects a session number or session ID.")
+        raise RuntimeError("(ai-use) expects a session number or session ID.")
     detail = ai._api_get(f"/sessions/{urllib.parse.quote(row['id'], safe='')}")
     agent = detail.get("agent") or {} if isinstance(detail, dict) else {}
     if agent.get("model"):
@@ -659,7 +661,14 @@ code ai-use
     title = ai._session_title(row["id"]) or "(untitled)"
     print(f"Using session {label}: {title} [{row['id']}]")
     end-code
-    // ( session-number | session-ID -- ) Select a remote session for follow-up chat in Stateful Agents API mode.
+    // ( session-number | session-ID -- ) Select a session by number or session ID from stack.
+    last :: safe=True
+
+: ai-use:
+    BL word
+    (ai-use)
+    ; immediate
+    // ( <id> -- ) Select a session by number or session ID from input stream.
     last :: safe=True
 
 code ai-new

@@ -382,7 +382,7 @@ class SessionStoreAndSyncTests(unittest.TestCase):
              patch.object(ai, "_session_title", return_value="Remote Export Title"), \
              patch.object(ai, "_fetch_session_items", return_value=raw_items), \
              contextlib.redirect_stdout(io.StringIO()):
-            self.vm.dictate("1 ai-use ai-context stringify")
+            self.vm.dictate("ai-use: 1 ai-context stringify")
         exported_ctx = json.loads(self.vm.pop())
         self.assertEqual(exported_ctx["session_id"], "sess_export_12345678")
         self.assertEqual(exported_ctx["items"], raw_items)
