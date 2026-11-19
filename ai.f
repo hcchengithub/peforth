@@ -304,6 +304,12 @@ code with-tools
     /// Automatically resets after the turn completes.
 last :: safe=True
 
+code with-timeline
+    vm.host["ai_with_timeline"] = True
+    end-code
+    // ( -- ) One-shot modifier: causes next ai-context to reconstruct the complete timeline (including function calls and tool results) from diagnostics DB onto TOS without altering in-memory ai_messages.
+last :: safe=True
+
 code (subagent)
     import ai
     stream_response = vm.pop()

@@ -2331,6 +2331,134 @@ def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict]
     return session_id, messages, summary
 
 
+def reconstruct_local_session_timeline(session_id: str, *, vm=None) -> list[dict]:
+    """Reconstruct full message history including function calls and tool results from ai-diagnostics.sqlite3."""
+    logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+    if logger is None:
+        return []
+    try:
+        turns = logger.recall_local_session_turns(session_id)
+        if not turns:
+            return []
+        events = logger.recall_local_session_timeline_events(session_id) if hasattr(logger, "recall_local_session_timeline_events") else []
+    finally:
+        if should_close:
+            logger.close()
+
+    events_by_turn = {}
+    for ev in events:
+        tid = ev.get("turn_id")
+        if tid:
+            events_by_turn.setdefault(tid, []).append(ev)
+
+    system_prompt = get_system_prompt(vm) if vm is not None else ""
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    for t in turns:
+        tid = t.get("turn_id")
+        prompt_text = (t.get("prompt_text") or "").strip()
+        output_text = (t.get("output_text") or "").strip()
+        started_at = t.get("started_at")
+        ended_at = t.get("ended_at")
+        turn_start_ts = format_description_time(started_at) if started_at else None
+        turn_end_ts = format_description_time(ended_at) if ended_at else (turn_start_ts or None)
+
+        turn_meta = {}
+        if t.get("metadata_json"):
+            try:
+                turn_meta = json.loads(t["metadata_json"]) if isinstance(t["metadata_json"], str) else (t["metadata_json"] or {})
+            except Exception:
+                turn_meta = {}
+        turn_model = turn_meta.get("model")
+        turn_provider = turn_meta.get("provider")
+
+        if prompt_text:
+            u_msg = {"role": "user", "content": prompt_text}
+            if turn_start_ts:
+                u_msg["timestamp"] = turn_start_ts
+            messages.append(u_msg)
+
+        turn_events = events_by_turn.get(tid, [])
+        i = 0
+        while i < len(turn_events):
+            ev = turn_events[i]
+            if ev.get("event_type") == "tool_call_started":
+                call_id = ev.get("call_id")
+                op = ev.get("operation") or "tool"
+                payload = {}
+                if ev.get("payload_json"):
+                    try:
+                        payload = json.loads(ev["payload_json"]) if isinstance(ev["payload_json"], str) else (ev["payload_json"] or {})
+                    except Exception:
+                        payload = {}
+                args_str = payload.get("arguments", "{}")
+                tc_msg = {
+                    "role": "assistant",
+                    "tool_calls": [{
+                        "id": call_id or f"call_{i}",
+                        "type": "function",
+                        "function": {
+                            "name": op,
+                            "arguments": args_str,
+                        }
+                    }]
+                }
+                if ev.get("recorded_at"):
+                    tc_msg["timestamp"] = format_description_time(ev["recorded_at"])
+                messages.append(tc_msg)
+
+                # Match execution result
+                res_content = "{}"
+                fin_ts = None
+                j = i + 1
+                while j < len(turn_events):
+                    nev = turn_events[j]
+                    if nev.get("call_id") == call_id:
+                        if nev.get("event_type") == "forth_execution_finished":
+                            f_payload = {}
+                            if nev.get("payload_json"):
+                                try:
+                                    f_payload = json.loads(nev["payload_json"]) if isinstance(nev["payload_json"], str) else (nev["payload_json"] or {})
+                                except Exception:
+                                    f_payload = {}
+                            res_content = json.dumps({
+                                "stdout": f_payload.get("stdout", ""),
+                                "error": f_payload.get("error")
+                            }, ensure_ascii=False)
+                            if nev.get("recorded_at"):
+                                fin_ts = format_description_time(nev["recorded_at"])
+                        elif nev.get("event_type") == "tool_result_submitted":
+                            if fin_ts is None and nev.get("recorded_at"):
+                                fin_ts = format_description_time(nev["recorded_at"])
+                    j += 1
+
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": call_id or f"call_{i}",
+                    "content": res_content,
+                }
+                if fin_ts:
+                    tool_msg["timestamp"] = fin_ts
+                elif tc_msg.get("timestamp"):
+                    tool_msg["timestamp"] = tc_msg["timestamp"]
+                messages.append(tool_msg)
+            i += 1
+
+        if output_text:
+            a_msg = {"role": "assistant", "content": output_text}
+            if turn_end_ts:
+                a_msg["timestamp"] = turn_end_ts
+            if turn_model:
+                a_msg["model"] = turn_model
+            if turn_provider:
+                a_msg["provider"] = turn_provider
+            messages.append(a_msg)
+
+    return messages
+
+
 def distill_context_to_text(ctx_or_messages) -> str:
     """Convert an ai-context dict or messages list into clean distilled transcript text."""
     if isinstance(ctx_or_messages, dict):
@@ -2428,6 +2556,7 @@ def get_ai_context(vm) -> dict:
     import copy
     import urllib.parse
 
+    with_timeline = vm.host.pop("ai_with_timeline", False)
     active_id = vm.host.get("ai_active_session_id")
     if active_id:
         items = []
@@ -2480,14 +2609,22 @@ def get_ai_context(vm) -> dict:
         }
     else:
         local_id = vm.host.get("ai_local_session_id") or _ensure_local_session_id(vm)
-        raw_messages = vm.host.get("ai_messages") or []
-        items = copy.deepcopy(raw_messages)
+        if with_timeline and local_id:
+            timeline_items = reconstruct_local_session_timeline(local_id, vm=vm)
+            if timeline_items:
+                items = timeline_items
+            else:
+                raw_messages = vm.host.get("ai_messages") or []
+                items = copy.deepcopy(raw_messages)
+        else:
+            raw_messages = vm.host.get("ai_messages") or []
+            items = copy.deepcopy(raw_messages)
 
         provider_info = get_active_provider_info(vm)
         current_model = provider_info.get("model") or "unknown"
 
         # If any user or assistant item is missing timestamp, correlate with turns from diagnostic log
-        missing_ts = any(
+        missing_ts = not with_timeline and any(
             isinstance(it, dict) and it.get("role") in ("user", "assistant") and not it.get("timestamp")
             for it in items
         )

@@ -449,6 +449,28 @@ class DiagnosticLog:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def recall_local_session_timeline_events(self, session_id: str) -> list[dict]:
+        """Return ordered timeline events for turns in a local_* session."""
+        rows = self.connection.execute(
+            """
+            SELECT
+                e.event_id,
+                e.turn_id,
+                e.event_type,
+                e.call_id,
+                e.operation,
+                e.payload_json,
+                e.recorded_at,
+                e.sequence_no
+            FROM timeline e
+            JOIN turns t ON t.turn_id = e.turn_id
+            WHERE t.remote_session_id = ?
+            ORDER BY t.started_at ASC, e.sequence_no ASC, e.event_id ASC
+            """,
+            (session_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_local_session_summary(self, session_id: str) -> str:
         row = self.connection.execute(
             "SELECT summary FROM local_sessions WHERE session_id = ?",

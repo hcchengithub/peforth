@@ -3368,6 +3368,75 @@ class TestLocalSessionRecall(unittest.TestCase):
                 self.assertIn("╭─", transcript)
                 self.assertIn("╰─", transcript)
 
+                # Test with-timeline modifier
+                # Insert tool execution events into timeline table for t1
+                diag_log = DiagnosticLog(db_path, environment=env)
+                try:
+                    diag_log.append_event(
+                        rid,
+                        t1,
+                        "tool_call_started",
+                        call_id="call_test_forth_1",
+                        operation="peforth_run_forth",
+                        payload={"arguments": json.dumps({"source": "21 2 * .", "purpose": "計算數值"})},
+                    )
+                    diag_log.append_event(
+                        rid,
+                        t1,
+                        "forth_execution_finished",
+                        call_id="call_test_forth_1",
+                        operation="peforth_run_forth",
+                        payload={"stdout": "42 \n", "error": None},
+                    )
+                    diag_log.append_event(
+                        rid,
+                        t1,
+                        "tool_result_submitted",
+                        call_id="call_test_forth_1",
+                        operation="peforth_run_forth",
+                    )
+                finally:
+                    diag_log.close()
+
+                # Verify word properties
+                w_tl = vm.tick("with-timeline")
+                self.assertIsNotNone(w_tl)
+                self.assertTrue(w_tl.properties.get("safe"))
+
+                # In-memory ai_messages must remain lightweight
+                in_mem_before = list(vm.host["ai_messages"])
+                self.assertFalse(any(m.get("role") == "tool" for m in in_mem_before))
+
+                # with-timeline ai-context stringify
+                vm.dictate("with-timeline ai-context stringify")
+                self.assertNotIn("ai_with_timeline", vm.host)
+                tl_ctx = json.loads(vm.pop())
+                self.assertEqual(tl_ctx["session_id"], "local_aaaabbbbcccc1111")
+                # Context on TOS MUST contain the reconstructed tool call and result
+                roles_on_tos = [it.get("role") for it in tl_ctx["items"]]
+                self.assertIn("tool", roles_on_tos)
+                tool_item = next(it for it in tl_ctx["items"] if it.get("role") == "tool")
+                self.assertEqual(tool_item["tool_call_id"], "call_test_forth_1")
+                self.assertIn("42", tool_item["content"])
+
+                # In-memory ai_messages MUST be completely untouched!
+                in_mem_after = vm.host["ai_messages"]
+                self.assertEqual(in_mem_before, in_mem_after)
+                self.assertFalse(any(m.get("role") == "tool" for m in in_mem_after))
+
+                # with-timeline ai-context ai-distill must render Executed Forth box
+                vm.dictate("with-timeline ai-context ai-distill")
+                tl_distill = vm.pop()
+                self.assertIn("[Executed Forth (計算數值)]:", tl_distill)
+                self.assertIn("21 2 * .", tl_distill)
+                self.assertIn("Output: 42", tl_distill)
+
+                # Standard ai-context without with-timeline remains lightweight
+                vm.dictate("ai-context stringify")
+                normal_ctx = json.loads(vm.pop())
+                normal_roles = [it.get("role") for it in normal_ctx["items"]]
+                self.assertNotIn("tool", normal_roles)
+
 
 if __name__ == "__main__":
     print("=" * 60)
