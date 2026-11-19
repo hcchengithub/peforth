@@ -3437,6 +3437,27 @@ class TestLocalSessionRecall(unittest.TestCase):
                 normal_roles = [it.get("role") for it in normal_ctx["items"]]
                 self.assertNotIn("tool", normal_roles)
 
+                # Test ai-session-context and ai-session-context:
+                w_sc = vm.tick("ai-session-context")
+                self.assertIsNotNone(w_sc)
+                self.assertTrue(w_sc.properties.get("safe"))
+                self.assertIn("with-timeline", w_sc.comment)
+
+                w_ctx = vm.tick("ai-context")
+                self.assertIn("with-timeline", w_ctx.comment)
+
+                # Query context directly by session ID via ai-session-context:
+                vm.dictate("ai-session-context: local_aaaabbbbcccc1111 stringify")
+                sc_ctx = json.loads(vm.pop())
+                self.assertEqual(sc_ctx["session_id"], "local_aaaabbbbcccc1111")
+                self.assertNotIn("tool", [it.get("role") for it in sc_ctx["items"]])
+
+                # Query context directly with with-timeline via ai-session-context:
+                vm.dictate("with-timeline ai-session-context: local_aaaabbbbcccc1111 stringify")
+                sc_tl_ctx = json.loads(vm.pop())
+                self.assertEqual(sc_tl_ctx["session_id"], "local_aaaabbbbcccc1111")
+                self.assertIn("tool", [it.get("role") for it in sc_tl_ctx["items"]])
+
 
 if __name__ == "__main__":
     print("=" * 60)

@@ -833,16 +833,44 @@ code (ai-context)
     vm.push(ai.get_ai_context(vm))
     end-code
     // ( -- dict ) Push the current AI session context dict.
+    /// Supports 'with-timeline' modifier to reconstruct the full tool execution timeline (function calls and results) from diagnostics DB onto TOS without altering in-memory ai_messages.
     /// In Stateful mode, checks freshness, syncs with remote if needed, and returns ordered raw items from local mirror.
-    /// In Stateless mode, returns the active in-memory messages list.
+    /// In Stateless mode, returns the active in-memory messages list (or full timeline if with-timeline was specified).
     last :: safe=True
 
 : ai-context
     (ai-context)
     ;
     // ( -- dict ) Push the current AI session context dict.
+    /// Supports 'with-timeline' modifier to reconstruct the full tool execution timeline (function calls and results) from diagnostics DB onto TOS without altering in-memory ai_messages.
     /// In Stateful mode, checks freshness, syncs with remote if needed, and returns ordered raw items from local mirror.
-    /// In Stateless mode, returns the active in-memory messages list.
+    /// In Stateless mode, returns the active in-memory messages list (or full timeline if with-timeline was specified).
+    last :: safe=True
+
+code (ai-session-context)
+    import ai
+    selector = vm.pop()
+    if isinstance(selector, str) and selector.isdigit():
+        selector = int(selector)
+    vm.push(ai.get_ai_session_context(vm, selector))
+    end-code
+    // ( selector -- dict ) Push the AI session context dict for the specified session (number, ID, or prefix).
+    /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
+    last :: safe=True
+
+: ai-session-context
+    (ai-session-context)
+    ;
+    // ( selector -- dict ) Push the AI session context dict for the specified session (number, ID, or prefix).
+    /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
+    last :: safe=True
+
+: ai-session-context:
+    BL word
+    (ai-session-context)
+    ; immediate
+    // ( <id> -- dict ) Push the AI session context dict for the specified session ID or number from next word.
+    /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
     last :: safe=True
 
 code ai-distill

@@ -2543,6 +2543,10 @@ def query_local_sessions(*, query=None, session_id=None, limit=20, include_delet
 def get_ai_context(vm) -> dict:
     """Return the context dictionary for the currently active AI session.
 
+    Supports the 'with-timeline' modifier (vm.host['ai_with_timeline']) to reconstruct
+    the full event timeline (including function calls and tool results) from ai-diagnostics.sqlite3
+    onto TOS without altering in-memory ai_messages.
+
     In Stateful mode (when vm.host['ai_active_session_id'] is set):
       - Checks local session mirror freshness against remote metadata.
       - If stale or missing, fetches remote items and updates the local mirror.
@@ -2550,6 +2554,7 @@ def get_ai_context(vm) -> dict:
 
     In Stateless mode (default in-memory conversation):
       - Dumps the active conversation from vm.host['ai_messages'].
+      - If 'with-timeline' was set, reconstructs full tool execution history from diagnostics DB.
       - Returns a dict with mode="stateless", session_id (local session ID),
         and the list of message dicts (user, assistant, tool calls, tool results).
     """
@@ -2689,6 +2694,120 @@ def get_ai_context(vm) -> dict:
             "session_id": local_id,
             "model": current_model,
             "timestamp": latest_ts,
+            "items": items,
+        }
+
+
+def get_ai_session_context(vm, selector) -> dict:
+    """Return the context dictionary for a specific AI session (local or remote).
+
+    Supports the 'with-timeline' modifier (vm.host['ai_with_timeline']) to reconstruct
+    the full tool execution timeline for local sessions from ai-diagnostics.sqlite3.
+    """
+    import copy
+    import urllib.parse
+
+    with_timeline = vm.host.pop("ai_with_timeline", False)
+    if isinstance(selector, str) and selector.isdigit():
+        selector = int(selector)
+
+    is_local = False
+    if isinstance(selector, str) and selector.startswith("local_"):
+        is_local = True
+    elif isinstance(selector, int):
+        local_rows = vm.host.get("ai_local_session_rows") or []
+        remote_rows = vm.host.get("ai_session_rows") or []
+        if local_rows and not remote_rows:
+            is_local = True
+
+    if not is_local:
+        try:
+            logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+            if logger is not None:
+                try:
+                    all_local = logger.list_local_sessions(limit=200)
+                    if isinstance(selector, str) and any(r["session_id"] == selector or _short_id(r["session_id"]) == selector for r in all_local):
+                        is_local = True
+                    elif isinstance(selector, int) and any(_short_id(r["session_id"]) == str(selector) for r in all_local):
+                        is_local = True
+                finally:
+                    if should_close:
+                        logger.close()
+        except Exception:
+            pass
+
+    if is_local:
+        session_id, messages, _ = recall_local_session_messages(selector, vm=vm)
+        if with_timeline:
+            timeline_items = reconstruct_local_session_timeline(session_id, vm=vm)
+            items = timeline_items if timeline_items else messages
+        else:
+            items = messages
+
+        latest_ts = None
+        for item in reversed(items):
+            if isinstance(item, dict) and item.get("timestamp"):
+                latest_ts = item["timestamp"]
+                break
+        if not latest_ts:
+            latest_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        current_model = "unknown"
+        for item in reversed(items):
+            if isinstance(item, dict) and item.get("role") == "assistant" and item.get("model"):
+                current_model = item["model"]
+                break
+
+        return {
+            "mode": "stateless",
+            "session_id": session_id,
+            "model": current_model,
+            "timestamp": latest_ts,
+            "items": items,
+        }
+    else:
+        rows = vm.host.get("ai_session_rows")
+        if rows is None:
+            rows = _list_remote_sessions()
+            vm.host["ai_session_rows"] = rows
+        _, row = _resolve_session_selector(rows, selector)
+        remote_id = row.get("id") or row.get("session_id")
+
+        with _sync_context(vm), _open_session_store() as store:
+            remote_session = None
+            try:
+                encoded_id = urllib.parse.quote(remote_id, safe="")
+                remote_session = _api_get(f"/sessions/{encoded_id}", operation=f"get session {_short_id(remote_id)}")
+            except Exception:
+                remote_session = None
+
+            if remote_session and isinstance(remote_session, dict):
+                if store.needs_item_sync(remote_session):
+                    items = _fetch_session_items(remote_id)
+                    store.sync_session(remote_session, items)
+                else:
+                    store.update_session_metadata(remote_session)
+            items = store.get_session_items(remote_id)
+            session = store.get_session(remote_id)
+
+        session_model = ""
+        if session and session.get("model"):
+            session_model = session["model"]
+        elif remote_session and isinstance(remote_session, dict):
+            agent_obj = remote_session.get("agent")
+            session_model = remote_session.get("model") or (agent_obj.get("model") if isinstance(agent_obj, dict) else "") or ""
+
+        session_ts = None
+        if session and (session.get("last_active_at") or session.get("created_at")):
+            session_ts = format_description_time(session.get("last_active_at") or session.get("created_at"))
+        if not session_ts:
+            session_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        return {
+            "mode": "stateful",
+            "session_id": remote_id,
+            "model": session_model,
+            "timestamp": session_ts,
             "items": items,
         }
 
