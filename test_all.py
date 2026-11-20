@@ -1280,6 +1280,7 @@ stateless:
             "herdr-current-pane", "herdr-screen-read", "herdr-screen-tail",
             "herdr-show-pane-id", "herdr-clear-pane-id",
             "herdr-set-tab-id", "herdr-show-tab-id", "herdr-clear-tab-id",
+            "(herdr-prompt)", "(herdr)", "herdr:", "HERDR:",
             "stringify"
         ]
         unsafe_words = [
@@ -1295,6 +1296,45 @@ stateless:
             w = self.vm.tick(name)
             self.assertIsNotNone(w, f"Word '{name}' must exist in dictionary")
             self.assertFalse(w.properties.get("safe", False), f"Word '{name}' must NOT have safe=True")
+
+        self.assertTrue(self.vm.tick("herdr:").immediate)
+        self.assertTrue(self.vm.tick("HERDR:").immediate)
+
+    def test_herdr_macro_words(self):
+        import ai
+
+        self.vm.dictate('s" check pane w1:p1" (herdr-prompt)')
+        prompt = self.vm.pop()
+        self.assertIn("`herdr` skill", prompt)
+        self.assertIn("herdr.f", prompt)
+        self.assertIn("check pane w1:p1", prompt)
+        self.assertEqual(self.vm.dstack, [])
+
+        with self.assertRaises(Exception):
+            self.vm.dictate('s"   " (herdr-prompt)')
+
+        captured = []
+
+        def fake_subagent(vm_arg, prompt_arg, stream_arg, options=None):
+            captured.append((prompt_arg, stream_arg, options))
+            if not stream_arg:
+                vm_arg.push("HERDR_REPLY: ok")
+            if False:
+                yield
+
+        with unittest.mock.patch.object(ai, "ai_subagent_turn", side_effect=fake_subagent):
+            self.vm.dictate('s" inspect pane w2:p1" (herdr)')
+            self.assertEqual(self.vm.pop(), "HERDR_REPLY: ok")
+            self.assertEqual(self.vm.dstack, [])
+            self.assertFalse(captured[-1][1])
+            self.assertIsNone(captured[-1][2])
+            self.assertIn("inspect pane w2:p1", captured[-1][0])
+
+            self.vm.dictate("herdr: tail last 20 lines of w2:p1")
+            self.assertEqual(self.vm.dstack, [])
+            self.assertTrue(captured[-1][1])
+            self.assertIsNone(captured[-1][2])
+            self.assertIn("tail last 20 lines of w2:p1", captured[-1][0])
 
     def test_shell_and_system_info_words_and_security_annotations(self):
         # Read-only system reflection words are safe=True
