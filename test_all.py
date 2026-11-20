@@ -1332,6 +1332,10 @@ class TestSecurityTaskApproval(unittest.TestCase):
     """Verifies that the task security guard halts on non-safe words and resumes on trust-task."""
 
     def setUp(self):
+        import ai
+        p = patch.object(ai, "_maybe_run_attention_check", return_value=False)
+        p.start()
+        self.addCleanup(p.stop)
         self.vm = VM({"headless": True, "__file__dir__": str(HERE)})
         self.vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
 
@@ -3523,6 +3527,48 @@ class TestLocalSessionRecall(unittest.TestCase):
                 finally:
                     logger.close()
                     vm.host.pop("diagnostic_log", None)
+
+    def test_attention_check_language_and_behavior(self):
+        import ai
+
+        self.assertEqual(ai._detect_user_lang("幫我看一下這個 log"), "zh")
+        self.assertEqual(ai._detect_user_lang("Please check this log"), "en")
+        self.assertEqual(ai._detect_user_lang(""), "en")
+        self.assertEqual(ai._detect_user_lang(None), "en")
+
+        class DummyTask:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "config.yaml").write_text(
+                "logging:\n  level: \"disabled\"\nsecurity:\n  attention_check_rate: 1.0\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                vm = VM({"headless": True, "__file__dir__": str(HERE)})
+                vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+                vm.host["headless"] = False
+                vm.host["ai_user_lang"] = "zh"
+
+                task_caught = DummyTask()
+                with patch.object(sys.stdin, "isatty", return_value=True), \
+                     patch.object(ai, "read_numbered_choice", return_value="1"):
+                    caught = ai._maybe_run_attention_check(vm, task_caught, "turn-1", "call-1")
+                self.assertTrue(caught)
+                self.assertTrue(getattr(task_caught, "_attention_checked", False))
+                with patch.object(sys.stdin, "isatty", return_value=True):
+                    self.assertFalse(ai._maybe_run_attention_check(vm, task_caught, "turn-1", "call-2"))
+
+                vm.host["ai_user_lang"] = "en"
+                task_passed = DummyTask()
+                with patch.object(sys.stdin, "isatty", return_value=True), \
+                     patch.object(ai, "read_numbered_choice", return_value="3") as mock_choice:
+                    caught2 = ai._maybe_run_attention_check(vm, task_passed, "turn-2", "call-3")
+                    self.assertFalse(caught2)
+                    proposal = mock_choice.call_args.kwargs.get("proposal", {})
+                    self.assertIn(proposal.get("word"), [d["word"] for d in ai._ATTENTION_CHECK_DECOYS])
 
 
 if __name__ == "__main__":

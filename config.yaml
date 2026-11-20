@@ -20,3 +20,6 @@ integrations:
 logging:
   level: "normal"           # "disabled" | "normal" | "verbose"
   max_output_bytes: 262144  # 256 KiB; 0 = unlimited
+
+security:
+  attention_check_rate: 0.15  # 0.0 - 1.0; occasional humorous decoy approval (0 = disabled)

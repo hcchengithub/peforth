@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import platform
 import queue
+import random
 import re
 import shutil
 import subprocess
@@ -853,6 +854,9 @@ def _default_app_config() -> dict:
         "logging": {
             "level": "normal",
             "max_output_bytes": 262144,
+        },
+        "security": {
+            "attention_check_rate": 0.15,
         },
     }
 
@@ -1798,6 +1802,112 @@ def log_heartbeat(vm, message="heartbeat"):
         return False
 
 
+_ATTENTION_CHECK_DECOYS = [
+    {"word": "buy-100-pizzas", "source": 's" Buy 100 big pizzas for lunch" buy-food'},
+    {"word": "give-money-to-cat", "source": 's" Give all my money to a cute cat" send-money'},
+    {"word": "delete-all-mondays", "source": 's" Delete Monday so we can play" bye-monday'},
+    {"word": "eat-10-ice-creams", "source": 's" Eat 10 ice creams before dinner" eat-sweet'},
+    {"word": "tell-boss-im-batman", "source": 's" Tell my boss I am Batman" send-note'},
+    {"word": "make-pc-sing-song", "source": 's" Make my computer sing Happy Birthday very loud" sing-song'},
+    {"word": "nap-on-my-desk", "source": 's" Take a 3 hour nap on my desk now" go-sleep'},
+    {"word": "turn-fan-into-rocket", "source": 's" Fly my laptop to the moon today" fly-moon'},
+    {"word": "order-1000-cookies", "source": 's" Order 1000 chocolate cookies right now" buy-snack'},
+    {"word": "paint-screen-pink", "source": 's" Paint my whole screen bright pink with hearts" paint-now'},
+    {"word": "invite-50-dogs-here", "source": 's" Invite 50 happy dogs into the office" call-dogs'},
+    {"word": "change-name-to-banana", "source": 's" Change my name to Mr. Banana" set-name'},
+    {"word": "hide-all-my-homework", "source": 's" Hide all my work under the bed" hide-work'},
+    {"word": "dance-with-a-robot", "source": 's" Stop working and dance with a robot" dance-now'},
+    {"word": "give-cake-to-everyone", "source": 's" Send free cake to everyone in the building" send-cake'},
+    {"word": "lock-the-coffee-pot", "source": 's" Hide all the coffee and only drink milk" drink-milk'},
+    {"word": "count-to-one-million", "source": 's" Sit here and count apples to 1,000,000" count-now'},
+    {"word": "turn-mouse-into-frog", "source": 's" Turn my computer mouse into a green frog" magic-frog'},
+    {"word": "sleep-until-next-friday", "source": 's" Sleep from now until next Friday" long-nap'},
+    {"word": "ask-ai-to-do-dishes", "source": 's" Ask the AI to wash my dirty dishes" wash-cups'},
+]
+
+
+def _detect_user_lang(prompt: str | None) -> str:
+    """Detect user preferred language ('zh' if prompt contains Chinese characters, else 'en')."""
+    if prompt and re.search(r"[\u4e00-\u9fff]", prompt):
+        return "zh"
+    return "en"
+
+
+def _maybe_run_attention_check(vm, task, turn_id, call_id, real_proposal=None) -> bool:
+    """Occasionally inject a harmless humorous decoy approval to catch blind Enter-spamming.
+
+    Returns True if the user approved the decoy (caught!), False otherwise.
+    """
+    if vm.host.get("headless", False) or not sys.stdin.isatty():
+        return False
+    if getattr(task, "_attention_checked", False):
+        return False
+    sec_cfg = load_app_config(vm).get("security", {})
+    try:
+        rate = float(sec_cfg.get("attention_check_rate", 0.15))
+    except (TypeError, ValueError):
+        rate = 0.15
+    rate = max(0.0, min(1.0, rate))
+    if rate <= 0.0 or random.random() >= rate:
+        return False
+
+    task._attention_checked = True
+    lang = vm.host.get("ai_user_lang") or "en"
+    decoy = dict(random.choice(_ATTENTION_CHECK_DECOYS))
+
+    sys.__stdout__.write(
+        f"\n{_ANSI_GREEN_BOLD}[Security] Approval required — Word: {decoy['word']}{_ANSI_RESET}\n"
+        f"{_ANSI_DEEP_GREEN}Source:\n{decoy['source']}{_ANSI_RESET}\n\n"
+    )
+    sys.__stdout__.flush()
+
+    vm.host["in_approval"] = True
+    try:
+        choice = read_numbered_choice(
+            "Choose 1-4: ",
+            default="1",
+            labels={
+                "1": "Allow Once",
+                "2": "Trust this AI task",
+                "3": "Deny this proposal",
+                "4": "Cancel this AI task",
+            },
+            styles={"1": _ANSI_GREEN, "2": _ANSI_GREEN, "3": _ANSI_DIM, "4": _ANSI_DIM},
+            proposal=decoy,
+        )
+    finally:
+        vm.host["in_approval"] = False
+
+    if choice in ("1", "2"):
+        _log_event(
+            vm, "attention_check_caught", turn_id=turn_id, call_id=call_id,
+            operation=decoy["word"], payload={"lang": lang, "choice": choice, "decoy": decoy},
+        )
+        msg = (
+            f"\n[Security Attention Check] 抓到了！你剛剛差點批准「{decoy['word']}」——"
+            "顯然沒看內容就按 Enter 了對吧？還好這只是防呆抽查，已自動攔截。請看清楚接下來真正的請求：\n"
+            if lang == "zh"
+            else f"\n[Security Attention Check] Caught you! You almost approved '{decoy['word']}' without reading. "
+                 "Relax—it was just a sanity check and nothing ran. Now please review the REAL request carefully:\n"
+        )
+        sys.__stdout__.write(msg)
+        sys.__stdout__.flush()
+        return True
+
+    _log_event(
+        vm, "attention_check_passed", turn_id=turn_id, call_id=call_id,
+        operation=decoy["word"], payload={"lang": lang, "choice": choice},
+    )
+    msg = (
+        "\n[Security Attention Check] 好眼力！你有看清楚再按，這只是防呆抽查，接下來才是真正要執行的請求：\n"
+        if lang == "zh"
+        else "\n[Security Attention Check] Good catch! You actually read the prompt. That was just a sanity check—here is the REAL request:\n"
+    )
+    sys.__stdout__.write(msg)
+    sys.__stdout__.flush()
+    return False
+
+
 def install_security_guard(vm):
     """Install security decorator on vm.call to protect against unsafe AI execution."""
     init_diagnostics(vm)
@@ -1885,9 +1995,14 @@ def install_security_guard(vm):
 
                     # In interactive mode (not headless), prompt for approval directly
                     if not vm.host.get("headless", False):
+                        display_word = name
+                        display_source = source_text
+                        if name == "</py>" and vm.dstack and isinstance(vm.dstack[-1], str):
+                            display_word = "<py>...</py>"
+                            display_source = vm.dstack[-1].strip()
                         proposal = {
-                            "word": name,
-                            "source": source_text,
+                            "word": display_word,
+                            "source": display_source,
                         }
                         current_call_id = vm.host.get("ai_current_call_id")
                         _log_event(vm, "approval_requested", turn_id=turn_id,
@@ -1897,11 +2012,20 @@ def install_security_guard(vm):
                         if nokia_word:
                             yield from vm.call(nokia_word)
 
+                        caught = _maybe_run_attention_check(vm, task, turn_id, current_call_id, real_proposal=proposal)
+                        default_choice = "3" if caught else "1"
+
+                        sys.__stdout__.write(f"\n{_ANSI_GREEN_BOLD}[Security] Approval required — Word: {display_word}{_ANSI_RESET}\n")
+                        if display_word == "<py>...</py>" and display_source:
+                            preview = display_source if len(display_source) <= 300 else display_source[:300] + "..."
+                            sys.__stdout__.write(f"{_ANSI_DEEP_GREEN}Python:\n{preview}{_ANSI_RESET}\n")
+                        sys.__stdout__.flush()
+
                         vm.host["in_approval"] = True
                         try:
                             choice = read_numbered_choice(
                                 "Choose 1-4: ",
-                                default="1",
+                                default=default_choice,
                                 labels={
                                     "1": "Allow Once",
                                     "2": "Trust this AI task",
@@ -4006,6 +4130,7 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
             vm.push(msg)
         return
 
+    vm.host["ai_user_lang"] = _detect_user_lang(prompt)
     system_instructions = str(opts["instruction"]) if opts.get("instruction") else get_system_prompt(vm)
     active_tools = [] if isolated_session else _resolve_tools_list(AGENTS_TOOLS_DEFINITION, opts.get("tools"))
     logger = vm.host.get("diagnostic_log")
@@ -4524,6 +4649,8 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
         diag_session_id = _ensure_local_session_id(vm)
 
     # Start diagnostic turn tracking if enabled
+    if not is_subagent:
+        vm.host["ai_user_lang"] = _detect_user_lang(prompt)
     system_instructions = str(opts["instruction"]) if opts.get("instruction") else get_system_prompt(vm)
     active_tools = _resolve_tools_list(TOOLS_DEFINITION, opts.get("tools"))
     logger = vm.host.get("diagnostic_log")
