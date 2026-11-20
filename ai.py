@@ -10,6 +10,7 @@ import _thread
 import atexit
 import contextlib
 from datetime import datetime, timezone
+import hashlib
 import io
 import json
 import os
@@ -495,12 +496,19 @@ def capture_desktop(
         ):
             normalized_region = True
 
+    tmp_dir_local = get_tmp_dir(vm)
+    tmp_dir_win = _local_to_windows_path(str(tmp_dir_local)).replace("'", "''")
+
     script = f"""
 Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class PeForthDpi {{ [DllImport("user32.dll")] public static extern bool SetProcessDPIAware(); }}'
 [void][PeForthDpi]::SetProcessDPIAware()
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+$tmpDir = '{tmp_dir_win}'
+if (-not (Test-Path -LiteralPath $tmpDir)) {{
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+}}
 try {{
     Get-ChildItem -Path $env:TEMP -Filter 'desktop-live-*' -ErrorAction SilentlyContinue |
         Where-Object {{ $_.LastWriteTimeUtc -lt (Get-Date).ToUniversalTime().AddHours(-1) }} |
@@ -586,9 +594,8 @@ try {{
         }}
     }}
 
-    $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss')
-    $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
-    $outPath = Join-Path $env:TEMP ('desktop-live-' + $stamp + '-' + $id + '.jpg')
+    $stamp = (Get-Date).ToString('yyyyMMdd_HHmmss_ffffff')
+    $outPath = Join-Path $tmpDir ('desktop_' + $stamp + '.jpg')
     [System.IO.File]::WriteAllBytes($outPath, $jpegBytes)
     $info = Get-Item -LiteralPath $outPath
     [PSCustomObject]@{{
@@ -630,6 +637,26 @@ try {{
     if not local_path or not os.path.isfile(local_path) or os.path.getsize(local_path) <= 0:
         raise RuntimeError(f"Captured screenshot file is missing or empty: {local_path!r}")
     meta["path"] = local_path
+    if vm is not None and hasattr(vm, "host") and vm.host.get("diagnostic_log_mode") == "verbose":
+        try:
+            data = Path(local_path).read_bytes()
+            sha256 = hashlib.sha256(data).hexdigest()
+            _log_event(
+                vm,
+                "artifact_created",
+                turn_id=vm.host.get("ai_current_turn_id"),
+                call_id=vm.host.get("ai_current_call_id"),
+                operation="capture_desktop",
+                payload={
+                    "file_path": local_path,
+                    "size_bytes": len(data),
+                    "sha256": sha256,
+                    "width": meta.get("width"),
+                    "height": meta.get("height"),
+                },
+            )
+        except Exception:
+            pass
     return meta
 
 
@@ -752,9 +779,10 @@ def _expand_env_vars(value: str) -> str:
     )
 
 
-def _reported_source_path(runtime_path: Path) -> str:
+def _reported_source_path(runtime_path: Path, vm=None) -> str:
     """Return the source checkout path separately from the active runtime path."""
-    configured = os.environ.get("PEFORTH_SOURCE_PATH", "").strip()
+    cfg = load_app_config(vm).get("runtime", {})
+    configured = str(cfg.get("source_path") or "").strip() if isinstance(cfg, dict) else ""
     if configured:
         return _expand_env_vars(configured)
     return str(runtime_path)
@@ -805,8 +833,101 @@ def _safe_home_dir() -> Path:
         return Path(tempfile.gettempdir())
 
 
+def _default_app_config() -> dict:
+    return {
+        "runtime": {
+            "config_dir": "~/.peforth",
+            "tmp_dir": "~/.peforth/tmp",
+            "skills_dir": "",
+            "source_path": "",
+        },
+        "shells": {
+            "pwsh_path": "",
+            "wsl_distro": "",
+        },
+        "integrations": {
+            "line_endpoint": "",
+            "line_disabled": False,
+        },
+        "logging": {
+            "level": "normal",
+            "max_output_bytes": 262144,
+        },
+    }
+
+
+def get_config_yaml_path(vm=None) -> Path | None:
+    """Resolve config.yaml path. Explicit PEFORTH_CONFIG_DIR or ~/.peforth takes precedence over repo default."""
+    candidates = []
+    env_cfg_dir = os.environ.get("PEFORTH_CONFIG_DIR", "").strip()
+    if env_cfg_dir:
+        base = Path(_expand_env_vars(env_cfg_dir)).expanduser()
+        if not base.is_absolute():
+            base = (Path.cwd() / base).resolve()
+        candidates.extend([base / "config.yaml", base / "config.yml"])
+    home_cfg = _safe_home_dir() / ".peforth"
+    candidates.extend([home_cfg / "config.yaml", home_cfg / "config.yml"])
+
+    file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
+    candidates.extend([
+        Path.cwd() / "config.yaml",
+        Path.cwd() / "config.yml",
+        Path(file_dir).resolve() / "config.yaml" if file_dir else None,
+        Path(__file__).resolve().parent / "config.yaml",
+    ])
+    for c in candidates:
+        if c and c.exists():
+            return c
+    return None
+
+
+def load_app_config(vm=None) -> dict:
+    """Load non-secret settings from config.yaml, merged onto defaults."""
+    cfg = _default_app_config()
+    path = get_config_yaml_path(vm)
+    if path is None:
+        return cfg
+    try:
+        parsed = _parse_simple_yaml(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return cfg
+    if not isinstance(parsed, dict):
+        return cfg
+    for section, defaults in cfg.items():
+        incoming = parsed.get(section)
+        if isinstance(incoming, dict):
+            merged = dict(defaults)
+            merged.update(incoming)
+            cfg[section] = merged
+    return cfg
+
+
+def get_tmp_dir(vm=None) -> Path:
+    """Return the fixed temp workspace directory (~/.peforth/tmp or configured tmp_dir), creating it if needed."""
+    env_cfg_dir = os.environ.get("PEFORTH_CONFIG_DIR", "").strip()
+    if env_cfg_dir:
+        base = Path(_expand_env_vars(env_cfg_dir)).expanduser()
+        if not base.is_absolute():
+            base = (Path.cwd() / base).resolve()
+        tmp_dir = (base / "tmp").resolve()
+    else:
+        cfg = load_app_config(vm).get("runtime", {})
+        raw = str(cfg.get("tmp_dir") or "").strip() if isinstance(cfg, dict) else ""
+        if raw:
+            p = Path(_expand_env_vars(raw)).expanduser()
+            tmp_dir = p if p.is_absolute() else (Path.cwd() / p).resolve()
+        else:
+            tmp_dir = (_runtime_config_path(vm) / "tmp").resolve()
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    return tmp_dir
+
+
 def detect_system_info(vm=None) -> dict:
     load_dotenv()
+    app_cfg = load_app_config(vm)
+    runtime_cfg = app_cfg.get("runtime", {})
+    shells_cfg = app_cfg.get("shells", {})
+    logging_cfg = app_cfg.get("logging", {})
     is_windows = os.name == "nt"
     is_wsl = bool(os.environ.get("WSL_DISTRO_NAME")) or "microsoft" in platform.release().casefold()
     environment = "wsl" if is_wsl else ("windows" if is_windows else "linux")
@@ -828,7 +949,7 @@ def detect_system_info(vm=None) -> dict:
     default_shell = "pwsh" if is_windows else "bash"
 
     pwsh_candidates = ("pwsh", "powershell", "pwsh.exe", "powershell.exe") if is_windows else ("pwsh", "powershell")
-    pwsh_path = os.environ.get("PEFORTH_PWSH_PATH", "").strip()
+    pwsh_path = str(shells_cfg.get("pwsh_path") or "").strip() if isinstance(shells_cfg, dict) else ""
     if pwsh_path:
         pwsh_path = _expand_env_vars(pwsh_path)
         if not os.path.isfile(pwsh_path):
@@ -848,7 +969,7 @@ def detect_system_info(vm=None) -> dict:
         if wsl_bin:
             wsl_info["available"] = True
             wsl_info["path"] = wsl_bin
-            configured_distro = os.environ.get("PEFORTH_WSL_DISTRO", "").strip()
+            configured_distro = str(shells_cfg.get("wsl_distro") or "").strip() if isinstance(shells_cfg, dict) else ""
             try:
                 proc = subprocess.run([wsl_bin, "-l", "-q"], capture_output=True, timeout=5)
                 raw = proc.stdout
@@ -863,32 +984,33 @@ def detect_system_info(vm=None) -> dict:
                 wsl_info["distro"] = configured_distro or "Ubuntu"
     elif is_wsl:
         wsl_info["available"] = True
-        wsl_info["distro"] = os.environ.get("WSL_DISTRO_NAME") or os.environ.get("PEFORTH_WSL_DISTRO")
+        cfg_distro = str(shells_cfg.get("wsl_distro") or "").strip() if isinstance(shells_cfg, dict) else ""
+        wsl_info["distro"] = os.environ.get("WSL_DISTRO_NAME") or cfg_distro
 
     file_dir = vm.host.get("__file__dir__") if (vm is not None and hasattr(vm, "host")) else None
     runtime_dir = Path(file_dir).resolve() if file_dir else Path(__file__).resolve().parent
     runtime_path = str(runtime_dir)
-    source_path = _reported_source_path(runtime_dir)
+    source_path = _reported_source_path(runtime_dir, vm=vm)
 
     prefix = os.path.normcase(os.path.abspath(sys.prefix))
     base_prefix = os.path.normcase(os.path.abspath(sys.base_prefix))
     venv_active = prefix != base_prefix
 
-    config_dir_raw = os.environ.get("PEFORTH_CONFIG_DIR", "").strip()
-    resolved_config_dir = str(Path(_expand_env_vars(config_dir_raw)).resolve()) if config_dir_raw else str((_safe_home_dir() / ".peforth").resolve())
-    skills_dir_raw = (os.environ.get("PEFORTH_SKILLS_DIR", "") or os.environ.get("PEFORTH_AI_SKILLS_DIR", "")).strip()
+    resolved_config_dir = str(_runtime_config_path(vm).resolve())
+    skills_dir_raw = str(runtime_cfg.get("skills_dir") or "").strip() if isinstance(runtime_cfg, dict) else ""
+    cfg_path = get_config_yaml_path(vm)
 
     config_snapshot = {
-        "PEFORTH_SOURCE_PATH": os.environ.get("PEFORTH_SOURCE_PATH", ""),
-        "PEFORTH_CONFIG_DIR": config_dir_raw or resolved_config_dir,
-        "PEFORTH_SKILLS_DIR": skills_dir_raw or str(get_skills_dir(vm)),
-        "PEFORTH_AI_MODEL": os.environ.get("PEFORTH_AI_MODEL", ""),
-        "PEFORTH_AI_LOG_MODE": os.environ.get("PEFORTH_AI_LOG_MODE", "normal"),
-        "PEFORTH_PWSH_PATH": os.environ.get("PEFORTH_PWSH_PATH", ""),
-        "PEFORTH_WSL_DISTRO": os.environ.get("PEFORTH_WSL_DISTRO", ""),
-        "OPENAI_BASE_URL": os.environ.get("OPENAI_BASE_URL", ""),
-        "OPENAI_MODEL": os.environ.get("OPENAI_MODEL", ""),
-        "OPENAI_REASONING_EFFORT": os.environ.get("OPENAI_REASONING_EFFORT", ""),
+        "config_yaml_path": str(cfg_path) if cfg_path else "",
+        "PEFORTH_CONFIG_DIR": resolved_config_dir,
+        "runtime.config_dir": resolved_config_dir,
+        "runtime.tmp_dir": str(get_tmp_dir(vm)),
+        "runtime.skills_dir": skills_dir_raw or str(get_skills_dir(vm)),
+        "runtime.source_path": str(runtime_cfg.get("source_path") or "") if isinstance(runtime_cfg, dict) else "",
+        "shells.pwsh_path": str(shells_cfg.get("pwsh_path") or "") if isinstance(shells_cfg, dict) else "",
+        "shells.wsl_distro": str(shells_cfg.get("wsl_distro") or "") if isinstance(shells_cfg, dict) else "",
+        "logging.level": str(logging_cfg.get("level") or "normal") if isinstance(logging_cfg, dict) else "normal",
+        "logging.max_output_bytes": int(logging_cfg.get("max_output_bytes", 262144)) if isinstance(logging_cfg, dict) else 262144,
         "OPENAI_API_KEY_SET": bool(os.environ.get("OPENAI_API_KEY", "").strip()),
         "HERDR_ENV": os.environ.get("HERDR_ENV", ""),
         "HERDR_WORKSPACE_ID": os.environ.get("HERDR_WORKSPACE_ID", ""),
@@ -1433,11 +1555,40 @@ def apply_stateless_provider(vm, spec: str, reasoning: str = None) -> tuple[bool
     return True, f"[AI] Switched Stateless provider to {active.get('provider')} | {active.get('model')}{reasoning_str}."
 
 
+class _TeeByteBuffer:
+    """Mirror raw byte writes (e.g. sys.stdout.buffer.write) to both target.buffer and TeeOutput text buffer."""
+    def __init__(self, tee_output, target_buffer):
+        self._tee = tee_output
+        self._target_buffer = target_buffer
+
+    def write(self, data):
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            raw = bytes(data)
+            if self._target_buffer is not None:
+                try:
+                    self._target_buffer.write(raw)
+                    self._target_buffer.flush()
+                except Exception:
+                    pass
+            text = raw.decode("utf-8", errors="replace")
+            io.StringIO.write(self._tee, text)
+            return len(raw)
+        return self._tee.write(str(data))
+
+    def flush(self):
+        if self._target_buffer is not None:
+            try:
+                self._target_buffer.flush()
+            except Exception:
+                pass
+
+
 class TeeOutput(io.StringIO):
     """Mirror stdout to both the original stream and an internal buffer."""
     def __init__(self, target):
         super().__init__()
         self.target = target
+        self.buffer = _TeeByteBuffer(self, getattr(target, "buffer", None))
 
     def write(self, s):
         try:
@@ -1452,11 +1603,26 @@ def init_diagnostics(vm, *, database_path=None, force=False):
     """Initialize SQLite-backed diagnostic logging for the peforth runtime."""
     if not force and getattr(vm, "_diagnostics_initialized", False):
         return vm.host.get("diagnostic_log")
+    if force:
+        old_logger = vm.host.pop("diagnostic_log", None)
+        if old_logger is not None:
+            try:
+                old_logger.close()
+            except Exception:
+                pass
     vm._diagnostics_initialized = True
 
     load_dotenv()
-    log_mode = os.environ.get("PEFORTH_AI_LOG_MODE", "normal").strip().lower()
+    logging_cfg = load_app_config(vm).get("logging", {})
+    log_mode = str(logging_cfg.get("level") or "normal").strip().lower()
+    if log_mode not in ("disabled", "normal", "verbose"):
+        log_mode = "normal"
+    try:
+        max_output_bytes = int(logging_cfg.get("max_output_bytes", 262144))
+    except (TypeError, ValueError):
+        max_output_bytes = 262144
     vm.host["diagnostic_log_mode"] = log_mode
+    vm.host["diagnostic_max_output_bytes"] = max(0, max_output_bytes)
     if log_mode == "disabled":
         return None
 
@@ -1481,7 +1647,7 @@ def init_diagnostics(vm, *, database_path=None, force=False):
             "version": "2.1.0",
         }
         runtime_id = logger.start_runtime(
-            source_path=_reported_source_path(runtime_dir),
+            source_path=_reported_source_path(runtime_dir, vm=vm),
             runtime_path=str(runtime_dir),
             runtime_version=sys.version.split()[0],
             metadata=metadata,
@@ -1542,6 +1708,48 @@ def _log_event(vm, event_type, turn_id=None, *, payload=None, call_id=None,
         )
     except Exception:
         return None
+
+
+def _truncate_text_by_bytes(text: str, max_bytes: int) -> tuple[str, bool, int]:
+    """Truncate text to at most max_bytes UTF-8 bytes (0 = unlimited). Returns (text, truncated, original_bytes)."""
+    if not text:
+        return "", False, 0
+    raw = text.encode("utf-8", errors="replace")
+    orig_len = len(raw)
+    if max_bytes <= 0 or orig_len <= max_bytes:
+        return text, False, orig_len
+    cut = raw[:max_bytes].decode("utf-8", errors="ignore")
+    return cut + f"\n...[truncated {orig_len - max_bytes} bytes]", True, orig_len
+
+
+def _build_forth_exec_log_payload(vm, stdout_text: str, error_msg: str | None) -> dict:
+    """Build payload for forth_execution_finished, enriching with tool_result metadata in verbose mode."""
+    max_bytes = int(vm.host.get("diagnostic_max_output_bytes", 262144) or 0)
+    truncated_stdout, was_truncated, orig_bytes = _truncate_text_by_bytes(stdout_text, max_bytes)
+    payload = {
+        "stdout": truncated_stdout,
+        "error": error_msg,
+    }
+    if was_truncated:
+        payload["stdout_truncated"] = True
+        payload["stdout_original_bytes"] = orig_bytes
+    if vm.host.get("diagnostic_log_mode") == "verbose" and vm.dstack:
+        tos = vm.dstack[-1]
+        if isinstance(tos, dict):
+            tool_meta = {}
+            for k in ("returncode", "status_code", "url", "method", "timed_out", "disabled", "command", "error", "path", "size"):
+                if k in tos:
+                    tool_meta[k] = tos[k]
+            for text_key in ("stdout", "stderr", "response", "body"):
+                if text_key in tos and isinstance(tos[text_key], str) and tos[text_key]:
+                    t_val, t_trunc, t_orig = _truncate_text_by_bytes(tos[text_key], max_bytes)
+                    tool_meta[text_key] = t_val
+                    if t_trunc:
+                        tool_meta[f"{text_key}_truncated"] = True
+                        tool_meta[f"{text_key}_original_bytes"] = t_orig
+            if tool_meta:
+                payload["tool_result"] = tool_meta
+    return payload
 
 
 def _finish_turn(vm, turn_id, *, output_text=None, output_status="complete", status="completed", error=None):
@@ -1680,8 +1888,9 @@ def install_security_guard(vm):
                             "word": name,
                             "source": source_text,
                         }
+                        current_call_id = vm.host.get("ai_current_call_id")
                         _log_event(vm, "approval_requested", turn_id=turn_id,
-                                   operation=name, payload=proposal)
+                                   call_id=current_call_id, operation=name, payload=proposal)
 
                         nokia_word = vm.tick("nokia")
                         if nokia_word:
@@ -1712,7 +1921,7 @@ def install_security_guard(vm):
                         }.get(choice, "allow_once")
 
                         _log_event(vm, "approval_received", turn_id=turn_id,
-                                   operation=name, payload={"decision": decision})
+                                   call_id=current_call_id, operation=name, payload={"decision": decision})
 
                         if decision == "trust_task":
                             trusted_tasks.add(task)
@@ -1912,10 +2121,15 @@ def tool_search_words(vm, query):
 
 # --- Session Store & Local SQLite Mirror Helpers ---
 
-def _runtime_config_path() -> Path:
+def _runtime_config_path(vm=None) -> Path:
     configured = os.environ.get("PEFORTH_CONFIG_DIR")
     if configured:
         path = Path(_expand_env_vars(configured)).expanduser()
+        return path if path.is_absolute() else (Path.cwd() / path).resolve()
+    cfg = load_app_config(vm).get("runtime", {})
+    raw = str(cfg.get("config_dir") or "").strip() if isinstance(cfg, dict) else ""
+    if raw:
+        path = Path(_expand_env_vars(raw)).expanduser()
         return path if path.is_absolute() else (Path.cwd() / path).resolve()
     return _safe_home_dir() / ".peforth"
 
@@ -2866,10 +3080,11 @@ peforth is an AI-first Forth environment hosted by Python. It seamlessly bridges
 
 
 def get_skills_dir(vm=None) -> Path:
-    """Resolve the active skills directory from environment, VM, or package location."""
-    configured = os.environ.get("PEFORTH_SKILLS_DIR")
+    """Resolve the active skills directory from config.yaml, VM, or package location."""
+    cfg = load_app_config(vm).get("runtime", {})
+    configured = str(cfg.get("skills_dir") or "").strip() if isinstance(cfg, dict) else ""
     if configured:
-        return Path(configured).expanduser().resolve()
+        return Path(_expand_env_vars(configured)).expanduser().resolve()
     if vm is not None:
         file_dir = vm.host.get("__file__dir__")
         if file_dir:
@@ -3983,12 +4198,15 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
 
                         prev_ai_task = vm.host.get("in_ai_task")
                         prev_base_depth = vm.host.get("ai_task_base_frame_depth")
+                        prev_call_id = vm.host.get("ai_current_call_id")
                         vm.host["in_ai_task"] = vm.task
                         vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
+                        vm.host["ai_current_call_id"] = call_id
 
                         tee = TeeOutput(sys.stdout)
                         old_stdout = sys.stdout
                         error_msg = None
+                        t_exec_start = time.monotonic()
                         _log_event(vm, "forth_execution_started", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name,
                                    payload={"purpose": purpose, "source": source})
@@ -4006,9 +4224,15 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                                 vm.host.pop("ai_task_base_frame_depth", None)
                             else:
                                 vm.host["ai_task_base_frame_depth"] = prev_base_depth
+                            if prev_call_id is None:
+                                vm.host.pop("ai_current_call_id", None)
+                            else:
+                                vm.host["ai_current_call_id"] = prev_call_id
+                            exec_elapsed_ms = int((time.monotonic() - t_exec_start) * 1000)
                             _log_event(vm, "forth_execution_finished", turn_id=turn_id,
                                        call_id=call_id, operation=fn_name,
-                                       payload={"stdout": tee.getvalue(), "error": error_msg})
+                                       elapsed_ms=exec_elapsed_ms,
+                                       payload=_build_forth_exec_log_payload(vm, tee.getvalue(), error_msg))
 
                         exec_result = {
                             "stdout": tee.getvalue(),
@@ -4701,12 +4925,15 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         # Individual words are verified against safe=True in security_aware_call.
                         prev_ai_task = vm.host.get("in_ai_task")
                         prev_base_depth = vm.host.get("ai_task_base_frame_depth")
+                        prev_call_id = vm.host.get("ai_current_call_id")
                         vm.host["in_ai_task"] = vm.task
                         vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
+                        vm.host["ai_current_call_id"] = call_id
 
                         tee = TeeOutput(sys.stdout)
                         old_stdout = sys.stdout
                         error_msg = None
+                        t_exec_start = time.monotonic()
                         _log_event(vm, "forth_execution_started", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name,
                                    payload={"purpose": purpose, "source": source})
@@ -4724,9 +4951,15 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                                 vm.host.pop("ai_task_base_frame_depth", None)
                             else:
                                 vm.host["ai_task_base_frame_depth"] = prev_base_depth
+                            if prev_call_id is None:
+                                vm.host.pop("ai_current_call_id", None)
+                            else:
+                                vm.host["ai_current_call_id"] = prev_call_id
+                            exec_elapsed_ms = int((time.monotonic() - t_exec_start) * 1000)
                             _log_event(vm, "forth_execution_finished", turn_id=turn_id,
                                        call_id=call_id, operation=fn_name,
-                                       payload={"stdout": tee.getvalue(), "error": error_msg})
+                                       elapsed_ms=exec_elapsed_ms,
+                                       payload=_build_forth_exec_log_payload(vm, tee.getvalue(), error_msg))
 
                         exec_result = {
                             "stdout": tee.getvalue(),

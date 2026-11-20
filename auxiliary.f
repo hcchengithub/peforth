@@ -876,17 +876,22 @@ code line-notify
 
     token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
     user_id = os.environ.get("LINE_USER_ID", "").strip()
-    endpoint = os.environ.get("LINE_API_ENDPOINT", "").strip() or "https://api.line.me/v2/bot/message/push"
-    disabled = os.environ.get("LINE_NOTIFY_DISABLED", "").strip() == "1"
-
-    if not token or not user_id:
-        try:
-            import ai
+    endpoint = "https://api.line.me/v2/bot/message/push"
+    disabled = False
+    try:
+        import ai
+        if not token or not user_id:
             ai.load_dotenv()
             token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
             user_id = os.environ.get("LINE_USER_ID", "").strip()
-        except Exception:
-            pass
+        cfg = ai.load_app_config(vm).get("integrations", {})
+        if isinstance(cfg, dict):
+            ep = str(cfg.get("line_endpoint") or "").strip()
+            if ep:
+                endpoint = ep
+            disabled = bool(cfg.get("line_disabled"))
+    except Exception:
+        pass
 
     if not token or not user_id:
         vm.push({
@@ -908,7 +913,7 @@ code line-notify
             "disabled": True,
             "payload": payload,
             "error": None,
-            "response": "LINE_NOTIFY_DISABLED=1: message prepared but not sent.",
+            "response": "integrations.line_disabled=true: message prepared but not sent.",
         })
         return
 
@@ -937,7 +942,7 @@ code line-notify
         vm.push({"status_code": None, "error": f"{type(e).__name__}: {e}", "response": None})
     end-code
     // ( message-string -- result-dict ) Push a text message to user's LINE account via LINE Messaging API.
-    /// Reads LINE_CHANNEL_ACCESS_TOKEN and LINE_USER_ID from environment (.env).
-    /// If LINE_NOTIFY_DISABLED=1, prepares payload without sending (status_code=200, disabled=True).
+    /// Reads LINE_CHANNEL_ACCESS_TOKEN and LINE_USER_ID from environment (.env), and integrations.line_endpoint / integrations.line_disabled from config.yaml.
+    /// If integrations.line_disabled is true, prepares payload without sending (status_code=200, disabled=True).
     /// Example: s" Build completed successfully!" line-notify .
 last :: safe=False

@@ -1,0 +1,21 @@
+# peforth Configuration
+# Non-secret runtime, shell, integration, and diagnostic logging settings.
+# Secrets (API keys, tokens, user IDs) belong strictly in .env.
+
+runtime:
+  config_dir: "~/.peforth"
+  tmp_dir: "~/.peforth/tmp"
+  skills_dir: ""
+  source_path: ""
+
+shells:
+  pwsh_path: ""
+  wsl_distro: ""
+
+integrations:
+  line_endpoint: ""
+  line_disabled: false
+
+logging:
+  level: "normal"           # "disabled" | "normal" | "verbose"
+  max_output_bytes: 262144  # 256 KiB; 0 = unlimited

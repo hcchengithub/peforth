@@ -139,11 +139,14 @@ class SessionStoreAndSyncTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.config_dir = Path(self.temp_dir.name)
+        (self.config_dir / "config.yaml").write_text(
+            "logging:\n  level: \"disabled\"\n",
+            encoding="utf-8",
+        )
         self.env_patch = patch.dict(
             "os.environ",
             {
                 "PEFORTH_CONFIG_DIR": str(self.config_dir),
-                "PEFORTH_AI_LOG_MODE": "disabled",
             },
         )
         self.env_patch.start()
@@ -427,9 +430,13 @@ class SessionStoreAndSyncTests(unittest.TestCase):
 
     def test_sync_sessions_logs_diagnostic_timeline_events(self):
         diag_db = self.config_dir / "test_diag.sqlite3"
-        with patch.dict(os.environ, {"PEFORTH_AI_LOG_MODE": "normal"}):
-            logger = ai.init_diagnostics(self.vm, database_path=diag_db, force=True)
-            self.assertIsNotNone(logger)
+        (self.config_dir / "config.yaml").write_text(
+            "logging:\n  level: \"normal\"\n",
+            encoding="utf-8",
+        )
+        logger = ai.init_diagnostics(self.vm, database_path=diag_db, force=True)
+        self.assertIsNotNone(logger)
+        if True:
             remote_data = [
                 {
                     "id": "sess_logged_1",

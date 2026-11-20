@@ -19,6 +19,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -855,13 +856,14 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIn("config", info)
         cfg = info["config"]
         for key in (
-            "PEFORTH_SOURCE_PATH",
+            "config_yaml_path",
             "PEFORTH_CONFIG_DIR",
-            "PEFORTH_SKILLS_DIR",
-            "PEFORTH_AI_MODEL",
-            "PEFORTH_AI_LOG_MODE",
-            "OPENAI_BASE_URL",
-            "OPENAI_MODEL",
+            "runtime.config_dir",
+            "runtime.tmp_dir",
+            "runtime.skills_dir",
+            "runtime.source_path",
+            "logging.level",
+            "logging.max_output_bytes",
             "HERDR_ENV",
         ):
             self.assertIn(key, cfg)
@@ -988,34 +990,44 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertIsNotNone(w, "line-notify word must exist in dictionary")
         self.assertFalse(getattr(w, "safe", True), "line-notify must be marked safe=False")
 
-        # 1. Test disabled mode (payload prepared without hitting external network)
-        with patch.dict(os.environ, {
-            "LINE_NOTIFY_DISABLED": "1",
-            "LINE_CHANNEL_ACCESS_TOKEN": "mock_token_123",
-            "LINE_USER_ID": "U1234567890abcdef",
-        }):
-            self.vm.dictate('s" Hello LINE test!" line-notify')
-            res = self.vm.pop()
-            self.assertIsInstance(res, dict)
-            self.assertEqual(res.get("status_code"), 200)
-            self.assertTrue(res.get("disabled"))
-            self.assertEqual(res.get("payload", {}).get("to"), "U1234567890abcdef")
-            self.assertEqual(
-                res.get("payload", {}).get("messages", [{}])[0].get("text"),
-                "Hello LINE test!",
+        # 1. Test disabled mode via config.yaml (payload prepared without hitting external network)
+        with tempfile.TemporaryDirectory() as cfg_dir:
+            (Path(cfg_dir) / "config.yaml").write_text(
+                "integrations:\n  line_disabled: true\n",
+                encoding="utf-8",
             )
+            with patch.dict(os.environ, {
+                "PEFORTH_CONFIG_DIR": cfg_dir,
+                "LINE_CHANNEL_ACCESS_TOKEN": "mock_token_123",
+                "LINE_USER_ID": "U1234567890abcdef",
+            }):
+                self.vm.dictate('s" Hello LINE test!" line-notify')
+                res = self.vm.pop()
+                self.assertIsInstance(res, dict)
+                self.assertEqual(res.get("status_code"), 200)
+                self.assertTrue(res.get("disabled"))
+                self.assertEqual(res.get("payload", {}).get("to"), "U1234567890abcdef")
+                self.assertEqual(
+                    res.get("payload", {}).get("messages", [{}])[0].get("text"),
+                    "Hello LINE test!",
+                )
 
         # 2. Test missing credentials error
-        with patch.dict(os.environ, {
-            "LINE_NOTIFY_DISABLED": "0",
-            "LINE_CHANNEL_ACCESS_TOKEN": "",
-            "LINE_USER_ID": "",
-        }):
-            self.vm.dictate('s" Test without credentials" line-notify')
-            res_err = self.vm.pop()
-            self.assertIsInstance(res_err, dict)
-            self.assertIsNone(res_err.get("status_code"))
-            self.assertIn("must be set", res_err.get("error", ""))
+        with tempfile.TemporaryDirectory() as cfg_dir:
+            (Path(cfg_dir) / "config.yaml").write_text(
+                "integrations:\n  line_disabled: false\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {
+                "PEFORTH_CONFIG_DIR": cfg_dir,
+                "LINE_CHANNEL_ACCESS_TOKEN": "",
+                "LINE_USER_ID": "",
+            }):
+                self.vm.dictate('s" Test without credentials" line-notify')
+                res_err = self.vm.pop()
+                self.assertIsInstance(res_err, dict)
+                self.assertIsNone(res_err.get("status_code"))
+                self.assertIn("must be set", res_err.get("error", ""))
 
         # 3. Test type check: non-string TOS raises KernelError wrapping TypeError
         from projectk import KernelError
@@ -2004,11 +2016,14 @@ class TestSessionStoreAndSync(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.config_dir = Path(self.temp_dir.name)
+        (self.config_dir / "config.yaml").write_text(
+            "logging:\n  level: \"disabled\"\n",
+            encoding="utf-8",
+        )
         self.env_patch = patch.dict(
             "os.environ",
             {
                 "PEFORTH_CONFIG_DIR": str(self.config_dir),
-                "PEFORTH_AI_LOG_MODE": "disabled",
             },
         )
         self.env_patch.start()
@@ -2712,7 +2727,7 @@ class TestSessionStoreAndSync(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "diag_subagent.sqlite3"
-            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "PEFORTH_AI_LOG_MODE": "normal"}):
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "PEFORTH_CONFIG_DIR": str(tmpdir)}):
                 logger = ai.init_diagnostics(vm, database_path=db_path, force=True)
                 self.assertIsNotNone(logger)
                 try:
@@ -2974,7 +2989,7 @@ class TestSessionStoreAndSync(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "diag_interrupt.sqlite3"
-            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "PEFORTH_AI_LOG_MODE": "normal"}):
+            with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test-key", "PEFORTH_CONFIG_DIR": str(tmpdir)}):
                 logger = ai.init_diagnostics(vm, database_path=db_path, force=True)
                 self.assertIsNotNone(logger)
 
@@ -3311,6 +3326,7 @@ class TestLocalSessionRecall(unittest.TestCase):
                 t1 = logger.start_turn(rid, prompt_content_id=p1, remote_session_id="local_aaaabbbbcccc1111")
                 logger.finish_turn(t1, output_text="Forth 使用後進先出 (LIFO) 資料堆疊。", output_status="complete", status="completed")
 
+                time.sleep(0.002)
                 p2 = logger.store_content("prompt", "請舉一個 dup swap 的例子")
                 t2 = logger.start_turn(rid, prompt_content_id=p2, remote_session_id="local_aaaabbbbcccc1111")
                 logger.finish_turn(t2, output_text="例如 `10 dup` 會得到兩個 10。", output_status="complete", status="completed")
@@ -3457,6 +3473,56 @@ class TestLocalSessionRecall(unittest.TestCase):
                 sc_tl_ctx = json.loads(vm.pop())
                 self.assertEqual(sc_tl_ctx["session_id"], "local_aaaabbbbcccc1111")
                 self.assertIn("tool", [it.get("role") for it in sc_tl_ctx["items"]])
+
+    def test_config_yaml_tmp_dir_and_verbose_logging(self):
+        import ai
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "config.yaml").write_text(
+                "logging:\n"
+                "  level: \"verbose\"\n"
+                "  max_output_bytes: 32\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                vm = VM({"headless": True, "__file__dir__": str(HERE)})
+                vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+                app_cfg = ai.load_app_config(vm)
+                self.assertEqual(app_cfg["logging"]["level"], "verbose")
+                self.assertEqual(app_cfg["logging"]["max_output_bytes"], 32)
+
+                tmp_dir = ai.get_tmp_dir(vm)
+                self.assertEqual(tmp_dir, (cfg_dir / "tmp").resolve())
+                self.assertTrue(tmp_dir.is_dir())
+
+                diag_db = cfg_dir / "db" / "diag_verbose.sqlite3"
+                logger = ai.init_diagnostics(vm, database_path=diag_db, force=True)
+                self.assertIsNotNone(logger)
+                try:
+                    self.assertEqual(vm.host.get("diagnostic_log_mode"), "verbose")
+                    self.assertEqual(vm.host.get("diagnostic_max_output_bytes"), 32)
+
+                    # Verify TeeOutput.buffer mirrors sys.stdout.buffer.write
+                    buf_out = io.StringIO()
+                    tee = ai.TeeOutput(buf_out)
+                    tee.buffer.write(b"hello-from-buffer\n")
+                    self.assertIn("hello-from-buffer", tee.getvalue())
+
+                    # Verify verbose tool_result metadata & byte truncation
+                    vm.push({"returncode": 0, "stdout": "A" * 100})
+                    payload = ai._build_forth_exec_log_payload(vm, "B" * 100, None)
+                    self.assertTrue(payload.get("stdout_truncated"))
+                    self.assertEqual(payload.get("stdout_original_bytes"), 100)
+                    self.assertIn("tool_result", payload)
+                    self.assertEqual(payload["tool_result"]["returncode"], 0)
+                    self.assertTrue(payload["tool_result"].get("stdout_truncated"))
+                    self.assertEqual(payload["tool_result"].get("stdout_original_bytes"), 100)
+                finally:
+                    logger.close()
+                    vm.host.pop("diagnostic_log", None)
 
 
 if __name__ == "__main__":
