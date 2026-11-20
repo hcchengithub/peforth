@@ -840,6 +840,7 @@ def _default_app_config() -> dict:
             "tmp_dir": "~/.peforth/tmp",
             "skills_dir": "",
             "source_path": "",
+            "stream_timeout_seconds": 300,
         },
         "shells": {
             "pwsh_path": "",
@@ -3522,7 +3523,20 @@ def set_pending_turn_option(vm, key: str) -> None:
     opts[key] = val
 
 
-def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effort=None):
+def _get_stream_timeout(vm=None) -> int | None:
+    """Return SSE stream read timeout in seconds from config.yaml (default 300; 0 = unlimited)."""
+    cfg = load_app_config(vm).get("runtime", {})
+    raw = cfg.get("stream_timeout_seconds", 300) if isinstance(cfg, dict) else 300
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        return 300
+    if val <= 0:
+        return None
+    return val
+
+
+def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effort=None, timeout=300):
     """Send streaming Chat Completion request to OpenAI-compatible endpoint."""
     url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
@@ -3568,7 +3582,7 @@ def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effor
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        return _urlopen_interruptible(req, timeout=60)
+        return _urlopen_interruptible(req, timeout=timeout)
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         if "reasoning_effort" in err_body:
@@ -3578,7 +3592,7 @@ def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effor
                 payload["reasoning_effort"] = "none"
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            return _urlopen_interruptible(req, timeout=60)
+            return _urlopen_interruptible(req, timeout=timeout)
         raise
 
 
@@ -4045,7 +4059,8 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
             }
             _log_event(vm, "http_request_started", turn_id=turn_id,
                        http_method="POST", url="/agents/sessions", payload={"model": model})
-            response = _api_request("POST", "/sessions", payload=payload, stream=True, timeout=300)
+            stream_timeout = _get_stream_timeout(vm)
+            response = _api_request("POST", "/sessions", payload=payload, stream=True, timeout=stream_timeout)
         else:
             encoded_id = urllib.parse.quote(session_id, safe="")
             message_event = {
@@ -4060,7 +4075,8 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
             _log_event(vm, "http_request_started", turn_id=turn_id,
                        http_method="GET", url=f"/agents/sessions/{encoded_id}/events?stream=true",
                        payload={"model": model, "session_id": session_id})
-            response = _api_request("GET", f"/sessions/{encoded_id}/events?stream=true", stream=True, timeout=300)
+            stream_timeout = _get_stream_timeout(vm)
+            response = _api_request("GET", f"/sessions/{encoded_id}/events?stream=true", stream=True, timeout=stream_timeout)
 
         _log_event(vm, "sse_stream_opened", turn_id=turn_id)
         for event in _agents_event_stream(response):
@@ -4657,16 +4673,24 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
             _log_event(vm, "http_request_started", turn_id=turn_id,
                        http_method="POST", url=req_url, payload={"model": model})
             try:
+                stream_timeout = _get_stream_timeout(vm)
                 if opts.get("reasoning") is not None:
                     try:
                         response = _http_chat_stream(
                             base_url, api_key, model, messages, active_tools,
                             reasoning_effort=reasoning_effort,
+                            timeout=stream_timeout,
                         )
                     except TypeError:
                         response = _http_chat_stream(base_url, api_key, model, messages, active_tools)
                 else:
-                    response = _http_chat_stream(base_url, api_key, model, messages, active_tools)
+                    try:
+                        response = _http_chat_stream(
+                            base_url, api_key, model, messages, active_tools,
+                            timeout=stream_timeout,
+                        )
+                    except TypeError:
+                        response = _http_chat_stream(base_url, api_key, model, messages, active_tools)
                 elapsed_ms = (time.monotonic() - t0) * 1000.0
                 http_status = getattr(response, "status", 200)
                 _log_event(vm, "http_response_received", turn_id=turn_id,

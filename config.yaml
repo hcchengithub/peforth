@@ -7,6 +7,7 @@ runtime:
   tmp_dir: "~/.peforth/tmp"
   skills_dir: ""
   source_path: ""
+  stream_timeout_seconds: 300
 
 shells:
   pwsh_path: ""
