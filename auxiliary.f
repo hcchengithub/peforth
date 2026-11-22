@@ -859,7 +859,7 @@ code Windows-Message-Box
     // ( message-string title-string buttons-string -- result-dict ) Display a top-most Windows dialog with a selectable button set; stdout is the clicked button name.
     /// Buttons string options: "OK", "OKCancel", "YesNo", "YesNoCancel", "RetryCancel", "AbortRetryIgnore" (case-sensitive).
     /// Example: s" Continue?" s" Confirm" s" YesNo" Windows-Message-Box .  ( result dict; stdout is "Yes" or "No" )
-last :: safe=False
+last :: safe=True
 
 
 \ --- 10. External Notifications (LINE) ---

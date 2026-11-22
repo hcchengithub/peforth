@@ -870,7 +870,7 @@ class TestSafePropertyAudit(unittest.TestCase):
 
         w_msgbox = self.vm.tick("Windows-Message-Box")
         self.assertIsNotNone(w_msgbox, "Windows-Message-Box should be defined in auxiliary.f")
-        self.assertFalse(w_msgbox.properties.get("safe", True))
+        self.assertTrue(w_msgbox.properties.get("safe", False))
         self.assertIn("YesNoCancel", w_msgbox.comment)
 
     def test_forth_word_completer_matches_dictionary_in_all_modes(self):
