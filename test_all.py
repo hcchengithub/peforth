@@ -3565,6 +3565,110 @@ class TestLocalSessionRecall(unittest.TestCase):
                     vm.host.pop("diagnostic_log", None)
 
 
+class TestContextLengthRecovery(unittest.TestCase):
+    def test_is_context_length_error(self):
+        import ai
+
+        self.assertTrue(ai._is_context_length_error(400, '{"error":{"code":"context_length_exceeded"}}'))
+        self.assertTrue(ai._is_context_length_error(400, "This model's maximum context length is 128000 tokens"))
+        self.assertFalse(ai._is_context_length_error(400, '{"error":{"code":"invalid_model"}}'))
+        self.assertFalse(ai._is_context_length_error(500, "context_length_exceeded"))
+
+    def test_truncate_latest_oversized_tool_results_leaves_older_history_untouched(self):
+        import ai
+
+        old_big = "OLD_" * 1000
+        new_big = "HEAD_" + ("X" * 5000) + "_TAIL"
+        messages = [
+            {"role": "system", "content": "sys"},
+            {"role": "tool", "tool_call_id": "c0", "content": old_big},
+            {"role": "assistant", "content": "ok"},
+            {"role": "user", "content": "next"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "c1"}]},
+            {"role": "tool", "tool_call_id": "c1", "content": new_big},
+            {"role": "tool", "tool_call_id": "c2", "content": "small"},
+        ]
+        count = ai._truncate_latest_oversized_tool_results(messages)
+        self.assertEqual(count, 1)
+        self.assertEqual(messages[1]["content"], old_big)
+        self.assertIn("TRUNCATED:", messages[5]["content"])
+        self.assertTrue(messages[5]["content"].startswith("HEAD_"))
+        self.assertTrue(messages[5]["content"].endswith("_TAIL"))
+        self.assertEqual(messages[6]["content"], "small")
+
+    def test_stateless_turn_recovers_once_on_oversized_tool_output(self):
+        import io
+        import json
+        import urllib.error
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+        vm.host["ai_history"] = [
+            {"role": "user", "content": "prev"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "x", "arguments": "{}"}}]},
+            {"role": "tool", "tool_call_id": "call_1", "content": "Z" * 5000},
+        ]
+
+        class FakeStreamResp:
+            def __init__(self, lines):
+                self.status = 200
+                self._lines = [line.encode("utf-8") for line in lines]
+
+            def __iter__(self):
+                return iter(self._lines)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        calls = []
+
+        def fake_stream(base_url, api_key, model, messages, tools, **kwargs):
+            calls.append(len(messages[-1]["content"]))
+            if len(calls) == 1:
+                body = json.dumps({"error": {"code": "context_length_exceeded", "message": "too long"}}).encode("utf-8")
+                raise urllib.error.HTTPError("http://x", 400, "Bad Request", {}, io.BytesIO(body))
+            chunk = json.dumps({"choices": [{"delta": {"content": "Recovered!"}, "finish_reason": "stop"}]})
+            return FakeStreamResp([f"data: {chunk}\n", "data: [DONE]\n"])
+
+        with unittest.mock.patch.object(ai, "load_dotenv"), \
+             unittest.mock.patch.object(ai, "get_active_stateless_profile", return_value={"provider": "OpenAI", "endpoint": "http://x/v1", "model": "m", "api_key_env": "OPENAI_API_KEY"}), \
+             unittest.mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}), \
+             unittest.mock.patch.object(ai, "_http_chat_stream", side_effect=fake_stream):
+            list(ai.ai_turn(vm, "continue", stream_response=False))
+            res = vm.pop()
+            self.assertIn("HTTP 400", res)
+            self.assertIn("Tip:", res)
+
+        calls.clear()
+        vm.host["ai_history"] = []
+
+        def fake_stream_mid_turn(base_url, api_key, model, messages, tools, **kwargs):
+            calls.append(len(messages[-1]["content"]))
+            if len(calls) == 1:
+                tc = {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "call_1", "function": {"name": "peforth_search_words", "arguments": '{"query": "herdr"}'}}]}, "finish_reason": "tool_calls"}]}
+                return FakeStreamResp([f"data: {json.dumps(tc)}\n", "data: [DONE]\n"])
+            if len(calls) == 2:
+                body = json.dumps({"error": {"code": "context_length_exceeded", "message": "too long"}}).encode("utf-8")
+                raise urllib.error.HTTPError("http://x", 400, "Bad Request", {}, io.BytesIO(body))
+            chunk = json.dumps({"choices": [{"delta": {"content": "Used narrower tail!"}, "finish_reason": "stop"}]})
+            return FakeStreamResp([f"data: {chunk}\n", "data: [DONE]\n"])
+
+        with unittest.mock.patch.object(ai, "load_dotenv"), \
+             unittest.mock.patch.object(ai, "get_active_stateless_profile", return_value={"provider": "OpenAI", "endpoint": "http://x/v1", "model": "m", "api_key_env": "OPENAI_API_KEY"}), \
+             unittest.mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}), \
+             unittest.mock.patch.object(ai, "_http_chat_stream", side_effect=fake_stream_mid_turn), \
+             unittest.mock.patch.object(ai, "tool_search_words", return_value={"ok": True, "stdout": "BIG_" * 1500}):
+            list(ai.ai_turn(vm, "read pane", stream_response=False))
+            res = vm.pop()
+            self.assertEqual(res, "Used narrower tail!")
+            self.assertEqual(len(calls), 3)
+            self.assertLess(calls[2], calls[1])
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print(" Running peforth Architectural & Self-Test Suite")
