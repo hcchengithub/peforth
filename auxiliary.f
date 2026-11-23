@@ -560,6 +560,16 @@ code (pwsh)
 
     pwsh_path = shutil.which("pwsh") or shutil.which("pwsh.exe") or shutil.which("powershell.exe") or "powershell"
 
+    # Force redirected PowerShell/native output to UTF-8. Base64-encode command
+    # as UTF-16LE so non-ASCII text survives Windows argv handling.
+    import base64
+    encoded_command = base64.b64encode(command_line.encode("utf-16le")).decode("ascii")
+    utf8_prefix = "$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
+    utf8_prefix += "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); "
+    if os.name == "nt":
+        utf8_prefix += "chcp 65001 > $null; "
+    wrapped_command = utf8_prefix + "& ([ScriptBlock]::Create([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('" + encoded_command + "'))))"
+
     output_limit = 65536
     captured = bytearray()
     truncated = [False]
@@ -586,7 +596,7 @@ code (pwsh)
             return chunk
 
         status = pty.spawn(
-            [pwsh_path, "-NoLogo", "-Command", command_line],
+            [pwsh_path, "-NoLogo", "-Command", wrapped_command],
             master_read=read_master,
         )
         exit_code = os.waitstatus_to_exitcode(status)
@@ -595,7 +605,7 @@ code (pwsh)
         import sys
 
         proc = subprocess.Popen(
-            [pwsh_path, "-NoLogo", "-Command", command_line],
+            [pwsh_path, "-NoLogo", "-Command", wrapped_command],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
