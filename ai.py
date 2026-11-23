@@ -3660,6 +3660,46 @@ def _get_stream_timeout(vm=None) -> int | None:
     return val
 
 
+def _is_context_length_error(status_code: int, err_body: str) -> bool:
+    """Return True if an HTTP error indicates the request exceeded the model context window."""
+    if status_code != 400 or not err_body:
+        return False
+    lowered = err_body.lower()
+    return (
+        "context_length_exceeded" in lowered
+        or "maximum context length" in lowered
+        or "exceeds the context window" in lowered
+    )
+
+
+def _truncate_latest_oversized_tool_results(
+    messages: list,
+    min_len: int = 2000,
+    head: int = 800,
+    tail: int = 800,
+) -> int:
+    """Truncate oversized tool results from only the latest tool-call round in place.
+
+    Leaves older conversation history untouched. Returns the number of truncated messages.
+    """
+    truncated = 0
+    for msg in reversed(messages):
+        if not isinstance(msg, dict) or msg.get("role") != "tool":
+            break
+        content = msg.get("content")
+        if not isinstance(content, str) or len(content) <= min_len:
+            continue
+        orig_len = len(content)
+        msg["content"] = (
+            f"{content[:head]}\n\n"
+            f"... [TRUNCATED: original tool output was {orig_len} chars and caused HTTP 400 "
+            f"context_length_exceeded. Retry using a narrower query, tail, or filter.] ...\n\n"
+            f"{content[-tail:]}"
+        )
+        truncated += 1
+    return truncated
+
+
 def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effort=None, timeout=300):
     """Send streaming Chat Completion request to OpenAI-compatible endpoint."""
     url = f"{base_url.rstrip('/')}/chat/completions"
@@ -4793,6 +4833,7 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
 
     # Outer loop for handling multi-turn tool calling
     assistant_content = ""
+    context_recovery_attempts = 0
     try:
         while True:
             t0 = time.monotonic()
@@ -4824,6 +4865,29 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                            http_status=http_status, elapsed_ms=elapsed_ms)
             except urllib.error.HTTPError as e:
                 elapsed_ms = (time.monotonic() - t0) * 1000.0
+                err_body = e.read().decode("utf-8", errors="replace")
+                is_ctx_err = _is_context_length_error(e.code, err_body)
+                if is_ctx_err and context_recovery_attempts < 1:
+                    truncated_count = _truncate_latest_oversized_tool_results(messages)
+                    if truncated_count > 0:
+                        context_recovery_attempts += 1
+                        _log_event(
+                            vm,
+                            "context_length_recovery",
+                            turn_id=turn_id,
+                            http_status=e.code,
+                            elapsed_ms=elapsed_ms,
+                            payload={
+                                "truncated_tool_results": truncated_count,
+                                "attempt": context_recovery_attempts,
+                            },
+                        )
+                        if stream_response:
+                            sys.stdout.write(
+                                "\n[AI] Context limit exceeded (400); truncated oversized tool output and retrying...\n"
+                            )
+                            sys.stdout.flush()
+                        continue
                 _log_event(vm, "http_request_failed", turn_id=turn_id,
                            http_status=e.code, elapsed_ms=elapsed_ms, error=e)
                 _log_subagent_end(failed_error=e)
@@ -4832,8 +4896,12 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                              output_status="partial" if accumulated_full_text else "failed_before_output",
                              status="failed", error=e)
                 _restore_turn_id()
-                err_body = e.read().decode("utf-8", errors="replace")
                 err_msg = f"\n[AI Error] HTTP {e.code}: {err_body}\n"
+                if is_ctx_err:
+                    err_msg += (
+                        "Tip: Conversation history has exceeded the model's context limit. "
+                        "Start a new session or clear history to continue.\n"
+                    )
                 if stream_response:
                     sys.stdout.write(err_msg)
                     sys.stdout.flush()

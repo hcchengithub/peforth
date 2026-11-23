@@ -301,3 +301,44 @@ code herdr-screen-run
     end-code
     // ( pane-id command -- result ) Run a command in the selected pane.
     last :: safe=False
+
+\ --- Human-facing Herdr Natural Language Macros ---
+
+code (herdr-prompt)
+    text = vm.pop()
+    if not isinstance(text, str) or not text.strip():
+        raise KernelError("(herdr) expects a non-empty request string")
+    vm.push(
+        "Read and follow the `herdr` skill to handle the Herdr pane/workspace/agent request below.\n"
+        "Prefer the native `herdr.f` Forth words when inspecting or controlling panes inside peforth, "
+        "and summarize the observed state or result.\n\n"
+        f"Request:\n{text.strip()}"
+    )
+    end-code
+    // ( str -- prompt ) Build an isolated sub-agent prompt for a Herdr natural-language request.
+last :: safe=True
+
+: (herdr) ( str -- response )
+    (herdr-prompt) none swap false (subagent)
+    ;
+    // ( str -- response ) Execute a Herdr natural-language request via an isolated sub-agent and return its response.
+last :: safe=True
+
+: herdr:
+    "" word (herdr-prompt)
+    none swap
+    (ai-monotonic-time) >t
+    true (subagent)
+    (ai-monotonic-time) t> -
+    [ last literal ] :> nokia2_after_seconds
+    > if nokia2 then
+    ; immediate
+    // ( <request> -- ) Stream a natural-language Herdr request via an isolated sub-agent using herdr.f words.
+' herdr: :: nokia2_after_seconds=30
+last :: safe=True
+
+: HERDR:
+    "" word (herdr-prompt) none swap true (subagent) nokia2
+    ; immediate
+    // ( <request> -- ) Stream a natural-language Herdr request via an isolated sub-agent and always play nokia2 chime.
+last :: safe=True
