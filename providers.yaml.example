@@ -29,14 +29,6 @@ stateless:
       api_key_env: "OPENAI_API_KEY"
       aliases: ["gpt 6.1 terra", "terra"]
 
-    columbus-gemini-3.6-flash:
-      provider: "Columbus"
-      endpoint: "https://chatlkk.wistron.com:4000/v1"
-      model: "gemini-3.6-flash"
-      reasoning: "none"
-      api_key_env: "COLUMBUS_API_KEY"
-      aliases: ["gemini 3.6 flash", "gemini"]
-
     google-gemini-3.8-flash:
       provider: "Google"
       endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/"
