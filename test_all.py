@@ -524,7 +524,7 @@ class TestSafePropertyAudit(unittest.TestCase):
             "(ai-session-details)",
             "ai-session",
             "(ai-use)",
-            "ai-use:",
+            "ai-use",
             "ai-new",
             "ai-status",
             "ai-local-sessions",
@@ -532,6 +532,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             "ai-cancel",
             "(ai-context)",
             "ai-context",
+            "(ai-session-context)",
+            "ai-session-context",
             "ai-distill",
         ]
         for name in safe_session_words:
@@ -544,7 +546,8 @@ class TestSafePropertyAudit(unittest.TestCase):
         cleanup_word = self.vm.tick("ai-cleanup")
         self.assertIsNotNone(cleanup_word, "Word 'ai-cleanup' must exist in dictionary")
         self.assertFalse(cleanup_word.properties.get("safe", False), "Word 'ai-cleanup' must be safe=False")
-        self.assertIsNone(self.vm.tick("ai-use"), "Word 'ai-use' must not exist in dictionary")
+        self.assertIsNone(self.vm.tick("ai-use:"), "Word 'ai-use:' must not exist in dictionary")
+        self.assertIsNone(self.vm.tick("ai-session-context:"), "Word 'ai-session-context:' must not exist in dictionary")
         self.assertTrue(bool(getattr(cleanup_word, "help", "").strip()), "Word 'ai-cleanup' must have help documentation")
 
         promote_word = self.vm.tick("ai-promote")
@@ -2311,7 +2314,7 @@ class TestSessionStoreAndSync(unittest.TestCase):
              patch.object(ai, "_session_title", return_value="Remote Export Title"), \
              patch.object(ai, "_fetch_session_items", return_value=raw_items), \
              contextlib.redirect_stdout(io.StringIO()):
-            self.vm.dictate("ai-use: 1 ai-context stringify")
+            self.vm.dictate("ai-use 1 ai-context stringify")
         exported_ctx = json.loads(self.vm.pop())
         self.assertEqual(exported_ctx["session_id"], "sess_export_12345678")
         self.assertEqual(exported_ctx["items"], raw_items)
@@ -2556,13 +2559,13 @@ class TestSessionStoreAndSync(unittest.TestCase):
             vm.dictate('s" Follow-up in remote session" false (ai)')
         self.assertEqual(routed_calls, [("sess_promoted_777", "Follow-up in remote session", False)])
 
-        # 4. ai-use: switches to remote session and clears ai_messages (no 50-message preload)
+        # 4. ai-use switches to remote session and clears ai_messages (no 50-message preload)
         vm.host["ai_messages"] = [{"role": "user", "content": "leftover"}]
         with patch.object(ai, "_list_remote_sessions", return_value=[{"id": "sess_other_888"}]), \
              patch.object(ai, "_api_get", return_value={"id": "sess_other_888"}), \
              patch.object(ai, "_session_title", return_value="Other Session"), \
              contextlib.redirect_stdout(io.StringIO()):
-            vm.dictate('ai-use: sess_other_888')
+            vm.dictate('ai-use sess_other_888')
         self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
         self.assertNotIn("ai_messages", vm.host)
 
@@ -2576,12 +2579,12 @@ class TestSessionStoreAndSync(unittest.TestCase):
         self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
         self.assertNotIn("ai_messages", vm.host)
 
-        # 4c. ai-use: and (ai-use) with snapshot number
+        # 4c. ai-use and (ai-use) with snapshot number
         with patch.object(ai, "_api_get", return_value={"id": "sess_other_888"}), \
              patch.object(ai, "_session_title", return_value="Other Session"), \
              contextlib.redirect_stdout(io.StringIO()):
             vm.host["ai_session_rows"] = [{"id": "sess_other_888"}]
-            vm.dictate("ai-use: 1")
+            vm.dictate("ai-use 1")
             self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
             vm.dictate("1 (ai-use)")
             self.assertEqual(vm.host.get("ai_active_session_id"), "sess_other_888")
@@ -3398,10 +3401,10 @@ class TestLocalSessionRecall(unittest.TestCase):
                 finally:
                     check_logger.close()
 
-                # Resume via ai-use: with local_* ID (clears stateful session & loads ai_messages)
+                # Resume via ai-use with local_* ID (clears stateful session & loads ai_messages)
                 out_use = io.StringIO()
                 with contextlib.redirect_stdout(out_use):
-                    vm.dictate('ai-use: local_aaaabbbbcccc1111')
+                    vm.dictate('ai-use local_aaaabbbbcccc1111')
                 self.assertIn("Using local session", out_use.getvalue())
                 self.assertNotIn("ai_active_session_id", vm.host)
                 self.assertEqual(vm.host.get("ai_local_session_id"), "local_aaaabbbbcccc1111")
@@ -3497,7 +3500,7 @@ class TestLocalSessionRecall(unittest.TestCase):
                 normal_roles = [it.get("role") for it in normal_ctx["items"]]
                 self.assertNotIn("tool", normal_roles)
 
-                # Test ai-session-context and ai-session-context:
+                # Test ai-session-context and (ai-session-context)
                 w_sc = vm.tick("ai-session-context")
                 self.assertIsNotNone(w_sc)
                 self.assertTrue(w_sc.properties.get("safe"))
@@ -3506,17 +3509,21 @@ class TestLocalSessionRecall(unittest.TestCase):
                 w_ctx = vm.tick("ai-context")
                 self.assertIn("with-timeline", w_ctx.comment)
 
-                # Query context directly by session ID via ai-session-context:
-                vm.dictate("ai-session-context: local_aaaabbbbcccc1111 stringify")
+                # Query context directly by session ID via ai-session-context
+                vm.dictate("ai-session-context local_aaaabbbbcccc1111 stringify")
                 sc_ctx = json.loads(vm.pop())
                 self.assertEqual(sc_ctx["session_id"], "local_aaaabbbbcccc1111")
                 self.assertNotIn("tool", [it.get("role") for it in sc_ctx["items"]])
 
-                # Query context directly with with-timeline via ai-session-context:
-                vm.dictate("with-timeline ai-session-context: local_aaaabbbbcccc1111 stringify")
+                # Query context directly with with-timeline via ai-session-context
+                vm.dictate("with-timeline ai-session-context local_aaaabbbbcccc1111 stringify")
                 sc_tl_ctx = json.loads(vm.pop())
                 self.assertEqual(sc_tl_ctx["session_id"], "local_aaaabbbbcccc1111")
                 self.assertIn("tool", [it.get("role") for it in sc_tl_ctx["items"]])
+
+                vm.dictate('s" local_aaaabbbbcccc1111" (ai-session-context) stringify')
+                sc_stack_ctx = json.loads(vm.pop())
+                self.assertEqual(sc_stack_ctx["session_id"], "local_aaaabbbbcccc1111")
 
     def test_config_yaml_tmp_dir_and_verbose_logging(self):
         import ai

@@ -670,10 +670,10 @@ code (ai-use)
     // ( session-number | session-ID -- ) Select a session by number or session ID from stack.
     last :: safe=True
 
-: ai-use:
+: ai-use
     BL word
     (ai-use)
-    ; immediate
+    ;
     // ( <id> -- ) Select a session by number or session ID from input stream.
     last :: safe=True
 
@@ -859,16 +859,9 @@ code (ai-session-context)
     last :: safe=True
 
 : ai-session-context
-    (ai-session-context)
-    ;
-    // ( selector -- dict ) Push the AI session context dict for the specified session (number, ID, or prefix).
-    /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
-    last :: safe=True
-
-: ai-session-context:
     BL word
     (ai-session-context)
-    ; immediate
+    ;
     // ( <id> -- dict ) Push the AI session context dict for the specified session ID or number from next word.
     /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
     last :: safe=True
