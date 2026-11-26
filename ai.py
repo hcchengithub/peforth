@@ -1691,7 +1691,7 @@ def _current_diagnostic_session_id(vm) -> str | None:
 
 def _log_event(vm, event_type, turn_id=None, *, payload=None, call_id=None,
                operation=None, http_method=None, url=None, http_status=None,
-               elapsed_ms=None, error=None, session_id=None):
+               elapsed_ms=None, error=None, error_message=None, session_id=None):
     """Append a diagnostic event to the timeline table if logging is enabled."""
     logger = vm.host.get("diagnostic_log")
     runtime_id = vm.host.get("diagnostic_runtime_id")
@@ -1709,7 +1709,11 @@ def _log_event(vm, event_type, turn_id=None, *, payload=None, call_id=None,
             elapsed_ms=elapsed_ms,
             payload=payload,
             error_type=type(error).__name__ if error is not None else None,
-            error_message=str(error) if error is not None else None,
+            error_message=(
+                error_message
+                if error_message is not None
+                else (str(error) if error is not None else None)
+            ),
         )
     except Exception:
         return None
@@ -3700,6 +3704,53 @@ def _truncate_latest_oversized_tool_results(
     return truncated
 
 
+def _read_http_error_body(exc: urllib.error.HTTPError) -> str:
+    """Read and cache the decoded response body of an HTTPError so re-raises preserve it."""
+    cached = getattr(exc, "_cached_body_text", None)
+    if cached is not None:
+        return cached
+    try:
+        raw = exc.read()
+        if isinstance(raw, bytes):
+            text = raw.decode("utf-8", errors="replace")
+        elif raw is None:
+            text = ""
+        else:
+            text = str(raw)
+    except Exception:
+        text = ""
+    try:
+        setattr(exc, "_cached_body_text", text)
+    except Exception:
+        pass
+    return text
+
+
+def _summarize_http_error_body(err_body: str, max_chars: int = 240) -> str:
+    """Extract a concise single-line summary from an HTTP error response body."""
+    if not err_body or not err_body.strip():
+        return ""
+    summary = err_body
+    try:
+        data = json.loads(err_body)
+        if isinstance(data, dict):
+            err_obj = data.get("error")
+            if isinstance(err_obj, dict) and err_obj.get("message"):
+                summary = str(err_obj["message"])
+            elif isinstance(err_obj, str) and err_obj.strip():
+                summary = err_obj
+            elif data.get("message"):
+                summary = str(data["message"])
+            elif data.get("detail"):
+                summary = str(data["detail"])
+    except Exception:
+        pass
+    summary = " ".join(summary.split())
+    if len(summary) > max_chars:
+        summary = summary[: max_chars - 3] + "..."
+    return summary
+
+
 def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effort=None, timeout=300):
     """Send streaming Chat Completion request to OpenAI-compatible endpoint."""
     url = f"{base_url.rstrip('/')}/chat/completions"
@@ -3748,7 +3799,7 @@ def _http_chat_stream(base_url, api_key, model, messages, tools, reasoning_effor
     try:
         return _urlopen_interruptible(req, timeout=timeout)
     except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
+        err_body = _read_http_error_body(e)
         if "reasoning_effort" in err_body:
             if "Unrecognized request argument" in err_body:
                 payload.pop("reasoning_effort", None)
@@ -4865,7 +4916,7 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                            http_status=http_status, elapsed_ms=elapsed_ms)
             except urllib.error.HTTPError as e:
                 elapsed_ms = (time.monotonic() - t0) * 1000.0
-                err_body = e.read().decode("utf-8", errors="replace")
+                err_body = _read_http_error_body(e)
                 is_ctx_err = _is_context_length_error(e.code, err_body)
                 if is_ctx_err and context_recovery_attempts < 1:
                     truncated_count = _truncate_latest_oversized_tool_results(messages)
@@ -4888,8 +4939,34 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                             )
                             sys.stdout.flush()
                         continue
-                _log_event(vm, "http_request_failed", turn_id=turn_id,
-                           http_status=e.code, elapsed_ms=elapsed_ms, error=e)
+                safe_err_body = (
+                    err_body.replace(api_key, "[REDACTED]")
+                    if api_key and err_body
+                    else err_body
+                )
+                err_summary = _summarize_http_error_body(safe_err_body)
+                fail_payload = {"model": model}
+                if safe_err_body:
+                    fail_payload["error_body"] = (
+                        safe_err_body
+                        if len(safe_err_body) <= 2000
+                        else safe_err_body[:1997] + "..."
+                    )
+                if err_summary:
+                    fail_payload["error_summary"] = err_summary
+                fail_error_msg = f"{e} | {err_summary}" if err_summary else str(e)
+                if api_key:
+                    fail_error_msg = fail_error_msg.replace(api_key, "[REDACTED]")
+                _log_event(
+                    vm,
+                    "http_request_failed",
+                    turn_id=turn_id,
+                    http_status=e.code,
+                    elapsed_ms=elapsed_ms,
+                    payload=fail_payload,
+                    error=e,
+                    error_message=fail_error_msg,
+                )
                 _log_subagent_end(failed_error=e)
                 _finish_turn(vm, turn_id,
                              output_text="\n".join(accumulated_full_text) if accumulated_full_text else None,
