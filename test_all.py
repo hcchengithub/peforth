@@ -3722,6 +3722,161 @@ class TestContextLengthRecovery(unittest.TestCase):
             self.assertLess(calls[2], calls[1])
 
 
+class TestHttpChatStreamErrorHandling(unittest.TestCase):
+    def test_http_chat_stream_preserves_http_error_body_and_logs_details(self):
+        import io
+        import json
+        import urllib.error
+        import ai
+        from diagnostic_log import DiagnosticLog
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        secret_key = "sk-secret-token-should-redact"
+        err_payload = {
+            "error": {
+                "message": (
+                    "litellm.InternalServerError: InternalServerError: "
+                    "Hosted_vllmException - Internal Server Error\n\n"
+                    "LiteLLM: model group 'test-model' failed with the error above. "
+                    f"No fallback was attempted. token={secret_key}"
+                ),
+                "type": "internal_server_error",
+                "param": None,
+                "code": "500",
+            }
+        }
+        err_bytes = json.dumps(err_payload).encode("utf-8")
+
+        def fake_urlopen(req, timeout=300):
+            raise urllib.error.HTTPError(
+                url="https://api.example.invalid/v1/chat/completions",
+                code=500,
+                msg="Internal Server Error",
+                hdrs={},
+                fp=io.BytesIO(err_bytes),
+            )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "diag.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            diag = DiagnosticLog(db_path, environment=env)
+            try:
+                rid = diag.start_runtime(runtime_version="test")
+                vm.host["diagnostic_log"] = diag
+                vm.host["diagnostic_runtime_id"] = rid
+                profile = {
+                    "provider": "ExampleProvider",
+                    "endpoint": "https://api.example.invalid/v1",
+                    "model": "test-model",
+                    "reasoning": "none",
+                    "api_key_env": "TEST_PROVIDER_API_KEY",
+                }
+                with unittest.mock.patch.object(ai, "load_dotenv"), \
+                     unittest.mock.patch.object(ai, "init_diagnostics"), \
+                     unittest.mock.patch.object(ai, "get_active_stateless_profile", return_value=profile), \
+                     unittest.mock.patch.dict(os.environ, {"TEST_PROVIDER_API_KEY": secret_key}), \
+                     unittest.mock.patch.object(ai, "_urlopen_interruptible", side_effect=fake_urlopen):
+                    list(ai.ai_turn(vm, "test prompt", stream_response=False))
+            finally:
+                diag.close()
+
+            pushed = vm.pop()
+            self.assertIn("[AI Error] HTTP 500:", pushed)
+            self.assertIn("Hosted_vllmException - Internal Server Error", pushed)
+
+            conn = sqlite3.connect(str(db_path))
+            try:
+                row = conn.execute(
+                    "SELECT http_status, payload_json, error_message "
+                    "FROM timeline WHERE event_type = 'http_request_failed'"
+                ).fetchone()
+            finally:
+                conn.close()
+
+            self.assertIsNotNone(row)
+            http_status, payload_json, error_message = row
+            self.assertEqual(http_status, 500)
+            self.assertIn("Hosted_vllmException", payload_json or "")
+            self.assertIn("test-model", payload_json or "")
+            self.assertIn("Hosted_vllmException - Internal Server Error", error_message or "")
+            self.assertNotIn(secret_key, payload_json or "")
+            self.assertNotIn(secret_key, error_message or "")
+
+    def test_context_length_recovery_works_through_real_http_chat_stream(self):
+        import io
+        import json
+        import urllib.error
+        import ai
+
+        vm = VM({"headless": True, "__file__dir__": str(HERE)})
+        vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+
+        class FakeStreamResp:
+            def __init__(self, lines):
+                self.status = 200
+                self._lines = [line.encode("utf-8") for line in lines]
+
+            def __iter__(self):
+                return iter(self._lines)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        calls = []
+
+        def fake_urlopen(req, timeout=300):
+            body = json.loads(req.data.decode("utf-8"))
+            calls.append(len(body["messages"][-1]["content"]))
+            if len(calls) == 1:
+                tc = {
+                    "choices": [{
+                        "delta": {
+                            "tool_calls": [{
+                                "index": 0,
+                                "id": "call_1",
+                                "function": {
+                                    "name": "peforth_search_words",
+                                    "arguments": '{"query": "herdr"}',
+                                },
+                            }]
+                        },
+                        "finish_reason": "tool_calls",
+                    }]
+                }
+                return FakeStreamResp([f"data: {json.dumps(tc)}\n", "data: [DONE]\n"])
+            if len(calls) == 2:
+                err_body = json.dumps({
+                    "error": {"code": "context_length_exceeded", "message": "too long"}
+                }).encode("utf-8")
+                raise urllib.error.HTTPError(
+                    "http://x/v1/chat/completions", 400, "Bad Request", {}, io.BytesIO(err_body)
+                )
+            chunk = json.dumps({"choices": [{"delta": {"content": "Recovered via real stream!"}, "finish_reason": "stop"}]})
+            return FakeStreamResp([f"data: {chunk}\n", "data: [DONE]\n"])
+
+        profile = {
+            "provider": "OpenAI",
+            "endpoint": "http://x/v1",
+            "model": "m",
+            "api_key_env": "OPENAI_API_KEY",
+        }
+        with unittest.mock.patch.object(ai, "load_dotenv"), \
+             unittest.mock.patch.object(ai, "get_active_stateless_profile", return_value=profile), \
+             unittest.mock.patch.dict(os.environ, {"OPENAI_API_KEY": "sk-test"}), \
+             unittest.mock.patch.object(ai, "_urlopen_interruptible", side_effect=fake_urlopen), \
+             unittest.mock.patch.object(ai, "tool_search_words", return_value={"ok": True, "stdout": "BIG_" * 1500}):
+            list(ai.ai_turn(vm, "read pane", stream_response=False))
+
+        self.assertEqual(vm.pop(), "Recovered via real stream!")
+        self.assertEqual(len(calls), 3)
+        self.assertLess(calls[2], calls[1])
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print(" Running peforth Architectural & Self-Test Suite")
