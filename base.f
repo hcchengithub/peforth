@@ -1299,6 +1299,7 @@ code <py>
     vm.push(code_str)
     end-code immediate
     // ( <python> -- string ) Read Python code until </py> or </pyV>.
+    last :: safe=True
 
 code </py>
     source = vm.pop()

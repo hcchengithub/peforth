@@ -180,7 +180,7 @@ class TestSafePropertyAudit(unittest.TestCase):
 
     def test_dangerous_or_host_eval_words_are_not_safe(self):
         # Arbitrary Python evaluation or state destruction must NOT be safe=True
-        unsafe_words = ["<py>", "</py>", "</pyV>", "tib.append", "forget"]
+        unsafe_words = ["</py>", "</pyV>", "tib.append", "forget"]
         for name in unsafe_words:
             word = self.vm.tick(name)
             if word is not None:
@@ -1555,6 +1555,42 @@ class TestSecurityTaskApproval(unittest.TestCase):
 
         self.assertEqual(task.status, "done")
         self.assertEqual(self.vm.pop(), "hello from test")
+
+    def test_interactive_cancel_raises_ai_task_cancelled_error(self):
+        import ai
+        from projectk import Task
+
+        self.vm.define("unsafe_cancel_target", lambda v: v.push("should_not_run"), properties={"safe": False})
+        self.vm.host["headless"] = False
+        task = Task(self.vm, self.vm.evaluate("unsafe_cancel_target"))
+        self.vm.host["in_ai_task"] = task
+        self.vm.host["ai_task_base_frame_depth"] = 0
+
+        with patch.object(sys.stdin, "isatty", return_value=True), \
+             patch.object(ai, "_maybe_run_attention_check", return_value=False), \
+             patch.object(ai, "read_numbered_choice", return_value="4"):
+            with self.assertRaises(ai._AITaskCancelledError):
+                task.resume()
+        self.assertEqual(self.vm.dstack, [])
+
+    def test_py_block_prompts_approval_only_once(self):
+        import ai
+        from projectk import Task
+
+        self.vm.host["headless"] = False
+        task = Task(self.vm, self.vm.evaluate("<py> vm.push(123) </py>"))
+        self.vm.host["in_ai_task"] = task
+        self.vm.host["ai_task_base_frame_depth"] = 0
+
+        with patch.object(sys.stdin, "isatty", return_value=True), \
+             patch.object(ai, "_maybe_run_attention_check", return_value=False), \
+             patch.object(ai, "read_numbered_choice", return_value="1") as mock_choice, \
+             contextlib.redirect_stdout(io.StringIO()):
+            task.resume()
+        self.assertEqual(task.status, "done")
+        self.assertEqual(mock_choice.call_count, 1)
+        self.assertEqual(mock_choice.call_args.kwargs.get("proposal", {}).get("word"), "<py>...</py>")
+        self.assertEqual(self.vm.pop(), 123)
 
 
 class TestDiagnosticLoggingAndMonitoring(unittest.TestCase):

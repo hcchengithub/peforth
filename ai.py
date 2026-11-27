@@ -1590,12 +1590,20 @@ class _TeeByteBuffer:
 
 class TeeOutput(io.StringIO):
     """Mirror stdout to both the original stream and an internal buffer."""
-    def __init__(self, target):
+    def __init__(self, target, on_first_write=None):
         super().__init__()
         self.target = target
         self.buffer = _TeeByteBuffer(self, getattr(target, "buffer", None))
+        self._on_first_write = on_first_write
 
     def write(self, s):
+        if s and self._on_first_write is not None:
+            cb = self._on_first_write
+            self._on_first_write = None
+            try:
+                cb()
+            except Exception:
+                pass
         try:
             self.target.write(s)
             self.target.flush()
@@ -1837,6 +1845,29 @@ def _detect_user_lang(prompt: str | None) -> str:
     return "en"
 
 
+class _AITaskCancelledError(KernelError):
+    """Raised when the user chooses 'Cancel this AI task' during security approval."""
+
+
+def _format_forth_proposal_header(purpose: str, source: str) -> str:
+    return (
+        f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
+        f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
+        f"Source:\n"
+        f"{source.strip()}{_ANSI_RESET}\n"
+    )
+
+
+def _flush_pending_forth_proposal(vm, stream=None) -> None:
+    pending = vm.host.get("ai_pending_forth_proposal") if hasattr(vm, "host") else None
+    if not isinstance(pending, dict) or pending.get("shown"):
+        return
+    pending["shown"] = True
+    out = stream or sys.__stdout__
+    out.write(_format_forth_proposal_header(pending.get("purpose", ""), pending.get("source", "")))
+    out.flush()
+
+
 def _maybe_run_attention_check(vm, task, turn_id, call_id, real_proposal=None) -> bool:
     """Occasionally inject a harmless humorous decoy approval to catch blind Enter-spamming.
 
@@ -1858,10 +1889,14 @@ def _maybe_run_attention_check(vm, task, turn_id, call_id, real_proposal=None) -
     task._attention_checked = True
     lang = vm.host.get("ai_user_lang") or "en"
     decoy = dict(random.choice(_ATTENTION_CHECK_DECOYS))
+    decoy_purpose = decoy.get("purpose") or ""
+    if not decoy_purpose:
+        m = re.search(r's"\s*([^"]+)"', decoy.get("source", ""))
+        decoy_purpose = m.group(1).strip() if m else decoy["word"]
 
     sys.__stdout__.write(
-        f"\n{_ANSI_GREEN_BOLD}[Security] Approval required — Word: {decoy['word']}{_ANSI_RESET}\n"
-        f"{_ANSI_DEEP_GREEN}Source:\n{decoy['source']}{_ANSI_RESET}\n\n"
+        _format_forth_proposal_header(decoy_purpose, decoy["source"])
+        + f"\n{_ANSI_GREEN_BOLD}[Security] Approval required — Word: {decoy['word']}{_ANSI_RESET}\n"
     )
     sys.__stdout__.flush()
 
@@ -2019,6 +2054,7 @@ def install_security_guard(vm):
                         caught = _maybe_run_attention_check(vm, task, turn_id, current_call_id, real_proposal=proposal)
                         default_choice = "3" if caught else "1"
 
+                        _flush_pending_forth_proposal(vm, stream=sys.__stdout__)
                         sys.__stdout__.write(f"\n{_ANSI_GREEN_BOLD}[Security] Approval required — Word: {display_word}{_ANSI_RESET}\n")
                         if display_word == "<py>...</py>" and display_source:
                             preview = display_source if len(display_source) <= 300 else display_source[:300] + "..."
@@ -2057,8 +2093,7 @@ def install_security_guard(vm):
                         elif decision == "deny":
                             raise KernelError(f"Security: Execution of word '{name}' was denied.")
                         elif decision == "cancel":
-                            task.cancel()
-                            raise KernelError("Security: AI task was cancelled.")
+                            raise _AITaskCancelledError("Security: AI task was cancelled.")
                         # "allow_once": execute this call once without adding to trusted_tasks
                         vm.host["in_approval"] = True
                         try:
@@ -4450,13 +4485,11 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                         source = normalize_forth_source(args.get("source", ""))
                         purpose = args.get("purpose", "")
                         if stream_response:
-                            sys.stdout.write(
-                                f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
-                                f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
-                                f"Source:\n"
-                                f"{source.strip()}{_ANSI_RESET}\n\n"
-                            )
-                            sys.stdout.flush()
+                            vm.host["ai_pending_forth_proposal"] = {
+                                "purpose": purpose,
+                                "source": source,
+                                "shown": False,
+                            }
 
                         prev_ai_task = vm.host.get("in_ai_task")
                         prev_base_depth = vm.host.get("ai_task_base_frame_depth")
@@ -4465,9 +4498,14 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                         vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
                         vm.host["ai_current_call_id"] = call_id
 
-                        tee = TeeOutput(sys.stdout)
                         old_stdout = sys.stdout
+                        tee = TeeOutput(
+                            old_stdout,
+                            on_first_write=(lambda: _flush_pending_forth_proposal(vm, stream=old_stdout))
+                            if stream_response else None,
+                        )
                         error_msg = None
+                        cancelled_exc = None
                         t_exec_start = time.monotonic()
                         _log_event(vm, "forth_execution_started", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name,
@@ -4475,12 +4513,20 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                         try:
                             sys.stdout = tee
                             yield from vm.evaluate(source)
+                        except _AITaskCancelledError as e:
+                            cancelled_exc = e
+                            error_msg = str(e)
+                            sys.__stdout__.write("\n[Security] AI task cancelled.\n")
+                            sys.__stdout__.flush()
                         except Exception as e:
                             error_msg = f"{type(e).__name__}: {e}"
                             sys.__stdout__.write(f"\n[Execution Error] {error_msg}\n")
                             sys.__stdout__.flush()
                         finally:
                             sys.stdout = old_stdout
+                            if stream_response and error_msg is None:
+                                _flush_pending_forth_proposal(vm, stream=old_stdout)
+                            vm.host.pop("ai_pending_forth_proposal", None)
                             vm.host["in_ai_task"] = prev_ai_task
                             if prev_base_depth is None:
                                 vm.host.pop("ai_task_base_frame_depth", None)
@@ -4495,6 +4541,18 @@ def ai_turn_stateful(vm, prompt, stream_response, *, session_id=None, create_new
                                        call_id=call_id, operation=fn_name,
                                        elapsed_ms=exec_elapsed_ms,
                                        payload=_build_forth_exec_log_payload(vm, tee.getvalue(), error_msg))
+
+                        if cancelled_exc is not None:
+                            _finish_turn(
+                                vm, turn_id,
+                                output_status="cancelled",
+                                status="cancelled",
+                                error=cancelled_exc,
+                            )
+                            vm.host["ai_current_turn_id"] = None
+                            if not stream_response:
+                                vm.push(error_msg or "Security: AI task was cancelled.")
+                            return
 
                         exec_result = {
                             "stdout": tee.getvalue(),
@@ -5239,13 +5297,11 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         purpose = args.get("purpose", "")
 
                         if stream_response:
-                            sys.stdout.write(
-                                f"\n{_ANSI_GREEN_BOLD}[AI Proposes Forth Code]{_ANSI_RESET}\n"
-                                f"{_ANSI_DEEP_GREEN}Purpose: {purpose}\n"
-                                f"Source:\n"
-                                f"{source.strip()}{_ANSI_RESET}\n\n"
-                            )
-                            sys.stdout.flush()
+                            vm.host["ai_pending_forth_proposal"] = {
+                                "purpose": purpose,
+                                "source": source,
+                                "shown": False,
+                            }
 
                         # Execute Forth code under AI task context.
                         # Individual words are verified against safe=True in security_aware_call.
@@ -5256,9 +5312,14 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         vm.host["ai_task_base_frame_depth"] = len(getattr(vm.task, "frames", []))
                         vm.host["ai_current_call_id"] = call_id
 
-                        tee = TeeOutput(sys.stdout)
                         old_stdout = sys.stdout
+                        tee = TeeOutput(
+                            old_stdout,
+                            on_first_write=(lambda: _flush_pending_forth_proposal(vm, stream=old_stdout))
+                            if stream_response else None,
+                        )
                         error_msg = None
+                        cancelled_exc = None
                         t_exec_start = time.monotonic()
                         _log_event(vm, "forth_execution_started", turn_id=turn_id,
                                    call_id=call_id, operation=fn_name,
@@ -5266,12 +5327,20 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                         try:
                             sys.stdout = tee
                             yield from vm.evaluate(source)
+                        except _AITaskCancelledError as e:
+                            cancelled_exc = e
+                            error_msg = str(e)
+                            sys.__stdout__.write("\n[Security] AI task cancelled.\n")
+                            sys.__stdout__.flush()
                         except Exception as e:
                             error_msg = f"{type(e).__name__}: {e}"
                             sys.__stdout__.write(f"\n[Execution Error] {error_msg}\n")
                             sys.__stdout__.flush()
                         finally:
                             sys.stdout = old_stdout
+                            if stream_response and error_msg is None:
+                                _flush_pending_forth_proposal(vm, stream=old_stdout)
+                            vm.host.pop("ai_pending_forth_proposal", None)
                             vm.host["in_ai_task"] = prev_ai_task
                             if prev_base_depth is None:
                                 vm.host.pop("ai_task_base_frame_depth", None)
@@ -5286,6 +5355,18 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                                        call_id=call_id, operation=fn_name,
                                        elapsed_ms=exec_elapsed_ms,
                                        payload=_build_forth_exec_log_payload(vm, tee.getvalue(), error_msg))
+
+                        if cancelled_exc is not None:
+                            _finish_turn(
+                                vm, turn_id,
+                                output_status="cancelled",
+                                status="cancelled",
+                                error=cancelled_exc,
+                            )
+                            vm.host["ai_current_turn_id"] = None
+                            if not stream_response:
+                                vm.push(error_msg or "Security: AI task was cancelled.")
+                            return
 
                         exec_result = {
                             "stdout": tee.getvalue(),
