@@ -25,5 +25,5 @@ py-modules = ["main", "projectk", "ai", "diagnostic_log", "session_store"]
 packages = ["tools"]
 
 [tool.setuptools.package-data]
-"*" = ["*.f", "*.md", "skills/**/*"]
+"*" = ["*.f", "*.md", "attention_check_decoys.yaml", "skills/**/*"]
 

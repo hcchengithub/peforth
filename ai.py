@@ -1814,28 +1814,56 @@ def log_heartbeat(vm, message="heartbeat"):
         return False
 
 
-_ATTENTION_CHECK_DECOYS = [
-    {"word": "buy-100-pizzas", "source": 's" Buy 100 big pizzas for lunch" buy-food'},
-    {"word": "give-money-to-cat", "source": 's" Give all my money to a cute cat" send-money'},
-    {"word": "delete-all-mondays", "source": 's" Delete Monday so we can play" bye-monday'},
-    {"word": "eat-10-ice-creams", "source": 's" Eat 10 ice creams before dinner" eat-sweet'},
-    {"word": "tell-boss-im-batman", "source": 's" Tell my boss I am Batman" send-note'},
-    {"word": "make-pc-sing-song", "source": 's" Make my computer sing Happy Birthday very loud" sing-song'},
-    {"word": "nap-on-my-desk", "source": 's" Take a 3 hour nap on my desk now" go-sleep'},
-    {"word": "turn-fan-into-rocket", "source": 's" Fly my laptop to the moon today" fly-moon'},
-    {"word": "order-1000-cookies", "source": 's" Order 1000 chocolate cookies right now" buy-snack'},
-    {"word": "paint-screen-pink", "source": 's" Paint my whole screen bright pink with hearts" paint-now'},
-    {"word": "invite-50-dogs-here", "source": 's" Invite 50 happy dogs into the office" call-dogs'},
-    {"word": "change-name-to-banana", "source": 's" Change my name to Mr. Banana" set-name'},
-    {"word": "hide-all-my-homework", "source": 's" Hide all my work under the bed" hide-work'},
-    {"word": "dance-with-a-robot", "source": 's" Stop working and dance with a robot" dance-now'},
-    {"word": "give-cake-to-everyone", "source": 's" Send free cake to everyone in the building" send-cake'},
-    {"word": "lock-the-coffee-pot", "source": 's" Hide all the coffee and only drink milk" drink-milk'},
-    {"word": "count-to-one-million", "source": 's" Sit here and count apples to 1,000,000" count-now'},
-    {"word": "turn-mouse-into-frog", "source": 's" Turn my computer mouse into a green frog" magic-frog'},
-    {"word": "sleep-until-next-friday", "source": 's" Sleep from now until next Friday" long-nap'},
-    {"word": "ask-ai-to-do-dishes", "source": 's" Ask the AI to wash my dirty dishes" wash-cups'},
+_DEFAULT_ATTENTION_CHECK_DECOYS = [
+    {
+        "word": "invite-50-dogs-here",
+        "purpose": "Invite 50 happy dogs into the office",
+        "source": 's" Invite 50 happy dogs into the office" call-dogs',
+    },
 ]
+
+
+def _load_attention_check_decoys(vm=None) -> list[dict]:
+    """Load attention-check decoy entries from config dir or bundled attention_check_decoys.yaml."""
+    import yaml
+
+    candidates = []
+    if vm is not None:
+        try:
+            candidates.append(get_config_dir(vm) / "attention_check_decoys.yaml")
+        except Exception:
+            pass
+    candidates.append(Path(__file__).resolve().parent / "attention_check_decoys.yaml")
+
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        raw_list = data.get("decoys") if isinstance(data, dict) else data
+        if not isinstance(raw_list, list):
+            continue
+        cleaned = []
+        for item in raw_list:
+            if not isinstance(item, dict):
+                continue
+            word = str(item.get("word") or "").strip()
+            source = str(item.get("source") or "").strip()
+            if not word or not source:
+                continue
+            entry = {"word": word, "source": source}
+            purpose = str(item.get("purpose") or "").strip()
+            if purpose:
+                entry["purpose"] = purpose
+            cleaned.append(entry)
+        if cleaned:
+            return cleaned
+    return [dict(d) for d in _DEFAULT_ATTENTION_CHECK_DECOYS]
+
+
+_ATTENTION_CHECK_DECOYS = _load_attention_check_decoys()
 
 
 def _detect_user_lang(prompt: str | None) -> str:
@@ -1888,7 +1916,8 @@ def _maybe_run_attention_check(vm, task, turn_id, call_id, real_proposal=None) -
 
     task._attention_checked = True
     lang = vm.host.get("ai_user_lang") or "en"
-    decoy = dict(random.choice(_ATTENTION_CHECK_DECOYS))
+    decoys = _load_attention_check_decoys(vm)
+    decoy = dict(random.choice(decoys))
     decoy_purpose = decoy.get("purpose") or ""
     if not decoy_purpose:
         m = re.search(r's"\s*([^"]+)"', decoy.get("source", ""))

@@ -1,0 +1,54 @@
+# Security Attention Check Decoy Pool
+# Used by _maybe_run_attention_check() to catch blind Enter-spamming.
+# You can freely add, edit, or replace entries here without restarting.
+# Override location (optional): ~/.peforth/attention_check_decoys.yaml
+
+decoys:
+  - word: blame-intern
+    purpose: Attribute yesterday's production outage to a statistically plausible root cause.
+    source: 's" It was definitely the intern, not my Friday 5pm deploy" update-rca'
+  - word: deploy-on-friday
+    purpose: Expedite release pipeline before weekend maintenance window begins.
+    source: '17 00 >= if s" YOLO push to prod and mute Slack" force-deploy then'
+  - word: fake-progress-bar
+    purpose: Improve perceived CLI responsiveness during long-running operations.
+    source: '99 %done 60000 ms s" Pretend it is almost finished" spin-wheel'
+  - word: reply-all-oops
+    purpose: Broadcast urgent status update to all relevant stakeholders across the company.
+    source: 's" Accidentally CC all 12,000 employees with test meme" send-mail'
+  - word: download-more-ram
+    purpose: Mitigate system memory pressure without requiring physical hardware upgrades.
+    source: '64 GB s" Fetch free RAM from sketchy-ram-download.biz" curl-install'
+  - word: delete-legacy-code
+    purpose: Reduce technical debt and eliminate compiler warnings across the repository.
+    source: 's" Nobody understands this 2009 module anyway" rm-rf-src'
+  - word: mute-boss-mic
+    purpose: Optimize audio clarity during the quarterly architecture review meeting.
+    source: 's" Auto-mute whenever manager says synergy or paradigm" patch-teams'
+  - word: bribe-ci-runner
+    purpose: Resolve flaky integration test failures blocking the current pull request.
+    source: 's" Skip failing assertions and return exit code 0" patch-pytest'
+  - word: coffee-iv-drip
+    purpose: Maintain developer cognitive throughput past 18:00 local time.
+    source: '500 ml s" Reroute USB-C power directly to espresso machine" boil-now'
+  - word: rename-bug-to-feature
+    purpose: Close P1 customer issue ahead of tomorrow's sprint demo.
+    source: 's" Working as intended: user held the keyboard wrong" close-jira'
+  - word: mine-dogecoin-on-fan
+    purpose: Utilize idle GPU cycles when the terminal is waiting for user input.
+    source: '100 %fan s" Heat up office via background crypto miner" start-miner'
+  - word: auto-approve-self
+    purpose: Streamline code review turnaround for single-line hotfix commits.
+    source: 's" Log in as senior reviewer and type LGTM myself" gh-approve'
+  - word: hide-todo-comments
+    purpose: Ensure codebase passes static analysis quality gate before release.
+    source: 's" Replace every FIXME with TODO_NEXT_YEAR" sed-inplace'
+  - word: summon-rubber-duck
+    purpose: Initialize interactive root-cause debugging session for race condition.
+    source: 's" Explain bug out loud to plastic duck until it confesses" quack'
+  - word: overclock-toaster
+    purpose: Benchmark thermal throttling behavior on peripheral hardware devices.
+    source: 's" Flash custom BIOS onto breakroom toaster for 400C toast" flash-rom'
+  - word: turn-off-gravity
+    purpose: Resolve persistent stack overflow by inverting memory growth direction.
+    source: '-9.81 m/s2 s" Disable local physics engine for smoother scrolling" set-env'
