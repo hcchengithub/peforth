@@ -488,6 +488,49 @@ class DiagnosticLog:
         ).fetchone()
         return str(row["description"]) if row and row["description"] else ""
 
+    def delete_local_session(self, session_id: str) -> dict:
+        """Delete a local_* session's timeline, turns, local_sessions row, and orphan contents."""
+        if not isinstance(session_id, str) or not session_id.startswith("local_"):
+            raise ValueError(f"Expected a local_* session_id, got {session_id!r}")
+        with self._write_transaction():
+            cur_tl = self.connection.execute(
+                """
+                DELETE FROM timeline
+                WHERE session_id = ?
+                   OR turn_id IN (SELECT turn_id FROM turns WHERE remote_session_id = ?)
+                """,
+                (session_id, session_id),
+            )
+            cur_turns = self.connection.execute(
+                "DELETE FROM turns WHERE remote_session_id = ?",
+                (session_id,),
+            )
+            cur_ls = self.connection.execute(
+                "DELETE FROM local_sessions WHERE session_id = ?",
+                (session_id,),
+            )
+            cur_contents = self.connection.execute(
+                """
+                DELETE FROM contents
+                WHERE content_id NOT IN (
+                    SELECT prompt_content_id FROM turns WHERE prompt_content_id IS NOT NULL
+                    UNION
+                    SELECT instructions_content_id FROM turns WHERE instructions_content_id IS NOT NULL
+                    UNION
+                    SELECT output_content_id FROM turns WHERE output_content_id IS NOT NULL
+                    UNION
+                    SELECT content_id FROM timeline WHERE content_id IS NOT NULL
+                )
+                """
+            )
+        return {
+            "session_id": session_id,
+            "deleted_timeline": int(cur_tl.rowcount or 0),
+            "deleted_turns": int(cur_turns.rowcount or 0),
+            "deleted_session_row": int(cur_ls.rowcount or 0),
+            "deleted_contents": int(cur_contents.rowcount or 0),
+        }
+
     def close(self) -> None:
         self.connection.close()
 

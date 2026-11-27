@@ -746,37 +746,121 @@ code ai-status
     // ( -- ) Show complete details for the session selected by this Forth process.
     last :: safe=True
 
-code ai-cleanup
+code (ai-cleanup)
     import ai
     import urllib.parse
-    selector = vm.pop()
-    rows = vm.host.get("ai_session_rows")
-    if rows is None:
-        raise RuntimeError("Run ai-sessions first to refresh the remote list and its sequence numbers.")
-    index, row = ai._resolve_session_selector(rows, selector)
-    session_id = row.get("id") or row.get("session_id")
-    print(f"This permanently deletes session {index}: {session_id} and its conversation.")
-    result = ai._api_delete(
-        f"/sessions/{urllib.parse.quote(session_id, safe='')}",
-        vm=vm,
-        operation=f"delete session {ai._short_id(session_id)}",
-    )
-    if result.get("deleted") is not True:
-        raise RuntimeError("Agents API did not confirm session deletion.")
-    db_path = ai._session_db_path()
-    if db_path.is_file():
-        with ai._open_session_store() as store:
-            store.mark_remote_deleted(session_id, True)
-    if vm.host.get("ai_active_session_id") == session_id:
-        vm.host.pop("ai_active_session_id", None)
-    vm.host.pop("ai_session_rows", None)
 
-    print("AI session deleted from the API.")
+    raw_target = vm.pop()
+    items = list(raw_target) if isinstance(raw_target, (list, tuple, set)) else [raw_target]
+    if not items:
+        raise RuntimeError("(ai-cleanup) expects a session number, session ID, or non-empty list.")
+
+    remote_rows = vm.host.get("ai_session_rows")
+    if remote_rows is None:
+        remote_rows = ai.list_local_sessions(vm)
+    local_rows = vm.host.get("ai_local_session_rows")
+    if local_rows is None:
+        local_rows = ai.list_local_diagnostic_sessions(vm)
+
+    resolved = []
+    seen = set()
+    for item in items:
+        sel = item.strip() if isinstance(item, str) else item
+        if isinstance(sel, str) and sel.isdigit():
+            sel = int(sel)
+        if isinstance(sel, int) and not isinstance(sel, bool):
+            if 1 <= sel <= len(remote_rows):
+                row = remote_rows[sel - 1]
+                sid = row.get("id") or row.get("session_id")
+                kind = "remote"
+            elif len(remote_rows) < sel <= len(remote_rows) + len(local_rows):
+                sid = local_rows[sel - len(remote_rows) - 1]["session_id"]
+                kind = "local"
+            else:
+                raise RuntimeError(f"No session number matches {item!r}. Run ai-sessions first.")
+        elif isinstance(sel, str) and sel:
+            if sel.startswith("local_"):
+                sid = sel
+                kind = "local"
+            else:
+                local_matches = [
+                    r for r in local_rows
+                    if r.get("session_id") == sel or ai._short_id(r.get("session_id")) == sel
+                ]
+                if len(local_matches) == 1:
+                    sid = local_matches[0]["session_id"]
+                    kind = "local"
+                else:
+                    _, row = ai._resolve_session_selector(remote_rows, sel)
+                    sid = row.get("id") or row.get("session_id")
+                    kind = "remote"
+        else:
+            raise RuntimeError(f"Invalid session selector for (ai-cleanup): {item!r}")
+
+        if sid not in seen:
+            seen.add(sid)
+            resolved.append((kind, sid))
+
+    for kind, sid in resolved:
+        if kind == "remote":
+            print(f"Deleting remote session: {sid}")
+            result = ai._api_delete(
+                f"/sessions/{urllib.parse.quote(sid, safe='')}",
+                vm=vm,
+                operation=f"delete session {ai._short_id(sid)}",
+            )
+            if result.get("deleted") is not True:
+                raise RuntimeError(f"Agents API did not confirm deletion for {sid}.")
+            db_path = ai._session_db_path()
+            if db_path.is_file():
+                with ai._open_session_store() as store:
+                    store.mark_remote_deleted(sid, True)
+            if vm.host.get("ai_active_session_id") == sid:
+                vm.host.pop("ai_active_session_id", None)
+        else:
+            stats = ai.delete_local_session(sid, vm=vm)
+            print(
+                f"Deleted local session: {sid} "
+                f"(turns={stats['deleted_turns']}, timeline={stats['deleted_timeline']}, "
+                f"orphan_contents={stats['deleted_contents']})"
+            )
+
+    vm.host.pop("ai_session_rows", None)
+    vm.host.pop("ai_local_session_rows", None)
     end-code
-    // ( session-number | session-ID -- ) Delete the selected remote session immediately.
-    /// Permanently deletes the selected session from the remote API without prompting, and marks it remote_deleted in the local SQLite mirror.
-    /// Run ai-sessions first to refresh the session list. Cached session rows are cleared after deletion.
+    // ( target -- ) Permanently delete one or more remote or local AI sessions by number, ID, or list.
     last :: safe=False
+
+code (ai-cleanup-prompt)
+    text = vm.pop()
+    if not isinstance(text, str) or not text.strip():
+        raise KernelError("ai-cleanup: expects a non-empty request string")
+    vm.push(
+        "Clean up AI sessions according to the user's request below.\n"
+        "Use `peforth_eval` to inspect sessions with `(ai-sessions)` (which pushes "
+        "`{\"remote\": [...], \"local\": [...]}` onto the data stack), filter the matching "
+        "session IDs, and pass the list of matching session IDs (or a single ID) to `(ai-cleanup)`.\n"
+        "Because `(ai-cleanup)` is `safe=False`, the user will be prompted to approve the deletion.\n"
+        "If no sessions match, report that clearly without calling `(ai-cleanup)`.\n"
+        "Summarize what was deleted or skipped.\n\n"
+        f"Request:\n{text.strip()}"
+    )
+    end-code
+    // ( str -- prompt ) Build an isolated sub-agent prompt for an ai-cleanup: natural-language request.
+    last :: safe=True
+
+: ai-cleanup:
+    "" word (ai-cleanup-prompt)
+    none swap
+    (ai-monotonic-time) >t
+    true (subagent)
+    (ai-monotonic-time) t> -
+    [ last literal ] :> nokia2_after_seconds
+    > if nokia2 then
+    ; immediate
+    // ( <request> -- ) Clean up matching remote or local AI sessions via an isolated sub-agent using natural language.
+' ai-cleanup: :: nokia2_after_seconds=30
+last :: safe=True
 
 code ai-search
     import ai

@@ -41,13 +41,17 @@ In `turns.remote_session_id` and `timeline.session_id`, every conversation conte
    - Generated automatically when a local in-memory conversation (`vm.host["ai_messages"]`) starts.
    - If the user runs `ai-new` multiple times within the **same `runtime_id`**, each conversation context gets its own distinct `local_<16-hex>` ID, and `timeline` records an `ai_session_reset` event with `{"previous_session_id": "local_..."}`.
    - Always group or filter turns by `turns.remote_session_id` (not just `runtime_id`) so separate contexts separated by `ai-new` inside one process are not mixed together.
-2. **One-off isolated turns (`isolated_<16-hex>`)**:
+2. **Subagent turns (`subagent_<16-hex>`)**:
+   - Used for isolated `subagent:` / `SUBAGENT:` / `(subagent)` / `herdr:` / `ai-cleanup:` calls or re-entrant `(ai)` calls inside a tool task. Linked to the parent turn via `metadata_json` (`kind: "subagent"`, `parent_turn_id`).
+3. **One-off isolated turns (`isolated_<16-hex>`)**:
    - Used when `ai_isolated_session_once` is set for a single stateless call.
-3. **Stateful remote Agents API sessions (`sess_...`)**:
+4. **Stateful remote Agents API sessions (`sess_...`)**:
    - Active when the user selects a remote session with `ai-use` or promotes a local conversation with `ai-promote`.
    - When `ai-promote` promotes a local context to the cloud, `timeline` records an `ai_session_promoted` event with `{"from_local_session_id": "local_...", "to_remote_session_id": "sess_..."}`, linking the local and remote session history.
 
 ## Find the runtime, session, and turn
+
+For counting or listing local chat sessions (`local_...`) and their `turn_count` / `description` in the current VM, prefer the safe Forth word `(ai-sessions)` (which returns `{"remote": [...], "local": [...]}` and refreshes the `local_sessions` index from `turns`). Note that `local_sessions` is a lazy cache populated when `(ai-sessions)` / `list_local_sessions()` runs, whereas `turns` is written immediately when a turn starts—so querying `local_sessions` directly with SQL can omit an in-progress or newly started `local_*` session.
 
 If `ai_diagnostics.py` is available on the target host, you can run:
 

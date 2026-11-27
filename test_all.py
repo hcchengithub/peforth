@@ -533,6 +533,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             "(ai-session-context)",
             "ai-session-context",
             "ai-distill",
+            "(ai-cleanup-prompt)",
+            "ai-cleanup:",
         ]
         for name in safe_session_words:
             word = self.vm.tick(name)
@@ -541,9 +543,11 @@ class TestSafePropertyAudit(unittest.TestCase):
             help_text = getattr(word, "help", "") or ""
             self.assertTrue(bool(help_text.strip()), f"Word '{name}' must have help documentation")
 
-        cleanup_word = self.vm.tick("ai-cleanup")
-        self.assertIsNotNone(cleanup_word, "Word 'ai-cleanup' must exist in dictionary")
-        self.assertFalse(cleanup_word.properties.get("safe", False), "Word 'ai-cleanup' must be safe=False")
+        cleanup_word = self.vm.tick("(ai-cleanup)")
+        self.assertIsNotNone(cleanup_word, "Word '(ai-cleanup)' must exist in dictionary")
+        self.assertFalse(cleanup_word.properties.get("safe", False), "Word '(ai-cleanup)' must be safe=False")
+        self.assertTrue(bool((getattr(cleanup_word, "help", "") or "").strip()), "Word '(ai-cleanup)' must have help documentation")
+        self.assertIsNone(self.vm.tick("ai-cleanup"), "Word 'ai-cleanup' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("(ai-sessions-list)"), "Word '(ai-sessions-list)' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("ai-local-sessions"), "Word 'ai-local-sessions' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("ai-use:"), "Word 'ai-use:' must not exist in dictionary")
@@ -3534,6 +3538,47 @@ class TestLocalSessionRecall(unittest.TestCase):
                 vm.dictate('s" local_aaaabbbbcccc1111" (ai-session-context) stringify')
                 sc_stack_ctx = json.loads(vm.pop())
                 self.assertEqual(sc_stack_ctx["session_id"], "local_aaaabbbbcccc1111")
+
+    def test_ai_cleanup_prompt_and_local_deletion(self):
+        import ai
+        from diagnostic_log import DiagnosticLog
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            db_path = cfg_dir / "db" / "ai-diagnostics.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+            try:
+                rid = logger.start_runtime(source_path="test.py", runtime_path=tmpdir, runtime_version="3.13")
+                p1 = logger.store_content("prompt", "hi")
+                t1 = logger.start_turn(rid, prompt_content_id=p1, remote_session_id="local_trash111122223333")
+                logger.finish_turn(t1, output_text="hello", output_status="complete", status="completed")
+                logger.append_event(rid, t1, "turn_completed", session_id="local_trash111122223333")
+
+                p2 = logger.store_content("prompt", "保留這段重要對話")
+                t2 = logger.start_turn(rid, prompt_content_id=p2, remote_session_id="local_keep111122223333")
+                logger.finish_turn(t2, output_text="好的", output_status="complete", status="completed")
+            finally:
+                logger.close()
+
+            vm = VM({"headless": True, "__file__dir__": str(HERE)})
+            vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                vm.dictate('s" 清掉只有一個 turn 的 session" (ai-cleanup-prompt)')
+                prompt = vm.pop()
+                self.assertIn("(ai-sessions)", prompt)
+                self.assertIn("(ai-cleanup)", prompt)
+
+                vm.host["ai_local_session_id"] = "local_trash111122223333"
+                vm.host["ai_messages"] = [{"role": "user", "content": "hi"}]
+                with contextlib.redirect_stdout(io.StringIO()):
+                    vm.dictate('s" local_trash111122223333" (ai-cleanup)')
+                self.assertNotIn("ai_local_session_id", vm.host)
+                self.assertNotIn("ai_messages", vm.host)
+
+                vm.dictate("(ai-sessions)")
+                remaining = vm.pop()["local"]
+                self.assertEqual([r["session_id"] for r in remaining], ["local_keep111122223333"])
 
     def test_config_yaml_tmp_dir_and_verbose_logging(self):
         import ai

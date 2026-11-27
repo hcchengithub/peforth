@@ -2603,6 +2603,24 @@ def list_local_diagnostic_sessions(vm=None, *, limit: int = 30) -> list[dict]:
     return rows
 
 
+def delete_local_session(session_id: str, *, vm=None) -> dict:
+    """Delete a local_* session from ai-diagnostics.sqlite3 and clear matching VM caches."""
+    logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+    if logger is None:
+        raise RuntimeError("No diagnostic logging database found.")
+    try:
+        result = logger.delete_local_session(session_id)
+    finally:
+        if should_close:
+            logger.close()
+    if vm is not None and hasattr(vm, "host"):
+        if vm.host.get("ai_local_session_id") == session_id:
+            vm.host.pop("ai_local_session_id", None)
+            vm.host.pop("ai_messages", None)
+        vm.host.pop("ai_local_session_rows", None)
+    return result
+
+
 def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict], str]:
     """Recall a local_* stateless session from ai-diagnostics.sqlite3 into chat messages."""
     logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
