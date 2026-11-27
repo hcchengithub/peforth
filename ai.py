@@ -2325,8 +2325,17 @@ def _format_time(value):
     if not value:
         return "unknown"
     try:
-        return datetime.fromtimestamp(int(value), timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        return datetime.fromtimestamp(int(value), timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError, OSError, OverflowError):
+        if isinstance(value, str):
+            text = value.strip()
+            try:
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                pass
         return str(value)
 
 
@@ -2634,7 +2643,7 @@ def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict]
         turns = logger.recall_local_session_turns(session_id)
         if not turns:
             raise RuntimeError(f"No turns found in diagnostic DB for local session {session_id!r}.")
-        summary = logger.get_local_session_summary(session_id)
+        description = logger.get_local_session_description(session_id)
     finally:
         if should_close:
             logger.close()
@@ -2671,7 +2680,7 @@ def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict]
             if turn_provider:
                 a_msg["provider"] = turn_provider
             messages.append(a_msg)
-    return session_id, messages, summary
+    return session_id, messages, description
 
 
 def reconstruct_local_session_timeline(session_id: str, *, vm=None) -> list[dict]:
@@ -3060,7 +3069,10 @@ def get_ai_session_context(vm, selector) -> dict:
     elif isinstance(selector, int):
         local_rows = vm.host.get("ai_local_session_rows") or []
         remote_rows = vm.host.get("ai_session_rows") or []
-        if local_rows and not remote_rows:
+        if len(remote_rows) < selector <= len(remote_rows) + len(local_rows):
+            is_local = True
+            selector = selector - len(remote_rows)
+        elif local_rows and not remote_rows:
             is_local = True
 
     if not is_local:

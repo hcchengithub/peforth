@@ -166,20 +166,13 @@ def build_session_description(
     *,
     tz=None,
 ) -> str:
-    """Generate or preserve a session description according to SPEC rules."""
+    """Generate or preserve a session description from the first user message."""
     if is_complete_description(existing_description):
         return existing_description  # type: ignore[return-value]
 
-    if isinstance(existing_description, str) and _TIME_ONLY_DESCRIPTION_RE.match(existing_description.strip()):
-        time_prefix = existing_description.strip()
-    else:
-        time_prefix = format_description_time(created_at, tz=tz)
-
     first_user_text = extract_first_user_message_text(items)
     first_sentence = extract_first_sentence(first_user_text)
-    if first_sentence:
-        return f"{time_prefix} | {first_sentence}" if time_prefix else first_sentence
-    return time_prefix
+    return first_sentence or ""
 
 
 def _normalize_timestamp(value):

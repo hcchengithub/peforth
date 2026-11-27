@@ -482,64 +482,61 @@ code ai-screen-region
 
 code (ai-sessions)
     import ai
-    ai.sync_sessions(vm)
+    remote_rows = ai.list_local_sessions(vm)
+    local_rows = ai.list_local_diagnostic_sessions(vm)
+    vm.push({
+        "remote": remote_rows,
+        "local": local_rows,
+    })
     end-code
-    // ( -- ) Incrementally synchronize remote sessions into the local SQLite mirror and update the VM snapshot.
-    /// Fetches remote session metadata, downloads items only for new or updated sessions, and stores session rows in vm.host.
-    /// Prints nothing and leaves the data stack unchanged.
+    // ( -- dict ) Return remote (local SQLite mirror) and local diagnostic sessions as {"remote": [...], "local": [...]}.
     last :: safe=True
 
-code (ai-sessions-list)
+code ai-sessions
     import ai
-    rows = vm.host.get("ai_session_rows")
-    if rows is None:
-        rows = ai.list_local_sessions(vm)
-    if not rows:
-        print("No remote sessions found.")
-    else:
-        active_id = ai._saved_session(vm)
-        print(f"Remote sessions: {len(rows)} (newest first)")
-        for index, row in enumerate(rows, 1):
+    yield from vm.call(vm.tick("(ai-sessions)"))
+    data = vm.pop()
+    remote_rows = data.get("remote") or []
+    local_rows = data.get("local") or []
+    if not remote_rows and not local_rows:
+        print("No AI sessions found.")
+        return
+
+    active_remote = ai._saved_session(vm)
+    active_local = vm.host.get("ai_local_session_id") if not active_remote else None
+    idx = 0
+
+    if remote_rows:
+        print(f"Remote sessions: {len(remote_rows)} (newest first)")
+        for row in remote_rows:
+            idx += 1
             session_id = row.get("id") or row.get("session_id") or ""
             title = (
                 row.get("description")
                 or ai._session_title(session_id)
                 or "(untitled)"
             )
-            marker = " *" if session_id == active_id else ""
+            marker = " *" if session_id == active_remote else ""
             model = row.get("model") or (row.get("agent") or {}).get("model") or "unknown"
-            print(f"{index:>3}. {title}{marker}")
-            print(f"     Started: {ai._format_time(row.get('created_at'))}  "
-                  f"Last active: {ai._format_time(row.get('last_active_at'))}")
+            print(f"{idx:>3}. {title}{marker}")
+            print(f"     {ai._format_time(row.get('created_at'))} ~ {ai._format_time(row.get('last_active_at'))}")
             print(f"     {row.get('status') or 'unknown'}  {model}\t{session_id}\n")
-    end-code
-    // ( -- ) Print the session snapshot prepared by (ai-sessions).
-    last :: safe=True
-
-: ai-sessions
-    (ai-sessions)
-    (ai-sessions-list)
-    ;
-    // ( -- ) Synchronize remote AI sessions into the local SQLite mirror and list them.
-    /// Fetches remote session index metadata, performs differential item synchronization, and prints the numbered session list.
-    last :: safe=True
-
-code ai-local-sessions
-    import ai
-    rows = ai.list_local_diagnostic_sessions(vm)
-    active_local = vm.host.get("ai_local_session_id") if not vm.host.get("ai_active_session_id") else None
-    if not rows:
-        print("No local diagnostic sessions found.")
     else:
-        for index, row in enumerate(rows, 1):
+        print("Remote sessions: 0 (run ai-sync to sync from cloud)\n")
+
+    if local_rows:
+        print(f"Local sessions: {len(local_rows)} (newest first)")
+        for row in local_rows:
+            idx += 1
             sid = row.get("session_id", "")
-            summary = row.get("summary") or "(untitled)"
+            description = row.get("description") or "(untitled)"
             marker = " *" if sid == active_local else ""
             turns = row.get("turn_count", 0)
-            print(f"{index:>3}. {summary}{marker}")
-            print(f"     Turns: {turns}  Last active: {ai._format_time(row.get('last_active_at'))}\t{sid}\n")
+            print(f"{idx:>3}. {description}{marker}")
+            print(f"     {ai._format_time(row.get('created_at'))} ~ {ai._format_time(row.get('last_active_at'))}")
+            print(f"     Turns: {turns}\t{sid}\n")
     end-code
-    // ( -- ) List local Stateless AI sessions from the diagnostics database and cache one-line summaries.
+    // ( -- ) List remote (local mirror) and local AI sessions with unified 1-based numbering.
     last :: safe=True
 
 code ai-sync
@@ -622,8 +619,8 @@ code (ai-use)
         if 1 <= choice <= len(snapshot):
             row = snapshot[choice - 1]
             label = str(choice)
-        elif not snapshot and 1 <= choice <= len(local_snapshot):
-            _activate_local(choice, str(choice))
+        elif len(snapshot) < choice <= len(snapshot) + len(local_snapshot):
+            _activate_local(choice - len(snapshot), str(choice))
             return
         else:
             matches = [row for row in ai._list_remote_sessions()

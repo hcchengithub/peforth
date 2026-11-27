@@ -97,12 +97,12 @@ class SessionDescriptionRuleTests(unittest.TestCase):
         tz_plus_8 = timezone(timedelta(hours=8))
         ts = int(datetime(2026, 4, 19, 6, 58, 26, tzinfo=tz_plus_8).timestamp())
 
-        # No user message yet -> save only the time prefix
+        # No user message yet -> empty string (incomplete)
         placeholder = build_session_description(ts, [], existing_description=None, tz=tz_plus_8)
-        self.assertEqual(placeholder, "2026-04-19 06:58:26")
+        self.assertEqual(placeholder, "")
         self.assertFalse(is_complete_description(placeholder))
 
-        # Later sync brings a user message -> completes the description
+        # Later sync brings a user message -> completes the description without time prefix
         items = [
             {
                 "id": "msg_1",
@@ -112,7 +112,7 @@ class SessionDescriptionRuleTests(unittest.TestCase):
             }
         ]
         completed = build_session_description(ts, items, existing_description=placeholder, tz=tz_plus_8)
-        self.assertEqual(completed, "2026-04-19 06:58:26 | 請實作 AI session 本地副本")
+        self.assertEqual(completed, "請實作 AI session 本地副本")
         self.assertTrue(is_complete_description(completed))
 
         # Subsequent syncs or user modifications are never overwritten

@@ -518,7 +518,6 @@ class TestSafePropertyAudit(unittest.TestCase):
     def test_session_words_exist_and_safe_properties(self):
         safe_session_words = [
             "(ai-sessions)",
-            "(ai-sessions-list)",
             "ai-sessions",
             "ai-sync",
             "(ai-session-details)",
@@ -527,7 +526,6 @@ class TestSafePropertyAudit(unittest.TestCase):
             "ai-use",
             "ai-new",
             "ai-status",
-            "ai-local-sessions",
             "ai-search",
             "ai-cancel",
             "(ai-context)",
@@ -546,6 +544,8 @@ class TestSafePropertyAudit(unittest.TestCase):
         cleanup_word = self.vm.tick("ai-cleanup")
         self.assertIsNotNone(cleanup_word, "Word 'ai-cleanup' must exist in dictionary")
         self.assertFalse(cleanup_word.properties.get("safe", False), "Word 'ai-cleanup' must be safe=False")
+        self.assertIsNone(self.vm.tick("(ai-sessions-list)"), "Word '(ai-sessions-list)' must not exist in dictionary")
+        self.assertIsNone(self.vm.tick("ai-local-sessions"), "Word 'ai-local-sessions' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("ai-use:"), "Word 'ai-use:' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("ai-session-context:"), "Word 'ai-session-context:' must not exist in dictionary")
         self.assertTrue(bool(getattr(cleanup_word, "help", "").strip()), "Word 'ai-cleanup' must have help documentation")
@@ -2021,12 +2021,12 @@ class TestSessionDescriptionRules(unittest.TestCase):
         tz_plus_8 = timezone(timedelta(hours=8))
         ts = int(datetime(2026, 4, 19, 6, 58, 26, tzinfo=tz_plus_8).timestamp())
 
-        # No user message yet -> save only the time prefix
+        # No user message yet -> empty string (incomplete)
         placeholder = build_session_description(ts, [], existing_description=None, tz=tz_plus_8)
-        self.assertEqual(placeholder, "2026-04-19 06:58:26")
+        self.assertEqual(placeholder, "")
         self.assertFalse(is_complete_description(placeholder))
 
-        # Later sync brings a user message -> completes the description
+        # Later sync brings a user message -> completes the description without time prefix
         items = [
             {
                 "id": "msg_1",
@@ -2036,7 +2036,7 @@ class TestSessionDescriptionRules(unittest.TestCase):
             }
         ]
         completed = build_session_description(ts, items, existing_description=placeholder, tz=tz_plus_8)
-        self.assertEqual(completed, "2026-04-19 06:58:26 | 請實作 AI session 本地副本")
+        self.assertEqual(completed, "請實作 AI session 本地副本")
         self.assertTrue(is_complete_description(completed))
 
         # Subsequent syncs or user modifications are never overwritten
@@ -3385,19 +3385,29 @@ class TestLocalSessionRecall(unittest.TestCase):
             vm.host["ai_active_session_id"] = "sess_should_be_cleared"
 
             with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                vm.dictate("(ai-sessions)")
+                sess_dict = vm.pop()
+                self.assertIsInstance(sess_dict, dict)
+                self.assertIn("remote", sess_dict)
+                self.assertIn("local", sess_dict)
+                self.assertEqual(len(sess_dict["local"]), 1)
+                self.assertEqual(sess_dict["local"][0].get("description"), "幫我解釋 Forth 堆疊怎麼運作")
+
                 out_list = io.StringIO()
                 with contextlib.redirect_stdout(out_list):
-                    vm.dictate("ai-local-sessions")
+                    vm.dictate("ai-sessions")
                 listed = out_list.getvalue()
+                self.assertIn("Local sessions: 1 (newest first)", listed)
                 self.assertIn("幫我解釋 Forth 堆疊怎麼運作", listed)
                 self.assertIn("local_aaaabbbbcccc1111", listed)
+                self.assertIn(" ~ ", listed)
                 self.assertIn("Turns: 2", listed)
 
                 # Verify summary was persisted in local_sessions table in diagnostics DB
                 check_logger = DiagnosticLog(db_path, environment=env)
                 try:
-                    saved_summary = check_logger.get_local_session_summary("local_aaaabbbbcccc1111")
-                    self.assertIn("幫我解釋 Forth 堆疊怎麼運作", saved_summary)
+                    saved_desc = check_logger.get_local_session_description("local_aaaabbbbcccc1111")
+                    self.assertEqual(saved_desc, "幫我解釋 Forth 堆疊怎麼運作")
                 finally:
                     check_logger.close()
 

@@ -11,7 +11,7 @@ import sqlite3
 import time
 import uuid
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS contents (
@@ -154,12 +154,22 @@ class DiagnosticLog:
         try:
             while version < SCHEMA_VERSION:
                 next_version = version + 1
-                script = migrations.get(next_version)
-                if script is None:
-                    raise RuntimeError(f"no migration available for schema version {next_version}")
-                for statement in script.split(";"):
-                    if statement.strip():
-                        self.connection.execute(statement)
+                if next_version == 3:
+                    cols = {
+                        r["name"]
+                        for r in self.connection.execute("PRAGMA table_info(local_sessions)").fetchall()
+                    }
+                    if "summary" in cols and "description" not in cols:
+                        self.connection.execute(
+                            "ALTER TABLE local_sessions RENAME COLUMN summary TO description"
+                        )
+                else:
+                    script = migrations.get(next_version)
+                    if script is None:
+                        raise RuntimeError(f"no migration available for schema version {next_version}")
+                    for statement in script.split(";"):
+                        if statement.strip():
+                            self.connection.execute(statement)
                 self.connection.execute(f"PRAGMA user_version = {next_version}")
                 version = next_version
             self.connection.commit()
@@ -347,7 +357,7 @@ class DiagnosticLog:
         self._sequence = sequence_no
         return int(event_id)
 
-    def _build_local_summary(self, created_at: str | None, first_prompt: str | None, existing: str | None) -> str:
+    def _build_local_description(self, created_at: str | None, first_prompt: str | None, existing: str | None) -> str:
         try:
             from session_store import build_session_description, is_complete_description
         except ImportError:
@@ -358,7 +368,7 @@ class DiagnosticLog:
         return build_session_description(created_at, items, existing_description=existing)
 
     def list_local_sessions(self, *, limit: int = 30) -> list[dict]:
-        """List local_* stateless sessions from turns and populate missing summaries in local_sessions."""
+        """List local_* stateless sessions from turns and populate missing descriptions in local_sessions."""
         rows = self.connection.execute(
             """
             SELECT
@@ -366,7 +376,7 @@ class DiagnosticLog:
                 MIN(t.started_at) AS created_at,
                 MAX(COALESCE(t.ended_at, t.started_at)) AS last_active_at,
                 COUNT(*) AS turn_count,
-                ls.summary AS cached_summary
+                ls.description AS cached_description
             FROM turns t
             LEFT JOIN local_sessions ls ON ls.session_id = t.remote_session_id
             WHERE t.remote_session_id LIKE 'local_%'
@@ -384,7 +394,7 @@ class DiagnosticLog:
             created_at = row["created_at"]
             last_active_at = row["last_active_at"]
             turn_count = int(row["turn_count"] or 0)
-            summary = row["cached_summary"]
+            description = row["cached_description"]
             first_row = self.connection.execute(
                 """
                 SELECT c.content_text AS prompt_text
@@ -397,13 +407,13 @@ class DiagnosticLog:
                 (sid,),
             ).fetchone()
             first_prompt = first_row["prompt_text"] if first_row else None
-            computed = self._build_local_summary(created_at, first_prompt, summary)
-            if computed != summary:
-                summary = computed
-                to_upsert.append((sid, summary, created_at, last_active_at, turn_count, _now()))
+            computed = self._build_local_description(created_at, first_prompt, description)
+            if computed != description:
+                description = computed
+                to_upsert.append((sid, description, created_at, last_active_at, turn_count, _now()))
             results.append({
                 "session_id": sid,
-                "summary": summary or "",
+                "description": description or "",
                 "created_at": created_at,
                 "last_active_at": last_active_at,
                 "turn_count": turn_count,
@@ -413,10 +423,10 @@ class DiagnosticLog:
             with self._write_transaction():
                 self.connection.executemany(
                     """
-                    INSERT INTO local_sessions (session_id, summary, created_at, last_active_at, turn_count, updated_at)
+                    INSERT INTO local_sessions (session_id, description, created_at, last_active_at, turn_count, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT(session_id) DO UPDATE SET
-                        summary = excluded.summary,
+                        description = excluded.description,
                         created_at = excluded.created_at,
                         last_active_at = excluded.last_active_at,
                         turn_count = excluded.turn_count,
@@ -471,12 +481,12 @@ class DiagnosticLog:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_local_session_summary(self, session_id: str) -> str:
+    def get_local_session_description(self, session_id: str) -> str:
         row = self.connection.execute(
-            "SELECT summary FROM local_sessions WHERE session_id = ?",
+            "SELECT description FROM local_sessions WHERE session_id = ?",
             (session_id,),
         ).fetchone()
-        return str(row["summary"]) if row and row["summary"] else ""
+        return str(row["description"]) if row and row["description"] else ""
 
     def close(self) -> None:
         self.connection.close()
