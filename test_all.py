@@ -520,12 +520,11 @@ class TestSafePropertyAudit(unittest.TestCase):
             "(ai-sessions)",
             "ai-sessions",
             "ai-sync",
-            "(ai-session-details)",
-            "ai-session",
+            "(ai-status)",
+            "ai-status",
             "(ai-use)",
             "ai-use",
             "ai-new",
-            "ai-status",
             "ai-search",
             "ai-cancel",
             "(ai-context)",
@@ -548,6 +547,8 @@ class TestSafePropertyAudit(unittest.TestCase):
         self.assertFalse(cleanup_word.properties.get("safe", False), "Word '(ai-cleanup)' must be safe=False")
         self.assertTrue(bool((getattr(cleanup_word, "help", "") or "").strip()), "Word '(ai-cleanup)' must have help documentation")
         self.assertIsNone(self.vm.tick("ai-cleanup"), "Word 'ai-cleanup' must not exist in dictionary")
+        self.assertIsNone(self.vm.tick("(ai-session-details)"), "Word '(ai-session-details)' must not exist in dictionary")
+        self.assertIsNone(self.vm.tick("ai-session"), "Word 'ai-session' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("(ai-sessions-list)"), "Word '(ai-sessions-list)' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("ai-local-sessions"), "Word 'ai-local-sessions' must not exist in dictionary")
         self.assertIsNone(self.vm.tick("ai-use:"), "Word 'ai-use:' must not exist in dictionary")
@@ -3442,6 +3443,21 @@ class TestLocalSessionRecall(unittest.TestCase):
                 self.assertIn("local_aaaabbbbcccc1111", listed)
                 self.assertIn(" ~ ", listed)
                 self.assertIn("Turns: 2", listed)
+
+                out_status_num = io.StringIO()
+                with contextlib.redirect_stdout(out_status_num):
+                    vm.dictate("ai-status 1")
+                status_val = out_status_num.getvalue()
+                self.assertIn("Session: 1 [local_aaaabbbbcccc1111]", status_val)
+                self.assertIn("Title: 幫我解釋 Forth 堆疊怎麼運作", status_val)
+                self.assertIn("Time:", status_val)
+                self.assertIn(" ~ ", status_val)
+                self.assertIn("Turns: 2", status_val)
+
+                out_status_id = io.StringIO()
+                with contextlib.redirect_stdout(out_status_id):
+                    vm.dictate('s" local_aaaabbbbcccc1111" (ai-status)')
+                self.assertIn("Session: 1 [local_aaaabbbbcccc1111]", out_status_id.getvalue())
 
                 # Verify summary was persisted in local_sessions table in diagnostics DB
                 check_logger = DiagnosticLog(db_path, environment=env)

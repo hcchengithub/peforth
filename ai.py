@@ -2685,6 +2685,81 @@ def delete_local_session(session_id: str, *, vm=None) -> dict:
     return result
 
 
+def resolve_local_session_id(selector, *, vm=None, logger=None) -> tuple[str, str]:
+    """Resolve a 1-based local list number, session ID, or unambiguous suffix to (session_id, label)."""
+    if isinstance(selector, str):
+        selector = selector.strip()
+        if selector.isdigit():
+            selector = int(selector)
+
+    close_logger = False
+    if logger is None:
+        logger, close_logger = _open_diagnostic_log_for_local_sessions(vm)
+        if logger is None:
+            raise RuntimeError("No diagnostic logging database found.")
+    try:
+        rows = (vm.host.get("ai_local_session_rows") if (vm is not None and hasattr(vm, "host")) else None) or []
+        all_rows = logger.list_local_sessions(limit=200)
+    finally:
+        if close_logger:
+            logger.close()
+
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        candidates = rows or all_rows
+        if 1 <= selector <= len(candidates):
+            sid = candidates[selector - 1]["session_id"]
+            return sid, str(selector)
+        matches = [r for r in all_rows if _short_id(r["session_id"]) == str(selector)]
+        if len(matches) == 1:
+            return matches[0]["session_id"], str(selector)
+        if len(matches) > 1:
+            raise RuntimeError(f"Local session ID suffix {selector!r} is ambiguous; use the full ID.")
+        raise RuntimeError(f"No local session number or ID suffix matches {selector!r}.")
+
+    if isinstance(selector, str) and selector:
+        exact = [r for r in all_rows if r["session_id"] == selector]
+        if len(exact) == 1:
+            sid = exact[0]["session_id"]
+            return sid, _short_id(sid)
+        suffix = [r for r in all_rows if _short_id(r["session_id"]) == selector or r["session_id"].endswith(selector)]
+        if len(suffix) == 1:
+            sid = suffix[0]["session_id"]
+            return sid, _short_id(sid)
+        if len(suffix) > 1:
+            raise RuntimeError(f"Local session ID suffix {selector!r} is ambiguous; use the full ID.")
+        raise RuntimeError(f"No local session matches {selector!r}.")
+
+    raise RuntimeError("Expected a local session number or local_* session ID.")
+
+
+def get_local_session_details(selector, *, vm=None) -> dict:
+    """Return aggregated details for a local AI session from ai-diagnostics.sqlite3."""
+    logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
+    if logger is None:
+        raise RuntimeError("No diagnostic logging database found.")
+    try:
+        session_id, label = resolve_local_session_id(selector, vm=vm, logger=logger)
+        if not str(label).isdigit():
+            remote_rows = (vm.host.get("ai_session_rows") if (vm is not None and hasattr(vm, "host")) else None) or []
+            local_rows = (vm.host.get("ai_local_session_rows") if (vm is not None and hasattr(vm, "host")) else None) or []
+            matched_idx = next((i for i, r in enumerate(local_rows, 1) if r.get("session_id") == session_id), None)
+            if matched_idx is not None:
+                label = str(len(remote_rows) + matched_idx)
+            else:
+                all_rows = logger.list_local_sessions(limit=200)
+                matched_idx = next((i for i, r in enumerate(all_rows, 1) if r.get("session_id") == session_id), None)
+                if matched_idx is not None:
+                    label = str(len(remote_rows) + matched_idx)
+        details = logger.get_local_session_details(session_id)
+        if details is None:
+            raise RuntimeError(f"No turns found in diagnostic DB for local session {session_id!r}.")
+    finally:
+        if should_close:
+            logger.close()
+    details["label"] = label
+    return details
+
+
 def recall_local_session_messages(selector, *, vm=None) -> tuple[str, list[dict], str]:
     """Recall a local_* stateless session from ai-diagnostics.sqlite3 into chat messages."""
     logger, should_close = _open_diagnostic_log_for_local_sessions(vm)

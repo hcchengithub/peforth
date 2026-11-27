@@ -553,45 +553,138 @@ code ai-sync
     /// Fetches remote session metadata, downloads items only for new or updated sessions, and prints a brief sync summary.
     last :: safe=True
 
-code (ai-session-details)
+code (ai-status)
     import ai
     import urllib.parse
 
-    session_id = vm.pop()
-    index = vm.pop()
-    detail = ai._api_get(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
-    agent = detail.get("agent") or {}
-    usage = detail.get("usage") or {}
-    resolved_id = detail.get("id") or session_id
-    title = ai._session_title(resolved_id) or "(untitled)"
-    print(f"Session {index}: {title} [{resolved_id}]")
-    print(f"Created: {ai._format_time(detail.get('created_at'))}")
-    print(f"Last active: {ai._format_time(detail.get('last_active_at'))}")
-    print(f"Status: {detail.get('status', 'unknown')}")
-    print(f"Model: {agent.get('model', 'unknown')}")
-    print(f"Usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)} "
-          f"total={usage.get('total_tokens', 0)} tokens")
-    if detail.get("error"):
-        print(f"Error: {detail['error']}")
-    end-code
-    // ( index session_id -- ) Show complete details for the session selected by this Forth process.
-    last :: safe=True
+    def _print_remote_details(index_label, session_id):
+        detail = ai._api_get(f"/sessions/{urllib.parse.quote(session_id, safe='')}")
+        agent = detail.get("agent") or {}
+        usage = detail.get("usage") or {}
+        resolved_id = detail.get("id") or session_id
+        title = ai._session_title(resolved_id) or "(untitled)"
+        print(f"Session {index_label}: {title} [{resolved_id}]")
+        print(f"Time: {ai._format_time(detail.get('created_at'))} ~ {ai._format_time(detail.get('last_active_at'))}")
+        print(f"Status: {detail.get('status', 'unknown')}")
+        print(f"Model: {agent.get('model', 'unknown')}")
+        print(f"Usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)} "
+              f"total={usage.get('total_tokens', 0)} tokens")
+        if detail.get("error"):
+            print(f"Error: {detail['error']}")
 
-code ai-session
-    import ai
+    def _print_local_details(sel, label_override=None):
+        info = ai.get_local_session_details(sel, vm=vm)
+        title = (info.get("description") or "").strip() or "(untitled)"
+        label = label_override if label_override is not None else info["label"]
+        print(f"Session: {label} [{info['session_id']}]")
+        print(f"Title: {title}")
+        print(f"Time: {ai._format_time(info.get('created_at'))} ~ {ai._format_time(info.get('last_active_at'))}")
+        print(f"Turns: {info.get('turn_count', 0)}")
+        print(f"Status: {info.get('status') or 'unknown'}")
+        if info.get("error"):
+            print(f"Error: {info['error']}")
 
     selector = vm.pop()
-    rows = vm.host.get("ai_session_rows")
-    if rows is None or (isinstance(selector, str) and
-                        not any((row.get("id") or row.get("session_id")) == selector for row in rows)):
+    if isinstance(selector, str):
+        selector = selector.strip()
+
+    if not selector:
+        active_id = vm.host.get("ai_active_session_id")
+        if active_id:
+            print("Mode: Stateful (remote Agents API session)")
+            _print_remote_details("current", active_id)
+            messages = vm.host.get("ai_messages") or []
+            user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
+            if user_turns:
+                print(f"Local turns: {len(user_turns)} user turn(s) active in memory ({len(messages)} messages)")
+        else:
+            ctx = ai.get_ai_context(vm)
+            messages = ctx.get("items") or []
+            user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
+            if user_turns:
+                first_content = user_turns[0].get("content")
+                first_text = ""
+                if isinstance(first_content, str):
+                    first_text = first_content
+                elif isinstance(first_content, list):
+                    for part in first_content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            first_text = part.get("text", "")
+                            break
+                first_sentence = ai.extract_first_sentence(first_text, max_chars=80)
+                info = ai.get_active_provider_info(vm)
+                provider = info.get("provider", "OpenAI")
+                model = info.get("model", "gpt-6-luna")
+                reasoning = info.get("reasoning", "none")
+                reasoning_str = f" (Reasoning: {reasoning})" if reasoning and str(reasoning).lower() != "none" else ""
+                runtime_id = vm.host.get("diagnostic_runtime_id")
+                local_id = ctx.get("session_id") or vm.host.get("ai_local_session_id") or ai._ensure_local_session_id(vm)
+                print(f"Active AI session: local (in-memory) [{local_id}]")
+                print("Mode: Stateless (/chat/completions; use 'ai-promote' to promote to a remote session)")
+                if first_sentence:
+                    print(f"Topic: {first_sentence}")
+                print(f"Model: {provider} | {model}{reasoning_str}")
+                print(f"Turns: {len(user_turns)} user turn(s) ({len(messages)} messages in context)")
+                if runtime_id:
+                    print(f"Runtime: {runtime_id}")
+            else:
+                print("Active AI session: none (next request starts a fresh local conversation)")
+        return
+
+    if isinstance(selector, str) and selector.isdigit():
+        selector = int(selector)
+
+    remote_rows = vm.host.get("ai_session_rows") or []
+    local_rows = vm.host.get("ai_local_session_rows") or []
+
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        if 1 <= selector <= len(remote_rows):
+            row = remote_rows[selector - 1]
+            _print_remote_details(selector, row.get("id") or row.get("session_id"))
+            return
+        if len(remote_rows) < selector <= len(remote_rows) + len(local_rows):
+            _print_local_details(selector - len(remote_rows), label_override=str(selector))
+            return
+        if not remote_rows and not local_rows:
+            local_rows = ai.list_local_diagnostic_sessions(vm)
+            if 1 <= selector <= len(local_rows):
+                _print_local_details(selector, label_override=str(selector))
+                return
         rows = ai._list_remote_sessions()
         vm.host["ai_session_rows"] = rows
-    index, row = ai._resolve_session_selector(rows, selector)
-    vm.push(index)
-    vm.push(row.get("id") or row.get("session_id"))
-    yield from vm.call(vm.tick("(ai-session-details)"))
+        index, row = ai._resolve_session_selector(rows, selector)
+        _print_remote_details(index, row.get("id") or row.get("session_id"))
+        return
+
+    if isinstance(selector, str) and selector:
+        if selector.startswith("local_"):
+            _print_local_details(selector)
+            return
+        local_matches = [
+            r for r in local_rows
+            if r.get("session_id") == selector or ai._short_id(r.get("session_id")) == selector
+        ]
+        if len(local_matches) == 1:
+            _print_local_details(local_matches[0]["session_id"])
+            return
+        rows = remote_rows
+        if not rows or not any((row.get("id") or row.get("session_id")) == selector for row in rows):
+            rows = ai._list_remote_sessions()
+            vm.host["ai_session_rows"] = rows
+        index, row = ai._resolve_session_selector(rows, selector)
+        _print_remote_details(index, row.get("id") or row.get("session_id"))
+        return
+
+    raise RuntimeError("(ai-status) expects an empty selector, session number, or session ID.")
     end-code
-    // ( session-number | full-session-ID -- ) Show remote session details.
+    // ( selector -- ) Show details for the current or specified remote/local AI session from stack.
+    last :: safe=True
+
+: ai-status
+    BL word
+    (ai-status)
+    ;
+    // ( [<id>] -- ) Show details for the current or specified remote/local AI session.
     last :: safe=True
 
 code (ai-use)
@@ -695,56 +788,6 @@ code ai-promote
     // ( -- ) Distill current local conversation, ask for confirmation, and promote to a new remote Agents API session.
     /// Cleans lookup/error noise from vm.host['ai_messages'], previews the distilled context, and creates a remote session on approval.
     last :: safe=False
-
-code ai-status
-    import ai
-    import os
-
-    active_id = vm.host.get("ai_active_session_id")
-    if active_id:
-        print("Mode: Stateful (remote Agents API session)")
-        vm.push("current")
-        vm.push(active_id)
-        yield from vm.call(vm.tick("(ai-session-details)"))
-        messages = vm.host.get("ai_messages") or []
-        user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
-        if user_turns:
-            print(f"Local turns: {len(user_turns)} user turn(s) active in memory ({len(messages)} messages)")
-    else:
-        ctx = ai.get_ai_context(vm)
-        messages = ctx.get("items") or []
-        user_turns = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
-        if user_turns:
-            first_content = user_turns[0].get("content")
-            first_text = ""
-            if isinstance(first_content, str):
-                first_text = first_content
-            elif isinstance(first_content, list):
-                for part in first_content:
-                    if isinstance(part, dict) and part.get("type") == "text":
-                        first_text = part.get("text", "")
-                        break
-            first_sentence = ai.extract_first_sentence(first_text, max_chars=80)
-            info = ai.get_active_provider_info(vm)
-            provider = info.get("provider", "OpenAI")
-            model = info.get("model", "gpt-6-luna")
-            reasoning = info.get("reasoning", "none")
-            reasoning_str = f" (Reasoning: {reasoning})" if reasoning and str(reasoning).lower() != "none" else ""
-            runtime_id = vm.host.get("diagnostic_runtime_id")
-            local_id = ctx.get("session_id") or vm.host.get("ai_local_session_id") or ai._ensure_local_session_id(vm)
-            print(f"Active AI session: local (in-memory) [{local_id}]")
-            print("Mode: Stateless (/chat/completions; use 'ai-promote' to promote to a remote session)")
-            if first_sentence:
-                print(f"Topic: {first_sentence}")
-            print(f"Model: {provider} | {model}{reasoning_str}")
-            print(f"Turns: {len(user_turns)} user turn(s) ({len(messages)} messages in context)")
-            if runtime_id:
-                print(f"Runtime: {runtime_id}")
-        else:
-            print("Active AI session: none (next request starts a fresh local conversation)")
-    end-code
-    // ( -- ) Show complete details for the session selected by this Forth process.
-    last :: safe=True
 
 code (ai-cleanup)
     import ai

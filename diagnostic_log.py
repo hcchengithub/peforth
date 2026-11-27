@@ -531,6 +531,73 @@ class DiagnosticLog:
             "deleted_contents": int(cur_contents.rowcount or 0),
         }
 
+    def get_local_session_details(self, session_id: str) -> dict | None:
+        """Return aggregated metadata and description for a local_* session."""
+        rows = self.connection.execute(
+            """
+            SELECT
+                t.turn_id,
+                t.runtime_id,
+                t.started_at,
+                t.ended_at,
+                t.status,
+                t.error_message,
+                t.metadata_json,
+                cp.content_text AS prompt_text
+            FROM turns t
+            LEFT JOIN contents cp ON cp.content_id = t.prompt_content_id
+            WHERE t.remote_session_id = ?
+            ORDER BY t.started_at ASC, t.turn_id ASC
+            """,
+            (session_id,),
+        ).fetchall()
+        if not rows:
+            return None
+
+        created_at = rows[0]["started_at"]
+        last_active_at = None
+        for r in rows:
+            cand = r["ended_at"] or r["started_at"]
+            if cand and (last_active_at is None or cand > last_active_at):
+                last_active_at = cand
+
+        first_prompt = rows[0]["prompt_text"]
+        cached_description = self.get_local_session_description(session_id)
+        description = self._build_local_description(created_at, first_prompt, cached_description)
+
+        models: list[str] = []
+        runtime_ids: list[str] = []
+        for r in rows:
+            rid = r["runtime_id"]
+            if rid and rid not in runtime_ids:
+                runtime_ids.append(rid)
+            raw_meta = r["metadata_json"]
+            if raw_meta:
+                try:
+                    meta = json.loads(raw_meta) if isinstance(raw_meta, str) else raw_meta
+                except (TypeError, json.JSONDecodeError):
+                    meta = None
+                if isinstance(meta, dict):
+                    model = meta.get("model")
+                    provider = meta.get("provider")
+                    if model:
+                        label = f"{provider} | {model}" if provider else str(model)
+                        if label not in models:
+                            models.append(label)
+
+        last_row = rows[-1]
+        return {
+            "session_id": session_id,
+            "description": description or "",
+            "created_at": created_at,
+            "last_active_at": last_active_at,
+            "turn_count": len(rows),
+            "models": models,
+            "runtime_ids": runtime_ids,
+            "status": last_row["status"] or "unknown",
+            "error": last_row["error_message"],
+        }
+
     def close(self) -> None:
         self.connection.close()
 
