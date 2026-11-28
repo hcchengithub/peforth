@@ -534,6 +534,8 @@ class TestSafePropertyAudit(unittest.TestCase):
             "ai-distill",
             "(ai-cleanup-prompt)",
             "ai-cleanup:",
+            "with-aside",
+            "aside:",
         ]
         for name in safe_session_words:
             word = self.vm.tick(name)
@@ -3466,6 +3468,9 @@ class TestLocalSessionRecall(unittest.TestCase):
                     self.assertEqual(saved_desc, "幫我解釋 Forth 堆疊怎麼運作")
                 finally:
                     check_logger.close()
+                    diag_log = vm.host.get("diagnostic_log")
+                    if diag_log is not None:
+                        diag_log.close()
 
                 # Resume via ai-use with local_* ID (clears stateful session & loads ai_messages)
                 out_use = io.StringIO()
@@ -3631,6 +3636,128 @@ class TestLocalSessionRecall(unittest.TestCase):
                 vm.dictate("(ai-sessions)")
                 remaining = vm.pop()["local"]
                 self.assertEqual([r["session_id"] for r in remaining], ["local_keep111122223333"])
+
+    def test_ai_sessions_optional_count_limit(self):
+        from diagnostic_log import DiagnosticLog
+        from projectk import KernelError
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            db_path = cfg_dir / "db" / "ai-diagnostics.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+            try:
+                rid = logger.start_runtime(source_path="test.py", runtime_path=tmpdir, runtime_version="3.13")
+                for i in range(1, 18):
+                    sid = f"local_test{i:016d}"
+                    time.sleep(0.002)
+                    p = logger.store_content("prompt", f"session {i:02d}")
+                    t = logger.start_turn(rid, prompt_content_id=p, remote_session_id=sid)
+                    logger.finish_turn(t, output_text="ok", output_status="complete", status="completed")
+            finally:
+                logger.close()
+
+            vm = VM({"headless": True, "__file__dir__": str(HERE)})
+            vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir)}):
+                out_default = io.StringIO()
+                with contextlib.redirect_stdout(out_default):
+                    vm.dictate("ai-sessions")
+                txt_default = out_default.getvalue()
+                self.assertIn("Local sessions: showing 15 of 17 (newest first)", txt_default)
+                self.assertIn("session 17", txt_default)
+                self.assertNotIn("session 01", txt_default)
+
+                out_one = io.StringIO()
+                with contextlib.redirect_stdout(out_one):
+                    vm.dictate("ai-sessions 1")
+                txt_one = out_one.getvalue()
+                self.assertIn("Local sessions: showing 1 of 17 (newest first)", txt_one)
+                self.assertIn("session 17", txt_one)
+                self.assertNotIn("session 16", txt_one)
+
+                out_all = io.StringIO()
+                with contextlib.redirect_stdout(out_all):
+                    vm.dictate("ai-sessions 0")
+                txt_all = out_all.getvalue()
+                self.assertIn("Local sessions: 17 (newest first)", txt_all)
+                self.assertIn("session 17", txt_all)
+                self.assertIn("session 01", txt_all)
+
+                with self.assertRaises(KernelError):
+                    vm.dictate("ai-sessions -1")
+
+    def test_aside_mode_preserves_context_and_logs_isolated(self):
+        import ai
+        from diagnostic_log import DiagnosticLog
+
+        class FakeSSE:
+            def __init__(self, text):
+                self._lines = [
+                    f'data: {json.dumps({"choices": [{"delta": {"content": text}}]})}\n'.encode("utf-8"),
+                    b"data: [DONE]\n",
+                ]
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+            def __iter__(self):
+                return iter(self._lines)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cfg_dir = Path(tmpdir) / "cfg"
+            db_path = cfg_dir / "db" / "ai-diagnostics.sqlite3"
+            env = "windows" if os.name == "nt" else "wsl"
+            logger = DiagnosticLog(db_path, environment=env)
+            try:
+                rid = logger.start_runtime(source_path="test.py", runtime_path=tmpdir, runtime_version="3.13")
+                p1 = logger.store_content("prompt", "母版規則：一律用繁體中文簡答")
+                t1 = logger.start_turn(rid, prompt_content_id=p1, remote_session_id="local_base111122223333")
+                logger.finish_turn(t1, output_text="了解，會使用繁體中文簡答。", output_status="complete", status="completed")
+            finally:
+                logger.close()
+
+            recorded_messages = []
+            def fake_stream(base_url, api_key, model, messages, tools, **kwargs):
+                recorded_messages.append(list(messages))
+                return FakeSSE("aside reply")
+
+            with patch.dict(os.environ, {"PEFORTH_CONFIG_DIR": str(cfg_dir), "OPENAI_API_KEY": "sk-test"}), \
+                 patch.object(ai, "_http_chat_stream", side_effect=fake_stream):
+                vm = VM({"headless": True, "__file__dir__": str(HERE)})
+                vm.dictate((HERE / "init.f").read_text(encoding="utf-8"))
+                with contextlib.redirect_stdout(io.StringIO()):
+                    vm.dictate("ai-use local_base111122223333")
+                before_len = len(vm.host["ai_messages"])
+
+                with contextlib.redirect_stdout(io.StringIO()):
+                    vm.dictate("aside: 岔開問一句")
+
+                # 1. Context was borrowed, but in-memory ai_messages was NOT mutated
+                self.assertEqual(len(vm.host["ai_messages"]), before_len)
+                self.assertTrue(any("母版規則" in str(m.get("content")) for m in recorded_messages[0]))
+                self.assertTrue(any("岔開問一句" in str(m.get("content")) for m in recorded_messages[0]))
+
+                # 2. Original local_* session still has 1 turn; aside turn logged under isolated_*
+                vm.dictate("(ai-sessions)")
+                local_rows = vm.pop()["local"]
+                self.assertEqual(len(local_rows), 1)
+                self.assertEqual(local_rows[0]["turn_count"], 1)
+
+                check_logger = DiagnosticLog(db_path, environment=env)
+                try:
+                    iso_rows = check_logger.connection.execute(
+                        "SELECT remote_session_id, metadata_json FROM turns WHERE remote_session_id LIKE 'isolated_%'"
+                    ).fetchall()
+                    self.assertEqual(len(iso_rows), 1)
+                    meta = json.loads(iso_rows[0]["metadata_json"])
+                    self.assertEqual(meta.get("kind"), "aside")
+                    self.assertEqual(meta.get("aside_from"), "local_base111122223333")
+                finally:
+                    check_logger.close()
+                    diag_log = vm.host.get("diagnostic_log")
+                    if diag_log is not None:
+                        diag_log.close()
 
     def test_config_yaml_tmp_dir_and_verbose_logging(self):
         import ai

@@ -305,7 +305,7 @@ code ?cli
     args = list(vm.host.get("argv", []))
 
     def _print_cli_help(file=None):
-        print("""Usage: f [-h] [-i] [-id <session-id>] [-l, --load <path>]... [-e <Forth tokens...> | -c <prompt tokens...>]
+        print("""Usage: f [-h] [-i] [-id <session-id>] [--aside] [-l, --load <path>]... [-e <Forth tokens...> | -c <prompt tokens...>]
 
 Run peforth Forth source or start the interactive REPL.
 
@@ -313,13 +313,15 @@ Options:
   -h, --help         Show this help message and exit
   -i, --interactive  Enter the REPL after executing source or completing chat
   -id <session-id>   Continue the conversation in this session
+  --aside            Borrow session context read-only for -c without modifying it
   -l, --load <path>  Include a Forth source file (may be repeated; before -e or -c)
   -e <tokens...>     Execute all remaining command-line tokens as one TIB,
                      joined with one space between tokens
                      Example: f -e run-monitor
   -c <tokens...>     Submit all remaining command-line tokens as an AI prompt
 
-Each -c run writes SESSION_ID=<session-id> to stderr after completion.
+Each -c run writes SESSION_ID=<session-id> to stderr after completion
+(or ASIDE_FROM / DIAG_SESSION_ID when --aside is used).
 
 With no source argument, the REPL starts. Loaded files run in order before -e
 or -c. Put -i before -e or -c when you want to continue interactively; all
@@ -330,6 +332,7 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
         return
 
     interactive = False
+    aside = False
     source = None
     chat_prompt = None
     session_id = None
@@ -343,6 +346,10 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
             return
         if arg in ("-i", "--interactive"):
             interactive = True
+            index += 1
+            continue
+        if arg == "--aside":
+            aside = True
             index += 1
             continue
         if arg == "-id":
@@ -394,6 +401,11 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
         _print_cli_help(sys.stderr)
         sys.exit(2)
 
+    if aside and chat_prompt is None:
+        print("Error: --aside applies only to -c/--chat.", file=sys.stderr)
+        _print_cli_help(sys.stderr)
+        sys.exit(2)
+
     for path in load_files:
         if not os.path.isfile(path):
             print(f"Forth source file not found: {path}", file=sys.stderr)
@@ -407,8 +419,26 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
             sys.exit(1)
 
     if chat_prompt is not None:
+        aside_source_id = None
         if session_id is not None:
-            vm.host["ai_active_session_id"] = session_id
+            if session_id.startswith("local_"):
+                import ai
+                try:
+                    sid, messages, _desc = ai.recall_local_session_messages(session_id, vm=vm)
+                    vm.host["ai_local_session_id"] = sid
+                    vm.host["ai_messages"] = messages
+                    aside_source_id = sid
+                except Exception as err:
+                    print(f"Error: {err}", file=sys.stderr)
+                    sys.exit(1)
+            else:
+                vm.host["ai_active_session_id"] = session_id
+                aside_source_id = session_id
+        if aside:
+            opts = vm.host.setdefault("ai_pending_turn_options", {})
+            opts["aside"] = True
+            if aside_source_id:
+                opts["aside_from"] = aside_source_id
         try:
             vm.push(chat_prompt)
             vm.push(True)
@@ -416,9 +446,16 @@ tokens after -e or -c belong to that Forth input or AI prompt.""", file=file)
         except Exception as err:
             print(f"Error: {err}", file=sys.stderr)
             sys.exit(1)
-        active_session = vm.host.get("ai_active_session_id")
-        if active_session:
-            print(f"SESSION_ID={active_session}", file=sys.stderr)
+        if aside:
+            if aside_source_id:
+                print(f"ASIDE_FROM={aside_source_id}", file=sys.stderr)
+            diag_sid = vm.host.get("ai_last_diag_session_id")
+            if diag_sid:
+                print(f"DIAG_SESSION_ID={diag_sid}", file=sys.stderr)
+        else:
+            active_session = vm.host.get("ai_active_session_id") or vm.host.get("ai_local_session_id")
+            if active_session:
+                print(f"SESSION_ID={active_session}", file=sys.stderr)
         if interactive:
             yield from vm.call(vm.tick("repl"))
         return

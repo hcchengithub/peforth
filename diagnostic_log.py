@@ -367,10 +367,9 @@ class DiagnosticLog:
         items = [{"type": "message", "role": "user", "content": first_prompt}] if first_prompt else []
         return build_session_description(created_at, items, existing_description=existing)
 
-    def list_local_sessions(self, *, limit: int = 30) -> list[dict]:
+    def list_local_sessions(self, *, limit: int | None = None) -> list[dict]:
         """List local_* stateless sessions from turns and populate missing descriptions in local_sessions."""
-        rows = self.connection.execute(
-            """
+        sql = """
             SELECT
                 t.remote_session_id AS session_id,
                 MIN(t.started_at) AS created_at,
@@ -382,10 +381,12 @@ class DiagnosticLog:
             WHERE t.remote_session_id LIKE 'local_%'
             GROUP BY t.remote_session_id
             ORDER BY last_active_at DESC, t.remote_session_id DESC
-            LIMIT ?
-            """,
-            (max(1, int(limit or 30)),),
-        ).fetchall()
+        """
+        params: tuple = ()
+        if limit is not None:
+            sql += "\n            LIMIT ?"
+            params = (max(1, int(limit)),)
+        rows = self.connection.execute(sql, params).fetchall()
 
         results = []
         to_upsert = []

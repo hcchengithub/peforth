@@ -310,6 +310,27 @@ code with-timeline
     // ( -- ) One-shot modifier: causes next ai-context to reconstruct the complete timeline (including function calls and tool results) from diagnostics DB onto TOS without altering in-memory ai_messages.
 last :: safe=True
 
+code with-aside
+    opts = vm.host.setdefault("ai_pending_turn_options", {})
+    opts["aside"] = True
+    end-code
+    // ( -- ) One-shot modifier: run the next ai: turn as a read-only aside using a copy of current context without modifying the session.
+    /// Automatically resets after the turn completes.
+last :: safe=True
+
+: aside:
+    with-aside
+    "" word
+    (ai-monotonic-time) >t
+    true (ai)
+    (ai-monotonic-time) t> -
+    [ last literal ] :> nokia2_after_seconds
+    > if nokia2 then
+    ; immediate
+    // ( <prompt> -- ) Ask an off-the-record aside question using current context without modifying the session; supports with-* prefixes.
+' aside: :: nokia2_after_seconds=30
+last :: safe=True
+
 code (subagent)
     import ai
     stream_response = vm.pop()
@@ -494,20 +515,41 @@ code (ai-sessions)
 
 code ai-sessions
     import ai
+
+    yield from vm.call(vm.tick("BL"))
+    yield from vm.call(vm.tick("word"))
+    raw_count = vm.pop()
+    raw_count = raw_count.strip() if isinstance(raw_count, str) else ""
+    if not raw_count:
+        count = 15
+    elif raw_count.isdigit():
+        n = int(raw_count)
+        count = None if n == 0 else n
+    else:
+        raise RuntimeError(f"ai-sessions expects a non-negative integer count (0 = all), got {raw_count!r}.")
+
     yield from vm.call(vm.tick("(ai-sessions)"))
     data = vm.pop()
-    remote_rows = data.get("remote") or []
-    local_rows = data.get("local") or []
-    if not remote_rows and not local_rows:
+    all_remote = data.get("remote") or []
+    all_local = data.get("local") or []
+    if not all_remote and not all_local:
         print("No AI sessions found.")
         return
+
+    remote_rows = all_remote[:count] if count is not None else all_remote
+    local_rows = all_local[:count] if count is not None else all_local
+    vm.host["ai_session_rows"] = remote_rows
+    vm.host["ai_local_session_rows"] = local_rows
 
     active_remote = ai._saved_session(vm)
     active_local = vm.host.get("ai_local_session_id") if not active_remote else None
     idx = 0
 
-    if remote_rows:
-        print(f"Remote sessions: {len(remote_rows)} (newest first)")
+    if all_remote:
+        if len(remote_rows) < len(all_remote):
+            print(f"Remote sessions: showing {len(remote_rows)} of {len(all_remote)} (newest first)")
+        else:
+            print(f"Remote sessions: {len(remote_rows)} (newest first)")
         for row in remote_rows:
             idx += 1
             session_id = row.get("id") or row.get("session_id") or ""
@@ -524,8 +566,11 @@ code ai-sessions
     else:
         print("Remote sessions: 0 (run ai-sync to sync from cloud)\n")
 
-    if local_rows:
-        print(f"Local sessions: {len(local_rows)} (newest first)")
+    if all_local:
+        if len(local_rows) < len(all_local):
+            print(f"Local sessions: showing {len(local_rows)} of {len(all_local)} (newest first)")
+        else:
+            print(f"Local sessions: {len(local_rows)} (newest first)")
         for row in local_rows:
             idx += 1
             sid = row.get("session_id", "")
@@ -536,7 +581,7 @@ code ai-sessions
             print(f"     {ai._format_time(row.get('created_at'))} ~ {ai._format_time(row.get('last_active_at'))}")
             print(f"     Turns: {turns}\t{sid}\n")
     end-code
-    // ( -- ) List remote (local mirror) and local AI sessions with unified 1-based numbering.
+    // ( [<count>] -- ) List remote (local mirror) and local AI sessions (default 15 each; 0 = all).
     last :: safe=True
 
 code ai-sync
@@ -969,6 +1014,7 @@ code (ai-context)
     /// Supports 'with-timeline' modifier to reconstruct the full tool execution timeline (function calls and results) from diagnostics DB onto TOS without altering in-memory ai_messages.
     /// In Stateful mode, checks freshness, syncs with remote if needed, and returns ordered raw items from local mirror.
     /// In Stateless mode, returns the active in-memory messages list (or full timeline if with-timeline was specified).
+    /// Example: ai-context ai-distill clipboard! \ Distill current AI conversation into clean transcript and copy to clipboard
     last :: safe=True
 
 code (ai-session-context)
@@ -980,6 +1026,7 @@ code (ai-session-context)
     end-code
     // ( selector -- dict ) Push the AI session context dict for the specified session (number, ID, or prefix).
     /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
+    /// Example: with-timeline s" local_6481a9b2709a480b" (ai-session-context) stringify clipboard! \ Export full session JSON with tool timeline to clipboard
     last :: safe=True
 
 : ai-session-context
@@ -988,6 +1035,7 @@ code (ai-session-context)
     ;
     // ( <id> -- dict ) Push the AI session context dict for the specified session ID or number from next word.
     /// Supports 'with-timeline' modifier to reconstruct full tool execution history from diagnostics DB without polluting in-memory messages.
+    /// Example: with-timeline ai-session-context local_6481a9b2709a480b stringify clipboard! \ Export full session JSON with tool timeline to clipboard
     last :: safe=True
 
 code ai-distill

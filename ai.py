@@ -2652,8 +2652,8 @@ def _open_diagnostic_log_for_local_sessions(vm=None):
     return DiagnosticLog(db_path, environment=env), True
 
 
-def list_local_diagnostic_sessions(vm=None, *, limit: int = 30) -> list[dict]:
-    """List local_* stateless sessions from ai-diagnostics.sqlite3 and cache summaries."""
+def list_local_diagnostic_sessions(vm=None, *, limit: int | None = None) -> list[dict]:
+    """List local_* stateless sessions from ai-diagnostics.sqlite3 and cache descriptions."""
     logger, should_close = _open_diagnostic_log_for_local_sessions(vm)
     if logger is None:
         return []
@@ -4833,6 +4833,34 @@ def ai_turn(vm, prompt, stream_response):
 
     pending_opts = vm.host.pop("ai_pending_turn_options", None) or {}
     active_session_id = vm.host.get("ai_active_session_id")
+    if active_session_id and pending_opts.get("aside"):
+        if not pending_opts.get("aside_messages"):
+            try:
+                ctx = get_ai_session_context(vm, active_session_id)
+                raw_items = ctx.get("items") or []
+                aside_msgs = []
+                for item in raw_items:
+                    if not isinstance(item, dict):
+                        continue
+                    role = item.get("role")
+                    if role in ("user", "assistant", "system"):
+                        text = extract_item_text(item) if "content" in item else str(item.get("text") or "")
+                        if text:
+                            aside_msgs.append({"role": role, "content": text})
+                if aside_msgs:
+                    pending_opts["aside_messages"] = aside_msgs
+            except Exception:
+                pass
+        pending_opts.setdefault("aside_from", active_session_id)
+        yield from _stateless_turn_loop(
+            vm,
+            prompt,
+            stream_response,
+            options=pending_opts,
+            is_subagent=False,
+        )
+        return
+
     if active_session_id and not vm.host.get("ai_isolated_session_once", False):
         if pending_opts.get("model"):
             cand_prof = resolve_profile_override(
@@ -4923,13 +4951,16 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
         return
 
     image_url = opts.get("image_url") or vm.host.pop("ai_image_url_once", None)
-    isolated_session = is_subagent or bool(opts.get("isolated_session")) or vm.host.pop("ai_isolated_session_once", False)
+    aside_mode = bool(opts.get("aside")) and not is_subagent
+    aside_from = opts.get("aside_from") or (_current_diagnostic_session_id(vm) if aside_mode else None)
+    isolated_session = is_subagent or aside_mode or bool(opts.get("isolated_session")) or vm.host.pop("ai_isolated_session_once", False)
     if is_subagent:
         diag_session_id = f"subagent_{uuid.uuid4().hex[:16]}"
     elif isolated_session:
         diag_session_id = f"isolated_{uuid.uuid4().hex[:16]}"
     else:
         diag_session_id = _ensure_local_session_id(vm)
+    vm.host["ai_last_diag_session_id"] = diag_session_id
 
     # Start diagnostic turn tracking if enabled
     if not is_subagent:
@@ -4953,6 +4984,11 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
                 }
                 if opts.get("tools") is not None:
                     turn_meta["tools"] = [t.get("function", {}).get("name") for t in active_tools]
+                meta_json = json.dumps(turn_meta, ensure_ascii=False)
+            elif aside_mode:
+                turn_meta = {"kind": "aside", "model": model, "provider": p_name}
+                if aside_from:
+                    turn_meta["aside_from"] = aside_from
                 meta_json = json.dumps(turn_meta, ensure_ascii=False)
             elif opts:
                 meta_json = json.dumps(
@@ -5011,7 +5047,21 @@ def _stateless_turn_loop(vm, prompt, stream_response, *, options=None, is_subage
         user_content = prompt
 
     turn_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if isolated_session:
+    if aside_mode:
+        import copy
+        base_msgs = opts.get("aside_messages")
+        if base_msgs is None:
+            base_msgs = vm.host.get("ai_messages")
+        if base_msgs:
+            messages = _sanitize_messages(copy.deepcopy(list(base_msgs)))
+            if not messages or not (isinstance(messages[0], dict) and messages[0].get("role") == "system"):
+                messages.insert(0, {"role": "system", "content": system_instructions})
+            else:
+                messages[0] = {"role": "system", "content": system_instructions}
+        else:
+            messages = [{"role": "system", "content": system_instructions}]
+        messages.append({"role": "user", "content": user_content, "timestamp": turn_ts})
+    elif isolated_session:
         messages = [
             {"role": "system", "content": system_instructions},
             {"role": "user", "content": user_content, "timestamp": turn_ts},
